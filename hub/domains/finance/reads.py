@@ -290,9 +290,10 @@ class Line:
     count: int
 
 
-# Tant que les règles du lot 3 n'existent pas, presque tout est sans catégorie : une écriture
-# sans catégorie compte en dépense variable si elle est négative, en revenu sinon. Elle garde
-# l'identifiant « a-categoriser » pour rester visible.
+# Les règles (lot 3) catégorisent à l'import ; ce qui reste sans catégorie compte, comme dans
+# l'ancien script, en dépense variable s'il est négatif et en revenu sinon (la règle de départ
+# « autres revenus » prend déjà presque tous les crédits). Il garde l'identifiant
+# « a-categoriser » pour rester visible et se valider depuis l'écran « à catégoriser ».
 _LINES = (
     "SELECT coalesce(v.category_id, :unc), "
     "CASE WHEN c.grp IS NOT NULL THEN c.grp WHEN v.amount_minor < 0 THEN 'variable' "
@@ -411,19 +412,36 @@ def trend(
     return series
 
 
+REVIEW_IDS = 50  # identifiants rendus par groupe : de quoi proposer un lot de recatégorisations
+
+
+def _direction(amounts: list[int]) -> str:
+    if all(a < 0 for a in amounts):
+        return "debit"
+    if all(a > 0 for a in amounts):
+        return "credit"
+    return "any"
+
+
 def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
     rows = conn.execute(
         text(
-            "SELECT e.counterparty, e.currency, e.amount_minor FROM entries e "
+            "SELECT e.counterparty, e.currency, e.amount_minor, e.id FROM entries e "
             "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
-            "WHERE vc.category_id IS NULL AND e.kind = 'movement'"
+            "WHERE vc.category_id IS NULL AND e.kind = 'movement' ORDER BY e.booking_date DESC"
         )
     ).fetchall()
-    groups: dict[tuple[str, str], list[int]] = {}
-    for cp, ccy, amount in rows:
-        groups.setdefault((normalize(cp) or "(inconnu)", ccy), []).append(int(amount))
+    groups: dict[tuple[str, str], list[tuple[int, str]]] = {}
+    for cp, ccy, amount, entry_id in rows:
+        groups.setdefault((normalize(cp) or "(inconnu)", ccy), []).append((int(amount), entry_id))
     out: list[dict[str, Any]] = [
-        {"counterparty": k[0], "count": len(v), "total": money(sum(v), k[1])}
+        {
+            "counterparty": k[0],
+            "count": len(v),
+            "total": money(sum(a for a, _ in v), k[1]),
+            "direction": _direction([a for a, _ in v]),
+            "entry_ids": [i for _, i in v[:REVIEW_IDS]],
+        }
         for k, v in groups.items()
     ]
     out.sort(key=lambda g: (-g["count"], g["counterparty"]))
@@ -492,5 +510,5 @@ def import_detail(conn: Connection, import_id: str) -> dict[str, Any] | None:
         "status": row[4],
         "stats": json.loads(row[5]),
         "statements": statements,
-        "proposal_id": None,  # apply_import : lot 3
+        "proposal_id": None,  # carte apply_import : ajoutée par la route (core.db)
     }

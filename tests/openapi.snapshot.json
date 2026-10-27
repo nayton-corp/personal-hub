@@ -1,6 +1,147 @@
 {
   "components": {
     "schemas": {
+      "AcceptIn": {
+        "additionalProperties": false,
+        "properties": {
+          "assertion": {
+            "additionalProperties": true,
+            "title": "Assertion",
+            "type": "object"
+          },
+          "challenge_id": {
+            "maxLength": 40,
+            "title": "Challenge Id",
+            "type": "string"
+          },
+          "proposal_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Proposal Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "proposal_ids",
+          "challenge_id",
+          "assertion"
+        ],
+        "title": "AcceptIn",
+        "type": "object"
+      },
+      "AcceptOut": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptResultOut"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "AcceptOut",
+        "type": "object"
+      },
+      "AcceptResultOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "AcceptResultOut",
+        "type": "object"
+      },
+      "ApprovalChallengeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "default": "accept",
+            "enum": [
+              "accept",
+              "revert"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "proposal_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Proposal Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "proposal_ids"
+        ],
+        "title": "ApprovalChallengeIn",
+        "type": "object"
+      },
+      "ApprovalChallengeOut": {
+        "properties": {
+          "approval_digest": {
+            "title": "Approval Digest",
+            "type": "string"
+          },
+          "challenge_id": {
+            "title": "Challenge Id",
+            "type": "string"
+          },
+          "options": {
+            "additionalProperties": true,
+            "title": "Options",
+            "type": "object"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "options",
+          "approval_digest"
+        ],
+        "title": "ApprovalChallengeOut",
+        "type": "object"
+      },
       "ChallengeOut": {
         "properties": {
           "challenge_id": {
@@ -48,6 +189,161 @@
           "ok"
         ],
         "title": "CoreHealthOut",
+        "type": "object"
+      },
+      "DigestItemOut": {
+        "properties": {
+          "bundle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Id"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "preview": {
+            "$ref": "#/components/schemas/PreviewOut"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "reversible": {
+            "title": "Reversible",
+            "type": "boolean"
+          },
+          "reverted_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reverted By"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          },
+          "urn": {
+            "title": "Urn",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "urn",
+          "domain",
+          "kind",
+          "params",
+          "revision",
+          "status",
+          "tier",
+          "preview",
+          "reason",
+          "bundle_id",
+          "created_by",
+          "created_at",
+          "expires_at",
+          "decided_at",
+          "result",
+          "reversible",
+          "reverted_by"
+        ],
+        "title": "DigestItemOut",
+        "type": "object"
+      },
+      "DigestOut": {
+        "properties": {
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DigestItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "day",
+          "items"
+        ],
+        "title": "DigestOut",
         "type": "object"
       },
       "DomainHealthOut": {
@@ -327,6 +623,17 @@
             "title": "Domain",
             "type": "string"
           },
+          "external_text": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Text"
+          },
           "kind": {
             "maxLength": 60,
             "minLength": 1,
@@ -590,6 +897,27 @@
         "title": "RegisterFinishIn",
         "type": "object"
       },
+      "RevertIn": {
+        "additionalProperties": false,
+        "properties": {
+          "assertion": {
+            "additionalProperties": true,
+            "title": "Assertion",
+            "type": "object"
+          },
+          "challenge_id": {
+            "maxLength": 40,
+            "title": "Challenge Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "assertion"
+        ],
+        "title": "RevertIn",
+        "type": "object"
+      },
       "SearchOut": {
         "properties": {
           "items": {
@@ -699,6 +1027,48 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/approvals/challenge": {
+      "post": {
+        "description": "Défi WebAuthn qui contient `approval_digest` : un seul Face ID pour tout le lot.",
+        "operationId": "approval_challenge_api_approvals_challenge_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalChallengeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalChallengeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approval Challenge",
+        "tags": [
+          "propositions"
+        ]
+      }
+    },
     "/api/auth/logout": {
       "post": {
         "operationId": "logout_api_auth_logout_post",
@@ -899,6 +1269,57 @@
         ]
       }
     },
+    "/api/digest": {
+      "get": {
+        "description": "Effets appliqués au palier auto_digest, avec leur inverse d'un geste.",
+        "operationId": "day_digest_api_digest_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "day",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DigestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Day Digest",
+        "tags": [
+          "propositions"
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "health_api_health_get",
@@ -1087,6 +1508,48 @@
         ]
       }
     },
+    "/api/proposals/accept": {
+      "post": {
+        "description": "Valide un lot signé ; chaque proposition s'applique seule, avec son propre statut. Une\nsignature qui porte sur une autre révision ou une autre empreinte est refusée.",
+        "operationId": "accept_proposals_api_proposals_accept_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept Proposals",
+        "tags": [
+          "propositions"
+        ]
+      }
+    },
     "/api/proposals/{proposal_id}": {
       "get": {
         "operationId": "get_proposal_api_proposals__proposal_id__get",
@@ -1166,6 +1629,59 @@
           }
         },
         "summary": "Reject Proposal",
+        "tags": [
+          "propositions"
+        ]
+      }
+    },
+    "/api/proposals/{proposal_id}/revert": {
+      "post": {
+        "description": "Crée et applique l'inverse d'une proposition réversible (un Face ID).",
+        "operationId": "revert_proposal_api_proposals__proposal_id__revert_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevertIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revert Proposal",
         "tags": [
           "propositions"
         ]

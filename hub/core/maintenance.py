@@ -38,8 +38,11 @@ def nightly(hub: HubContext) -> dict[str, Any]:
     report = proposals.reconcile(hub)
     for d in hub.registry:
         d.nightly()
+    synced = proposals.sync_events(hub)
     result = {
         "expired": expired,
+        "requested": synced["requested"],
+        "obsoleted": synced["obsoleted"],
         "purged": purged,
         "reconciled_applied": report.marked_applied,
         "reconciled_released": report.released,

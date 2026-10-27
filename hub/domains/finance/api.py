@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
-from hub.core.auth import AppSession, Principal, require
+from hub.core import proposals
+from hub.core.auth import AppSession, Ctx, Principal, require
 from hub.core.errors import Problem
 from hub.domains.finance import insights, reads, snapshots
-from hub.domains.finance.importer import ImportRefused
+from hub.domains.finance.importer import APPLY_IMPORT, ImportRefused
 
 if TYPE_CHECKING:
     from hub.domains.finance.domain import FinanceDomain
@@ -236,12 +237,14 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         return {"items": items, "counters": report.counters()}
 
     @r.get("/imports/{import_id}")
-    def import_detail(_session: AppSession, import_id: str) -> dict[str, Any]:
+    def import_detail(_session: AppSession, hub_ctx: Ctx, import_id: str) -> dict[str, Any]:
         with engine.connect() as conn:
             found = reads.import_detail(conn, import_id)
         if found is None:
             raise Problem("not_found")
-        return found
+        proposals.sync_events(hub_ctx)
+        card = proposals.find(hub_ctx, "finance", APPLY_IMPORT, {"import_id": import_id})
+        return {**found, "proposal_id": card.id if card else None}
 
     return r
 

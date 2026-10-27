@@ -21,7 +21,7 @@ from hub.domains.finance import catalog, importer, insights, ledger, snapshots, 
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
 from tests.factories.camt import IBAN, IBAN_2, OTHER_IBAN, Stmt, Tx, camt053
-from tests.finance.conftest import finance_settings, rows
+from tests.finance.conftest import finance_settings, rows, without_seed_rules
 from tests.finance.test_finance_api import app_session, token
 
 TODAY = date(2026, 10, 27)
@@ -137,6 +137,7 @@ def ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[HubContext]
 def fin(ctx: HubContext) -> FinanceDomain:
     domain = ctx.registry.get("finance")
     assert isinstance(domain, FinanceDomain)
+    without_seed_rules(domain)
     return domain
 
 

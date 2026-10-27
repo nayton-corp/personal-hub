@@ -30,15 +30,26 @@ from hub.core.db import begin_immediate
 from hub.core.ids import new_id, urn
 from hub.core.logging import get_logger
 from hub.core.text import mask_iban
-from hub.domains.finance import catalog, dedup, ledger
+from hub.domains.finance import catalog, dedup, ledger, rules
 from hub.domains.finance.camt import parser
-from hub.domains.finance.camt.models import Anomaly, Balance, ParsedFile, ParsedStatement
+from hub.domains.finance.camt.models import Balance, ParsedEntry, ParsedFile, ParsedStatement
 
 log = get_logger("hub.finance.import")
 
 SOURCE = "camt053"
-TRANSFER_RULE = "system-transfer-own"
-TRANSFER_CATEGORY = "transfer-own"
+APPLY_IMPORT = "apply_import"
+# anomalies qu'une validation `apply_import` peut accepter ; les autres demandent d'abord un
+# compte, une ouverture ou un relevé conforme
+FORCEABLE: frozenset[str] = frozenset(
+    {
+        "internal_check_failed",
+        "ledger_check_failed",
+        "checkpoint_conflict",
+        "near_duplicate",
+        "grouped_not_split",
+        "missing_balance",
+    }
+)
 MAX_ZIP_MEMBERS = 500
 MAX_ZIP_TOTAL = 200 * 1024 * 1024
 SETTLE_SECONDS = 2  # un fichier modifié il y a moins longtemps est peut-être encore en copie
@@ -283,25 +294,7 @@ class ImportService:
 
     def _apply_statement(self, import_id: str, st: ParsedStatement) -> StatementOutcome:
         with begin_immediate(self.engine) as conn:
-            outcome = _reconcile_and_apply(conn, import_id, st)
-            conn.execute(
-                text(
-                    "UPDATE import_statements SET account_id = :a, status = :s, reasons_json = :r, "
-                    "new_entries = :n, duplicates = :d, updated_at = :at "
-                    "WHERE import_id = :i AND stmt_index = :x"
-                ),
-                {
-                    "a": outcome[1],
-                    "s": outcome[0].status,
-                    "r": canonical.dumps(outcome[0].reasons),
-                    "n": outcome[0].new,
-                    "d": outcome[0].duplicates,
-                    "at": now_iso(),
-                    "i": import_id,
-                    "x": st.index,
-                },
-            )
-        result = outcome[0]
+            result = apply_statement(conn, import_id, st)
         log.info(
             "import.statement",
             import_id=import_id,
@@ -315,40 +308,7 @@ class ImportService:
 
     def _finish(self, import_id: str) -> None:
         with begin_immediate(self.engine) as conn:
-            rows = conn.execute(
-                text(
-                    "SELECT status, reasons_json, new_entries, duplicates FROM import_statements "
-                    "WHERE import_id = :i ORDER BY stmt_index"
-                ),
-                {"i": import_id},
-            ).fetchall()
-            old = conn.execute(
-                text("SELECT status, stats_json FROM imports WHERE id = :i"), {"i": import_id}
-            ).one()
-            applied = all(r[0] == "applied" for r in rows)
-            reasons = sorted({x for r in rows for x in json.loads(r[1])})
-            stats = {
-                **json.loads(old[1]),
-                "statements": len(rows),
-                "new": sum(r[2] for r in rows),
-                "duplicates": sum(r[3] for r in rows),
-                "reasons": reasons,
-            }
-            status = "applied" if applied else "needs_review"
-            conn.execute(
-                text(
-                    "UPDATE imports SET status = :s, stats_json = :j, updated_at = :at "
-                    "WHERE id = :i"
-                ),
-                {"s": status, "j": canonical.dumps(stats), "at": now_iso(), "i": import_id},
-            )
-            if applied and old[0] != "applied":
-                ledger.append_event(
-                    conn,
-                    "import.applied",
-                    urn("finance", "import", import_id),
-                    {"new": stats["new"], "duplicates": stats["duplicates"]},
-                )
+            finish(conn, import_id)
 
     # --- boîte d'entrée ------------------------------------------------------------------
 
@@ -407,6 +367,47 @@ class ImportService:
             raise ImportRefused("busy.retry", "reprise d'historique en cours")
         return self.process([Incoming(name, data)])
 
+    def parsed(self, conn: Connection, import_id: str) -> ParsedFile:
+        """Relit un import depuis son archive chiffrée."""
+        row = conn.execute(
+            text("SELECT archive_path FROM imports WHERE id = :i"), {"i": import_id}
+        ).first()
+        if row is None or not row[0]:
+            raise ImportRefused("import.not_found", "import inconnu")
+        try:
+            return parser.parse(self.archiver.load(row[0]))
+        except (secrets.SecretsError, OSError) as exc:
+            raise ImportRefused("import.archive_unavailable", "archive illisible") from exc
+
+    def review_plan(self, conn: Connection, import_id: str) -> list[tuple[int, Plan]]:
+        """Relevés en attente d'un import et ce que leur validation écrirait (lecture seule)."""
+        waiting = set(
+            conn.execute(
+                text(
+                    "SELECT stmt_index FROM import_statements WHERE import_id = :i "
+                    "AND status = 'needs_review'"
+                ),
+                {"i": import_id},
+            ).scalars()
+        )
+        if not waiting:
+            return []
+        pf = self.parsed(conn, import_id)
+        return [(st.index, plan_statement(conn, st)) for st in pf.statements if st.index in waiting]
+
+    def force(self, conn: Connection, import_id: str, proposal_id: str) -> list[StatementOutcome]:
+        """`apply_import` validé : applique les relevés en attente malgré les anomalies
+        acceptables, dans la transaction de l'appelant."""
+        waiting = {i for i, _ in self.review_plan(conn, import_id)}
+        pf = self.parsed(conn, import_id)
+        outcomes = [
+            apply_statement(conn, import_id, st, force=True, proposal_id=proposal_id)
+            for st in pf.statements
+            if st.index in waiting
+        ]
+        finish(conn, import_id)
+        return outcomes
+
     def retry_needs_review(
         self, import_ids: Sequence[str] | None = None, *, quiet: bool = False
     ) -> list[StatementOutcome]:
@@ -440,14 +441,28 @@ class ImportService:
         return self.apply_all(staged, only)
 
 
-def _reconcile_and_apply(
-    conn: Connection, import_id: str, st: ParsedStatement
-) -> tuple[StatementOutcome, str | None]:
-    reasons: list[Anomaly] = list(st.anomalies)
+@dataclass
+class Plan:
+    """Ce que le rapprochement d'un relevé a trouvé, avant toute écriture."""
+
+    account: catalog.Account | None
+    reasons: list[str]
+    fresh: list[tuple[ParsedEntry, str]]
+    checkpoints: list[tuple[str, str, int]]
+    duplicates: int
+
+    @property
+    def blocking(self) -> list[str]:
+        return sorted(set(self.reasons) - FORCEABLE)
+
+
+def plan_statement(conn: Connection, st: ParsedStatement) -> Plan:
+    """Contrôles du point 5 de la section 4, en lecture seule."""
+    reasons: list[str] = list(st.anomalies)
     account = catalog.account_by_iban(conn, st.iban) if st.iban else None
     if account is None:
         reasons.append("unknown_account")
-        return StatementOutcome(import_id, st.index, "needs_review", sorted(set(reasons))), None
+        return Plan(None, sorted(set(reasons)), [], [], 0)
     if st.currency is not None and st.currency != account.currency:
         reasons.append("currency_mismatch")
     opening = conn.execute(
@@ -507,19 +522,16 @@ def _reconcile_and_apply(
         )
         if opening is not None and ledger_balance != st.closing.amount_minor:
             reasons.append("ledger_check_failed")
+    return Plan(account, sorted(set(reasons)), fresh, checkpoints, len(st.entries) - len(fresh))
 
-    duplicates = len(st.entries) - len(fresh)
-    if reasons:
-        return (
-            StatementOutcome(
-                import_id, st.index, "needs_review", sorted(set(reasons)), 0, duplicates
-            ),
-            account.id,
-        )
 
-    own = catalog.own_ibans(conn) - {iban}
+def _insert(conn: Connection, import_id: str, plan: Plan, proposal_id: str | None) -> None:
+    """Point 6 : écritures, catégorisation par les règles, checkpoints, événement."""
+    assert plan.account is not None  # noqa: S101 - garanti par l'appelant
+    account = plan.account
+    ruleset = rules.load(conn)
     created = now_iso()
-    for e, key in fresh:
+    for e, key in plan.fresh:
         seq, _id = ledger.append_entry(
             conn,
             ledger.NewEntry(
@@ -540,20 +552,17 @@ def _reconcile_and_apply(
             ),
             created,
         )
-        if e.counterparty_iban and e.counterparty_iban in own:
-            ledger.append(
-                conn,
-                "categorizations",
-                {
-                    "entry_seq": seq,
-                    "category_id": TRANSFER_CATEGORY,
-                    "source": "rule",
-                    "rule_id": TRANSFER_RULE,
-                    "proposal_id": None,
-                    "created_at": created,
-                },
-            )
-    for kind, on_date, amount in checkpoints:
+        target = rules.Target(
+            e.amount_minor,
+            ledger.search_text(e.counterparty, e.label, e.remittance),
+            e.counterparty_iban,
+            e.bank_tx_code,
+            account.iban,
+        )
+        won = ruleset.winner(target)
+        if won is not None:
+            rules.categorize(conn, seq, won, proposal_id=proposal_id, created_at=created)
+    for kind, on_date, amount in plan.checkpoints:
         ledger.append(
             conn,
             "checkpoints",
@@ -565,17 +574,145 @@ def _reconcile_and_apply(
                 "import_id": import_id,
             },
         )
-    if fresh:
+    if plan.fresh:
         ledger.append_event(
             conn,
             "entries.appended",
             urn("finance", "account", account.id),
-            {"import_id": import_id, "count": len(fresh)},
+            {"import_id": import_id, "count": len(plan.fresh)},
         )
+
+
+def _reconcile_and_apply(
+    conn: Connection,
+    import_id: str,
+    st: ParsedStatement,
+    *,
+    force: bool = False,
+    proposal_id: str | None = None,
+) -> tuple[StatementOutcome, str | None]:
+    plan = plan_statement(conn, st)
+    account_id = plan.account.id if plan.account else None
+    stopping = plan.blocking if force else plan.reasons
+    if plan.account is None or stopping:
+        return (
+            StatementOutcome(import_id, st.index, "needs_review", plan.reasons, 0, plan.duplicates),
+            account_id,
+        )
+    _insert(conn, import_id, plan, proposal_id)
+    # validé malgré des anomalies : elles restent inscrites sur le relevé
     return (
-        StatementOutcome(import_id, st.index, "applied", [], len(fresh), duplicates),
-        account.id,
+        StatementOutcome(
+            import_id, st.index, "applied", plan.reasons, len(plan.fresh), plan.duplicates
+        ),
+        account_id,
     )
+
+
+def apply_statement(
+    conn: Connection,
+    import_id: str,
+    st: ParsedStatement,
+    *,
+    force: bool = False,
+    proposal_id: str | None = None,
+) -> StatementOutcome:
+    outcome, account_id = _reconcile_and_apply(
+        conn, import_id, st, force=force, proposal_id=proposal_id
+    )
+    conn.execute(
+        text(
+            "UPDATE import_statements SET account_id = :a, status = :s, reasons_json = :r, "
+            "new_entries = :n, duplicates = :d, updated_at = :at "
+            "WHERE import_id = :i AND stmt_index = :x"
+        ),
+        {
+            "a": account_id,
+            "s": outcome.status,
+            "r": canonical.dumps(outcome.reasons),
+            "n": outcome.new,
+            "d": outcome.duplicates,
+            "at": now_iso(),
+            "i": import_id,
+            "x": st.index,
+        },
+    )
+    return outcome
+
+
+def finish(conn: Connection, import_id: str) -> str:
+    """Statut et statistiques de l'import d'après ses relevés ; renvoie le statut."""
+    rows = conn.execute(
+        text(
+            "SELECT status, reasons_json, new_entries, duplicates FROM import_statements "
+            "WHERE import_id = :i ORDER BY stmt_index"
+        ),
+        {"i": import_id},
+    ).fetchall()
+    old = conn.execute(
+        text("SELECT status, stats_json FROM imports WHERE id = :i"), {"i": import_id}
+    ).one()
+    applied = all(r[0] == "applied" for r in rows)
+    reasons = sorted({x for r in rows for x in json.loads(r[1])})
+    stats = {
+        **json.loads(old[1]),
+        "statements": len(rows),
+        "new": sum(r[2] for r in rows),
+        "duplicates": sum(r[3] for r in rows),
+        "reasons": reasons,
+    }
+    status = "applied" if applied else "needs_review"
+    conn.execute(
+        text("UPDATE imports SET status = :s, stats_json = :j, updated_at = :at WHERE id = :i"),
+        {"s": status, "j": canonical.dumps(stats), "at": now_iso(), "i": import_id},
+    )
+    target = urn("finance", "import", import_id)
+    params = {"import_id": import_id}
+    if applied and old[0] != "applied":
+        ledger.append_event(
+            conn,
+            "import.applied",
+            target,
+            {"new": stats["new"], "duplicates": stats["duplicates"]},
+        )
+        if old[0] == "needs_review":
+            # appliqué tout seul : sa carte `apply_import` éventuelle devient sans objet
+            ledger.append_event(
+                conn, "proposal.obsolete", target, {"kind": APPLY_IMPORT, "params": params}
+            )
+    elif not applied:
+        request_review(conn, import_id)
+    return status
+
+
+def pending_reasons(conn: Connection, import_id: str) -> list[str]:
+    rows = conn.execute(
+        text(
+            "SELECT reasons_json FROM import_statements WHERE import_id = :i "
+            "AND status = 'needs_review'"
+        ),
+        {"i": import_id},
+    ).fetchall()
+    return sorted({x for r in rows for x in json.loads(r[0])})
+
+
+def request_review(conn: Connection, import_id: str) -> bool:
+    """Demande au cœur une carte `apply_import` si la validation peut lever toutes les
+    anomalies ; sinon le relevé attend un compte, une ouverture ou un relevé conforme."""
+    reasons = pending_reasons(conn, import_id)
+    if not reasons or set(reasons) - FORCEABLE:
+        return False
+    ledger.append_event(
+        conn,
+        "proposal.request",
+        urn("finance", "import", import_id),
+        {
+            "kind": APPLY_IMPORT,
+            "params": {"import_id": import_id},
+            "reason": "relevé en attente de validation",
+        },
+    )
+    return True
 
 
 def _existing_keys(conn: Connection, keys: Sequence[str]) -> set[str]:

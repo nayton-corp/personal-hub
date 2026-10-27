@@ -1,6 +1,9 @@
-"""Commandes `hub finance …` : registre, comptes et catégories, imports, reprise d'historique.
+"""Commandes `hub finance …` : registre, comptes et catégories, règles, imports, reprise
+d'historique.
 
-Les sorties sont des identifiants et des compteurs, jamais le contenu d'une écriture.
+Créer un compte ou une catégorie passe par le Double Sas (ticket L1-12, bascule du lot 3) : la
+commande crée la proposition et la valide depuis le terminal. Les sorties sont des
+identifiants et des compteurs, jamais le contenu d'une écriture.
 """
 
 from __future__ import annotations
@@ -13,17 +16,50 @@ from typing import TYPE_CHECKING, Annotated
 import typer
 from sqlalchemy import text
 
+from hub.core import proposals
+from hub.core.auth import Principal
+from hub.core.context import HubContext
 from hub.core.db import begin_immediate
+from hub.core.errors import Problem
 from hub.core.money import Money
+from hub.core.registry import Registry
 from hub.core.text import mask_iban
-from hub.domains.finance import catalog, importer
+from hub.domains.finance import catalog, importer, legacy, rules
 
 if TYPE_CHECKING:
     from hub.domains.finance.domain import FinanceDomain
 
 
+CLI = Principal("system:cli", frozenset(), is_app=True)
+
+
 def _out(value: object) -> None:
     typer.echo(json.dumps(value, ensure_ascii=False))
+
+
+def propose_and_accept(
+    domain: FinanceDomain, kind: str, params: dict[str, object]
+) -> dict[str, object]:
+    """Crée la proposition et la valide depuis le terminal ; renvoie son résultat."""
+    hub = HubContext.build(domain.settings, Registry([domain]))
+    if not hub.core.is_current():
+        typer.echo("core.db n'est pas à jour : lancer `hub db upgrade`.", err=True)
+        raise typer.Exit(2)
+    try:
+        p, _ = proposals.create(hub, CLI, "finance", kind, params)
+        if p.status == "applied":
+            return {"proposal_id": p.id, **(p.result or {})}
+        (outcome,) = proposals.accept(hub, CLI, [p], None)
+    except Problem as exc:
+        typer.echo(exc.detail or exc.title, err=True)
+        raise typer.Exit(1) from exc
+    finally:
+        hub.core.dispose()
+    if outcome.status != "applied":
+        problem = outcome.problem or {}
+        typer.echo(str(problem.get("detail") or problem.get("title") or outcome.status), err=True)
+        raise typer.Exit(1)
+    return {"proposal_id": p.id, **(outcome.result or {})}
 
 
 def build_cli(domain: FinanceDomain) -> typer.Typer:
@@ -31,6 +67,8 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
     accounts = typer.Typer(no_args_is_help=True, help="Comptes")
     categories = typer.Typer(no_args_is_help=True, help="Catégories")
     imports = typer.Typer(no_args_is_help=True, help="Imports")
+    rules_app = typer.Typer(no_args_is_help=True, help="Règles de catégorisation")
+    app.add_typer(rules_app, name="rules")
     app.add_typer(accounts, name="accounts")
     app.add_typer(categories, name="categories")
     app.add_typer(imports, name="imports")
@@ -70,28 +108,26 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
         liquid: Annotated[bool, typer.Option(help="compte dans les liquidités")] = False,
         budget: Annotated[bool, typer.Option(help="compte suivi par le budget")] = False,
     ) -> None:
-        """Crée un compte (écriture directe tant que le Double Sas n'existe pas)."""
+        """Crée un compte par une proposition `create_account` validée depuis le terminal ; les
+        relevés en attente sur cet IBAN sont relancés."""
         ready()
-        try:
-            with begin_immediate(engine) as conn:
-                a = catalog.add_account(
-                    conn,
-                    institution=institution,
-                    name=name,
-                    kind=kind,
-                    currency=currency,
-                    iban=iban,
-                    external_ref=external_ref,
-                    liquid=liquid,
-                    budget_account=budget,
-                )
-        except catalog.CatalogError as exc:
-            typer.echo(str(exc), err=True)
-            raise typer.Exit(1) from exc
-        _out({"id": a.id, "iban": mask_iban(a.iban)})
-        retried = domain.importer.retry_needs_review(quiet=True)
-        if retried:
-            _out({"retried": len(retried), "applied": sum(s.status == "applied" for s in retried)})
+        result = propose_and_accept(
+            domain,
+            "create_account",
+            {
+                "institution": institution,
+                "name": name,
+                "kind": kind,
+                "currency": currency,
+                "iban": iban,
+                "external_ref": external_ref,
+                "liquid": liquid,
+                "budget_account": budget,
+            },
+        )
+        _out(
+            {"id": result["account_id"], "iban": result["iban"], "proposal": result["proposal_id"]}
+        )
 
     @accounts.command("list")
     def accounts_list() -> None:
@@ -131,14 +167,12 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
         name: str,
         group: Annotated[str, typer.Option(help="fixed, variable, savings, income, transfer")],
     ) -> None:
+        """Crée une catégorie par une proposition `create_category` validée depuis le terminal."""
         ready()
-        try:
-            with begin_immediate(engine) as conn:
-                catalog.add_category(conn, id=id, name=name, grp=group)
-        except catalog.CatalogError as exc:
-            typer.echo(str(exc), err=True)
-            raise typer.Exit(1) from exc
-        _out({"id": id})
+        result = propose_and_accept(
+            domain, "create_category", {"id": id, "name": name, "grp": group}
+        )
+        _out({"id": id, "proposal": result["proposal_id"]})
 
     @categories.command("list")
     def categories_list() -> None:
@@ -146,6 +180,45 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
         with engine.connect() as conn:
             for c in catalog.list_categories(conn):
                 typer.echo(f"{c.id:<20} {c.grp:<9} {c.name}{'' if c.active else ' (inactive)'}")
+
+    @rules_app.command("list")
+    def rules_list(
+        all_: Annotated[bool, typer.Option("--all", help="avec les règles désactivées")] = False,
+    ) -> None:
+        ready()
+        with engine.connect() as conn:
+            typer.echo(f"version des règles : {rules.version(conn)}", err=True)
+            for r in rules.list_rules(conn, active_only=not all_):
+                state = "" if r.active else "  (désactivée)"
+                typer.echo(
+                    f"{r.priority:>5}  {r.id:<24} {r.field:<17} {r.direction:<6} "
+                    f"{r.category_id:<20} « {r.pattern} »{state}"
+                )
+
+    @rules_app.command("import-legacy")
+    def rules_import_legacy(
+        path: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="bcf_rules.json")],
+        run: Annotated[bool, typer.Option(help="catégoriser ensuite le registre")] = True,
+    ) -> None:
+        """Reprend le fichier de règles de `bcf_aggregate.py` (sur le Mac) ; compteurs seuls."""
+        ready()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            with begin_immediate(engine) as conn:
+                report = legacy.import_rules(conn, data, run=run)
+        except (json.JSONDecodeError, legacy.LegacyError, rules.RuleError) as exc:
+            typer.echo(f"fichier refusé : {exc}", err=True)
+            raise typer.Exit(1) from exc
+        _out(report.public())
+
+    @rules_app.command("run")
+    def rules_run() -> None:
+        """Catégorise selon les règles actives ce qu'elles ont le droit de toucher (sans
+        catégorie, ou catégorisé par une règle) ; une décision humaine n'est jamais remplacée."""
+        ready()
+        with begin_immediate(engine) as conn:
+            changed = rules.run(conn)
+        _out({"categorized": changed})
 
     @app.command("watch-inbox")
     def watch_inbox(

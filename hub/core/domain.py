@@ -40,6 +40,13 @@ class LocalHandler(Protocol):
         ...
 
 
+class AfterCommit(Protocol):
+    """Facultatif sur un handler local : suite hors transaction, une fois l'effet validé
+    (recalculs, relances). Une erreur y est journalisée, jamais remontée."""
+
+    def after_commit(self, params: BaseModel, result: dict[str, Any]) -> None: ...
+
+
 class ExternalHandler(Protocol):
     """Effet chez un tiers (Domia, calendrier) : appel idempotent."""
 
@@ -139,6 +146,13 @@ class Domain(Protocol):
 
     def applied(self, proposal_ids: Sequence[str]) -> Mapping[str, dict[str, Any]]:
         """Lit `applied_proposals` : ce qui fait foi pour la réconciliation."""
+        ...
+
+    def record_applied(
+        self, conn: Connection, proposal_id: str, kind: str, result: dict[str, Any]
+    ) -> None:
+        """Inscrit l'effet dans `applied_proposals` (et l'événement `proposal.applied`), dans la
+        transaction de l'effet. La clé primaire interdit une seconde application."""
         ...
 
     def nightly(self) -> None: ...

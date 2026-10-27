@@ -163,6 +163,12 @@ def authenticate(
     conn: Connection, settings: Settings, challenge_id: str, credential: dict[str, Any]
 ) -> str:
     challenge, _ = _take_challenge(conn, challenge_id, "login")
+    return authenticate_with(conn, settings, challenge, credential)
+
+
+def authenticate_with(
+    conn: Connection, settings: Settings, challenge: bytes, credential: dict[str, Any]
+) -> str:
     credential_id = credential.get("id")
     if not isinstance(credential_id, str):
         raise Problem("auth.passkey_invalid")
@@ -189,6 +195,48 @@ def authenticate(
         {"n": verified.new_sign_count, "at": now_iso(), "id": credential_id},
     )
     return credential_id
+
+
+def approval_options(conn: Connection, settings: Settings, digest: str) -> dict[str, Any]:
+    """Défi de validation : il commence par `approval_digest`, ce que la passkey signe porte
+    donc sur ces propositions, à ces révisions et ces empreintes."""
+    challenge = bytes.fromhex(digest) + secrets.token_bytes(16)
+    options = generate_authentication_options(
+        rp_id=settings.server.rp_id,
+        challenge=challenge,
+        user_verification=UserVerificationRequirement.REQUIRED,
+        allow_credentials=_credentials(conn),
+    )
+    challenge_id = _store_challenge(
+        conn, "approve", options.challenge, settings.auth.challenge_seconds, bound=digest
+    )
+    return {"challenge_id": challenge_id, "options": json.loads(options_to_json(options))}
+
+
+def verify_approval(
+    conn: Connection,
+    settings: Settings,
+    challenge_id: str,
+    credential: dict[str, Any],
+    digest: str,
+) -> dict[str, Any]:
+    """Vérifie une validation signée ; renvoie ce qui est gardé dans `signature_json`."""
+    try:
+        challenge, bound = _take_challenge(conn, challenge_id, "approve")
+    except Problem:
+        raise Problem("approval.signature_invalid", "défi expiré ou inconnu") from None
+    if bound != digest:
+        raise Problem("approval.signature_invalid", "la signature porte sur un autre aperçu")
+    try:
+        credential_id = authenticate_with(conn, settings, challenge, credential)
+    except Problem:
+        raise Problem("approval.signature_invalid") from None
+    return {
+        "credential_id": credential_id,
+        "challenge_id": challenge_id,
+        "approval_digest": digest,
+        "assertion": credential,
+    }
 
 
 def list_all(conn: Connection) -> list[dict[str, Any]]:

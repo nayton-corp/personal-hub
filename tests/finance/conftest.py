@@ -90,3 +90,9 @@ def ledger_state(domain: FinanceDomain) -> list[tuple[object, ...]]:
         "SELECT id, account_id, kind, booking_date, amount_minor, counterparty, label, dedup_key "
         "FROM entries ORDER BY booking_date, dedup_key",
     )
+
+
+def without_seed_rules(domain: FinanceDomain) -> None:
+    """Les tests de lecture décident eux-mêmes des catégories : règles de départ coupées."""
+    with begin_immediate(domain.engine()) as conn:
+        conn.execute(text("UPDATE rules SET active = 0 WHERE id LIKE 'seed-%'"))
