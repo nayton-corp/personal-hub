@@ -130,13 +130,18 @@ def parse(txt: str) -> Notice:
     if value == 0:
         raise ViacError("viac.unrecognized", "montant nul")
     quantity = num(qty) if qty is not None else None
-    if quantity == 0 and price is not None and price_ccy == "CHF" and num(price) > 0:
+    if quantity == 0 and kind in ("buy", "sell"):
         # petit achat de rééquilibrage : VIAC arrondit les parts à 2 décimales et imprime
-        # « 0.00 parts » ; le montant comptabilisé et le cours donnent les parts réelles
-        with localcontext(DECIMAL_CONTEXT):
-            quantity = (value / num(price)).quantize(
-                Decimal(1).scaleb(-QTY_PLACES), rounding=ROUND_HALF_EVEN
-            )
+        # « 0.00 parts ». Avec un cours en CHF, le montant comptabilisé donne les parts
+        # réelles ; en devise, l'avis ne donne pas le taux : on garde le montant sans parts
+        # (aucune ligne de titres), le rapport suivant donne les positions exactes
+        if price is not None and price_ccy == "CHF" and num(price) > 0:
+            with localcontext(DECIMAL_CONTEXT):
+                quantity = (value / num(price)).quantize(
+                    Decimal(1).scaleb(-QTY_PLACES), rounding=ROUND_HALF_EVEN
+                )
+        else:
+            quantity = None
     if quantity is not None and quantity <= 0:
         raise ViacError("viac.unrecognized", "nombre de parts invalide")
     return Notice(
