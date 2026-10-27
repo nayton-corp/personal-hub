@@ -55,7 +55,8 @@ else
 fi
 case "${HUB_PUBLIC_ORIGIN:-}" in
   https://*.ts.net) ok "origine $HUB_PUBLIC_ORIGIN" ;;
-  *) warn "HUB_PUBLIC_ORIGIN n'est pas une adresse *.ts.net : les passkeys en dépendent" ;;
+  http://*|https://*) warn "HUB_PUBLIC_ORIGIN n'est pas une adresse *.ts.net : les passkeys en dépendent" ;;
+  *) ko "HUB_PUBLIC_ORIGIN doit commencer par https:// (ex. https://hub.tailnet.ts.net)" ;;
 esac
 
 [ "$fail" = 0 ] && echo "Prêt." || echo "Corriger les points en échec avant de déployer."
