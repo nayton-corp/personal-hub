@@ -1,0 +1,167 @@
+"""Routes Finance (section 6) : lecture du registre et dépôt d'un relevé."""
+
+from __future__ import annotations
+
+import re
+from typing import TYPE_CHECKING, Annotated, Any
+
+from fastapi import APIRouter, Depends, Query, Request
+
+from hub.core.auth import AppSession, Principal, require
+from hub.core.clock import utcnow
+from hub.core.errors import Problem
+from hub.domains.finance import reads
+from hub.domains.finance.importer import ImportRefused
+
+if TYPE_CHECKING:
+    from hub.domains.finance.domain import FinanceDomain
+
+MONTH = r"^\d{4}-(0[1-9]|1[0-2])$"
+DATE = r"^\d{4}-\d{2}-\d{2}$"
+MAX_UPLOAD = 50 * 1024 * 1024
+_NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip)$", re.I)
+
+Reader = Annotated[Principal, Depends(require("app", "finance:read"))]
+AnyReader = Annotated[Principal, Depends(require("app", "finance:read", "finance:aggregates"))]
+
+
+def _aggregates_only(p: Principal) -> bool:
+    return not (p.is_app or p.allows("finance:read"))
+
+
+def _this_month() -> str:
+    return utcnow().strftime("%Y-%m")
+
+
+def build_router(domain: FinanceDomain) -> APIRouter:
+    r = APIRouter()
+    engine = domain.engine()
+
+    @r.get("/accounts")
+    def accounts(_p: AnyReader) -> dict[str, Any]:
+        """Comptes, IBAN masqué, solde calculé, dernier CLBD et écart."""
+        with engine.connect() as conn:
+            return {"items": reads.accounts(conn)}
+
+    @r.get("/entries")
+    def entries(
+        _p: Reader,
+        account: str | None = None,
+        from_: Annotated[str | None, Query(alias="from", pattern=DATE)] = None,
+        to: Annotated[str | None, Query(pattern=DATE)] = None,
+        category: str | None = None,
+        uncategorized: bool = False,
+        cursor: Annotated[str | None, Query(max_length=40)] = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> dict[str, Any]:
+        f = reads.EntryFilter(account, from_, to, category, uncategorized)
+        try:
+            with engine.connect() as conn:
+                items, next_cursor = reads.entries(conn, f, cursor, limit)
+        except ValueError:
+            raise Problem("validation.params", "curseur invalide") from None
+        return {"items": items, "next_cursor": next_cursor}
+
+    @r.get("/entries/{entry_id}")
+    def entry(_p: Reader, entry_id: str) -> dict[str, Any]:
+        with engine.connect() as conn:
+            found = reads.entry_detail(conn, entry_id)
+        if found is None:
+            raise Problem("not_found")
+        return found
+
+    @r.get("/summary")
+    def summary(
+        p: AnyReader, month: Annotated[str | None, Query(pattern=MONTH)] = None
+    ) -> dict[str, Any]:
+        with engine.connect() as conn:
+            return reads.summary(conn, month or _this_month(), aggregates_only=_aggregates_only(p))
+
+    @r.get("/budget")
+    def budget(
+        p: AnyReader, month: Annotated[str | None, Query(pattern=MONTH)] = None
+    ) -> dict[str, Any]:
+        with engine.connect() as conn:
+            return reads.budget(conn, month or _this_month(), aggregates_only=_aggregates_only(p))
+
+    @r.get("/trend")
+    def trend(
+        _p: AnyReader,
+        category: str | None = None,
+        months: Annotated[int, Query(ge=1, le=36)] = 12,
+        month: Annotated[str | None, Query(pattern=MONTH)] = None,
+    ) -> dict[str, Any]:
+        with engine.connect() as conn:
+            series = reads.trend(conn, category, months, month or _this_month())
+        return {"category": category, "series": series}
+
+    @r.get("/review")
+    def review(_p: Reader) -> dict[str, Any]:
+        """Écritures sans catégorie, groupées par contrepartie normalisée."""
+        with engine.connect() as conn:
+            return {"groups": reads.review(conn)}
+
+    @r.get("/search")
+    def search(
+        _p: Reader, q: Annotated[str, Query(min_length=3, max_length=100)]
+    ) -> dict[str, Any]:
+        if reads.fts_query(q) is None:
+            raise Problem("validation.params", "au moins 3 caractères")
+        with engine.connect() as conn:
+            return {"items": reads.search(conn, q)}
+
+    @r.get("/categories")
+    def categories(_p: AnyReader) -> dict[str, Any]:
+        with engine.connect() as conn:
+            return {"items": reads.categories(conn)}
+
+    @r.get("/freshness")
+    def freshness(_p: AnyReader) -> dict[str, Any]:
+        with engine.connect() as conn:
+            return {"items": reads.freshness(conn)}
+
+    @r.post("/imports", status_code=202)
+    async def upload(
+        request: Request,
+        _session: AppSession,
+        name: Annotated[str, Query(max_length=124)],
+    ) -> dict[str, Any]:
+        """Corps brut (XML ou zip) ; même traitement que `inbox/`."""
+        if not _NAME.match(name):
+            raise Problem("validation.params", "nom de fichier .xml ou .zip attendu")
+        body = await request.body()
+        if not body or len(body) > MAX_UPLOAD:
+            raise Problem("validation.params", "fichier vide ou trop volumineux")
+        try:
+            report = domain.importer.receive(name, body)
+        except ImportRefused as exc:
+            headers = {"Retry-After": "60"} if exc.code == "busy.retry" else None
+            raise Problem(exc.code, exc.detail, headers=headers) from None
+        files = report.files
+        if files and all(f.status == "duplicate" for f in files):
+            raise Problem("import.duplicate_file")
+        if files and all(f.status == "rejected" for f in files):
+            raise Problem("import.invalid_schema", files[0].reason)
+        with engine.connect() as conn:
+            items = [
+                {"import_id": f.import_id, "status": _status(conn, f.import_id) or f.status}
+                for f in files
+            ]
+        return {"items": items, "counters": report.counters()}
+
+    @r.get("/imports/{import_id}")
+    def import_detail(_session: AppSession, import_id: str) -> dict[str, Any]:
+        with engine.connect() as conn:
+            found = reads.import_detail(conn, import_id)
+        if found is None:
+            raise Problem("not_found")
+        return found
+
+    return r
+
+
+def _status(conn: Any, import_id: str | None) -> str | None:
+    if import_id is None:
+        return None
+    found = reads.import_detail(conn, import_id)
+    return str(found["status"]) if found else None

@@ -175,6 +175,9 @@ class DemoDomain:
     def nightly(self) -> None:
         self.nightly_runs += 1
 
+    def verify(self) -> Health:
+        return self.health()
+
     def health(self) -> Health:
         return Health(
             ok=self.path.exists(),

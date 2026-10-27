@@ -1,0 +1,745 @@
+"""Service d'import camt.053 (tickets L1-06 et L1-13), section 4 de la spécification.
+
+Réception → validation → analyse → mise en attente → rapprochement → application → archivage.
+Les fichiers d'un lot sont appliqués triés par compte puis par date d'OPBD, une transaction par
+relevé, jamais par lot. Rien de ce module ne journalise de contenu : des identifiants et des
+compteurs seulement.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import io
+import itertools
+import json
+import re
+import time
+import zipfile
+from collections.abc import Iterable, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from datetime import date, timedelta
+from pathlib import Path
+from typing import Any, Literal
+
+from sqlalchemy import Connection, Engine, text
+
+from hub.core import canonical, secrets
+from hub.core.clock import now_iso, utcnow
+from hub.core.db import begin_immediate
+from hub.core.ids import new_id, urn
+from hub.core.logging import get_logger
+from hub.core.text import mask_iban
+from hub.domains.finance import catalog, dedup, ledger
+from hub.domains.finance.camt import parser
+from hub.domains.finance.camt.models import Anomaly, Balance, ParsedFile, ParsedStatement
+
+log = get_logger("hub.finance.import")
+
+SOURCE = "camt053"
+TRANSFER_RULE = "system-transfer-own"
+TRANSFER_CATEGORY = "transfer-own"
+MAX_ZIP_MEMBERS = 500
+MAX_ZIP_TOTAL = 200 * 1024 * 1024
+SETTLE_SECONDS = 2  # un fichier modifié il y a moins longtemps est peut-être encore en copie
+_SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+class ImportRefused(RuntimeError):
+    """Refus d'un import ; `code` est un type d'erreur stable de l'API."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(f"{code}: {detail}")
+        self.code = code
+        self.detail = detail
+
+
+@dataclass(frozen=True)
+class Incoming:
+    name: str
+    data: bytes
+
+
+@dataclass
+class FileOutcome:
+    name: str
+    import_id: str | None
+    status: Literal["staged", "duplicate", "rejected"]
+    reason: str | None = None
+
+
+@dataclass
+class StatementOutcome:
+    import_id: str
+    index: int
+    status: Literal["applied", "needs_review"]
+    reasons: list[str]
+    new: int = 0
+    duplicates: int = 0
+
+
+@dataclass
+class BatchReport:
+    files: list[FileOutcome] = field(default_factory=list)
+    statements: list[StatementOutcome] = field(default_factory=list)
+
+    def counters(self) -> dict[str, int]:
+        return {
+            "files": len(self.files),
+            "duplicate_files": sum(f.status == "duplicate" for f in self.files),
+            "rejected_files": sum(f.status == "rejected" for f in self.files),
+            "statements": len(self.statements),
+            "applied": sum(s.status == "applied" for s in self.statements),
+            "needs_review": sum(s.status == "needs_review" for s in self.statements),
+            "new_entries": sum(s.new for s in self.statements),
+            "duplicate_entries": sum(s.duplicates for s in self.statements),
+        }
+
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def safe_name(name: str) -> str:
+    return _SAFE_NAME.sub("_", Path(name).name)[:80] or "fichier"
+
+
+def expand(name: str, data: bytes) -> list[Incoming]:
+    """Un .zip devient un fichier par membre .xml, taille décompressée plafonnée."""
+    if not name.lower().endswith(".zip"):
+        return [Incoming(name, data)]
+    out: list[Incoming] = []
+    total = 0
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            members = [i for i in z.infolist() if not i.is_dir()]
+            if len(members) > MAX_ZIP_MEMBERS:
+                raise ImportRefused("import.invalid_schema", "archive zip : trop de fichiers")
+            for info in members:
+                if not info.filename.lower().endswith(".xml"):
+                    continue
+                if info.file_size > parser.MAX_BYTES:
+                    raise ImportRefused("import.invalid_schema", "archive zip : fichier trop gros")
+                with z.open(info) as fh:
+                    member = fh.read(parser.MAX_BYTES + 1)
+                if len(member) > parser.MAX_BYTES:
+                    raise ImportRefused("import.invalid_schema", "archive zip : fichier trop gros")
+                total += len(member)
+                if total > MAX_ZIP_TOTAL:
+                    raise ImportRefused("import.invalid_schema", "archive zip trop volumineuse")
+                out.append(Incoming(f"{Path(name).stem}/{Path(info.filename).name}", member))
+    except zipfile.BadZipFile as exc:
+        raise ImportRefused("import.invalid_schema", "archive zip illisible") from exc
+    return out
+
+
+class Archiver:
+    """Chiffre avec age vers archive/AAAA/MM/ ; la clé publique suffit pour écrire."""
+
+    def __init__(self, root: Path, recipient: str | None, identity_file: Path | None) -> None:
+        self.root = root
+        self.recipient = recipient
+        self.identity_file = identity_file
+
+    def store(self, data: bytes, sub: str, name: str) -> str:
+        if self.recipient is None:
+            raise ImportRefused(
+                "import.archive_unavailable", "clé age absente : archivage impossible"
+            )
+        target = self.root / sub / f"{name}.age"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_suffix(".age.tmp")
+        tmp.write_bytes(secrets.encrypt_for(self.recipient, data))
+        tmp.replace(target)
+        return str(target.relative_to(self.root))
+
+    def load(self, relative: str) -> bytes:
+        if self.identity_file is None or not self.identity_file.exists():
+            raise ImportRefused(
+                "import.archive_unavailable", "clé age absente : relecture impossible"
+            )
+        return secrets.decrypt_with(self.identity_file, (self.root / relative).read_bytes())
+
+
+def recipient_from_key(key_file: Path) -> str | None:
+    if not key_file.exists():
+        return None
+    return secrets.recipient(key_file)
+
+
+class ImportService:
+    def __init__(
+        self,
+        engine: Engine,
+        *,
+        inbox: Path,
+        archiver: Archiver,
+        lock_file: Path,
+    ) -> None:
+        self.engine = engine
+        self.inbox = inbox
+        self.archiver = archiver
+        self.lock_file = lock_file
+
+    # --- réception -----------------------------------------------------------------------
+
+    def _known(self, digest: str) -> bool:
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT 1 FROM imports WHERE file_sha256 = :h"), {"h": digest}
+            ).first()
+        return row is not None
+
+    def _record(
+        self,
+        f: Incoming,
+        digest: str,
+        status: str,
+        stats: dict[str, Any],
+        parsed: ParsedFile | None,
+    ) -> str:
+        import_id = new_id()
+        now = now_iso()
+        stamp = utcnow().strftime("%Y/%m")
+        archive_path = self.archiver.store(f.data, stamp, f"{import_id}-{safe_name(f.name)}")
+        with begin_immediate(self.engine) as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO imports (id, source, file_sha256, file_name, received_at, status, "
+                    "stats_json, archive_path, updated_at) VALUES (:id, :src, :h, :n, :at, :st, "
+                    ":stats, :ap, :at)"
+                ),
+                {
+                    "id": import_id,
+                    "src": SOURCE,
+                    "h": digest,
+                    "n": safe_name(f.name),
+                    "at": now,
+                    "st": status,
+                    "stats": canonical.dumps(stats),
+                    "ap": archive_path,
+                },
+            )
+            for s in parsed.statements if parsed else []:
+                conn.execute(
+                    text(
+                        "INSERT INTO import_statements (import_id, stmt_index, opbd_date, "
+                        "clbd_date, status, updated_at) VALUES (:i, :x, :o, :c, 'pending', :at)"
+                    ),
+                    {
+                        "i": import_id,
+                        "x": s.index,
+                        "o": s.opening.on_date if s.opening else None,
+                        "c": s.closing.on_date if s.closing else None,
+                        "at": now,
+                    },
+                )
+        return import_id
+
+    def stage(self, f: Incoming) -> tuple[FileOutcome, ParsedFile | None]:
+        digest = sha256(f.data)
+        if self._known(digest):
+            self.archiver.store(f.data, "duplicates", f"{digest[:16]}-{safe_name(f.name)}")
+            log.info("import.duplicate_file")
+            return FileOutcome(f.name, None, "duplicate", "import.duplicate_file"), None
+        try:
+            parsed = parser.parse(f.data)
+        except parser.CamtError as exc:
+            stats: dict[str, Any] = {"reason": exc.code, "detail": exc.reason}
+            import_id = self._record(f, digest, "rejected", stats, None)
+            log.warning("import.rejected", import_id=import_id, reason=exc.code)
+            return FileOutcome(f.name, import_id, "rejected", exc.code), None
+        stats = {"version": parsed.version}
+        import_id = self._record(f, digest, "staged", stats, parsed)
+        return FileOutcome(f.name, import_id, "staged"), parsed
+
+    # --- rapprochement et application ----------------------------------------------------
+
+    def apply_all(
+        self, staged: dict[str, ParsedFile], only: set[tuple[str, int]] | None = None
+    ) -> list[StatementOutcome]:
+        """Applique les relevés triés par compte puis par OPBD, une transaction chacun."""
+        work = [
+            (import_id, s)
+            for import_id, pf in staged.items()
+            for s in pf.statements
+            if only is None or (import_id, s.index) in only
+        ]
+        work.sort(
+            key=lambda w: (w[1].iban or "", w[1].opening.on_date if w[1].opening else "", w[0])
+        )
+        outcomes = [self._apply_statement(import_id, s) for import_id, s in work]
+        for import_id in sorted({o.import_id for o in outcomes}):
+            self._finish(import_id)
+        return outcomes
+
+    def _apply_statement(self, import_id: str, st: ParsedStatement) -> StatementOutcome:
+        with begin_immediate(self.engine) as conn:
+            outcome = _reconcile_and_apply(conn, import_id, st)
+            conn.execute(
+                text(
+                    "UPDATE import_statements SET account_id = :a, status = :s, reasons_json = :r, "
+                    "new_entries = :n, duplicates = :d, updated_at = :at "
+                    "WHERE import_id = :i AND stmt_index = :x"
+                ),
+                {
+                    "a": outcome[1],
+                    "s": outcome[0].status,
+                    "r": canonical.dumps(outcome[0].reasons),
+                    "n": outcome[0].new,
+                    "d": outcome[0].duplicates,
+                    "at": now_iso(),
+                    "i": import_id,
+                    "x": st.index,
+                },
+            )
+        result = outcome[0]
+        log.info(
+            "import.statement",
+            import_id=import_id,
+            stmt=st.index,
+            status=result.status,
+            reasons=result.reasons,
+            new=result.new,
+            duplicates=result.duplicates,
+        )
+        return result
+
+    def _finish(self, import_id: str) -> None:
+        with begin_immediate(self.engine) as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT status, reasons_json, new_entries, duplicates FROM import_statements "
+                    "WHERE import_id = :i ORDER BY stmt_index"
+                ),
+                {"i": import_id},
+            ).fetchall()
+            old = conn.execute(
+                text("SELECT status, stats_json FROM imports WHERE id = :i"), {"i": import_id}
+            ).one()
+            applied = all(r[0] == "applied" for r in rows)
+            reasons = sorted({x for r in rows for x in json.loads(r[1])})
+            stats = {
+                **json.loads(old[1]),
+                "statements": len(rows),
+                "new": sum(r[2] for r in rows),
+                "duplicates": sum(r[3] for r in rows),
+                "reasons": reasons,
+            }
+            status = "applied" if applied else "needs_review"
+            conn.execute(
+                text(
+                    "UPDATE imports SET status = :s, stats_json = :j, updated_at = :at "
+                    "WHERE id = :i"
+                ),
+                {"s": status, "j": canonical.dumps(stats), "at": now_iso(), "i": import_id},
+            )
+            if applied and old[0] != "applied":
+                ledger.append_event(
+                    conn,
+                    "import.applied",
+                    urn("finance", "import", import_id),
+                    {"new": stats["new"], "duplicates": stats["duplicates"]},
+                )
+
+    # --- boîte d'entrée ------------------------------------------------------------------
+
+    def ready_files(self) -> list[Path]:
+        if not self.inbox.is_dir():
+            return []
+        now = time.time()
+        out = []
+        for p in sorted(self.inbox.iterdir()):
+            if not p.is_file() or p.name.startswith("."):
+                continue
+            if p.suffix.lower() not in {".xml", ".zip"}:
+                continue
+            if now - p.stat().st_mtime < SETTLE_SECONDS:
+                continue
+            out.append(p)
+        return out
+
+    def process(self, files: Iterable[Incoming]) -> BatchReport:
+        report = BatchReport()
+        staged: dict[str, ParsedFile] = {}
+        for raw in files:
+            try:
+                members = expand(raw.name, raw.data)
+            except ImportRefused as exc:
+                members = []
+                report.files.append(FileOutcome(raw.name, None, "rejected", exc.code))
+            for f in members:
+                outcome, parsed = self.stage(f)
+                report.files.append(outcome)
+                if parsed is not None and outcome.import_id is not None:
+                    staged[outcome.import_id] = parsed
+        report.statements = self.apply_all(staged)
+        if any(s.status == "applied" and s.new for s in report.statements):
+            report.statements += self.retry_needs_review(quiet=True)
+        return report
+
+    def process_inbox(self) -> BatchReport:
+        """Traite l'inbox jusqu'à ce qu'elle soit vide ; rien pendant une reprise d'historique."""
+        total = BatchReport()
+        if self.lock_file.exists():
+            log.info("import.paused", reason="history")
+            return total
+        while paths := self.ready_files():
+            incoming = [Incoming(p.name, p.read_bytes()) for p in paths]
+            batch = self.process(incoming)
+            for p in paths:
+                p.unlink()
+            total.files += batch.files
+            total.statements += batch.statements
+        return total
+
+    def receive(self, name: str, data: bytes) -> BatchReport:
+        """POST /api/finance/imports : même traitement que l'inbox."""
+        if self.lock_file.exists():
+            raise ImportRefused("busy.retry", "reprise d'historique en cours")
+        return self.process([Incoming(name, data)])
+
+    def retry_needs_review(
+        self, import_ids: Sequence[str] | None = None, *, quiet: bool = False
+    ) -> list[StatementOutcome]:
+        """Rejoue les relevés en attente depuis l'archive chiffrée (après une ouverture, un
+        compte ajouté ou un relevé manquant arrivé entre-temps)."""
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT s.import_id, s.stmt_index, i.archive_path FROM import_statements s "
+                    "JOIN imports i ON i.id = s.import_id WHERE s.status = 'needs_review' "
+                    "ORDER BY i.received_at"
+                )
+            ).fetchall()
+        wanted = [r for r in rows if import_ids is None or r[0] in import_ids]
+        if not wanted:
+            return []
+        staged: dict[str, ParsedFile] = {}
+        only = set()
+        for import_id, index, archive_path in wanted:
+            if import_id not in staged:
+                try:
+                    staged[import_id] = parser.parse(self.archiver.load(archive_path))
+                except (ImportRefused, secrets.SecretsError, OSError) as exc:
+                    if quiet:
+                        log.warning("import.retry_unavailable", error=type(exc).__name__)
+                        return []
+                    if isinstance(exc, ImportRefused):
+                        raise
+                    raise ImportRefused("import.archive_unavailable", "archive illisible") from exc
+            only.add((import_id, index))
+        return self.apply_all(staged, only)
+
+
+def _reconcile_and_apply(
+    conn: Connection, import_id: str, st: ParsedStatement
+) -> tuple[StatementOutcome, str | None]:
+    reasons: list[Anomaly] = list(st.anomalies)
+    account = catalog.account_by_iban(conn, st.iban) if st.iban else None
+    if account is None:
+        reasons.append("unknown_account")
+        return StatementOutcome(import_id, st.index, "needs_review", sorted(set(reasons))), None
+    if st.currency is not None and st.currency != account.currency:
+        reasons.append("currency_mismatch")
+    opening = conn.execute(
+        text("SELECT booking_date FROM entries WHERE account_id = :a AND kind = 'opening'"),
+        {"a": account.id},
+    ).first()
+    if opening is None:
+        reasons.append("no_opening")
+    elif any(e.booking_date <= opening[0] for e in st.entries) or (
+        st.closing is not None and st.closing.on_date < opening[0]
+    ):
+        reasons.append("before_opening")
+
+    iban = account.iban or ""
+    keys = dedup.keys(iban, st.entries)
+    existing = _existing_keys(conn, keys)
+    fresh = [(e, k) for e, k in zip(st.entries, keys, strict=True) if k not in existing]
+    statement_keys = set(keys)
+    for e, _k in fresh:
+        others = conn.execute(
+            text(
+                "SELECT dedup_key FROM entries WHERE account_id = :a AND booking_date = :d "
+                "AND amount_minor = :m AND kind = 'movement'"
+            ),
+            {"a": account.id, "d": e.booking_date, "m": e.amount_minor},
+        ).scalars()
+        if any(k not in statement_keys for k in others):
+            reasons.append("near_duplicate")
+            break
+
+    checkpoints: list[tuple[str, str, int]] = []
+    if st.opening is not None and st.closing is not None:
+        total = st.opening.amount_minor + sum(e.amount_minor for e in st.entries)
+        if total != st.closing.amount_minor:
+            reasons.append("internal_check_failed")
+        for kind, bal in (("OPBD", st.opening), ("CLBD", st.closing)):
+            known = conn.execute(
+                text(
+                    "SELECT amount_minor FROM checkpoints WHERE account_id = :a AND on_date = :d "
+                    "AND kind = :k"
+                ),
+                {"a": account.id, "d": bal.on_date, "k": kind},
+            ).scalar_one_or_none()
+            if known is None:
+                checkpoints.append((kind, bal.on_date, bal.amount_minor))
+            elif known != bal.amount_minor:
+                reasons.append("checkpoint_conflict")
+        ledger_balance = conn.execute(
+            text(
+                "SELECT coalesce(sum(amount_minor), 0) FROM entries WHERE account_id = :a "
+                "AND booking_date <= :d AND kind != 'correction'"
+            ),
+            {"a": account.id, "d": st.closing.on_date},
+        ).scalar_one()
+        ledger_balance += sum(
+            e.amount_minor for e, _ in fresh if e.booking_date <= st.closing.on_date
+        )
+        if opening is not None and ledger_balance != st.closing.amount_minor:
+            reasons.append("ledger_check_failed")
+
+    duplicates = len(st.entries) - len(fresh)
+    if reasons:
+        return (
+            StatementOutcome(
+                import_id, st.index, "needs_review", sorted(set(reasons)), 0, duplicates
+            ),
+            account.id,
+        )
+
+    own = catalog.own_ibans(conn) - {iban}
+    created = now_iso()
+    for e, key in fresh:
+        seq, _id = ledger.append_entry(
+            conn,
+            ledger.NewEntry(
+                account_id=account.id,
+                booking_date=e.booking_date,
+                value_date=e.value_date,
+                amount_minor=e.amount_minor,
+                currency=e.currency,
+                counterparty=e.counterparty,
+                counterparty_iban=e.counterparty_iban,
+                label=e.label,
+                remittance=e.remittance,
+                bank_ref=e.bank_ref,
+                bank_tx_code=e.bank_tx_code,
+                fx_json=e.fx_json,
+                dedup_key=key,
+                import_id=import_id,
+            ),
+            created,
+        )
+        if e.counterparty_iban and e.counterparty_iban in own:
+            ledger.append(
+                conn,
+                "categorizations",
+                {
+                    "entry_seq": seq,
+                    "category_id": TRANSFER_CATEGORY,
+                    "source": "rule",
+                    "rule_id": TRANSFER_RULE,
+                    "proposal_id": None,
+                    "created_at": created,
+                },
+            )
+    for kind, on_date, amount in checkpoints:
+        ledger.append(
+            conn,
+            "checkpoints",
+            {
+                "account_id": account.id,
+                "on_date": on_date,
+                "kind": kind,
+                "amount_minor": amount,
+                "import_id": import_id,
+            },
+        )
+    if fresh:
+        ledger.append_event(
+            conn,
+            "entries.appended",
+            urn("finance", "account", account.id),
+            {"import_id": import_id, "count": len(fresh)},
+        )
+    return (
+        StatementOutcome(import_id, st.index, "applied", [], len(fresh), duplicates),
+        account.id,
+    )
+
+
+def _existing_keys(conn: Connection, keys: Sequence[str]) -> set[str]:
+    found: set[str] = set()
+    for i in range(0, len(keys), 500):
+        chunk = keys[i : i + 500]
+        marks = ",".join(f":k{j}" for j in range(len(chunk)))
+        found.update(
+            conn.execute(
+                text(f"SELECT dedup_key FROM entries WHERE dedup_key IN ({marks})"),
+                {f"k{j}": k for j, k in enumerate(chunk)},
+            ).scalars()
+        )
+    return found
+
+
+# --- ouverture et reprise d'historique ------------------------------------------------------
+
+
+def open_account(
+    conn: Connection, account_id: str, booking_date: str, amount_minor: int, currency: str
+) -> int:
+    """Écriture d'ouverture, une seule par compte. Sa clé vient de l'IBAN (ou de la référence
+    externe), pas du ULID du compte : une reconstruction redonne le même identifiant."""
+    account = catalog.get_account(conn, account_id)
+    if conn.execute(
+        text("SELECT 1 FROM entries WHERE account_id = :a LIMIT 1"), {"a": account_id}
+    ).first():
+        raise ImportRefused("import.before_opening", "le registre de ce compte est déjà ouvert")
+    seq, _ = ledger.append_entry(
+        conn,
+        ledger.NewEntry(
+            account_id=account_id,
+            kind="opening",
+            booking_date=booking_date,
+            amount_minor=amount_minor,
+            currency=currency,
+            dedup_key=dedup.opening_key(account.iban or account.external_ref or account.id),
+            label="Solde d'ouverture",
+        ),
+    )
+    return seq
+
+
+@dataclass
+class HistoryReport:
+    ok: bool
+    accounts: list[dict[str, Any]] = field(default_factory=list)
+    batch: dict[str, int] = field(default_factory=dict)
+    error: str | None = None
+    missing: list[dict[str, str]] = field(default_factory=list)  # périodes manquantes
+
+    def public(self) -> dict[str, Any]:
+        return {
+            "ok": self.ok,
+            "error": self.error,
+            "missing": self.missing,
+            "accounts": self.accounts,
+            "batch": self.batch,
+        }
+
+
+@contextmanager
+def _locked(lock_file: Path) -> Any:
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        lock_file.touch(exist_ok=False)
+    except FileExistsError:
+        raise ImportRefused("busy.retry", "une reprise d'historique est déjà en cours") from None
+    try:
+        yield
+    finally:
+        lock_file.unlink(missing_ok=True)
+
+
+def _day_before(iso_date: str) -> str:
+    return (date.fromisoformat(iso_date) - timedelta(days=1)).isoformat()
+
+
+def import_history(service: ImportService, folder: Path) -> HistoryReport:
+    """`hub finance import-history <dossier>` : trie, vérifie la continuité avant d'écrire, ouvre
+    chaque compte au relevé le plus ancien, puis applique tout. Un trou arrête tout."""
+    with _locked(service.lock_file):
+        files: dict[str, Incoming] = {}
+        for p in sorted(folder.iterdir()):
+            if p.is_file() and p.suffix.lower() in {".xml", ".zip"}:
+                for f in expand(p.name, p.read_bytes()):
+                    files.setdefault(sha256(f.data), f)
+        parsed: list[tuple[Incoming, ParsedFile]] = []
+        for f in files.values():
+            if service._known(sha256(f.data)):
+                continue
+            try:
+                parsed.append((f, parser.parse(f.data)))
+            except parser.CamtError as exc:
+                return HistoryReport(ok=False, error=f"{exc.code} : {safe_name(f.name)}")
+
+        by_iban: dict[str, list[_Span]] = {}
+        for _f, pf in parsed:
+            for s in pf.statements:
+                if s.iban is None or s.opening is None or s.closing is None:
+                    return HistoryReport(ok=False, error="relevé sans IBAN ou sans soldes")
+                by_iban.setdefault(s.iban, []).append(_Span(s, s.opening, s.closing))
+
+        report = HistoryReport(ok=True)
+        openings: list[tuple[catalog.Account, _Span]] = []
+        with service.engine.connect() as conn:
+            for iban, spans in sorted(by_iban.items()):
+                account = catalog.account_by_iban(conn, iban)
+                if account is None:
+                    return HistoryReport(ok=False, error=f"compte inconnu : {mask_iban(iban)}")
+                if conn.execute(
+                    text("SELECT 1 FROM entries WHERE account_id = :a LIMIT 1"), {"a": account.id}
+                ).first():
+                    return HistoryReport(
+                        ok=False, error=f"registre déjà ouvert pour {mask_iban(iban)}"
+                    )
+                spans.sort(key=lambda x: (x.opening.on_date, x.closing.on_date))
+                for prev, nxt in itertools.pairwise(spans):
+                    # CLBD d'un relevé = OPBD du suivant ; deux relevés qui se recouvrent sont
+                    # laissés au dédoublonnage
+                    overlap = nxt.opening.on_date <= prev.closing.on_date
+                    if not overlap and nxt.opening.amount_minor != prev.closing.amount_minor:
+                        report.missing.append(
+                            {
+                                "account": mask_iban(iban) or "",
+                                "from": prev.closing.on_date,
+                                "to": nxt.opening.on_date,
+                            }
+                        )
+                openings.append((account, spans[0]))
+        if report.missing:
+            report.ok = False
+            report.error = "historique discontinu"
+            return report
+
+        for account, oldest in openings:
+            first = min([e.booking_date for e in oldest.stmt.entries] + [oldest.opening.on_date])
+            with begin_immediate(service.engine) as conn:
+                open_account(
+                    conn,
+                    account.id,
+                    _day_before(first),
+                    oldest.opening.amount_minor,
+                    account.currency,
+                )
+        batch = service.process(f for f, _ in parsed)
+        report.batch = batch.counters()
+        report.ok = report.batch["needs_review"] == 0 and report.batch["rejected_files"] == 0
+        with service.engine.connect() as conn:
+            for account, _oldest in openings:
+                row = conn.execute(
+                    text(
+                        "SELECT count(*), min(booking_date), max(booking_date) FROM entries "
+                        "WHERE account_id = :a AND kind = 'movement'"
+                    ),
+                    {"a": account.id},
+                ).one()
+                report.accounts.append(
+                    {
+                        "account": mask_iban(account.iban),
+                        "statements": len(by_iban[account.iban or ""]),
+                        "entries": row[0],
+                        "from": row[1],
+                        "to": row[2],
+                    }
+                )
+        return report
+
+
+@dataclass(frozen=True)
+class _Span:
+    stmt: ParsedStatement
+    opening: Balance
+    closing: Balance
