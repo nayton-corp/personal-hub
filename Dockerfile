@@ -24,6 +24,10 @@ RUN uv sync --frozen --no-dev --no-editable
 # --- API, importeur, planificateur : une seule image, des commandes différentes ---
 FROM ${PYTHON_IMAGE} AS hub
 COPY --from=restic /usr/bin/restic /usr/local/bin/restic
+# pdftotext (poppler) lit les PDF VIAC, comme les scripts du Mac (lot 4)
+RUN apt-get update \
+ && apt-get install --no-install-recommends -y poppler-utils \
+ && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 hub \
  && useradd --uid 10001 --gid 10001 --home-dir /srv/hub --shell /usr/sbin/nologin hub \
  && mkdir -p /srv/hub/data /srv/hub/archive /srv/hub/backup /srv/hub/inbox \

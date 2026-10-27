@@ -21,7 +21,7 @@ MONTH = r"^\d{4}-(0[1-9]|1[0-2])$"
 PERIOD = r"^[mq]$"
 DATE = r"^\d{4}-\d{2}-\d{2}$"
 MAX_UPLOAD = 50 * 1024 * 1024
-_NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip)$", re.I)
+_NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip|pdf)$", re.I)
 
 Reader = Annotated[Principal, Depends(require("app", "finance:read"))]
 AnyReader = Annotated[Principal, Depends(require("app", "finance:read", "finance:aggregates"))]
@@ -132,6 +132,14 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         with engine.connect() as conn:
             return insights.kpis(conn, m, domain.today(), pillar3a_cap=domain.pillar3a_cap)
 
+    @r.get("/holdings")
+    def holdings(
+        _p: AnyReader, on: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None
+    ) -> dict[str, Any]:
+        """Positions des comptes de titres (VIAC) à une date, aujourd'hui par défaut."""
+        with engine.connect() as conn:
+            return insights.holdings(conn, on or domain.today().isoformat())
+
     @r.get("/networth/history")
     def networth_history(
         _p: AnyReader,
@@ -213,9 +221,9 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         _session: AppSession,
         name: Annotated[str, Query(max_length=124)],
     ) -> dict[str, Any]:
-        """Corps brut (XML ou zip) ; même traitement que `inbox/`."""
+        """Corps brut (XML, zip ou PDF VIAC) ; même traitement que `inbox/`."""
         if not _NAME.match(name):
-            raise Problem("validation.params", "nom de fichier .xml ou .zip attendu")
+            raise Problem("validation.params", "nom de fichier .xml, .zip ou .pdf attendu")
         body = await request.body()
         if not body or len(body) > MAX_UPLOAD:
             raise Problem("validation.params", "fichier vide ou trop volumineux")

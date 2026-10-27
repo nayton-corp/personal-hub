@@ -60,8 +60,8 @@ def test_seed_data(finance: FinanceDomain) -> None:
         assert conn.execute(
             text("SELECT grp FROM categories WHERE id='transfer-own'")
         ).scalar() == ("transfer")
-        # 0004_rules : règles de départ de bcf_aggregate.py, version des règles + 1
-        assert conn.execute(text("SELECT version FROM rules_meta")).scalar() == 2
+        # 0004_rules : règles de départ de bcf_aggregate.py ; 0005_viac : règles VIAC
+        assert conn.execute(text("SELECT version FROM rules_meta")).scalar() == 3
         seeds = conn.execute(text("SELECT count(*) FROM rules WHERE id LIKE 'seed-%'")).scalar()
         assert seeds is not None
         assert seeds > 250
@@ -145,6 +145,49 @@ def seed_every_table(finance: FinanceDomain) -> None:
             conn,
             "applied_proposals",
             {"proposal_id": "p1", "kind": "x", "result_json": "{}", "applied_at": at},
+        )
+        ledger.append(
+            conn,
+            "trades",
+            {
+                "account_id": account.id,
+                "trade_date": "2026-10-02",
+                "isin": "CH0000000011",
+                "quantity": "1.5",
+                "amount_minor": 15000,
+                "currency": "CHF",
+                "dedup_key": "k",
+                "import_id": imp,
+                "created_at": at,
+            },
+        )
+        ledger.append(
+            conn,
+            "holdings",
+            {
+                "account_id": account.id,
+                "on_date": "2026-10-02",
+                "isin": "CH0000000011",
+                "quantity": "1.5",
+                "value_minor": 15000,
+                "currency": "CHF",
+                "cost_price": "100",
+                "import_id": imp,
+                "created_at": at,
+            },
+        )
+        ledger.append(
+            conn,
+            "prices",
+            {
+                "isin": "CH0000000011",
+                "on_date": "2026-10-02",
+                "price": "100",
+                "currency": "CHF",
+                "source": "viac_report",
+                "import_id": imp,
+                "created_at": at,
+            },
         )
         ledger.append_event(conn, "test", "hub:finance:entry:x")
 

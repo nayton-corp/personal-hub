@@ -113,7 +113,12 @@
         <div class="kv"><span>Versements nets</span><b class="amt" id="p-deposits">—</b></div>
         <div class="kv"><span>Effet marché</span><b class="amt" id="p-market">—</b></div>
         <div class="kv total"><span>Variation totale</span><b class="amt" id="p-total">—</b></div>
-        <p class="note mt">Les positions VIAC et IBKR arrivent au lot 4 : d'ici là, l'effet marché reste nul.</p>
+        <p class="note mt">Effet marché : valeur des positions moins versements nets (dividendes, intérêts et frais compris).</p>
+      </div>
+      <div class="card" id="c-positions" hidden>
+        <div class="head"><h2>Positions</h2><span class="note" id="positions-note">—</span></div>
+        <div id="pos-list"></div>
+        <p class="note mt warn" id="pos-missing" hidden></p>
       </div>
       <div class="card">
         <div class="head"><h2>Comptes</h2><span class="note" id="comptes-note">—</span></div>

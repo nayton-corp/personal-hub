@@ -1,6 +1,7 @@
-# Domaine Finance : registre BCF
+# Domaine Finance : registre BCF et VIAC
 
-Ce que font les lots 1 à 3, et comment reprendre ton historique BCF et tes règles sur le Mac.
+Ce que font les lots 1 à 4, et comment reprendre ton historique BCF, tes règles et tes PDF
+VIAC sur le Mac.
 Toutes les commandes passent par le conteneur `importer`, le seul qui voit la boîte d'entrée :
 
 ```
@@ -11,7 +12,7 @@ alias fin='hubc run --rm --no-deps importer hub finance'
 ## Ce qui tourne
 
 - `importer` surveille `~/PersonalHub/inbox/` toutes les 30 s (`hub finance watch-inbox`).
-  Un `.xml` camt.053 (.001.04 ou .001.08) ou un `.zip` de relevés y est validé contre le XSD
+  Un `.xml` camt.053 (.001.04 ou .001.08), un `.pdf` VIAC ou un `.zip` y est validé contre le XSD
   ISO 20022, rapproché, puis appliqué s'il n'y a aucune anomalie. Le fichier est ensuite
   chiffré avec ta clé age vers le volume `archive` et retiré de la boîte d'entrée.
 - Un relevé avec une anomalie reste « en attente » (`needs_review`) sans rien écrire. Les
@@ -48,8 +49,8 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
   « Autres » (flux, budget, résumé).
 - **Instantanés.** Une ligne par fin de mois depuis la première écriture, plus une pour
   aujourd'hui, recalculées en entier chaque nuit et après chaque import appliqué (un relevé
-  ancien corrige donc aussi les mois passés). Au lot 2, la valeur d'un compte est son solde
-  et l'effet marché est nul ; les positions VIAC et IBKR arrivent au lot 4.
+  ancien corrige donc aussi les mois passés). La valeur d'un compte est son solde, sauf pour
+  les titres VIAC, valorisés par leurs positions (lot 4).
 - **3e pilier.** Plafond 2026 : 7'258 CHF. Une autre valeur se règle dans `settings.toml`,
   section `[finance]`, clé `pillar3a_cap_minor` (en centimes).
 
@@ -81,8 +82,8 @@ format ».
    puis supprime le dossier `history/` du Mac (les originaux sont archivés chiffrés).
 
 La reprise n'est possible qu'une fois par compte : dès qu'un compte a des écritures, un relevé
-plus ancien est refusé (`before_opening`). Revenir plus loin demanderait une reconstruction
-(lot 4).
+plus ancien est refusé (`before_opening`). Pour revenir plus loin, il faut repartir d'une base
+vide pour ce compte : exporte d'abord tout l'historique disponible.
 
 ## Catégories et Double Sas (lot 3)
 
@@ -125,6 +126,73 @@ devient une carte `apply_import` à valider ; il est rejoué avant d'appliquer. 
 `hubc run --rm --no-deps importer hub proposals list|show|accept|reject` fait la même chose
 sans Face ID (le terminal du Mac vaut validation).
 
+## VIAC et patrimoine (lot 4)
+
+**Deux comptes par portefeuille.** Chaque portefeuille VIAC devient deux comptes de
+prévoyance : les liquidités 3a (`viac:<n°>:cash`), où passent versements, dividendes,
+intérêts et commissions, et les titres (`viac:<n°>:titres`). Un achat débite les liquidités et
+crédite les titres du même montant (et l'inverse pour une vente).
+
+**Ce qui est lu.** Les PDF passent par `pdftotext -layout` (poppler, dans l'image), puis par
+les motifs de tes scripts `viac_parser.py` et `viac_rapport.py`, portés côté serveur :
+
+| Document | Ce qu'il écrit |
+|---|---|
+| Opération de bourse (achat, vente) | deux écritures (liquidités et titres), l'opération (parts, ISIN), le cours |
+| Avis de dividende, intérêts, commission | une écriture sur les liquidités, catégories `rendement` ou `frais-placement` |
+| Versement, retrait | une écriture sur les liquidités, catégorie `transfer-own` (c'est un apport) |
+| Rapport « Rapport au JJ.MM.AAAA » | les positions (parts, valeur), leurs cours, et le solde du compte 3a comme point de contrôle |
+| Attestation fiscale, relevé récapitulatif | rien (`ignored`) : une attestation cite des versements, elle n'en est pas un |
+
+Un PDF qui ne se lit pas entièrement est refusé (`viac.unrecognized`, `viac.unreadable`) au
+lieu d'écrire une ligne « inconnue ». Un rapport ne bloque jamais : s'il ne colle pas aux avis,
+l'import est appliqué et signale `holdings_mismatch` (parts), `ledger_check_failed`
+(liquidités) ou `checkpoint_conflict` dans ses motifs.
+
+**Valeur et effet marché.** Les titres valent leurs parts (dernier rapport, plus les achats et
+ventes des avis postérieurs) fois le dernier cours connu. Les versements nets sont toutes les
+écritures sauf le rendement et les frais : l'effet marché (valeur moins versements) comprend
+donc la hausse des cours, les dividendes, les intérêts et les commissions. La marge 3a compte
+les versements reçus par VIAC (ou, s'ils sont plus élevés, les paiements « Épargne 3a » des
+comptes BCF). `GET /api/finance/holdings?on=` donne les positions (valeur, prix de revient au
+coût moyen, plus-value, poids) ; l'onglet Patrimoine les affiche.
+
+**Reprendre tes PDF VIAC (sur le Mac).**
+
+1. Pour chaque portefeuille (le numéro est en tête de chaque avis, `3.xxx.xxx.xxx.xx`) :
+   ```
+   fin viac add-portfolio 3.123.456.789.01 --name "VIAC 1"
+   ```
+2. Copie tes PDF dans `~/PersonalHub/inbox/viac-history/` : les avis
+   (`~/Downloads/viac_out/viac_pdfs/` ou l'export de l'app VIAC) et les rapports, avec leurs
+   sous-dossiers si tu veux (la surveillance ne lit pas les sous-dossiers).
+3. Lance la reprise :
+   ```
+   fin viac import-history /srv/hub/inbox/viac-history
+   ```
+   Elle lit **tous** les PDF avant d'écrire ; un PDF illisible ou un portefeuille inconnu
+   arrête tout sans rien écrire. Elle ouvre ensuite les deux comptes à zéro la veille du plus
+   ancien document, puis applique tout par date (le même jour : versements, ventes, achats,
+   le reste, puis les rapports). La sortie ne contient que des compteurs ; `warnings` liste
+   les écarts relevés par les rapports.
+4. Vérifie : `fin verify-ledger`, `fin imports list --status needs_review` (vide), l'onglet
+   Patrimoine (valeur VIAC égale au dernier rapport), puis supprime le dossier du Mac.
+
+Ensuite, un nouveau PDF déposé dans `~/PersonalHub/inbox/` est traité comme un relevé BCF.
+La collecte automatique (bot VIAC) arrive au lot 5. Pour lancer le hub hors conteneur sur le
+Mac, installe d'abord poppler : `brew install poppler`.
+
+**Reconstruction par rejeu.** `fin rebuild --out /srv/hub/data/rebuild` reconstruit le
+registre dans une base neuve, sans toucher l'originale : données de référence (comptes avec
+leurs identifiants, catégories, règles dans leur état final, cours de change), ouvertures,
+puis chaque import relu depuis son archive chiffrée et chaque proposition validée, dans
+l'ordre où ils sont arrivés. Il compare ensuite les deux bases (`fin compare <base>` fait la
+comparaison seule) : soldes, écritures, catégories, totaux mensuels, notes, étiquettes,
+budgets, points de contrôle, imports, opérations, positions et cours ; code 1 au moindre écart,
+avec des compteurs et des identifiants opaques seulement. Un écart attendu : une catégorie posée
+par une règle depuis désactivée. La base reconstruite ouvre une nouvelle époque du journal ;
+la mettre en service se fait hub arrêté (remplacer `finance.db`, puis `fin verify-ledger`).
+
 ## Autres commandes
 
 | Commande | Rôle |
@@ -136,3 +204,5 @@ sans Face ID (le terminal du Mac vaut validation).
 | `fin watch-inbox --once` | un passage de la boîte d'entrée |
 | `fin verify-ledger` | chaîne et empreintes, code 1 au moindre écart |
 | `fin rebuild-fts` | index de recherche, après une restauration |
+| `fin viac add-portfolio N° --name …` · `fin viac import-history DOSSIER` | comptes et reprise VIAC |
+| `fin rebuild --out DOSSIER` · `fin compare BASE` | reconstruction par rejeu et comparaison |

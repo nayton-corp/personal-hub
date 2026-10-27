@@ -142,6 +142,14 @@ def account_by_iban(conn: Connection, iban: str) -> Account | None:
     return _account(tuple(row)) if row else None
 
 
+def account_by_ref(conn: Connection, external_ref: str) -> Account | None:
+    row = conn.execute(
+        text(f"SELECT {_ACCOUNT_COLS} FROM accounts WHERE external_ref = :r"),  # noqa: S608
+        {"r": external_ref},
+    ).first()
+    return _account(tuple(row)) if row else None
+
+
 def own_ibans(conn: Connection) -> frozenset[str]:
     rows = conn.execute(text("SELECT iban FROM accounts WHERE iban IS NOT NULL"))
     return frozenset(str(r[0]) for r in rows)

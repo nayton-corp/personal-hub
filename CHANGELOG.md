@@ -2,6 +2,24 @@
 
 ## [Non publié]
 
+### Lot 4 — VIAC et patrimoine minimal
+
+- Schéma `0005_viac` : instruments, opérations (`trades`), positions (`holdings`) et cours
+  (`prices`) en ajout seul et chaînés au journal, `rebuild_meta`, catégories `transfer-titres`,
+  `rendement` et `frais-placement`, règles système des codes `VIAC/…`.
+- PDF VIAC : `pdftotext -layout` isolé (processus séparé, délai, mémoire et taille plafonnés,
+  rien sur le disque), parseurs des avis (achat, vente, dividende, intérêts, commission,
+  versement, retrait) et du rapport portés de `viac_parser.py` et `viac_rapport.py` ;
+  attestations et relevés reconnus et ignorés, le reste refusé.
+- Deux comptes par portefeuille (liquidités 3a et titres) ; boîte d'entrée et dépôt par l'API
+  acceptent les `.pdf` ; `hub finance viac add-portfolio` et `viac import-history`.
+- Valorisation des titres par positions et cours, versements nets hors rendement et frais
+  (l'effet marché n'est plus nul), marge 3a d'après les versements VIAC, valeur de marché dans
+  `accounts`, route `holdings`, carte Positions dans l'onglet Patrimoine.
+- `hub finance rebuild` (reconstruction du registre par rejeu, nouvelle époque du journal) et
+  `hub finance compare`.
+- Image et CI : poppler-utils.
+
 ### Lot 3 — Catégories et Double Sas
 
 - Moteur de règles (`0004_rules`) : la règle active la plus prioritaire gagne, appliquée à

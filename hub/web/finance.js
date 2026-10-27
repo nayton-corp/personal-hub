@@ -19,6 +19,7 @@ const path = {
   kpis: () => `/finance/kpis?month=${P.month}`,
   history: () => "/finance/networth/history",
   accounts: () => "/finance/accounts",
+  holdings: () => "/finance/holdings",
   freshness: () => "/finance/freshness",
   categories: () => "/finance/categories",
   budget: () => `/finance/budget?month=${P.month}&period=${P.period}`,
@@ -230,6 +231,8 @@ function patrimoine() {
     { n: "Crypto", v: units(k.envelopes.crypto) },
   ].sort((a, b) => b.v - a.v) : null, chf);
 
+  positions();
+
   const list = $("acct-list");
   list.replaceChildren();
   const acc = store.use(path.accounts());
@@ -245,7 +248,7 @@ function patrimoine() {
     if (!rs.length) continue;
     if (P.env === "all") {
       const g = el("div", "grp");
-      g.append(el("span", "", KIND_LABEL[kind]), el("span", "amt", chf(rs.reduce((s, a) => s + units(a.balance), 0))));
+      g.append(el("span", "", KIND_LABEL[kind]), el("span", "amt", chf(rs.reduce((s, a) => s + units(a.value), 0))));
       list.append(g);
     }
     for (const a of rs) {
@@ -254,11 +257,32 @@ function patrimoine() {
       const stale = a.kind === "cash" && (age == null || age > STALE_DAYS);
       const gap = a.last_clbd && a.last_clbd.gap.minor !== 0;
       const sub = (clbd ? `relevé du ${date(clbd)}` : "aucun relevé") + (stale ? " · à rafraîchir" : "") + (gap ? " · écart au relevé" : "");
-      const r = row(initials(a.institution), a.name, sub, chf(units(a.balance)), a.iban || null, "", true);
+      const r = row(initials(a.institution), a.name, sub, chf(units(a.value)), a.iban || null, "", true);
       if (stale || gap) r.querySelector(".n span").className = "warn";
       list.append(r);
     }
   }
+}
+
+// positions des comptes de titres (VIAC) : valeur, plus-value latente, poids
+function positions() {
+  const card = $("c-positions");
+  const h = store.use(path.holdings()).data;
+  const show = h && h.items.length && (P.env === "all" || P.env === "pilier3a");
+  card.hidden = !show;
+  if (!show) return;
+  const list = $("pos-list");
+  list.replaceChildren();
+  const gain = h.cost ? units(h.value) - units(h.cost) : null;
+  text("positions-note", gain == null ? `${chf(units(h.value))} CHF` : `plus-value ${signed(gain)} CHF`);
+  for (const p of h.items) {
+    const sub = `${p.quantity.replace(".", ",")} parts · ${pct(ratio(p.weight), 1)}` + (p.price_date ? ` · cours du ${date(p.price_date)}` : " · sans cours");
+    const g = p.gain ? units(p.gain) : null;
+    list.append(row(initials(p.name), p.name, sub, chf(units(p.value)), g == null ? null : signed(g), g == null ? "" : g >= 0 ? "up" : "down", false));
+  }
+  const missing = $("pos-missing");
+  missing.hidden = !h.missing_prices.length;
+  missing.textContent = h.missing_prices.length ? `Sans cours : ${h.missing_prices.join(", ")} (valorisé au solde du registre).` : "";
 }
 
 // --- budget ---------------------------------------------------------------------------------
