@@ -26,6 +26,7 @@ from hub.core.domain import Domain, ExternalHandler, LocalHandler, Preview, Prop
 from hub.core.errors import Problem
 from hub.core.ids import new_id, urn
 from hub.core.logging import get_logger
+from hub.core.notify import Message
 
 FINAL = frozenset({"applied", "rejected", "expired", "superseded", "obsolete", "failed"})
 APPLYING_GRACE = timedelta(minutes=5)
@@ -154,6 +155,21 @@ def _check_allowed(principal: Principal, domain: str, kind: ProposalKind) -> Non
         raise Problem("proposal.kind_not_allowed")
 
 
+def _enforce_hourly(hub: HubContext, principal: Principal) -> None:
+    """Un jeton crée au plus `auth.token_proposals_per_hour` propositions par heure glissante
+    (un modèle emballé, ou manipulé par un libellé, ne noie pas l'app sous les cartes)."""
+    since = iso(utcnow() - timedelta(hours=1))
+    with hub.core.engine.connect() as conn:
+        count = conn.execute(
+            text("SELECT count(*) FROM proposals WHERE created_by = :a AND created_at >= :s"),
+            {"a": principal.actor, "s": since},
+        ).scalar_one()
+    if count >= hub.settings.auth.token_proposals_per_hour:
+        raise Problem(
+            "rate_limited", "trop de propositions cette heure", headers={"Retry-After": "600"}
+        )
+
+
 def _validate(kind: ProposalKind, params: dict[str, Any]) -> BaseModel:
     try:
         return kind.params_model.model_validate(params)
@@ -234,6 +250,8 @@ def create(
         raise Problem("proposal.kind_unknown")
     _check_allowed(principal, domain, kind)
     model = _validate(kind, params)
+    if not principal.is_app:
+        _enforce_hourly(hub, principal)
     clean = model.model_dump(mode="json")
     params_hash = canonical.sha256_hex({"domain": domain, "kind": kind_name, "params": clean})
 
@@ -629,8 +647,9 @@ EVENTS_CONSUMER = "proposals"
 
 def sync_events(hub: HubContext, limit: int = 500) -> dict[str, int]:
     """Lit la boîte de sortie de chaque domaine : `proposal.request` crée une carte (création
-    idempotente), `proposal.obsolete` rend sans objet celle qui attend encore."""
-    counts = {"requested": 0, "obsoleted": 0}
+    idempotente), `proposal.obsolete` rend sans objet celle qui attend encore,
+    `notify.request` envoie une notification (texte générique, posé par une sentinelle)."""
+    counts = {"requested": 0, "obsoleted": 0, "notified": 0}
     for d in hub.registry:
         with hub.core.engine.connect() as conn:
             row = conn.execute(
@@ -644,6 +663,8 @@ def sync_events(hub: HubContext, limit: int = 500) -> dict[str, int]:
                     counts["requested"] += _requested(hub, d, e.payload)
                 elif e.type == "proposal.obsolete":
                     counts["obsoleted"] += _obsolete(hub, d.name, e.payload)
+                elif e.type == "notify.request":
+                    counts["notified"] += _notify(hub, e.payload)
             cursor = events[-1].seq
             with hub.core.engine.begin() as conn:
                 values = {"c": EVENTS_CONSUMER, "d": d.name, "n": cursor, "at": now_iso()}
@@ -665,6 +686,12 @@ def sync_events(hub: HubContext, limit: int = 500) -> dict[str, int]:
             if len(events) < limit:
                 break
     return counts
+
+
+def _notify(hub: HubContext, payload: dict[str, Any]) -> int:
+    title = str(payload.get("title") or "Personal Hub")[:120]
+    body = str(payload.get("body") or "")[:300]
+    return int(hub.notifier.send(Message(title, body, tags=str(payload.get("tags") or ""))))
 
 
 def _requested(hub: HubContext, d: Domain, payload: dict[str, Any]) -> int:

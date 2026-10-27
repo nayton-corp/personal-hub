@@ -160,6 +160,24 @@ services:
       - collector-market:/var/lib/hub-collector
       - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/market.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
 
+  # --- lot 7 : IA locale, profil « brain » (COMPOSE_PROFILES=collectors,brain) ---
+  # Passerelle MCP et assistant. Ne voit le hub que par l'API, avec ses propres jetons (« brain »
+  # et « agrégats », dans brain.enc.yaml) ; joint Ollama, qui tourne en natif sur le Mac pour
+  # avoir le GPU, par host.docker.internal. Aucune base, aucun dossier du Mac.
+  brain:
+    <<: *hardening
+    image: hub:${HUB_TAG:-dev}
+    profiles: [brain]
+    command: ["hub-brain", "daemon"]
+    environment: *hub-env
+    volumes:
+      - brain:/srv/hub/brain
+      - ${HUB_BRAIN_SECRETS:-./brain.enc.yaml}:/srv/hub/config/secrets.enc.yaml:ro
+    secrets: [age_key]
+    networks: [hub]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on: [api]
+
 volumes:
   data: {}
   archive: {}
@@ -170,6 +188,7 @@ volumes:
   collector-revolut: {}
   collector-ibkr: {}
   collector-market: {}
+  brain: {}
 
 networks:
   hub: {}

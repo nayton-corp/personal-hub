@@ -92,6 +92,8 @@ export function pendingCard() {
     });
     const n = el("div", "n");
     n.append(el("b", "", p.preview.summary), el("span", "", p.revision > 1 ? `révision ${p.revision} · a changé, relis-la` : by(p.created_by)));
+    // la raison de l'assistant, en une ligne : du texte, jamais du HTML
+    if (p.reason && p.created_by.startsWith("token:")) n.append(el("span", "muted", `« ${p.reason} »`));
     const v = el("div", "v");
     const no = el("button", "link", "Refuser");
     no.type = "button";

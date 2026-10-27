@@ -260,3 +260,32 @@ class CollectorLinkOut(BaseModel):
     state: str
     expires_at: str | None = None
     code: str | None = None
+
+
+# --- outils de l'assistant (lot 7) ------------------------------------------------------------
+
+
+class CapabilityOut(BaseModel):
+    domain: str
+    description: str
+    tools: list[str]
+    aggregates_only: bool
+
+
+class CapabilitiesOut(BaseModel):
+    domains: list[CapabilityOut]
+
+
+class ToolOut(BaseModel):
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+
+
+class ToolsOut(BaseModel):
+    domain: str
+    items: list[ToolOut]
+
+
+class ToolCallOut(BaseModel):
+    result: Any

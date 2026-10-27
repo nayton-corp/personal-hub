@@ -31,6 +31,7 @@ collectors = [
 [project.scripts]
 hub = "hub.cli:main"
 hub-collector = "hub.collectors.cli:main"
+hub-brain = "hub.brain.cli:main"
 
 [project.entry-points."hub.domains"]
 finance = "hub.domains.finance:create"
@@ -77,6 +78,8 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # textes en français : apostrophes et 
 # pages HTML et lignes CSV factices des tests de collecteurs
 "tests/collectors/fakebank.py" = ["E501"]
 "tests/finance/test_revolut.py" = ["E501"]
+# fixtures du registre d'un an, importées de test_app_reads (le paramètre redéfinit le nom)
+"tests/{brain/test_*,finance/test_tools,finance/test_sentinels}.py" = ["F811"]
 "hub/domains/*/migrations/**" = ["E501"]
 # SQL assemblé à partir de noms de tables et de marques :n internes ; les valeurs restent liées
 "hub/domains/finance/{ledger,reads,importer,domain,insights,handlers}.py" = ["S608"]
@@ -119,13 +122,19 @@ layers = ["hub.domains", "hub.core"]
 name = "Ni l'API ni la CLI n'importent un domaine : elles passent par le registre"
 type = "forbidden"
 source_modules = ["hub.core", "hub.api", "hub.cli"]
-forbidden_modules = ["hub.domains", "hub.collectors"]
+forbidden_modules = ["hub.domains", "hub.collectors", "hub.brain"]
 
 [[tool.importlinter.contracts]]
 name = "Les collecteurs ne voient ni les domaines ni l'API : ils déposent des fichiers et déclarent leurs runs"
 type = "forbidden"
 source_modules = ["hub.collectors"]
 forbidden_modules = ["hub.domains", "hub.api", "hub.cli"]
+
+[[tool.importlinter.contracts]]
+name = "Le brain ne voit le hub que par son API : ni domaine, ni base, ni route"
+type = "forbidden"
+source_modules = ["hub.brain"]
+forbidden_modules = ["hub.domains", "hub.api", "hub.cli", "hub.collectors", "hub.core.db", "hub.core.coredb", "hub.core.proposals"]
 
 [[tool.importlinter.contracts]]
 name = "Les domaines sont indépendants entre eux (lecture croisée par public.py)"

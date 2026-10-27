@@ -67,6 +67,8 @@ class Auth(BaseModel):
     challenge_seconds: int = Field(default=300, ge=30, le=900)
     rp_name: str = "Personal Hub"
     login_attempts_per_minute: int = 10
+    # propositions qu'un jeton (un modèle) peut créer par heure glissante ; l'app n'a pas de limite
+    token_proposals_per_hour: int = Field(default=60, ge=1, le=10_000)
 
 
 class Notify(BaseModel):

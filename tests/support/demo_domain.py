@@ -128,7 +128,11 @@ class DemoDomain:
     def mcp_tools(self) -> list[McpTool]:
         return [
             McpTool(
-                "demo_count", "Nombre d'éléments", {"type": "object"}, "demo:read", lambda _args: 0
+                "demo_count",
+                "Nombre d'éléments",
+                {"type": "object"},
+                "demo:read",
+                lambda _args, _caller: 0,
             )
         ]
 

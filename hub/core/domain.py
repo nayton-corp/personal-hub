@@ -75,13 +75,37 @@ class ProposalKind:
             raise ValueError("un type réversible doit fournir son inverse")
 
 
+class ToolCaller(Protocol):
+    """Ce qu'un outil MCP voit de son appelant : ses portées, et les seuls effets permis à un
+    modèle (créer une proposition, en lire l'état). Fourni par le cœur à chaque appel."""
+
+    @property
+    def actor(self) -> str: ...
+
+    def allows(self, scope: str) -> bool: ...
+
+    def propose(
+        self, kind: str, params: dict[str, Any], reason: str | None = None
+    ) -> dict[str, Any]: ...
+
+    def proposal(self, proposal_id: str) -> dict[str, Any] | None: ...
+
+    def collectors(self) -> list[dict[str, Any]]:
+        """État des collecteurs (mode, échecs consécutifs, dernier résultat), sans contenu."""
+        ...
+
+
 @dataclass(frozen=True)
 class McpTool:
+    """Outil pour l'assistant (lot 7). Une portée `<domaine>:aggregates` est aussi ouverte à
+    `<domaine>:read`. `call` reçoit des arguments déjà validés contre `input_schema` par le
+    domaine lui-même et renvoie du JSON (montants en texte, jamais de flottant)."""
+
     name: str
     description: str
     input_schema: dict[str, Any]
     scope: str  # portée exigée, ex. 'finance:read'
-    call: Callable[[dict[str, Any]], Any]
+    call: Callable[[dict[str, Any], ToolCaller], Any]
 
 
 @dataclass(frozen=True)
