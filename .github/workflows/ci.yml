@@ -1,0 +1,78 @@
+# Barrières de qualité (spécification, section 11) sur chaque pull request, et construction
+# des images linux/arm64. Aucune donnée réelle : tous les tests utilisent des fixtures générées.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+      - name: Aucune donnée réelle dans le dépôt
+        run: scripts/check_no_data.sh
+      - name: Secrets (gitleaks)
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 \
+            detect --source /repo --redact --no-banner
+      - name: Ruff
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Types (mypy --strict)
+        run: uv run mypy
+      - name: Isolation des domaines (import-linter)
+        run: uv run lint-imports
+      - name: Tests et couverture
+        run: uv run pytest -q --cov=hub --cov-report=term --cov-fail-under=85
+      - name: Migrations
+        run: uv run pytest -q -m migrations
+
+  image:
+    runs-on: ubuntu-24.04
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Image hub (linux/arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: hub
+          platforms: linux/arm64
+          push: false
+          tags: hub:ci
+          cache-from: type=gha,scope=hub
+          cache-to: type=gha,mode=max,scope=hub
+      - name: Image web (linux/arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: web
+          platforms: linux/arm64
+          push: false
+          tags: hub-web:ci
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+      - name: Le compose reste valide
+        run: |
+          cp deploy/.env.example deploy/.env
+          docker compose --env-file deploy/.env -f deploy/compose.yaml config --quiet

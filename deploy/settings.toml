@@ -1,0 +1,20 @@
+# Réglages sans secret, embarqués dans l'image. Surcharge par variable d'environnement :
+# HUB_<SECTION>__<CLÉ>, par exemple HUB_SERVER__PUBLIC_ORIGIN (posée par compose depuis .env).
+log_level = "INFO"
+
+[paths]
+data = "/srv/hub/data"        # volume nommé « data » : jamais un dossier du Mac
+inbox = "/srv/hub/inbox"      # dossier du Mac monté (~/PersonalHub/inbox)
+archive = "/srv/hub/archive"
+backup = "/srv/hub/backup"
+
+[server]
+bind = "0.0.0.0:8710"         # réseau compose « hub » seulement : aucun port publié
+public_origin = "https://hub.example.ts.net"
+
+[auth]
+session_hours = 12
+
+[secrets]
+file = "/srv/hub/config/secrets.enc.yaml"
+age_key_file = "/run/secrets/age_key"

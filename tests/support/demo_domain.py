@@ -89,11 +89,11 @@ class DemoDomain:
         self.nightly_runs = 0
         self.third_party = FakeThirdParty()
         self.proposal_kinds: Mapping[str, ProposalKind] = {
-            "add_item": ProposalKind(params_model=AddItem, handler=AddItemHandler(),
-                                     ai_allowed=True),
+            "add_item": ProposalKind(
+                params_model=AddItem, handler=AddItemHandler(), ai_allowed=True
+            ),
             "add_item_human_only": ProposalKind(params_model=AddItem, handler=AddItemHandler()),
-            "notify": ProposalKind(params_model=AddItem, handler=self.third_party,
-                                   external=True),
+            "notify": ProposalKind(params_model=AddItem, handler=self.third_party, external=True),
         }
 
     def engine(self) -> Engine:
@@ -115,8 +115,7 @@ class DemoDomain:
                 rows = conn.execute(text("SELECT seq, name FROM items ORDER BY seq")).fetchall()
             return {"items": [{"seq": s, "name": n} for s, n in rows]}
 
-        @r.get("/summary", dependencies=[Depends(require("app", "demo:read",
-                                                          "demo:aggregates"))])
+        @r.get("/summary", dependencies=[Depends(require("app", "demo:read", "demo:aggregates"))])
         def summary() -> dict[str, int]:
             with self._engine.connect() as conn:
                 return {"count": conn.execute(text("SELECT count(*) FROM items")).scalar_one()}
@@ -127,8 +126,11 @@ class DemoDomain:
         return None
 
     def mcp_tools(self) -> list[McpTool]:
-        return [McpTool("demo_count", "Nombre d'éléments", {"type": "object"}, "demo:read",
-                        lambda _args: 0)]
+        return [
+            McpTool(
+                "demo_count", "Nombre d'éléments", {"type": "object"}, "demo:read", lambda _args: 0
+            )
+        ]
 
     def search(self, q: str, limit: int, scopes: frozenset[str]) -> list[Hit]:
         with self._engine.connect() as conn:
@@ -155,8 +157,10 @@ class DemoDomain:
         marks = ",".join(f":p{i}" for i in range(len(proposal_ids)))
         with self._engine.connect() as conn:
             rows = conn.execute(
-                text(f"SELECT proposal_id, result_json FROM applied_proposals "  # noqa: S608
-                     f"WHERE proposal_id IN ({marks})"),
+                text(
+                    f"SELECT proposal_id, result_json FROM applied_proposals "
+                    f"WHERE proposal_id IN ({marks})"
+                ),
                 {f"p{i}": p for i, p in enumerate(proposal_ids)},
             ).fetchall()
         return {pid: json.loads(res) for pid, res in rows}
@@ -172,5 +176,8 @@ class DemoDomain:
         self.nightly_runs += 1
 
     def health(self) -> Health:
-        return Health(ok=self.path.exists(), db="ok" if self.path.exists() else "missing",
-                      schema_version=self.schema_version)
+        return Health(
+            ok=self.path.exists(),
+            db="ok" if self.path.exists() else "missing",
+            schema_version=self.schema_version,
+        )

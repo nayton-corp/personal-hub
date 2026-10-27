@@ -74,6 +74,12 @@ class Notify(BaseModel):
     ntfy_topic_file: Path | None = None
 
 
+class Backup(BaseModel):
+    restic_local: Path | None = Path("/restic")  # dépôt restic sur le disque externe
+    replica: Path | None = Path("/replica")  # réplique Litestream, sauvegardée elle aussi
+    keep_local_days: int = Field(default=7, ge=1)
+
+
 class Secrets(BaseModel):
     file: Path = Path("/etc/hub/secrets.enc.yaml")
     age_key_file: Path = Path("/run/secrets/age_key")
@@ -89,6 +95,7 @@ class Settings(BaseSettings):
     auth: Auth = Auth()
     notify: Notify = Notify()
     secrets: Secrets = Secrets()
+    backup: Backup = Backup()
     log_level: str = "INFO"
 
     @classmethod

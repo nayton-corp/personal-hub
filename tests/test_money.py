@@ -11,8 +11,7 @@ def test_display_and_api() -> None:
     assert Money(-4550, "CHF").display() == "-45.50"
     assert Money(5, "CHF").display() == "0.05"
     assert Money(1200, "JPY").display() == "1200"
-    assert Money(-4550, "CHF").to_api() == {"minor": -4550, "currency": "CHF",
-                                            "display": "-45.50"}
+    assert Money(-4550, "CHF").to_api() == {"minor": -4550, "currency": "CHF", "display": "-45.50"}
 
 
 def test_from_decimal_rounds_half_even() -> None:

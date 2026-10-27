@@ -1,0 +1,8 @@
+# Réplication continue vers le disque externe monté (HUB_REPLICA). Le second emplacement est
+# couvert par restic (conteneur « scheduler »), qui sauvegarde aussi cette réplique.
+# finance.db s'ajoute ici au lot 1.
+dbs:
+  - path: /srv/hub/data/core.db
+    replica:
+      type: file
+      path: /replica/core.db

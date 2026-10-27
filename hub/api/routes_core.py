@@ -63,6 +63,15 @@ def _reader(principal: CurrentPrincipal, hub_ctx: Ctx) -> Principal:
 Reader = Annotated[Principal, Depends(_reader)]
 
 
+def _searcher(principal: CurrentPrincipal, hub_ctx: Ctx) -> Principal:
+    if principal.is_app or any(principal.allows(f"{d.name}:read") for d in hub_ctx.registry):
+        return principal
+    raise Problem("auth.scope")
+
+
+Searcher = Annotated[Principal, Depends(_searcher)]
+
+
 @router.get("/proposals", response_model=ProposalListOut, tags=["propositions"])
 def list_proposals(
     hub_ctx: Ctx,
@@ -126,11 +135,10 @@ def reject_proposal(proposal_id: str, hub_ctx: Ctx, principal: AppSession) -> Pr
 @router.get("/search", response_model=SearchOut, tags=["cœur"])
 def search(
     hub_ctx: Ctx,
-    principal: Reader,
+    principal: Searcher,
     q: Annotated[str, Query(min_length=3, max_length=200)],
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> SearchOut:
-    hits: list[HitOut] = []
     scored: list[tuple[int, HitOut]] = []
     for d in hub_ctx.registry:
         if not (principal.is_app or principal.allows(f"{d.name}:read")):
@@ -138,9 +146,8 @@ def search(
         granted = frozenset({"app"}) if principal.is_app else principal.scopes
         for h in d.search(q, limit, granted):
             scored.append((h.score, HitOut(domain=d.name, urn=h.urn, title=h.title, date=h.date)))
-    scored.sort(key=lambda item: (-item[0], item[1].date or ""), reverse=False)
-    hits = [h for _, h in scored[:limit]]
-    return SearchOut(items=hits)
+    scored.sort(key=lambda item: (item[0], item[1].date or ""), reverse=True)
+    return SearchOut(items=[h for _, h in scored[:limit]])
 
 
 def _resolve(hub_ctx: Ctx, principal: Principal, value: str) -> RefOut | None:

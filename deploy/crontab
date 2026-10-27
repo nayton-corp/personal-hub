@@ -1,0 +1,6 @@
+# Tâches planifiées, exécutées par `hub scheduler` dans le conteneur « scheduler ».
+# Heure de Zurich (TZ). Même fichier sur le Mac (phase 1) et sur le Pi.
+# min heure jour mois jour-semaine commande
+15 2 * * * hub verify
+30 2 * * * hub backup --restic
+0 3 * * * hub nightly

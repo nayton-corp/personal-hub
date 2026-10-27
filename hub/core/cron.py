@@ -115,5 +115,5 @@ def run_forever(crontab: Path, tz: str | None = None) -> None:  # pragma: no cov
     while True:
         now = datetime.now(zone)
         nxt = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
-        time.sleep(max(0.0, (nxt - now).total_seconds()))
+        time.sleep(max(timedelta(0), nxt - now).total_seconds())
         tick(jobs, nxt)

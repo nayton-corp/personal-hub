@@ -24,8 +24,12 @@ def _isolated_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
 def make_settings(tmp_path: Path, origin: str = "https://hub.example.ts.net") -> Settings:
     return Settings(
-        paths=Paths(data=tmp_path / "data", inbox=tmp_path / "inbox",
-                    archive=tmp_path / "archive", backup=tmp_path / "backup"),
+        paths=Paths(
+            data=tmp_path / "data",
+            inbox=tmp_path / "inbox",
+            archive=tmp_path / "archive",
+            backup=tmp_path / "backup",
+        ),
         server=Server(public_origin=origin),
     )
 

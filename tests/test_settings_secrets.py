@@ -38,8 +38,11 @@ def test_secrets_roundtrip(tmp_path: Path) -> None:
     key = tmp_path / "age.key"
     key.write_text(f"# created: test\n{identity}\n")
     enc = tmp_path / "secrets.enc.yaml"
-    enc.write_bytes(secrets.encrypt_for(str(identity.to_public()),
-                                        b"restic:\n  password: pw\nbcf:\n  contract: '1'\n"))
+    enc.write_bytes(
+        secrets.encrypt_for(
+            str(identity.to_public()), b"restic:\n  password: pw\nbcf:\n  contract: '1'\n"
+        )
+    )
     assert secrets.section(enc, key, "restic") == {"password": "pw"}
     assert secrets.load(tmp_path / "absent", key) == {}
     with pytest.raises(secrets.SecretsError):

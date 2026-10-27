@@ -176,13 +176,35 @@ def verify() -> None:
 def backup(
     dest: Annotated[Path | None, typer.Option(help="Dossier cible (défaut : paths.backup)")] = None,
     stamp: Annotated[str | None, typer.Option(help="Suffixe des fichiers (défaut : date)")] = None,
+    restic: Annotated[bool, typer.Option(help="Puis restic vers chaque dépôt.")] = False,
 ) -> None:
     """Copie `.backup` cohérente de chaque base, vérifiée par `integrity_check`."""
-    from hub.core.maintenance import backup_all
+    from hub.core.maintenance import backup_all, prune_local_copies, restic_backup
 
     hub = _ctx()
-    files = backup_all(hub, dest or hub.settings.paths.backup, stamp)
-    typer.echo(json.dumps({"files": [f.name for f in files]}))
+    target = dest or hub.settings.paths.backup
+    files = backup_all(hub, target, stamp)
+    out: dict[str, object] = {"files": [f.name for f in files]}
+    if restic:
+        out["pruned"] = prune_local_copies(target, hub.settings.backup.keep_local_days)
+        out["restic"] = len(restic_backup(hub))
+    typer.echo(json.dumps(out))
+
+
+@app.command()
+def restore(
+    stamp: Annotated[str, typer.Argument(help="Suffixe des copies, ex. predeploy-v0.2.0")],
+    source: Annotated[Path | None, typer.Option(help="Dossier des copies")] = None,
+) -> None:
+    """Remet les bases depuis une copie de `hub backup` (services arrêtés), puis réconcilie."""
+    from hub.core.maintenance import restore as run
+
+    try:
+        restored = run(_ctx(), stamp, source)
+    except (FileNotFoundError, RuntimeError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(json.dumps({"restored": restored}))
 
 
 @app.command()
