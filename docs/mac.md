@@ -16,12 +16,13 @@ Les mêmes images et le même `deploy/compose.yaml` serviront sur le Pi 5.
    ```
    mkdir -p ~/.config/hub && age-keygen -o ~/.config/hub/age.key && chmod 400 ~/.config/hub/age.key
    ```
-   La ligne `Public key: age1…` affichée sert à chiffrer.
+   La ligne `Public key: age1…` affichée sert à chiffrer ; `age-keygen -y ~/.config/hub/age.key` la réaffiche.
 6. **Secrets chiffrés** (jamais de fichier en clair sur le disque) :
    ```
    printf 'restic:\n  password: "%s"\n' "$(openssl rand -base64 32)" \
-     | age -r age1… -o ~/.config/hub/secrets.enc.yaml
+     | age -r "$(age-keygen -y ~/.config/hub/age.key)" -o ~/.config/hub/secrets.enc.yaml
    ```
+   (`age-keygen -y` relit la clé publique depuis la clé de l'étape 5.)
    Copie le mot de passe restic dans le kit de secours avant de fermer le terminal :
    `age -d -i ~/.config/hub/age.key ~/.config/hub/secrets.enc.yaml`.
 7. **Dossiers :** `mkdir -p ~/PersonalHub/inbox`, et sur le disque externe
@@ -49,8 +50,8 @@ gardé dans le volume `ts-state`.
 ## 3. Première passkey
 
 ```
-docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm --no-deps scheduler \
-  hub auth bootstrap-code
+HUB_TAG=$(cat deploy/.current-tag) docker compose --env-file deploy/.env -f deploy/compose.yaml \
+  run --rm --no-deps scheduler hub auth bootstrap-code
 ```
 
 Sur l'iPhone (Tailscale actif), ouvre `HUB_PUBLIC_ORIGIN`, saisis le code, valide par
@@ -70,10 +71,13 @@ appareil) depuis la page d'état. Partager → « Sur l'écran d'accueil » inst
 
 ## 5. Commandes utiles
 
+Une commande à la main doit viser l'image déployée : `deploy/.current-tag` la retient
+(sans elle, compose cherche `hub:dev` et échoue en « pull access denied »).
+
 Les bases ne s'ouvrent jamais depuis macOS ; toute commande passe par un conteneur jetable :
 
 ```
-alias hubc='docker compose --env-file deploy/.env -f deploy/compose.yaml'
+alias hubc='HUB_TAG=$(cat deploy/.current-tag) docker compose --env-file deploy/.env -f deploy/compose.yaml'
 hubc run --rm --no-deps scheduler hub token create brain-mac -s brain
 hubc run --rm --no-deps scheduler hub verify
 hubc logs -f api
