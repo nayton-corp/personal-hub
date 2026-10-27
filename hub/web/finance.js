@@ -23,6 +23,7 @@ const path = {
   holdings: () => "/finance/holdings",
   look: () => `/finance/lookthrough?dimension=${P.look}`,
   recurring: () => "/finance/recurring",
+  alerts: () => "/finance/alerts",
   freshness: () => "/finance/freshness",
   categories: () => "/finance/categories",
   budget: () => `/finance/budget?month=${P.month}&period=${P.period}`,
@@ -197,6 +198,16 @@ function home() {
   if (k.to_categorize > 0) items.push([`${k.to_categorize} écriture${k.to_categorize > 1 ? "s" : ""} à catégoriser`, "par contrepartie, en un Face ID", "journal", String(k.to_categorize)]);
   const p3 = k.pillar3a;
   if (p3 && p3.margin.minor > 0) items.push([`Marge 3a ${p3.year} : ${chf(units(p3.margin))} CHF`, `versé ${chf(units(p3.paid))} sur ${chf(units(p3.cap))}`, "patrimoine", "3a"]);
+  // sentinelles de nuit (lot 7) : budget, abonnements ; la marge 3a est déjà ci-dessus
+  const alerts = store.data(path.alerts());
+  for (const a of alerts ? alerts.items : []) {
+    if (a.kind === "pillar3a_margin") continue;
+    const d = a.detail;
+    const sub = a.kind === "recurring_up"
+      ? `${chf2(Math.abs(units(d.usual)))} → ${chf2(Math.abs(units(d.last)))} ${d.last.currency}`
+      : `${chf(units(d.spent))} sur ${chf(units(d.target))} CHF` + (a.kind === "budget_likely" ? ` · ${chf(units(d.projected))} projetés` : "");
+    items.push([a.title, `${sub} · le ${date(a.on_date)}`, "budget", "!"]);
+  }
   if (!items.length) todo.append(el("div", "empty", "Rien à traiter."));
   for (const [title, sub, tab, ini] of items) {
     const r = row(ini, title, sub, "", null, "", tab !== "patrimoine");

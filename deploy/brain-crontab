@@ -1,0 +1,4 @@
+# Tâches du brain (lot 7), exécutées par `hub-brain daemon` dans le conteneur « brain ».
+# Heure de Zurich. Le Mac doit être allumé et Ollama lancé ; sinon le passage est sauté.
+# min heure jour mois jour-semaine commande
+30 8 * * * hub-brain suggest

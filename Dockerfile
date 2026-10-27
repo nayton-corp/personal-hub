@@ -20,7 +20,7 @@ COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY alembic.ini ./
 COPY hub ./hub
-COPY deploy/crontab deploy/settings.toml ./deploy/
+COPY deploy/crontab deploy/brain-crontab deploy/settings.toml ./deploy/
 RUN uv sync --frozen --no-dev --no-editable
 
 # --- API, importeur, planificateur : une seule image, des commandes différentes ---
@@ -32,9 +32,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 hub \
  && useradd --uid 10001 --gid 10001 --home-dir /srv/hub --shell /usr/sbin/nologin hub \
- && mkdir -p /srv/hub/data /srv/hub/archive /srv/hub/backup /srv/hub/inbox \
+ && mkdir -p /srv/hub/data /srv/hub/archive /srv/hub/backup /srv/hub/inbox /srv/hub/brain \
  && chown -R 10001:10001 /srv/hub \
- && chmod 0700 /srv/hub/data /srv/hub/archive /srv/hub/backup
+ && chmod 0700 /srv/hub/data /srv/hub/archive /srv/hub/backup /srv/hub/brain
 COPY --from=build /srv/hub/venv /srv/hub/venv
 COPY --from=build /srv/hub/app /srv/hub/app
 ENV PATH=/srv/hub/venv/bin:$PATH \

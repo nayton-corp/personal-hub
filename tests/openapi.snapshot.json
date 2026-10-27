@@ -142,6 +142,53 @@
         "title": "ApprovalChallengeOut",
         "type": "object"
       },
+      "CapabilitiesOut": {
+        "properties": {
+          "domains": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityOut"
+            },
+            "title": "Domains",
+            "type": "array"
+          }
+        },
+        "required": [
+          "domains"
+        ],
+        "title": "CapabilitiesOut",
+        "type": "object"
+      },
+      "CapabilityOut": {
+        "properties": {
+          "aggregates_only": {
+            "title": "Aggregates Only",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "domain",
+          "description",
+          "tools",
+          "aggregates_only"
+        ],
+        "title": "CapabilityOut",
+        "type": "object"
+      },
       "ChallengeOut": {
         "properties": {
           "challenge_id": {
@@ -1297,6 +1344,63 @@
           "needs_bootstrap"
         ],
         "title": "SessionOut",
+        "type": "object"
+      },
+      "ToolCallOut": {
+        "properties": {
+          "result": {
+            "title": "Result"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "ToolCallOut",
+        "type": "object"
+      },
+      "ToolOut": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "input_schema": {
+            "additionalProperties": true,
+            "title": "Input Schema",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "input_schema"
+        ],
+        "title": "ToolOut",
+        "type": "object"
+      },
+      "ToolsOut": {
+        "properties": {
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ToolOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "domain",
+          "items"
+        ],
+        "title": "ToolsOut",
         "type": "object"
       },
       "ValidationError": {
@@ -2524,6 +2628,141 @@
         "summary": "Search",
         "tags": [
           "cœur"
+        ]
+      }
+    },
+    "/api/tools": {
+      "get": {
+        "operationId": "capabilities_api_tools_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilitiesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capabilities",
+        "tags": [
+          "outils"
+        ]
+      }
+    },
+    "/api/tools/{domain}": {
+      "get": {
+        "operationId": "domain_tools_api_tools__domain__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{1,63}$",
+              "title": "Domain",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Domain Tools",
+        "tags": [
+          "outils"
+        ]
+      }
+    },
+    "/api/tools/{domain}/{name}": {
+      "post": {
+        "operationId": "call_tool_api_tools__domain___name__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{1,63}$",
+              "title": "Domain",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{1,63}$",
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Args"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolCallOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Call Tool",
+        "tags": [
+          "outils"
         ]
       }
     }

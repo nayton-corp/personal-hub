@@ -11,7 +11,15 @@ from fastapi.responses import StreamingResponse
 from hub.core import proposals
 from hub.core.auth import AppSession, Ctx, Principal, require
 from hub.core.errors import Problem
-from hub.domains.finance import insights, lookthrough, reads, recurring, snapshots, transfers
+from hub.domains.finance import (
+    insights,
+    lookthrough,
+    reads,
+    recurring,
+    sentinels,
+    snapshots,
+    transfers,
+)
 from hub.domains.finance.importer import APPLY_IMPORT, ImportRefused
 
 if TYPE_CHECKING:
@@ -231,6 +239,12 @@ def build_router(domain: FinanceDomain) -> APIRouter:
             raise Problem("validation.params", "au moins 3 caractères")
         with engine.connect() as conn:
             return {"items": reads.search(conn, q)}
+
+    @r.get("/alerts")
+    def alerts(_p: Reader) -> dict[str, Any]:
+        """Alertes des sentinelles des 31 derniers jours (budget, abonnements, 3a)."""
+        with engine.connect() as conn:
+            return {"items": sentinels.recent(conn, domain.today())}
 
     @r.get("/categories")
     def categories(_p: AnyReader) -> dict[str, Any]:

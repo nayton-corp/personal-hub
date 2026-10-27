@@ -46,6 +46,7 @@ def nightly(hub: HubContext) -> dict[str, Any]:
         "expired": expired,
         "requested": synced["requested"],
         "obsoleted": synced["obsoleted"],
+        "notified": synced["notified"],
         "purged": purged,
         "reconciled_applied": report.marked_applied,
         "reconciled_released": report.released,

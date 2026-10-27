@@ -2,6 +2,28 @@
 
 ## [Non publié]
 
+### Lot 7 — IA locale
+
+- Outils de l'assistant : contrat `McpTool.call(args, caller)` (le cœur fournit les portées et
+  la création de propositions), routes `GET /api/tools`, `GET /api/tools/{domaine}`,
+  `POST /api/tools/{domaine}/{outil}`, réservées aux jetons. Une portée `aggregates` est ouverte
+  à la portée `read` du même domaine.
+- Les 15 outils Finance du plan : catégories en liste fermée dans le schéma, montants en CHF à
+  deux décimales, aucun IBAN, `data_as_of` dans chaque réponse, libellés marqués comme texte
+  externe. Le jeton « agrégats » n'a que 7 outils de totaux ; une catégorie ou un mois de moins
+  de 3 écritures y est fondu ou masqué.
+- Propositions d'un jeton limitées par heure glissante (`auth.token_proposals_per_hour`, 60).
+- Sentinelles de nuit (schéma `0007_alerts`) : budget dépassé ou qui va l'être, abonnement en
+  hausse, marge 3a pas encore versée en novembre et décembre. Une alerte par occasion, notifiée
+  par l'événement `notify.request` (texte générique, ni montant ni nom), route
+  `GET /api/finance/alerts`, lignes dans « À traiter ».
+- Brain (`hub/brain`, commande `hub-brain`, conteneur `brain` au profil compose « brain ») :
+  passerelle MCP sur stdio sans dépendance, routage des outils par domaine
+  (`hub_capabilities`, `hub_load_tools`), assistant `ask` sur Ollama par l'API compatible
+  OpenAI (MLX possible par la configuration), suggestions de catégorie pour les commerçants
+  jamais vus (`suggest`, chaque matin), contrôle de bout en bout `check`.
+- App : la raison d'une proposition de l'assistant s'affiche sur sa carte.
+
 ### Lot 6 — Patrimoine complet
 
 - Schéma `0006_wealth` : instruments élargis (cryptos, symboles, sorte), compositions des fonds,

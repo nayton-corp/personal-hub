@@ -1,5 +1,6 @@
 """Domaine Finance : registre BCF, import camt.053 (lot 1), lectures de l'app (lot 2),
-règles de catégorisation et propositions du Double Sas (lot 3)."""
+règles de catégorisation et propositions du Double Sas (lot 3), outils de l'assistant et
+sentinelles (lot 7)."""
 
 from __future__ import annotations
 
@@ -22,18 +23,30 @@ from hub.core.ids import Urn, urn
 from hub.core.logging import get_logger
 from hub.core.migrations import runner
 from hub.core.settings import Settings
-from hub.domains.finance import importer, ledger, reads, recurring, snapshots, transfers
+from hub.domains.finance import (
+    importer,
+    ledger,
+    reads,
+    recurring,
+    sentinels,
+    snapshots,
+    transfers,
+)
 from hub.domains.finance.handlers import build_kinds
 from hub.domains.finance.importer import Archiver, ImportService, recipient_from_key
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 6  # 0006_wealth
+SCHEMA_VERSION = 7  # 0007_alerts
 TZ = ZoneInfo("Europe/Zurich")  # le jour civil des chiffres de l'app
 log = get_logger("hub.finance")
 
 
 class FinanceDomain:
     name = "finance"
+    description = (
+        "Finances personnelles : comptes, dépenses par catégorie, budget, patrimoine, "
+        "abonnements ; propositions de catégorie, de règle, de budget et de note."
+    )
     schema_version = SCHEMA_VERSION
     scopes = frozenset({"finance:read", "finance:propose", "finance:aggregates"})
 
@@ -75,7 +88,9 @@ class FinanceDomain:
         return build_cli(self)
 
     def mcp_tools(self) -> list[McpTool]:
-        return []  # les 15 outils MCP arrivent avec la passerelle
+        from hub.domains.finance.tools import FinanceTools
+
+        return FinanceTools(self).build()
 
     def search(self, q: str, limit: int, scopes: frozenset[str]) -> list[Hit]:
         with self._engine.connect() as conn:
@@ -190,10 +205,18 @@ class FinanceDomain:
         log.info("derived.refreshed", transfers=pairs, recurring=found)
         return {"transfers": pairs, "recurring": found}
 
+    def run_sentinels(self) -> list[sentinels.Alert]:
+        with begin_immediate(self._engine) as conn:
+            raised = sentinels.run(conn, self.today(), pillar3a_cap=self.pillar3a_cap)
+        for a in raised:
+            log.info("sentinel.alert", kind=a.kind)
+        return raised
+
     def nightly(self) -> None:
         refreshed = self.refresh_snapshots(force=True)
         log.info("snapshots.nightly", rows=refreshed.rows)
         log.info("imports.review_requested", count=self.request_reviews())
+        log.info("sentinels.raised", count=len(self.run_sentinels()))
         result = self.verify_ledger()
         if result.ok:
             log.info("ledger.verified", links=result.links)

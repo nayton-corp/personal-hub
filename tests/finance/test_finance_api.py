@@ -262,7 +262,7 @@ def test_upload_and_import_detail(client: TestClient, ctx: HubContext, fin: Fina
 
 def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
     r = client.get("/api/health").json()
-    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 6, "ok": True}
+    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 7, "ok": True}
     events = loaded.events_since(0, 10)
     assert [e.type for e in events] == ["entries.appended", "import.applied"]
     assert loaded.applied([]) == {}
@@ -271,7 +271,7 @@ def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceD
     (acc,) = client.get("/api/finance/accounts", headers=token(ctx, "brain")).json()["items"]
     assert loaded.resolve(f"hub:finance:account:{acc['id']}") is not None
     assert loaded.resolve(events[1].urn) is not None
-    assert loaded.mcp_tools() == []
+    assert len(loaded.mcp_tools()) == 15  # lot 7
 
 
 def test_viac_pdf_upload_and_holdings(

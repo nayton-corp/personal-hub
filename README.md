@@ -26,6 +26,7 @@ hub/core/migrations Alembic de core.db (SQL explicite, pas de downgrade)
 hub/api/            application FastAPI et routes du cœur
 hub/domains/        domaines, isolés par import-linter ; finance/ : registre, camt.053, API
 hub/web/            coquille de l'app (PWA), servie par Caddy
+hub/brain/          IA locale : passerelle MCP, assistant et suggestions (`hub-brain`), sur le Mac
 hub/cli.py          commande `hub`
 deploy/             compose, Caddy, Tailscale, Litestream, crontab, deploy.sh
 docs/               mise en route sur le Mac, domaine Finance, kit de secours
@@ -59,6 +60,7 @@ Un changement voulu du contrat d'API se valide avec `make openapi`, puis relectu
 | `hub backup [--restic]` · `hub restore STAMP` | copies `.backup` vérifiées, restic, restauration |
 | `hub nightly` · `hub reconcile` | expirations, purges, réconciliation des propositions |
 | `hub scheduler deploy/crontab` | tâches planifiées du conteneur `scheduler` |
+| `hub-brain mcp` · `ask` · `suggest` · `check` | IA locale, conteneur `brain` ([docs/brain.md](docs/brain.md)) |
 
 Portées d'un jeton : `brain` (= `finance:read finance:propose`), `aggregates`
 (= `*:aggregates`), `collector` (= `core:collector`), ou une portée qualifiée. La portée `app`
