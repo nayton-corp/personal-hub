@@ -24,6 +24,35 @@ alias fin='hubc run --rm --no-deps importer hub finance'
 - `hub verify` (chaque nuit et avant/après chaque migration) recalcule la chaîne du journal et
   l'empreinte de chaque ligne (`verify-ledger`).
 
+## L'app (lot 2)
+
+L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes de
+`/api/finance` ; chaque chiffre est calculé côté serveur, en centimes.
+
+| Route | Ce qu'elle donne |
+|---|---|
+| `kpis?month=` | patrimoine net et variations (1 mois, depuis le 31 décembre), revenus, dépenses, épargne, reste à vivre, jours restants, liquidités, mois couverts, taux d'épargne 3 mois, comptes périmés, à catégoriser, marge 3a |
+| `networth/history?from=&to=` | instantanés : patrimoine, versements cumulés, valeur par enveloppe |
+| `flows?month=` | revenus → fixe, variable, épargne → catégories, et le reste sur compte |
+| `budget?month=&period=m\|q` | réel et cible par catégorie de dépense, dépassements, reste à vivre |
+| `budget/totals?month=&period=m\|q` | revenus, dépenses fixes et variables, épargne, placements, taux |
+| `budget/months?month=&months=6` | les mêmes totaux, mois par mois (graphique Tendance) |
+| `export.csv?from=&to=` | journal complet en CSV (session passkey seulement) |
+
+- **Mois.** Le mois affiché est toujours un paramètre ; l'app part du mois civil à Zurich.
+  `period=q` couvre les trois mois complets avant le mois choisi. Un mois futur est refusé.
+- **Sans catégorie.** Tant que les règles du lot 3 n'existent pas, une écriture sans
+  catégorie compte en dépense variable si elle est négative, en revenu sinon, sous le nom
+  « À catégoriser ».
+- **Portée aggregates.** Une catégorie de moins de 3 écritures sur la période rejoint
+  « Autres » (flux, budget, résumé).
+- **Instantanés.** Une ligne par fin de mois depuis la première écriture, plus une pour
+  aujourd'hui, recalculées en entier chaque nuit et après chaque import appliqué (un relevé
+  ancien corrige donc aussi les mois passés). Au lot 2, la valeur d'un compte est son solde
+  et l'effet marché est nul ; les positions VIAC et IBKR arrivent au lot 4.
+- **3e pilier.** Plafond 2026 : 7'258 CHF. Une autre valeur se règle dans `settings.toml`,
+  section `[finance]`, clé `pillar3a_cap_minor` (en centimes).
+
 ## Reprendre l'historique (L1-11)
 
 Décision du 27/10/2026 : tout ce que la BCF fournit en camt.053, sans importeur « ancien

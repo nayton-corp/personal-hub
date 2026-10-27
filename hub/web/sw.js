@@ -1,6 +1,7 @@
 // Service worker minimal : met en cache la coquille de l'app, jamais les réponses de l'API.
-const CACHE = "hub-shell-v1";
-const SHELL = ["/", "/index.html", "/app.js", "/webauthn.js", "/styles.css",
+const CACHE = "hub-shell-v2";
+const SHELL = ["/", "/index.html", "/app.js", "/store.js", "/finance.js", "/charts.js",
+  "/format.js", "/webauthn.js", "/styles.css", "/vendor/d3.v7.9.0.min.js",
   "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {

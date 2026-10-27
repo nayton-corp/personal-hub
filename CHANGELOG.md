@@ -2,6 +2,20 @@
 
 ## [Non publié]
 
+### Lot 2 — App en lecture
+
+- Instantanés du patrimoine (`0003_snapshots`) : une ligne par fin de mois et une pour
+  aujourd'hui, recalculées par la tâche de nuit et par l'événement `import.applied` (curseur
+  dans la boîte de sortie) ; la série stockée égale le calcul direct.
+- Routes de l'app : `kpis`, `networth/history`, `flows`, `budget/totals`, `budget/months`,
+  `export.csv` ; `budget` prend `period=m|q` et rend reste à vivre et jours restants. Mois
+  toujours en paramètre, début d'année au 31 décembre, rapports en décimales texte.
+- Écritures sans catégorie comptées en dépense variable (débit) ou en revenu (crédit) dans
+  le résumé, le budget et la tendance, en attendant les règles du lot 3.
+- Port du dashboard : d3 7.9.0 servi par le hub, `store.js` à la place du runtime `dash.*`,
+  CSS et JS en fichiers (CSP stricte respectée), vues Accueil, Patrimoine, Budget, Journal
+  et Sources, bandeau « relevé du … », comptes périmés et écrans sans donnée.
+
 ### Lot 1 — Registre BCF
 
 - Base `finance.db` (`0001_ledger`, `0002_fts`) : comptes, imports et relevés, registre

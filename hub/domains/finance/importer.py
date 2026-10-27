@@ -15,7 +15,7 @@ import json
 import re
 import time
 import zipfile
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -175,11 +175,14 @@ class ImportService:
         inbox: Path,
         archiver: Archiver,
         lock_file: Path,
+        on_applied: Callable[[], object] | None = None,
     ) -> None:
         self.engine = engine
         self.inbox = inbox
         self.archiver = archiver
         self.lock_file = lock_file
+        # appelé après un lot dont au moins un relevé est appliqué (instantanés, L2-01)
+        self.on_applied = on_applied
 
     # --- réception -----------------------------------------------------------------------
 
@@ -271,6 +274,11 @@ class ImportService:
         outcomes = [self._apply_statement(import_id, s) for import_id, s in work]
         for import_id in sorted({o.import_id for o in outcomes}):
             self._finish(import_id)
+        if self.on_applied and any(o.status == "applied" for o in outcomes):
+            try:
+                self.on_applied()
+            except Exception as exc:  # l'import est fait ; la tâche de nuit rattrapera
+                log.warning("import.after_apply_failed", error=type(exc).__name__)
         return outcomes
 
     def _apply_statement(self, import_id: str, st: ParsedStatement) -> StatementOutcome:
