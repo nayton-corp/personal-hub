@@ -62,8 +62,19 @@ def test_buy_printed_as_zero_parts_keeps_its_amount() -> None:
     # petit achat de rééquilibrage : VIAC imprime « 0.00 parts » pour 0.004 part
     n = viac_notice.parse(f.buy(D2, "0.00", "0.40", price="100.00"))
     assert (n.kind, n.amount, n.quantity) == ("buy", Decimal("0.40"), Decimal("0.004"))
-    with pytest.raises(ViacError, match="nombre de parts invalide"):
-        viac_notice.parse(f.buy(D2, "0.00", "0.40", price="100.00", currency="USD"))
+    # en devise, l'avis ne donne pas le taux : le montant reste, sans parts
+    usd = viac_notice.parse(f.buy(D2, "0.00", "0.40", price="100.00", currency="USD"))
+    assert (usd.kind, usd.amount, usd.quantity) == ("buy", Decimal("0.40"), None)
+
+
+def test_zero_parts_buy_in_foreign_currency_moves_cash_only(viac: FinanceDomain) -> None:
+    open_portfolio(viac)
+    txt = f.buy(D2, "0.00", "0.40", price="100.00", currency="USD")
+    report = viac.importer.process([Incoming("b.pdf", f.fake_pdf(txt))])
+    assert {s.status for s in report.statements} == {"applied"}
+    amounts = rows(viac, "SELECT amount_minor FROM entries WHERE kind = 'movement' ORDER BY 1")
+    assert amounts == [(-40,), (40,)]
+    assert rows(viac, "SELECT count(*) FROM trades") == [(0,)]
 
 
 def test_nil_fee_is_recognized_not_refused() -> None:
