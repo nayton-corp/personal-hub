@@ -40,6 +40,9 @@ def test_upgrade_head_on_empty_base(finance: FinanceDomain) -> None:
         "rules",
         "rules_meta",
         "fx_rates",
+        "compositions",
+        "transfer_links",
+        "recurring",
         "entries_fts",
         "notes_fts",
         *PROTECTED,
@@ -60,8 +63,9 @@ def test_seed_data(finance: FinanceDomain) -> None:
         assert conn.execute(
             text("SELECT grp FROM categories WHERE id='transfer-own'")
         ).scalar() == ("transfer")
-        # 0004_rules : règles de départ de bcf_aggregate.py ; 0005_viac : règles VIAC
-        assert conn.execute(text("SELECT version FROM rules_meta")).scalar() == 3
+        # 0004_rules : règles de départ de bcf_aggregate.py ; 0005_viac : règles VIAC ;
+        # 0006_wealth : règles IBKR
+        assert conn.execute(text("SELECT version FROM rules_meta")).scalar() == 4
         seeds = conn.execute(text("SELECT count(*) FROM rules WHERE id LIKE 'seed-%'")).scalar()
         assert seeds is not None
         assert seeds > 250

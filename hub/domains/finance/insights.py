@@ -18,7 +18,7 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.core.money import DECIMAL_CONTEXT, Money, quantize
-from hub.domains.finance import valuation
+from hub.domains.finance import transfers, valuation
 from hub.domains.finance.reads import (
     MIN_COUNT_FOR_AGGREGATES,
     OTHERS,
@@ -181,7 +181,10 @@ def to_categorize(conn: Connection) -> int:
         conn.execute(
             text(
                 "SELECT count(*) FROM entries e LEFT JOIN v_entry_category vc "
-                "ON vc.entry_seq = e.seq WHERE vc.category_id IS NULL AND e.kind = 'movement'"
+                "ON vc.entry_seq = e.seq WHERE vc.category_id IS NULL AND e.kind = 'movement' "
+                # un côté de virement apparié n'attend pas de catégorie (lot 6)
+                "AND e.seq NOT IN (SELECT debit_seq FROM transfer_links) "
+                "AND e.seq NOT IN (SELECT credit_seq FROM transfer_links)"
             )
         ).scalar_one()
     )
@@ -237,6 +240,7 @@ def holdings(conn: Connection, on_date: str) -> dict[str, Any]:
     accts = {
         r[0]: r[1] for r in conn.execute(text("SELECT id, name FROM accounts WHERE kind != 'cash'"))
     }
+    kinds = {r[0]: r[1] for r in conn.execute(text("SELECT isin, kind FROM instruments"))}
     lines = [
         line
         for account_id in sorted(positions.accounts)
@@ -257,6 +261,8 @@ def holdings(conn: Connection, on_date: str) -> dict[str, Any]:
                 "sub_class": sub_class,
                 "quantity": str(x.quantity),
                 "price": str(x.price) if x.price is not None else None,
+                "price_currency": x.currency,
+                "kind": kinds.get(x.isin, "other"),
                 "price_date": x.price_date,
                 "value": money(x.value, CCY),
                 "cost": money(cost, CCY) if cost is not None else None,
@@ -306,7 +312,7 @@ def _cost(
             ),
             {"a": account_id, "i": isin, "d": on_date},
         ).first()
-        if row is None or row[2] != CCY or Decimal(row[0]) != quantity:
+        if row is None or row[1] is None or row[2] != CCY or Decimal(row[0]) != quantity:
             return None
         return Money.from_decimal(Decimal(row[0]) * Decimal(row[1]), CCY).minor
 
@@ -361,6 +367,7 @@ def kpis(
         "savings_rate_3m": ratio(q.savings, q.income),
         "stale_accounts": stale_accounts(conn, today),
         "to_categorize": to_categorize(conn),
+        "unmatched_transfers": transfers.summary(conn, detailed=False)["unmatched"],
         "pillar3a": pillar3a(conn, at.year, at, pillar3a_cap),
         "last_statement": max(clbds) if clbds else None,
         "missing_fx": now.missing_fx,
