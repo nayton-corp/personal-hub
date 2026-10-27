@@ -31,7 +31,18 @@ def _head(conn: Connection) -> tuple[str, int]:
     row = conn.execute(
         text("SELECT chain_hash, epoch FROM journal ORDER BY seq DESC LIMIT 1")
     ).first()
-    return (row[0], row[1]) if row else (hashing.GENESIS, 1)
+    if row:
+        return row[0], row[1]
+    # base reconstruite par rejeu : son journal ouvre l'époque inscrite dans `rebuild_meta`
+    # (journal vide seulement ; la table n'existe qu'à partir de 0005)
+    epoch = None
+    if conn.execute(
+        text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'rebuild_meta'")
+    ).first():
+        epoch = conn.execute(
+            text("SELECT epoch FROM rebuild_meta WHERE id = 1")
+        ).scalar_one_or_none()
+    return hashing.GENESIS, int(epoch) if epoch is not None else 1
 
 
 def append(conn: Connection, table: str, values: Mapping[str, Any]) -> int:

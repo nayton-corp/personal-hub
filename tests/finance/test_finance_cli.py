@@ -133,3 +133,33 @@ def test_hub_main_mounts_finance(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
         assert exc.value.code == 0
     finally:
         get_settings.cache_clear()
+
+
+def test_viac_commands_and_rebuild(
+    app: typer.Typer, finance: FinanceDomain, tmp_path: Path
+) -> None:
+    from tests.factories import viac as v
+
+    finance.importer.pdf_text = v.fake_text
+    assert run(app, "viac", "add-portfolio", "3.1.2", "--name", "VIAC 1")[0] == 1
+    code, out = run(app, "viac", "add-portfolio", v.PORTFOLIO, "--name", "VIAC 1")
+    assert code == 0, out
+    ids = json.loads(out.splitlines()[-1])
+    again = json.loads(run(app, "viac", "add-portfolio", v.PORTFOLIO, "--name", "VIAC 1")[1])
+    assert again == ids  # rien de recréé
+    folder = tmp_path / "viac-history"
+    folder.mkdir()
+    (folder / "a.pdf").write_bytes(v.fake_pdf(v.deposit(date(2026, 3, 2), "1000.00")))
+    (folder / "b.pdf").write_bytes(v.fake_pdf(v.buy(date(2026, 3, 5), "9.5", "950.00")))
+    code, out = run(app, "viac", "import-history", str(folder))
+    assert code == 0, out
+    assert json.loads(out)["batch"]["new_entries"] == 3
+    out_dir = tmp_path / "rebuilt"
+    code, out = run(app, "rebuild", "--out", str(out_dir))
+    assert code == 0, out
+    report = json.loads(out.splitlines()[-1])
+    assert report["compare"]["ok"]
+    assert report["verify_ledger"]
+    assert run(app, "rebuild", "--out", str(out_dir))[0] == 1  # base déjà là
+    code, out = run(app, "compare", str(out_dir / "finance.db"))
+    assert code == 0, out

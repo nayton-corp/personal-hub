@@ -26,6 +26,8 @@ jobs:
           version: "0.13.6"
       - run: uv python install 3.12
       - run: uv sync --frozen
+      - name: pdftotext pour les PDF VIAC
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y poppler-utils
       - name: Aucune donnée réelle dans le dépôt
         run: scripts/check_no_data.sh
       - name: Secrets (gitleaks)

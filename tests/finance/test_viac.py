@@ -332,7 +332,7 @@ def test_viac_history_refuses_unreadable(viac: FinanceDomain, tmp_path: Path) ->
 def test_titles_are_valued_by_positions(viac: FinanceDomain) -> None:
     from hub.domains.finance import insights, valuation
 
-    cash, titles = open_portfolio(viac)
+    open_portfolio(viac)
     send(viac, f.deposit(D1, "1000.00"), f.buy(D2, "9.5", "950.00"))
     with viac.engine().connect() as conn:
         v = valuation.value_at(conn, "2026-03-31")

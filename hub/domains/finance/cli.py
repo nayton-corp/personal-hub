@@ -20,12 +20,12 @@ from sqlalchemy import text
 from hub.core import proposals
 from hub.core.auth import Principal
 from hub.core.context import HubContext
-from hub.core.db import begin_immediate
+from hub.core.db import begin_immediate, make_engine
 from hub.core.errors import Problem
 from hub.core.money import Money
 from hub.core.registry import Registry
 from hub.core.text import mask_iban
-from hub.domains.finance import catalog, importer, legacy, rules
+from hub.domains.finance import catalog, importer, legacy, rebuild, rules
 from hub.domains.finance import viac as viac_patterns
 from hub.domains.finance.viac import apply as viac_apply
 
@@ -253,6 +253,53 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
             raise typer.Exit(1) from exc
         _out(report.public())
         if not report.ok:
+            raise typer.Exit(1)
+
+    @app.command("rebuild")
+    def rebuild_cmd(
+        out: Annotated[Path, typer.Option(help="dossier de la base reconstruite (vide)")],
+    ) -> None:
+        """Reconstruit le registre par rejeu dans `<out>/finance.db` (la base d'origine n'est
+        pas touchée), puis le compare à l'origine. Compteurs seuls ; 1 au moindre écart."""
+        ready()
+        if (out / "finance.db").exists():
+            typer.echo(f"{out / 'finance.db'} existe déjà", err=True)
+            raise typer.Exit(1)
+        from hub.domains.finance.domain import FinanceDomain
+
+        paths = domain.settings.paths.model_copy(update={"data": out})
+        target = FinanceDomain(domain.settings.model_copy(update={"paths": paths}))
+        target.importer.pdf_text = domain.importer.pdf_text
+        hub = HubContext.build(domain.settings, Registry([domain]))
+        try:
+            applied = rebuild.applied_proposals(engine, hub.core.engine)
+        finally:
+            hub.core.dispose()
+        try:
+            report = rebuild.rebuild(domain, target, applied)
+            diff = rebuild.compare(engine, target.engine())
+            check = target.verify_ledger()
+        finally:
+            target.engine().dispose()
+        _out({**report.public(), "verify_ledger": check.ok, "compare": diff.public()})
+        if not (report.ok and diff.ok and check.ok):
+            raise typer.Exit(1)
+
+    @app.command("compare")
+    def compare_cmd(
+        other: Annotated[
+            Path, typer.Argument(exists=True, dir_okay=False, help="autre finance.db")
+        ],
+    ) -> None:
+        """Compare le registre à une autre base (reconstruite ou restaurée) ; 1 au moindre écart."""
+        ready()
+        other_engine = make_engine(other)
+        try:
+            diff = rebuild.compare(engine, other_engine)
+        finally:
+            other_engine.dispose()
+        _out(diff.public())
+        if not diff.ok:
             raise typer.Exit(1)
 
     @viac.command("add-portfolio")
