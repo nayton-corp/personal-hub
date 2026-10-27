@@ -205,6 +205,23 @@ def test_review_and_search(client: TestClient, ctx: HubContext, fin: FinanceDoma
     assert ref["href"].startswith("/finance/entries/")
 
 
+def test_notprovided_counterparty_shows_label(
+    client: TestClient, ctx: HubContext, fin: FinanceDomain
+) -> None:
+    """BCF met « NOTPROVIDED » comme nom pour les cartes et TWINT : l'app montre le libellé."""
+    ready_account(fin, 100_000)
+    tx = Tx("35.53", True, date(2026, 10, 1), counterparty="NOTPROVIDED", label="Previdis SA")
+    stmt = Stmt(opening=Decimal("1000.00"), opening_date=date(2026, 10, 1), entries=[tx])
+    fin.importer.process([Incoming("np.xml", camt053(stmt))])
+    h = token(ctx, "brain")
+    items = client.get("/api/finance/entries", headers=h).json()["items"]
+    (item,) = [e for e in items if e["kind"] == "movement"]
+    assert item["counterparty"] is None
+    assert item["label"] == "Previdis SA"
+    (group,) = client.get("/api/finance/review", headers=h).json()["groups"]
+    assert group["counterparty"] == "(inconnu)"  # pas de règle proposée sur « notprovided »
+
+
 def test_upload_and_import_detail(client: TestClient, ctx: HubContext, fin: FinanceDomain) -> None:
     app_session(ctx, client)
     ready_account(fin, 100_000)

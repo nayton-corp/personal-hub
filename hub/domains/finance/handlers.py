@@ -22,7 +22,7 @@ from hub.core.errors import Problem
 from hub.core.ids import new_id
 from hub.core.money import Money
 from hub.core.text import mask_iban, normalize
-from hub.domains.finance import catalog, importer, ledger, rules
+from hub.domains.finance import catalog, importer, ledger, reads, rules
 
 if TYPE_CHECKING:
     from hub.domains.finance.domain import FinanceDomain
@@ -67,7 +67,7 @@ def _entry_brief(r: Any) -> dict[str, Any]:
         "id": r.id,
         "booking_date": r.booking_date,
         "amount": Money(int(r.amount_minor), r.currency).to_api(),
-        "counterparty": r.counterparty or r.label or None,
+        "counterparty": reads.party(r.counterparty) or r.label or None,
     }
 
 

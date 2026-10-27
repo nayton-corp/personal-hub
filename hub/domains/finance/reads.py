@@ -155,6 +155,12 @@ _ENTRY_COLS = (
 )
 
 
+def party(name: str | None) -> str | None:
+    """Nom affichable de la contrepartie. BCF écrit « NOTPROVIDED » quand le nom manque (cartes,
+    TWINT) ; la valeur reste telle quelle en base parce qu'elle entre dans les clés de doublon."""
+    return None if name and name.strip().upper() == "NOTPROVIDED" else name
+
+
 def _entry(r: Any) -> dict[str, Any]:
     return {
         "id": r[1],
@@ -163,7 +169,7 @@ def _entry(r: Any) -> dict[str, Any]:
         "booking_date": r[4],
         "value_date": r[5],
         "amount": money(r[6], r[7]),
-        "counterparty": r[8],
+        "counterparty": party(r[8]),
         "counterparty_iban": mask_iban(r[9]),
         "label": r[10],
         "remittance": r[11],
@@ -439,7 +445,9 @@ def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
     ).fetchall()
     groups: dict[tuple[str, str], list[tuple[int, str]]] = {}
     for cp, ccy, amount, entry_id in rows:
-        groups.setdefault((normalize(cp) or "(inconnu)", ccy), []).append((int(amount), entry_id))
+        groups.setdefault((normalize(party(cp)) or "(inconnu)", ccy), []).append(
+            (int(amount), entry_id)
+        )
     out: list[dict[str, Any]] = [
         {
             "counterparty": k[0],
