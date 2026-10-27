@@ -24,7 +24,7 @@ Outcome = Literal[
     "unknown",
 ]
 Kind = Literal["run", "check"]
-NAMES = ("bcf", "viac", "revolut")
+NAMES = ("bcf", "viac", "revolut", "ibkr", "market")
 
 
 class Failure(Exception):
@@ -54,6 +54,20 @@ class RevolutConfig(BaseModel):
     api_url: str = "https://api.enablebanking.com"
 
 
+class MarketConfig(BaseModel):
+    """Cours du marché (lot 6) : sources publiques, sans compte."""
+
+    fx_url: str = "https://api.frankfurter.dev/v1"
+    currencies: list[str] = ["EUR", "USD", "GBP"]
+    coingecko_url: str = "https://api.coingecko.com/api/v3"
+    crypto: dict[str, str] = {"BTC": "bitcoin", "ETH": "ethereum"}  # symbole → id CoinGecko
+    yahoo_url: str = "https://query1.finance.yahoo.com/v8/finance/chart"
+    quotes: dict[str, str] = {}  # ISIN ou symbole → symbole Yahoo (par ex. « VWRL.SW »)
+    mempool_url: str = "https://mempool.space/api"
+    eth_rpc_url: str = "https://ethereum-rpc.publicnode.com"
+    backfill_days: int = Field(default=365, ge=1, le=365)
+
+
 class CollectorConfig(BaseModel):
     """Section `[collectors]` des réglages (sans secret)."""
 
@@ -69,9 +83,12 @@ class CollectorConfig(BaseModel):
         "bcf": "30 7 * * 1-5",  # jours ouvrés 07:30 (une seule validation du push)
         "viac": "0 9 * * 0",  # dimanche 09:00
         "revolut": "15 7,13,19 * * *",  # trois synchros, la quatrième reste pour la main
+        "ibkr": "45 6 * * 2-6",  # relevé Flex de la veille, du mardi au samedi
+        "market": "15 6 * * *",  # cours de la veille, tous les jours
     }
     urls: dict[str, str] = {}  # « bcf.url » : remplace une adresse de `[site]` (faux site)
     revolut: RevolutConfig = RevolutConfig()
+    market: MarketConfig = MarketConfig()
 
     @property
     def profiles(self) -> Path:

@@ -11,8 +11,9 @@ import { api, shiftMonth, store } from "./store.js";
 const $ = (id) => document.getElementById(id);
 const P = store.params;
 const STALE_DAYS = 45;
-const ENV_LABEL = { all: "Patrimoine net", cash: "Cash", pilier3a: "3e pilier", ibkr: "IBKR", crypto: "Crypto" };
-const KIND_ENV = { cash: "cash", pension: "pilier3a", securities: "ibkr", crypto: "crypto" };
+const ENV_LABEL = { all: "Patrimoine net", cash: "Cash", pilier3a: "3e pilier", titres: "Titres", crypto: "Crypto" };
+const KIND_ENV = { cash: "cash", pension: "pilier3a", securities: "titres", crypto: "crypto" };
+const CADENCE = { weekly: "chaque semaine", monthly: "chaque mois", quarterly: "chaque trimestre", yearly: "chaque année" };
 const KIND_LABEL = { cash: "Cash", pension: "Prévoyance", securities: "Titres", crypto: "Crypto" };
 
 const path = {
@@ -20,6 +21,8 @@ const path = {
   history: () => "/finance/networth/history",
   accounts: () => "/finance/accounts",
   holdings: () => "/finance/holdings",
+  look: () => `/finance/lookthrough?dimension=${P.look}`,
+  recurring: () => "/finance/recurring",
   freshness: () => "/finance/freshness",
   categories: () => "/finance/categories",
   budget: () => `/finance/budget?month=${P.month}&period=${P.period}`,
@@ -190,6 +193,7 @@ function home() {
   const n = pending ? pending.items.length : 0;
   if (n > 0) items.push([`${n} proposition${n > 1 ? "s" : ""} à valider`, "un seul Face ID pour tout le lot", "accueil", String(n)]);
   if (k.stale_accounts > 0) items.push([`${k.stale_accounts} compte${k.stale_accounts > 1 ? "s" : ""} à rafraîchir`, `dernier relevé de plus de ${STALE_DAYS} jours`, "sources", "!"]);
+  if (k.unmatched_transfers > 0) items.push([`${k.unmatched_transfers} virement${k.unmatched_transfers > 1 ? "s" : ""} sans autre côté`, "un relevé manque peut-être sur l'autre compte", "sources", "⇄"]);
   if (k.to_categorize > 0) items.push([`${k.to_categorize} écriture${k.to_categorize > 1 ? "s" : ""} à catégoriser`, "par contrepartie, en un Face ID", "journal", String(k.to_categorize)]);
   const p3 = k.pillar3a;
   if (p3 && p3.margin.minor > 0) items.push([`Marge 3a ${p3.year} : ${chf(units(p3.margin))} CHF`, `versé ${chf(units(p3.paid))} sur ${chf(units(p3.cap))}`, "patrimoine", "3a"]);
@@ -228,11 +232,12 @@ function patrimoine() {
   charts.hbars($("alloc"), k ? [
     { n: "Cash", v: units(k.envelopes.cash), cls: "neutral" },
     { n: "3e pilier", v: units(k.envelopes.pilier3a) },
-    { n: "IBKR", v: units(k.envelopes.ibkr) },
+    { n: "Titres", v: units(k.envelopes.titres) },
     { n: "Crypto", v: units(k.envelopes.crypto) },
   ].sort((a, b) => b.v - a.v) : null, chf);
 
   positions();
+  lookthrough();
 
   const list = $("acct-list");
   list.replaceChildren();
@@ -249,7 +254,9 @@ function patrimoine() {
     if (!rs.length) continue;
     if (P.env === "all") {
       const g = el("div", "grp");
-      g.append(el("span", "", KIND_LABEL[kind]), el("span", "amt", chf(rs.reduce((s, a) => s + units(a.value), 0))));
+      // en CHF : l'enveloppe des chiffres clés (un compte en devise y est converti)
+      const sum = k ? units(k.envelopes[KIND_ENV[kind]]) : rs.reduce((s, a) => s + (a.value.currency === "CHF" ? units(a.value) : 0), 0);
+      g.append(el("span", "", KIND_LABEL[kind]), el("span", "amt", chf(sum)));
       list.append(g);
     }
     for (const a of rs) {
@@ -258,32 +265,60 @@ function patrimoine() {
       const stale = a.kind === "cash" && (age == null || age > STALE_DAYS);
       const gap = a.last_clbd && a.last_clbd.gap.minor !== 0;
       const sub = (clbd ? `relevé du ${date(clbd)}` : "aucun relevé") + (stale ? " · à rafraîchir" : "") + (gap ? " · écart au relevé" : "");
-      const r = row(initials(a.institution), a.name, sub, chf(units(a.value)), a.iban || null, "", true);
+      const val = chf(units(a.value)) + (a.value.currency === "CHF" ? "" : ` ${a.value.currency}`);
+      const r = row(initials(a.institution), a.name, sub, val, a.iban || null, "", true);
       if (stale || gap) r.querySelector(".n span").className = "warn";
       list.append(r);
     }
   }
 }
 
-// positions des comptes de titres (VIAC) : valeur, plus-value latente, poids
+// positions de toutes les enveloppes (VIAC, IBKR, cryptos, titres saisis à la main) : valeur,
+// plus-value latente, poids ; filtrées par l'enveloppe choisie
 function positions() {
   const card = $("c-positions");
   const h = store.use(path.holdings()).data;
-  const show = h && h.items.length && (P.env === "all" || P.env === "pilier3a");
-  card.hidden = !show;
-  if (!show) return;
+  const acc = store.data(path.accounts());
+  const env = Object.fromEntries((acc ? acc.items : []).map((a) => [a.id, KIND_ENV[a.kind]]));
+  const items = h ? h.items.filter((p) => P.env === "all" || env[p.account_id] === P.env) : [];
+  card.hidden = !items.length || P.env === "cash";
+  if (card.hidden) return;
   const list = $("pos-list");
   list.replaceChildren();
-  const gain = h.cost ? units(h.value) - units(h.cost) : null;
-  text("positions-note", gain == null ? `${chf(units(h.value))} CHF` : `plus-value ${signed(gain)} CHF`);
-  for (const p of h.items) {
-    const sub = `${p.quantity.replace(".", ",")} parts · ${pct(ratio(p.weight), 1)}` + (p.price_date ? ` · cours du ${date(p.price_date)}` : " · sans cours");
+  const value = items.reduce((s, p) => s + units(p.value), 0);
+  const gains = items.map((p) => (p.gain ? units(p.gain) : null));
+  const gain = gains.every((g) => g != null) ? gains.reduce((s, g) => s + g, 0) : null;
+  text("positions-note", gain == null ? `${chf(value)} CHF` : `plus-value ${signed(gain)} CHF`);
+  for (const p of items) {
+    const unit = p.kind === "crypto" ? "" : " parts";
+    const share = value ? pct(units(p.value) / value, 1) : "—";
+    const sub = `${p.account || ""} · ${p.quantity.replace(".", ",")}${unit} · ${share}` + (p.price_date ? ` · cours du ${date(p.price_date)}` : " · sans cours");
     const g = p.gain ? units(p.gain) : null;
     list.append(row(initials(p.name), p.name, sub, chf(units(p.value)), g == null ? null : signed(g), g == null ? "" : g >= 0 ? "up" : "down", false));
   }
-  const missing = $("pos-missing");
-  missing.hidden = !h.missing_prices.length;
-  missing.textContent = h.missing_prices.length ? `Sans cours : ${h.missing_prices.join(", ")} (valorisé au solde du registre).` : "";
+  const missing = h.missing_prices.filter((isin) => items.some((p) => p.isin === isin));
+  $("pos-missing").hidden = !missing.length;
+  $("pos-missing").textContent = missing.length ? `Sans cours : ${missing.join(", ")} (valorisé au solde du registre).` : "";
+}
+
+// transparence des fonds : ce que les positions détiennent vraiment, toutes enveloppes
+function lookthrough() {
+  const card = $("c-look");
+  const h = store.data(path.holdings());
+  card.hidden = !(h && h.items.length) || !(P.env === "all" || P.env === "titres" || P.env === "pilier3a");
+  if (card.hidden) return;
+  pressed("look-seg", P.look);
+  const le = store.use(path.look());
+  const l = le.data;
+  charts.hbars($("look-bars"), l ? l.items.map((x) => ({ n: x.bucket, v: units(x.value), cls: x.bucket === "Non ventilé" ? "neutral" : "" })) : null, chf);
+  if (!l) {
+    text("look-note", failed(le) || "—");
+    text("look-foot", "");
+    return;
+  }
+  const covered = ratio(l.covered);
+  text("look-note", covered == null ? "—" : `${pct(covered)} ventilé`);
+  text("look-foot", l.compositions_since ? `Compositions des fonds au ${date(l.compositions_since)} ; le reste est classé d'après le fonds lui-même.` : "Aucune composition importée : chaque fonds est classé d'après lui-même.");
 }
 
 // --- budget ---------------------------------------------------------------------------------
@@ -358,10 +393,28 @@ function budget() {
       }
     }
   }
+  subscriptions();
   const m = store.data(path.months());
   charts.months($("ch-months"), m ? m.series.map((s) => ({
     month: s.month, fixed: units(s.fixed), variable: units(s.variable), savings: units(s.savings),
   })) : null);
+}
+
+// abonnements et paiements réguliers : prochaines échéances et total mensuel
+function subscriptions() {
+  const r = store.use(path.recurring()).data;
+  const card = $("c-subs");
+  card.hidden = !(r && r.items && r.items.length);
+  if (card.hidden) return;
+  const total = r.monthly_total.map((m) => `${chf(Math.abs(units(m)))} ${m.currency}`).join(" + ");
+  text("subs-note", `${r.count} actif${r.count > 1 ? "s" : ""} · ${total || "—"} par mois`);
+  const list = $("subs-list");
+  list.replaceChildren();
+  for (const s of r.items.filter((x) => x.active)) {
+    const sub = `${CADENCE[s.cadence] || s.cadence} · prochain le ${date(s.next_date)}` + (s.category_name ? ` · ${s.category_name}` : "");
+    const v = Math.abs(units(s.last_amount));
+    list.append(row(initials(s.label), s.label, sub, chf2(v), s.amount.currency === "CHF" ? null : s.amount.currency, "muted", false));
+  }
 }
 
 // --- journal --------------------------------------------------------------------------------
@@ -555,6 +608,7 @@ function stepper(id) {
 
 export function start() {
   if (!VIEWS[P.tab]) P.tab = "accueil";
+  if (!ENV_LABEL[P.env]) P.env = "all"; // « ibkr » d'une version précédente : l'enveloppe s'appelle « titres »
   for (const b of document.querySelectorAll("#tabbar button")) b.addEventListener("click", () => store.set({ tab: b.dataset.tab }));
   $("btn-src").addEventListener("click", () => store.set({ tab: P.tab === "sources" ? "accueil" : "sources" }));
   $("go-budget").addEventListener("click", () => store.set({ tab: "budget" }));
@@ -578,6 +632,7 @@ export function start() {
   seg("range-seg", "range");
   seg("mode-seg", "mode");
   seg("env-chips", "env");
+  seg("look-seg", "look");
   seg("period-seg", "period");
   seg("tx-chips", "tx");
   stepper("month-home");

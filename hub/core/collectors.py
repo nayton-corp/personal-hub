@@ -26,7 +26,13 @@ from hub.core.errors import Problem
 from hub.core.ids import new_id
 from hub.core.notify import Message
 
-COLLECTORS: dict[str, str] = {"bcf": "BCF", "viac": "VIAC", "revolut": "Revolut"}
+COLLECTORS: dict[str, str] = {
+    "bcf": "BCF",
+    "viac": "VIAC",
+    "revolut": "Revolut",
+    "ibkr": "IBKR",
+    "market": "Cours et cryptos",
+}
 Outcome = Literal[
     "ok",
     "nothing_new",

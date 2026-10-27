@@ -10,8 +10,9 @@ du journal (`rebuild_meta`).
 
 `compare` met les deux bases côte à côte : soldes par compte, écritures, catégorie courante de
 chaque écriture, totaux mensuels par catégorie, notes, étiquettes, budgets, points de contrôle,
-statuts des imports, opérations, positions et cours. Seuls des compteurs et des clés opaques
-(identifiants d'écriture, mois, catégories) sortent, jamais un montant ni un libellé.
+statuts des imports, opérations, positions, cours, change, compositions des fonds, virements
+appariés et abonnements. Seuls des compteurs et des clés opaques (identifiants
+d'écriture, mois, catégories) sortent, jamais un montant ni un libellé.
 
 Écart attendu : une catégorie posée par une règle depuis désactivée ou modifiée, que la base
 d'origine garde et que le rejeu (avec les règles finales) ne reproduit pas.
@@ -348,6 +349,18 @@ CHECKS: dict[str, Query] = {
         "SELECT account_id, on_date, isin, quantity || '|' || value_minor FROM holdings"
     ),
     "prices": _q("SELECT isin, on_date, source, price FROM prices"),
+    "fx": _q("SELECT on_date, base, quote, source, rate FROM fx_rates"),
+    "compositions": _q(
+        "SELECT isin, dimension, bucket, weight || '|' || on_date FROM compositions"
+    ),
+    # tables dérivées, recalculées après le rejeu
+    "transfers": _q(
+        "SELECT d.id, c.id, l.method FROM transfer_links l "
+        "JOIN entries d ON d.seq = l.debit_seq JOIN entries c ON c.seq = l.credit_seq"
+    ),
+    "recurring": _q(
+        "SELECT key, cadence || '|' || amount_minor || '|' || next_date FROM recurring"
+    ),
 }
 
 

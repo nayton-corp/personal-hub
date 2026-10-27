@@ -7,7 +7,23 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_EVEN, Context, Decimal, InvalidOperation, localcontext
 
 # Copie de la table `currencies` ; la base reste la référence pour les domaines.
-CURRENCY_EXPONENTS: dict[str, int] = {"CHF": 2, "EUR": 2, "USD": 2, "GBP": 2, "JPY": 0}
+CURRENCY_EXPONENTS: dict[str, int] = {
+    "CHF": 2,
+    "EUR": 2,
+    "USD": 2,
+    "GBP": 2,
+    "JPY": 0,
+    # lot 6 : devises de courtage (IBKR)
+    "AUD": 2,
+    "CAD": 2,
+    "CZK": 2,
+    "DKK": 2,
+    "HKD": 2,
+    "NOK": 2,
+    "PLN": 2,
+    "SEK": 2,
+    "SGD": 2,
+}
 
 DECIMAL_CONTEXT = Context(prec=28, rounding=ROUND_HALF_EVEN)
 

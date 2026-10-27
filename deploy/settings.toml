@@ -19,7 +19,11 @@ session_hours = 12
 api_url = "http://api:8710"   # réseau compose « hub »
 home = "/var/lib/hub-collector"
 # horaires (heure de Zurich) ; Revolut : au plus 4 synchros par jour sans l'utilisateur
-schedules = { bcf = "30 7 * * 1-5", viac = "0 9 * * 0", revolut = "15 7,13,19 * * *" }
+schedules = { bcf = "30 7 * * 1-5", viac = "0 9 * * 0", revolut = "15 7,13,19 * * *", ibkr = "45 6 * * 2-6", market = "15 6 * * *" }
+# lot 6 : cours publics ; quotes = { "<ISIN>" = "<symbole Yahoo>" } pour les titres sans autre cours
+[collectors.market]
+currencies = ["EUR", "USD", "GBP"]
+crypto = { BTC = "bitcoin", ETH = "ethereum" }
 
 [secrets]
 file = "/srv/hub/config/secrets.enc.yaml"

@@ -31,7 +31,8 @@ from hub.core.db import begin_immediate
 from hub.core.ids import new_id, urn
 from hub.core.logging import get_logger
 from hub.core.text import mask_iban
-from hub.domains.finance import catalog, dedup, ledger, revolut, rules
+from hub.domains.finance import catalog, dedup, documents, ibkr, ledger, revolut, rules
+from hub.domains.finance.assets import DocumentError
 from hub.domains.finance.camt import parser
 from hub.domains.finance.camt.models import Balance, ParsedEntry, ParsedFile, ParsedStatement
 from hub.domains.finance.viac import ViacError
@@ -201,7 +202,7 @@ def read_viac(text_of: Callable[[bytes], str], data: bytes) -> ViacDoc | str:
     return kind
 
 
-Staged = ParsedFile | ViacDoc
+Staged = ParsedFile | ViacDoc | documents.Doc
 
 
 class Archiver:
@@ -338,6 +339,9 @@ class ImportService:
             return FileOutcome(f.name, None, "duplicate", "import.duplicate_file"), None
         if viac_text.is_pdf(f.data):
             return self._stage_viac(f, digest)
+        extra = documents.detect(f.name, f.data)
+        if extra is not None:
+            return self._stage_doc(f, digest, extra)
         source = revolut.source_of(f.data) or SOURCE
         try:
             parsed = self.reread(source, f.data)
@@ -369,6 +373,21 @@ class ImportService:
         import_id = self._record(
             f, digest, "staged", stats, None, source=source, rows=doc.statements()
         )
+        return FileOutcome(f.name, import_id, "staged"), doc
+
+    def _stage_doc(
+        self, f: Incoming, digest: str, source: str
+    ) -> tuple[FileOutcome, Staged | None]:
+        """Document du lot 6 : IBKR, cours, positions, composition de fonds."""
+        try:
+            doc = documents.read(source, f.data)
+        except DocumentError as exc:
+            stats: dict[str, Any] = {"reason": exc.code, "detail": exc.reason}
+            import_id = self._record(f, digest, "rejected", stats, None, source=source, rows=[])
+            log.warning("import.rejected", import_id=import_id, reason=exc.code)
+            return FileOutcome(f.name, import_id, "rejected", exc.code), None
+        stats = {"document": doc.handler.name}
+        import_id = self._record(f, digest, "staged", stats, None, source=source, rows=doc.rows())
         return FileOutcome(f.name, import_id, "staged"), doc
 
     # --- rapprochement et application ----------------------------------------------------
@@ -404,6 +423,23 @@ class ImportService:
             log.info(
                 "import.viac",
                 import_id=import_id,
+                status=sorted({o.status for o in done}),
+                reasons=sorted({r for o in done for r in o.reasons}),
+                new=sum(o.new for o in done),
+            )
+            outcomes += done
+        extras = sorted(
+            ((i, d) for i, d in staged.items() if isinstance(d, documents.Doc)),
+            key=lambda w: (w[1].order, w[0]),
+        )
+        for import_id, extra in extras:
+            indexes = None if only is None else {x for i, x in only if i == import_id}
+            with begin_immediate(self.engine) as conn:
+                done = apply_doc(conn, import_id, extra, indexes)
+            log.info(
+                "import.document",
+                import_id=import_id,
+                document=extra.handler.name,
                 status=sorted({o.status for o in done}),
                 reasons=sorted({r for o in done for r in o.reasons}),
                 new=sum(o.new for o in done),
@@ -511,7 +547,8 @@ class ImportService:
     def review_plan(self, conn: Connection, import_id: str) -> list[tuple[int, Plan]]:
         """Relevés en attente d'un import et ce que leur validation écrirait (lecture seule).
         Un document VIAC n'a rien à forcer : il attend un compte ou une ouverture."""
-        if source_of(conn, import_id) in VIAC_SOURCES:
+        source = source_of(conn, import_id) or ""
+        if source in VIAC_SOURCES or documents.handler_for(source) is not None:
             return []
         waiting = set(
             conn.execute(
@@ -563,7 +600,13 @@ class ImportService:
             if import_id not in staged:
                 try:
                     staged[import_id] = self.reread(source, self.archiver.load(archive_path))
-                except (ImportRefused, secrets.SecretsError, OSError, ViacError) as exc:
+                except (
+                    ImportRefused,
+                    secrets.SecretsError,
+                    OSError,
+                    ViacError,
+                    DocumentError,
+                ) as exc:
                     if quiet:
                         log.warning("import.retry_unavailable", error=type(exc).__name__)
                         return []
@@ -575,6 +618,8 @@ class ImportService:
 
     def reread(self, source: str, data: bytes) -> Staged:
         """Relit un fichier archivé selon sa source."""
+        if documents.handler_for(source) is not None:
+            return documents.read(source, data)
         if source in VIAC_SOURCES:
             doc = read_viac(self.pdf_text, data)
             if isinstance(doc, str):
@@ -641,6 +686,21 @@ def apply_viac(
         _set_statement(conn, import_id, 2 * k, r.cash_id, cash)
         _set_statement(conn, import_id, 2 * k + 1, r.titles_id, titles)
         out += [cash, titles]
+    return out
+
+
+def apply_doc(
+    conn: Connection, import_id: str, doc: documents.Doc, indexes: set[int] | None = None
+) -> list[StatementOutcome]:
+    """Applique un document du lot 6, relevé par relevé."""
+    out = []
+    for index, r in doc.handler.apply(conn, import_id, doc.payload, indexes):
+        status: Literal["applied", "needs_review"] = (
+            "applied" if r.status == "applied" else "needs_review"
+        )
+        o = StatementOutcome(import_id, index, status, sorted(r.reasons), r.new, r.duplicates)
+        _set_statement(conn, import_id, index, r.account_id, o)
+        out.append(o)
     return out
 
 
@@ -1277,3 +1337,66 @@ def open_revolut(service: ImportService, account: catalog.Account) -> tuple[bool
     ids = sorted({i for i, _ in pending})
     service.retry_needs_review(ids)
     return True, ids
+
+
+# --- IBKR (lot 6) -----------------------------------------------------------------------------
+
+
+def import_ibkr_history(service: ImportService, folder: Path) -> HistoryReport:
+    """`hub finance ibkr import-history <dossier>` : lit tous les relevés Flex (sous-dossiers
+    compris) avant d'écrire, vérifie que chaque compte IBKR est déclaré et pas encore ouvert,
+    puis applique tout dans l'ordre des dates : le plus ancien relevé ouvre les comptes."""
+    with _locked(service.lock_file):
+        files: dict[str, Incoming] = {}
+        for p in sorted(folder.rglob("*")):
+            if p.is_file() and not p.name.startswith(".") and p.suffix.lower() in {".xml", ".zip"}:
+                for f in expand(p.name, p.read_bytes()):
+                    if ibkr.is_flex(f.data):
+                        files.setdefault(sha256(f.data), f)
+        fresh = [f for digest, f in files.items() if not service._known(digest)]
+        spans: dict[str, list[str]] = {}
+        for f in fresh:
+            try:
+                flex = ibkr.parse(f.data)
+            except DocumentError as exc:
+                return HistoryReport(ok=False, error=f"{exc.code} : {safe_name(f.name)}")
+            for st in flex.statements:
+                spans.setdefault(st.account, []).extend([st.from_date, st.to_date])
+        if not spans:
+            return HistoryReport(ok=False, error="aucun relevé Flex nouveau dans ce dossier")
+        with service.engine.connect() as conn:
+            for number in sorted(spans):
+                titles = catalog.account_by_ref(conn, ibkr.titles_ref(number))
+                if titles is None:
+                    return HistoryReport(
+                        ok=False,
+                        error=f"compte IBKR inconnu : {number} (hub finance ibkr add-account)",
+                    )
+                if conn.execute(
+                    text("SELECT 1 FROM entries WHERE account_id = :a LIMIT 1"), {"a": titles.id}
+                ).first():
+                    return HistoryReport(ok=False, error=f"registre déjà ouvert : {number}")
+        batch = service.process(fresh)
+        report = HistoryReport(ok=True, batch=batch.counters())
+        report.ok = report.batch["needs_review"] == 0 and report.batch["rejected_files"] == 0
+        with service.engine.connect() as conn:
+            for number, dates in sorted(spans.items()):
+                count = conn.execute(
+                    text(
+                        "SELECT count(*) FROM entries e JOIN accounts a ON a.id = e.account_id "
+                        "WHERE a.external_ref LIKE :r AND e.kind = 'movement'"
+                    ),
+                    {"r": f"ibkr:{number}:%"},
+                ).scalar_one()
+                report.accounts.append(
+                    {"account": number, "entries": count, "from": min(dates), "to": max(dates)}
+                )
+            flagged = conn.execute(
+                text(
+                    "SELECT s.reasons_json FROM import_statements s JOIN imports i "
+                    "ON i.id = s.import_id WHERE i.source = :src AND s.reasons_json != '[]'"
+                ),
+                {"src": ibkr.SOURCE},
+            ).scalars()
+            report.warnings = sorted({r for x in flagged for r in json.loads(x)})
+        return report

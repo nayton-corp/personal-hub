@@ -22,12 +22,12 @@ from hub.core.ids import Urn, urn
 from hub.core.logging import get_logger
 from hub.core.migrations import runner
 from hub.core.settings import Settings
-from hub.domains.finance import importer, ledger, reads, snapshots
+from hub.domains.finance import importer, ledger, reads, recurring, snapshots, transfers
 from hub.domains.finance.handlers import build_kinds
 from hub.domains.finance.importer import Archiver, ImportService, recipient_from_key
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 5  # 0005_viac
+SCHEMA_VERSION = 6  # 0006_wealth
 TZ = ZoneInfo("Europe/Zurich")  # le jour civil des chiffres de l'app
 log = get_logger("hub.finance")
 
@@ -177,7 +177,18 @@ class FinanceDomain:
         return utcnow().astimezone(TZ).date()
 
     def refresh_snapshots(self, *, force: bool = False) -> snapshots.Refresh:
-        return snapshots.refresh(self._engine, self.today(), force=force)
+        refreshed = snapshots.refresh(self._engine, self.today(), force=force)
+        if refreshed.recomputed:
+            self.refresh_derived()
+        return refreshed
+
+    def refresh_derived(self) -> dict[str, int]:
+        """Virements appariés, puis abonnements (qui laissent les virements de côté)."""
+        with begin_immediate(self._engine) as conn:
+            pairs = transfers.refresh(conn)
+            found = recurring.refresh(conn, self.today())
+        log.info("derived.refreshed", transfers=pairs, recurring=found)
+        return {"transfers": pairs, "recurring": found}
 
     def nightly(self) -> None:
         refreshed = self.refresh_snapshots(force=True)

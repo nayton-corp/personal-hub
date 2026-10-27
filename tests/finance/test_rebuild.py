@@ -14,10 +14,14 @@ from hub.core.db import begin_immediate
 from hub.core.registry import Registry
 from hub.domains.finance import ledger, rebuild
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.importer import Incoming
+from tests.factories import ibkr as f
 from tests.factories import viac as v
 from tests.factories.camt import Tx
+from tests.finance import test_wealth as w
 from tests.finance.conftest import D, finance_settings, ready_account, rows
 from tests.finance.test_double_sas import accept, create, entry_id, load
+from tests.finance.test_ibkr import add_ibkr, quarter
 from tests.finance.test_viac import open_portfolio, send
 
 
@@ -154,4 +158,47 @@ def test_missing_params_fail_the_rebuild(
     report = rebuild.rebuild(fin, target, applied)
     assert not report.ok
     assert report.skipped == {"params_missing": 1}
+    target.engine().dispose()
+
+
+def test_rebuild_replays_wealth_documents(
+    ctx: HubContext, fin: FinanceDomain, tmp_path: Path
+) -> None:
+    """Lot 6 : relevé IBKR, fichier de cours, positions saisies et composition de fonds se
+    rejouent depuis l'archive ; les tables dérivées sont recalculées à l'identique."""
+    add_ibkr(fin)
+    w.add_ref(fin, "revolut:invest", "securities", "Revolut actions")
+    w.add_ref(fin, "revolut:crypto", "crypto", "Revolut crypto")
+    w.add_ref(fin, "crypto:ledger-btc", "crypto", "Ledger")
+    btc = {"instrument": "BTC", "kind": "crypto", "currency": "CHF", "source": "coingecko"}
+    market = w.market_doc(
+        fx=[
+            {"on_date": "2026-10-20", "base": "USD", "quote": "CHF", "rate": "0.8", "source": "ecb"}
+        ],
+        prices=[{**btc, "on_date": "2026-10-20", "price": "90000"}],
+        balances=[
+            {
+                "account": "crypto:ledger-btc",
+                "instrument": "BTC",
+                "on_date": "2026-10-20",
+                "quantity": "0.5",
+            }
+        ],
+    )
+    fin.importer.process(
+        [
+            Incoming("flex.xml", f.flex(quarter())),
+            Incoming("market.json", market),
+            Incoming("positions.csv", w.POSITIONS.encode()),
+            Incoming(f"{w.WORLD}_holdings.csv", w.ISHARES.encode()),
+        ]
+    )
+    fin.refresh_snapshots(force=True)
+    target = target_for(fin, tmp_path)
+    report = rebuild.rebuild(fin, target, rebuild.applied_proposals(fin.engine(), ctx.core.engine))
+    assert report.ok, report.public()
+    diff = rebuild.compare(fin.engine(), target.engine())
+    assert diff.ok, diff.public()
+    for name in ("holdings", "prices", "fx", "compositions", "trades"):
+        assert diff.checks[name]["rebuilt"] > 0, name
     target.engine().dispose()

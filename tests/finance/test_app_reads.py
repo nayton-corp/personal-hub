@@ -295,7 +295,7 @@ def test_networth_history(client: TestClient, ctx: HubContext, year: FinanceDoma
     assert len(r["items"]) == 12
     last = r["items"][-1]
     assert minor(last["net_worth"]) == minor(last["deposits_cum"]) == 2_869_000
-    assert set(last["by_envelope"]) == {"cash", "pilier3a", "ibkr", "crypto"}
+    assert set(last["by_envelope"]) == {"cash", "pilier3a", "titres", "crypto"}
     part = client.get(
         "/api/finance/networth/history?from=2026-01-01&to=2026-03-31", headers=h
     ).json()

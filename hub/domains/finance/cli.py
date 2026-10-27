@@ -25,7 +25,7 @@ from hub.core.errors import Problem
 from hub.core.money import Money
 from hub.core.registry import Registry
 from hub.core.text import mask_iban
-from hub.domains.finance import catalog, importer, legacy, rebuild, rules
+from hub.domains.finance import catalog, ibkr, importer, legacy, rebuild, rules
 from hub.domains.finance import viac as viac_patterns
 from hub.domains.finance.viac import apply as viac_apply
 
@@ -79,6 +79,12 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
     app.add_typer(viac, name="viac")
     revolut_app = typer.Typer(no_args_is_help=True, help="Revolut (Enable Banking, CSV)")
     app.add_typer(revolut_app, name="revolut")
+    ibkr_app = typer.Typer(no_args_is_help=True, help="IBKR (Flex Query)")
+    app.add_typer(ibkr_app, name="ibkr")
+    crypto_app = typer.Typer(no_args_is_help=True, help="Portefeuilles crypto (adresses)")
+    app.add_typer(crypto_app, name="crypto")
+    positions_app = typer.Typer(no_args_is_help=True, help="Positions saisies à la main")
+    app.add_typer(positions_app, name="positions")
     engine = domain.engine()
 
     def ready() -> None:
@@ -420,6 +426,96 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
                 "aucun relevé avec solde : ouvrir à la main (hub finance accounts open)", err=True
             )
         _out({"id": account.id, "opened": done, "imports": len(ids)})
+
+    def create_positions_account(
+        ref: str, institution: str, name: str, kind: str, currency: str = "CHF"
+    ) -> str:
+        """Compte à positions, créé par une proposition validée au terminal (idempotent)."""
+        with engine.connect() as conn:
+            found = catalog.account_by_ref(conn, ref)
+        if found is not None:
+            return found.id
+        result = propose_and_accept(
+            domain,
+            "create_account",
+            {
+                "institution": institution,
+                "name": name,
+                "kind": kind,
+                "currency": currency,
+                "external_ref": ref,
+            },
+        )
+        return str(result["account_id"])
+
+    @ibkr_app.command("add-account")
+    def ibkr_add_account(
+        number: Annotated[str, typer.Argument(help="n° de compte IBKR, ex. U1234567")],
+        name: Annotated[str, typer.Option(help="ex. « IBKR »")] = "IBKR",
+        base: Annotated[str, typer.Option(help="devise de base du compte IBKR")] = "CHF",
+    ) -> None:
+        """Déclare un compte IBKR : son compte de titres (proposition validée au terminal). Les
+        comptes de liquidités par devise se créent au premier relevé Flex qui les cite."""
+        ready()
+        if not re.fullmatch(r"[A-Z0-9]{4,20}", number):
+            typer.echo("numéro attendu : U1234567", err=True)
+            raise typer.Exit(1)
+        account_id = create_positions_account(
+            ibkr.titles_ref(number), "IBKR", f"{name} titres", "securities", base.upper()
+        )
+        _out({"id": account_id, "ref": ibkr.titles_ref(number)})
+
+    @ibkr_app.command("import-history")
+    def ibkr_import_history(
+        folder: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    ) -> None:
+        """Reprise des relevés Flex (XML, sous-dossiers compris), du plus ancien au plus récent :
+        le plus ancien ouvre les comptes au solde de départ d'IBKR. Compteurs seuls."""
+        ready()
+        report = importer.import_ibkr_history(domain.importer, folder)
+        _out(report.public())
+        if not report.ok:
+            raise typer.Exit(1)
+
+    @crypto_app.command("add-wallet")
+    def crypto_add_wallet(
+        name: Annotated[str, typer.Argument(help="nom court, ex. ledger-btc")],
+        label: Annotated[str | None, typer.Option(help="nom affiché")] = None,
+    ) -> None:
+        """Déclare un portefeuille crypto (compte `crypto:<nom>`, en CHF) ; ses adresses vont
+        dans les secrets du collecteur « market », jamais dans la base."""
+        ready()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,40}", name):
+            typer.echo("nom attendu : minuscules, chiffres et tirets (ledger-btc)", err=True)
+            raise typer.Exit(1)
+        ref = f"crypto:{name}"
+        account_id = create_positions_account(ref, "Crypto", label or name, "crypto")
+        _out({"id": account_id, "ref": ref})
+
+    @positions_app.command("add-account")
+    def positions_add_account(
+        ref: Annotated[str, typer.Argument(help="référence, ex. revolut:invest")],
+        name: Annotated[str, typer.Option(help="ex. « Revolut actions »")],
+        institution: Annotated[str, typer.Option(help="ex. Revolut")],
+        kind: Annotated[str, typer.Option(help="securities ou crypto")] = "securities",
+    ) -> None:
+        """Compte dont les positions arrivent par un CSV saisi à la main
+        (date,account,instrument,name,kind,quantity,price,currency)."""
+        ready()
+        if kind not in ("securities", "crypto") or not re.fullmatch(
+            r"[a-z0-9]+:[a-z0-9][a-z0-9:-]{0,40}", ref
+        ):
+            typer.echo("référence : revolut:invest ; type : securities ou crypto", err=True)
+            raise typer.Exit(1)
+        account_id = create_positions_account(ref, institution, name, kind)
+        _out({"id": account_id, "ref": ref})
+
+    @app.command("derived")
+    def derived_cmd() -> None:
+        """Recalcule les instantanés, les virements appariés et les abonnements."""
+        ready()
+        refreshed = domain.refresh_snapshots(force=True)
+        _out({"snapshots": refreshed.rows, **domain.refresh_derived()})
 
     @imports.command("list")
     def imports_list(

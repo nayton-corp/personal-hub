@@ -143,6 +143,23 @@ services:
       - collector-revolut:/var/lib/hub-collector
       - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/revolut.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
 
+  # --- lot 6 : API officielles ou publiques, pas de navigateur ---
+  collector-ibkr:                        # Flex Web Service, jeton Flex en lecture seule
+    <<: *collector
+    command: ["hub-collector", "daemon", "ibkr"]
+    volumes:
+      - ${HUB_INBOX}:/srv/hub/inbox
+      - collector-ibkr:/var/lib/hub-collector
+      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/ibkr.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
+
+  collector-market:                      # change BCE, CoinGecko, soldes des adresses publiques
+    <<: *collector
+    command: ["hub-collector", "daemon", "market"]
+    volumes:
+      - ${HUB_INBOX}:/srv/hub/inbox
+      - collector-market:/var/lib/hub-collector
+      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/market.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
+
 volumes:
   data: {}
   archive: {}
@@ -151,6 +168,8 @@ volumes:
   collector-bcf: {}
   collector-viac: {}
   collector-revolut: {}
+  collector-ibkr: {}
+  collector-market: {}
 
 networks:
   hub: {}

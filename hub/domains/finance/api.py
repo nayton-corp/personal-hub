@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from hub.core import proposals
 from hub.core.auth import AppSession, Ctx, Principal, require
 from hub.core.errors import Problem
-from hub.domains.finance import insights, reads, snapshots
+from hub.domains.finance import insights, lookthrough, reads, recurring, snapshots, transfers
 from hub.domains.finance.importer import APPLY_IMPORT, ImportRefused
 
 if TYPE_CHECKING:
@@ -21,7 +21,8 @@ MONTH = r"^\d{4}-(0[1-9]|1[0-2])$"
 PERIOD = r"^[mq]$"
 DATE = r"^\d{4}-\d{2}-\d{2}$"
 MAX_UPLOAD = 50 * 1024 * 1024
-_NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip|pdf)$", re.I)
+_NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip|pdf|json|csv)$", re.I)
+DIMENSION = r"^(region|sector|currency|holding)$"
 
 Reader = Annotated[Principal, Depends(require("app", "finance:read"))]
 AnyReader = Annotated[Principal, Depends(require("app", "finance:read", "finance:aggregates"))]
@@ -140,6 +141,32 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         with engine.connect() as conn:
             return insights.holdings(conn, on or domain.today().isoformat())
 
+    @r.get("/lookthrough")
+    def lookthrough_route(
+        _p: AnyReader,
+        dimension: Annotated[str, Query(pattern=DIMENSION)] = "region",
+        on: Annotated[str | None, Query(pattern=DATE)] = None,
+    ) -> dict[str, Any]:
+        """Positions ventilées par région, secteur, devise, ou les dix plus grosses lignes
+        sous-jacentes (transparence des fonds)."""
+        with engine.connect() as conn:
+            return lookthrough.breakdown(conn, dimension, on or domain.today().isoformat())
+
+    @r.get("/recurring")
+    def recurring_route(p: AnyReader) -> dict[str, Any]:
+        """Abonnements et paiements réguliers, prochaines échéances, total mensuel ; pour la
+        portée `aggregates`, les totaux seulement."""
+        domain.refresh_snapshots()
+        with engine.connect() as conn:
+            return recurring.listing(conn, domain.today(), aggregates_only=_aggregates_only(p))
+
+    @r.get("/transfers")
+    def transfers_route(p: AnyReader) -> dict[str, Any]:
+        """Virements appariés par méthode et virements sans autre côté."""
+        domain.refresh_snapshots()
+        with engine.connect() as conn:
+            return transfers.summary(conn, detailed=not _aggregates_only(p))
+
     @r.get("/networth/history")
     def networth_history(
         _p: AnyReader,
@@ -221,9 +248,9 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         _session: AppSession,
         name: Annotated[str, Query(max_length=124)],
     ) -> dict[str, Any]:
-        """Corps brut (XML, zip ou PDF VIAC) ; même traitement que `inbox/`."""
+        """Corps brut (XML, zip, PDF VIAC, JSON ou CSV) ; même traitement que `inbox/`."""
         if not _NAME.match(name):
-            raise Problem("validation.params", "nom de fichier .xml, .zip ou .pdf attendu")
+            raise Problem("validation.params", "nom de fichier .xml, .zip, .pdf, .json ou .csv")
         body = await request.body()
         if not body or len(body) > MAX_UPLOAD:
             raise Problem("validation.params", "fichier vide ou trop volumineux")
