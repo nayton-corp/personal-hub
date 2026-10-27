@@ -16,12 +16,13 @@ Les mêmes images et le même `deploy/compose.yaml` serviront sur le Pi 5.
    ```
    mkdir -p ~/.config/hub && age-keygen -o ~/.config/hub/age.key && chmod 400 ~/.config/hub/age.key
    ```
-   La ligne `Public key: age1…` affichée sert à chiffrer.
+   La ligne `Public key: age1…` affichée sert à chiffrer ; `age-keygen -y ~/.config/hub/age.key` la réaffiche.
 6. **Secrets chiffrés** (jamais de fichier en clair sur le disque) :
    ```
    printf 'restic:\n  password: "%s"\n' "$(openssl rand -base64 32)" \
-     | age -r age1… -o ~/.config/hub/secrets.enc.yaml
+     | age -r "$(age-keygen -y ~/.config/hub/age.key)" -o ~/.config/hub/secrets.enc.yaml
    ```
+   (`age-keygen -y` relit la clé publique depuis la clé de l'étape 5.)
    Copie le mot de passe restic dans le kit de secours avant de fermer le terminal :
    `age -d -i ~/.config/hub/age.key ~/.config/hub/secrets.enc.yaml`.
 7. **Dossiers :** `mkdir -p ~/PersonalHub/inbox`, et sur le disque externe
