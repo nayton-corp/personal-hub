@@ -241,3 +241,30 @@ def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceD
     assert loaded.resolve(f"hub:finance:account:{acc['id']}") is not None
     assert loaded.resolve(events[1].urn) is not None
     assert loaded.mcp_tools() == []
+
+
+def test_viac_pdf_upload_and_holdings(
+    client: TestClient, ctx: HubContext, fin: FinanceDomain
+) -> None:
+    from tests.factories import viac as v
+    from tests.finance.test_viac import open_portfolio
+
+    app_session(ctx, client)
+    fin.importer.pdf_text = v.fake_text
+    open_portfolio(fin)
+    for name, txt in (
+        ("versement.pdf", v.deposit(date(2026, 3, 2), "1000.00")),
+        ("achat.pdf", v.buy(date(2026, 3, 5), "9.5", "950.00")),
+    ):
+        r = client.post(f"/api/finance/imports?name={name}", content=v.fake_pdf(txt))
+        assert r.status_code == 202
+        assert r.json()["items"][0]["status"] == "applied"
+    bad = client.post("/api/finance/imports?name=x.pdf", content=b"%PDF-1.4\nautre")
+    assert bad.status_code == 422
+    h = client.get("/api/finance/holdings?on=2026-03-31", headers=token(ctx, "aggregates"))
+    assert h.status_code == 200
+    assert h.json()["value"]["minor"] == 95000
+    assert (
+        client.get("/api/finance/holdings?on=31.03.2026", headers=token(ctx, "brain")).status_code
+        == 422
+    )

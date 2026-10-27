@@ -132,6 +132,14 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         with engine.connect() as conn:
             return insights.kpis(conn, m, domain.today(), pillar3a_cap=domain.pillar3a_cap)
 
+    @r.get("/holdings")
+    def holdings(
+        _p: AnyReader, on: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None
+    ) -> dict[str, Any]:
+        """Positions des comptes de titres (VIAC) à une date, aujourd'hui par défaut."""
+        with engine.connect() as conn:
+            return insights.holdings(conn, on or domain.today().isoformat())
+
     @r.get("/networth/history")
     def networth_history(
         _p: AnyReader,

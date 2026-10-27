@@ -32,7 +32,11 @@ D3 = date(2026, 6, 30)
 def test_parse_buy_and_sell() -> None:
     n = viac_notice.parse(f.buy(D2, "12.345", "1234.50", price="100.00"))
     assert (n.kind, n.portfolio, n.value_date) == ("buy", f.PORTFOLIO, "2026-03-05")
-    assert (n.amount, n.quantity, n.isin) == (Decimal("1234.50"), Decimal("12.345"), f.FUND_WORLD[1])
+    assert (n.amount, n.quantity, n.isin) == (
+        Decimal("1234.50"),
+        Decimal("12.345"),
+        f.FUND_WORLD[1],
+    )
     assert n.fund == f.FUND_WORLD[0]
     assert n.is_trade
     s = viac_notice.parse(f.buy(D2, "2", "220.00", sell=True))
@@ -155,7 +159,8 @@ def send(domain: FinanceDomain, *docs: str) -> importer.BatchReport:
 
 def balance(domain: FinanceDomain, account_id: str) -> int:
     ((v,),) = rows(
-        domain, "SELECT coalesce(sum(amount_minor), 0) FROM entries WHERE account_id = :a",
+        domain,
+        "SELECT coalesce(sum(amount_minor), 0) FROM entries WHERE account_id = :a",
         a=account_id,
     )
     return int(v)  # type: ignore[call-overload]
@@ -298,14 +303,16 @@ def test_viac_history(viac: FinanceDomain, tmp_path: Path) -> None:
     assert openings == [("2026-03-01", 0), ("2026-03-01", 0)]
     # une deuxième reprise ne trouve rien de nouveau et n'écrit rien
     again = importer.import_viac_history(viac.importer, folder)
-    assert again.ok and again.batch["files"] == 0
+    assert again.ok
+    assert again.batch["files"] == 0
 
 
 def test_viac_history_refuses_unknown_portfolio(viac: FinanceDomain, tmp_path: Path) -> None:
     (tmp_path / "a.pdf").write_bytes(f.fake_pdf(f.deposit(D1, "1000.00")))
     report = importer.import_viac_history(viac.importer, tmp_path)
     assert not report.ok
-    assert report.error is not None and "add-portfolio" in report.error
+    assert report.error is not None
+    assert "add-portfolio" in report.error
     assert rows(viac, "SELECT count(*) FROM imports") == [(0,)]
 
 
@@ -314,5 +321,78 @@ def test_viac_history_refuses_unreadable(viac: FinanceDomain, tmp_path: Path) ->
     (tmp_path / "a.pdf").write_bytes(f.fake_pdf("Lettre quelconque\nPortefeuille 3.100.200.300.01"))
     report = importer.import_viac_history(viac.importer, tmp_path)
     assert not report.ok
-    assert report.error is not None and report.error.startswith("viac.unrecognized")
+    assert report.error is not None
+    assert report.error.startswith("viac.unrecognized")
     assert rows(viac, "SELECT count(*) FROM entries") == [(0,)]
+
+
+# --- valorisation ----------------------------------------------------------------------------
+
+
+def test_titles_are_valued_by_positions(viac: FinanceDomain) -> None:
+    from hub.domains.finance import insights, valuation
+
+    cash, titles = open_portfolio(viac)
+    send(viac, f.deposit(D1, "1000.00"), f.buy(D2, "9.5", "950.00"))
+    with viac.engine().connect() as conn:
+        v = valuation.value_at(conn, "2026-03-31")
+    # avant tout rapport : parts des avis au cours de l'achat
+    assert (v.net_worth, v.deposits, v.by_envelope["pilier3a"]) == (100000, 100000, 100000)
+    folio = f.Folio("VIAC1", cash="56.00", positions=[f.Pos("9.5", "1045.00")])
+    send(viac, f.dividend(D3, "6.00"), f.report(D3, [folio]))
+    with viac.engine().connect() as conn:
+        v = valuation.value_at(conn, D3.isoformat())
+        later = valuation.value_at(conn, "2026-07-15")
+        (s,) = valuation.series(conn, [D3.isoformat()])
+        h = insights.holdings(conn, D3.isoformat())
+    # valeur : 56 de liquidités + 1045 de titres ; versements : 1000 ; marché : 101 (dividende
+    # compris)
+    assert (v.net_worth, v.deposits) == (110100, 100000)
+    assert (s.net_worth, s.deposits) == (v.net_worth, v.deposits)
+    assert later.net_worth == v.net_worth
+    (item,) = h["items"]
+    assert (item["isin"], item["quantity"], item["price"]) == (f.FUND_WORLD[1], "9.5", "110")
+    assert (item["value"]["minor"], item["cost"]["minor"], item["gain"]["minor"]) == (
+        104500,
+        95000,
+        9500,
+    )
+    assert item["weight"] == "1.0000"
+    assert item["name"] == f.FUND_WORLD[0]
+    assert h["missing_prices"] == []
+
+
+def test_trade_after_report_moves_quantities(viac: FinanceDomain) -> None:
+    from hub.domains.finance import valuation
+
+    _, titles = open_portfolio(viac)
+    send(viac, f.deposit(D1, "2000.00"), f.buy(D2, "9.5", "950.00"))
+    send(viac, f.report(D3, [f.Folio("VIAC1", cash="1050.00", positions=[f.Pos("9.5", "1045")])]))
+    send(viac, f.buy(date(2026, 7, 2), "5", "600.00", price="120.00"))
+    with viac.engine().connect() as conn:
+        p = valuation.Positions(conn)
+        (line,) = p.lines(titles, "2026-07-31")
+    assert (line.quantity, line.price, line.value) == (Decimal("14.5"), Decimal(120), 174000)
+
+
+def test_pillar3a_counts_viac_deposits(viac: FinanceDomain) -> None:
+    from hub.domains.finance import insights
+
+    open_portfolio(viac)
+    send(viac, f.deposit(D1, "3000.00"), f.deposit(D2, "500.00", withdrawal=True))
+    with viac.engine().connect() as conn:
+        p = insights.pillar3a(conn, 2026, date(2026, 10, 27))
+    assert (p["paid"]["minor"], p["source"]) == (300000, "viac")
+    assert p["margin"]["minor"] == 725800 - 300000
+
+
+def test_accounts_route_gives_market_value(viac: FinanceDomain) -> None:
+    from hub.domains.finance import reads
+
+    _, titles = open_portfolio(viac)
+    send(viac, f.deposit(D1, "1000.00"), f.buy(D2, "9.5", "950.00"))
+    send(viac, f.report(D3, [f.Folio("VIAC1", cash="50.00", positions=[f.Pos("9.5", "1045")])]))
+    with viac.engine().connect() as conn:
+        by_id = {a["id"]: a for a in reads.accounts(conn)}
+    assert by_id[titles]["balance"]["minor"] == 95000
+    assert by_id[titles]["value"]["minor"] == 104500

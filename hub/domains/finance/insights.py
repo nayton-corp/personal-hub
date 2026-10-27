@@ -188,26 +188,127 @@ def to_categorize(conn: Connection) -> int:
 
 
 def pillar3a(conn: Connection, year: int, until: date, cap: int | None = None) -> dict[str, Any]:
+    """Versements 3a de l'année : ceux que VIAC a reçus (avis de versement) ou, à défaut, les
+    paiements catégorisés « épargne 3a » sur les comptes courants ; le plus grand des deux,
+    pour qu'un historique VIAC incomplet ou une catégorie manquante ne sous-estime rien."""
     if cap is None:
         known = [y for y in PILLAR_3A_CAP if y <= year] or [min(PILLAR_3A_CAP)]
         cap = PILLAR_3A_CAP[max(known)]
+    period = {"ccy": CCY, "s": f"{year}-01-01", "e": until.isoformat()}
     ids, params = _in("a", _budget_accounts(conn))
-    paid = -int(
+    from_bank = -int(
         conn.execute(
             text(
                 "SELECT coalesce(sum(amount_minor), 0) FROM v_entry_allocation "
                 f"WHERE category_id = :c AND account_id IN {ids} AND currency = :ccy "
                 "AND booking_date >= :s AND booking_date <= :e"
             ),
-            {**params, "c": EPARGNE_3A, "ccy": CCY, "s": f"{year}-01-01", "e": until.isoformat()},
+            {**params, **period, "c": EPARGNE_3A},
         ).scalar_one()
     )
+    at_viac = int(
+        conn.execute(
+            text(
+                "SELECT coalesce(sum(amount_minor), 0) FROM entries "
+                "WHERE bank_tx_code = 'VIAC/DEPOSIT' AND currency = :ccy "
+                "AND booking_date >= :s AND booking_date <= :e"
+            ),
+            period,
+        ).scalar_one()
+    )
+    paid = max(from_bank, at_viac)
     return {
         "year": year,
         "cap": money(cap, CCY),
         "paid": money(paid, CCY),
         "margin": money(max(0, cap - paid), CCY),
+        "source": "viac" if at_viac and at_viac >= from_bank else "bank",
     }
+
+
+def holdings(conn: Connection, on_date: str) -> dict[str, Any]:
+    """Positions des comptes de titres à une date : parts, dernier cours, valeur, prix de
+    revient (coût moyen des achats, ou celui du dernier rapport) et poids."""
+    positions = valuation.Positions(conn)
+    names = {
+        r[0]: (r[1], r[2], r[3])
+        for r in conn.execute(text("SELECT isin, name, asset_class, sub_class FROM instruments"))
+    }
+    accts = {
+        r[0]: r[1] for r in conn.execute(text("SELECT id, name FROM accounts WHERE kind != 'cash'"))
+    }
+    lines = [
+        line
+        for account_id in sorted(positions.accounts)
+        for line in positions.lines(account_id, on_date)
+    ]
+    total = sum(x.value for x in lines)
+    items = []
+    for x in lines:
+        cost = _cost(conn, x.account_id, x.isin, x.quantity, on_date)
+        name, asset_class, sub_class = names.get(x.isin, (x.isin, None, None))
+        items.append(
+            {
+                "account_id": x.account_id,
+                "account": accts.get(x.account_id),
+                "isin": x.isin,
+                "name": name,
+                "asset_class": asset_class,
+                "sub_class": sub_class,
+                "quantity": str(x.quantity),
+                "price": str(x.price) if x.price is not None else None,
+                "price_date": x.price_date,
+                "value": money(x.value, CCY),
+                "cost": money(cost, CCY) if cost is not None else None,
+                "gain": money(x.value - cost, CCY) if cost is not None and x.price else None,
+                "weight": ratio(x.value, total),
+            }
+        )
+    costs = [i["cost"]["minor"] for i in items if i["cost"] is not None]
+    return {
+        "on_date": on_date,
+        "currency": CCY,
+        "items": items,
+        "value": money(total, CCY),
+        "cost": money(sum(costs), CCY) if len(costs) == len(items) else None,
+        "missing_prices": sorted({x.isin for x in lines if x.price is None}),
+    }
+
+
+def _cost(
+    conn: Connection, account_id: str, isin: str, quantity: Decimal, on_date: str
+) -> int | None:
+    """Coût moyen : un achat ajoute son montant, une vente retire sa part du coût. Si les avis
+    ne rendent pas compte de toutes les parts (historique partiel), le prix de revient du
+    dernier rapport, s'il est en CHF (il est dans la devise du fonds)."""
+    with localcontext(DECIMAL_CONTEXT):
+        held, cost = Decimal(0), Decimal(0)
+        for qty, amount in conn.execute(
+            text(
+                "SELECT quantity, amount_minor FROM trades WHERE account_id = :a AND isin = :i "
+                "AND trade_date <= :d ORDER BY trade_date, seq"
+            ),
+            {"a": account_id, "i": isin, "d": on_date},
+        ):
+            q = Decimal(qty)
+            if q > 0:
+                cost += Decimal(amount)
+            elif held > 0:
+                cost -= cost * (-q) / held
+            held += q
+        if held == quantity:
+            return int(quantize(cost, 0))
+        row = conn.execute(
+            text(
+                "SELECT h.quantity, h.cost_price, n.currency FROM holdings h JOIN instruments n "
+                "ON n.isin = h.isin WHERE h.account_id = :a AND h.isin = :i AND h.on_date <= :d "
+                "ORDER BY h.on_date DESC LIMIT 1"
+            ),
+            {"a": account_id, "i": isin, "d": on_date},
+        ).first()
+        if row is None or row[2] != CCY or Decimal(row[0]) != quantity:
+            return None
+        return Money.from_decimal(Decimal(row[0]) * Decimal(row[1]), CCY).minor
 
 
 def _change(now: int, then: int, since: date) -> dict[str, Any]:
@@ -263,6 +364,7 @@ def kpis(
         "pillar3a": pillar3a(conn, at.year, at, pillar3a_cap),
         "last_statement": max(clbds) if clbds else None,
         "missing_fx": now.missing_fx,
+        "missing_prices": now.missing_prices,
     }
 
 

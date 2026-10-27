@@ -16,6 +16,7 @@ from sqlalchemy import Connection, text
 
 from hub.core.money import Money
 from hub.core.text import mask_iban, normalize
+from hub.domains.finance import valuation
 
 OTHERS = "autres"
 MIN_COUNT_FOR_AGGREGATES = 3
@@ -68,8 +69,10 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
             "ORDER BY a.institution, a.name"
         )
     ).fetchall()
+    positions = valuation.Positions(conn)
     for r in rows:
         clbd = last_clbd(conn, r[0])
+        value, missing = valuation.account_value(positions, r[0], int(r[8]), "9999-12-31")
         out.append(
             {
                 "id": r[0],
@@ -80,6 +83,9 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
                 "liquid": bool(r[6]),
                 "budget_account": bool(r[7]),
                 "balance": money(r[8], r[4]),
+                # valeur de marché pour un compte de titres (parts × dernier cours), sinon le solde
+                "value": money(value, r[4]),
+                "missing_prices": missing,
                 "last_booking": r[9],
                 "last_clbd": clbd,
             }
