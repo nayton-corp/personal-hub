@@ -67,7 +67,9 @@ VIAC_LOGIN = """
 <form id=f><input type=email name=user><input type=password name=pw><button>Connexion</button></form>
 <form id=o hidden><input name=otpcode inputmode=numeric autocomplete=one-time-code><button>OK</button></form>
 <script>
-f.onsubmit = (e) => {{ e.preventDefault(); f.hidden = true; o.hidden = false; }};
+f.onsubmit = (e) => {{ e.preventDefault();
+  if ({direct}) {{ fetch('/api/viac-login', {{method: 'POST'}}).then(() => {{ location.href = '/viac-home'; }}); return; }}
+  f.hidden = true; o.hidden = false; }};
 o.onsubmit = (e) => {{ e.preventDefault();
   fetch('/api/otp', {{method: 'POST', body: o.otpcode.value}}).then((r) => r.text()).then((t) => {{
     if (t === 'ok') location.href = '/documents'; }}); }};
@@ -111,6 +113,7 @@ class Bank:
     export: str = "file"  # file | nothing | bad
     viac_session: bool = True
     otp: str = "123456"
+    viac_2fa: bool = True  # False : connexion sans code, arrivée sur l'accueil
     documents: list[tuple[str, str]] = field(
         default_factory=lambda: [
             ("Versement", "03.10.2026"),
@@ -149,6 +152,9 @@ def _handler(bank: Bank) -> type[BaseHTTPRequestHandler]:
                 self._send(
                     ("refused" if bank.login == "refused" else bank.login).encode(), "text/plain"
                 )
+            elif path == "/api/viac-login":
+                bank.viac_session = True
+                self._send(b"ok", "text/plain")
             elif path == "/api/otp":
                 if data == bank.otp:
                     bank.viac_session = True
@@ -183,12 +189,15 @@ def _handler(bank: Bank) -> type[BaseHTTPRequestHandler]:
                 self._page("BCF", "<p>Au revoir</p>")
             elif path == "/documents":
                 if not bank.viac_session:
-                    self._page("VIAC", VIAC_LOGIN.format())
+                    direct = "false" if bank.viac_2fa else "true"
+                    self._page("VIAC", VIAC_LOGIN.format(direct=direct))
                     return
                 rows = "".join(
                     VIAC_ROW.format(name=n, on=on, i=i) for i, (n, on) in enumerate(bank.documents)
                 )
                 self._page("VIAC", VIAC_DOCS.format(rows=rows))
+            elif path == "/viac-home":
+                self._page("VIAC", "<h1>Accueil</h1><p>Vos portefeuilles</p>")
             elif path.startswith("/doc/"):
                 i = int(path.rsplit("/", 1)[1])
                 _name, _on = bank.documents[i]

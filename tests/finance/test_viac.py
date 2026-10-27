@@ -58,6 +58,21 @@ def test_parse_cash_notices(txt: str, kind: str, amount: str) -> None:
     assert (n.kind, n.amount, n.is_trade) == (kind, Decimal(amount), False)
 
 
+def test_buy_printed_as_zero_parts_keeps_its_amount() -> None:
+    # petit achat de rééquilibrage : VIAC imprime « 0.00 parts » pour 0.004 part
+    n = viac_notice.parse(f.buy(D2, "0.00", "0.40", price="100.00"))
+    assert (n.kind, n.amount, n.quantity) == ("buy", Decimal("0.40"), Decimal("0.004"))
+    with pytest.raises(ViacError, match="nombre de parts invalide"):
+        viac_notice.parse(f.buy(D2, "0.00", "0.40", price="100.00", currency="USD"))
+
+
+def test_nil_fee_is_recognized_not_refused() -> None:
+    txt = f.fee(D3, "0.00")
+    assert viac_notice.classify(txt) == "nil_fee"
+    assert viac_notice.ignored(txt) is not None
+    assert viac_notice.classify(f.fee(D3, "11.20")) == "notice"
+
+
 def test_attestation_is_recognized_not_a_deposit() -> None:
     txt = f.attestation(2025, "7258.00")
     assert viac_notice.classify(txt) == "attestation"
@@ -232,11 +247,13 @@ def test_attestation_and_garbage(viac: FinanceDomain) -> None:
     report = viac.importer.process(
         [
             Incoming("att.pdf", f.fake_pdf(f.attestation(2025, "7258.00"))),
+            Incoming("fee.pdf", f.fake_pdf(f.fee(D3, "0.00"))),
             Incoming("x.pdf", b"%PDF-1.4\nautre chose"),
         ]
     )
     assert [(o.status, o.reason) for o in report.files] == [
         ("ignored", "viac.attestation"),
+        ("ignored", "viac.nil_fee"),
         ("rejected", "viac.unreadable"),
     ]
     assert rows(viac, "SELECT count(*) FROM entries WHERE kind = 'movement'") == [(0,)]
@@ -285,6 +302,7 @@ def test_viac_history(viac: FinanceDomain, tmp_path: Path) -> None:
         "2026/b.pdf": f.buy(D2, "9.5", "950.00"),
         "c.pdf": f.report(D3, [f.Folio("VIAC1", cash="50.00", positions=[f.Pos("9.5", "1045")])]),
         "d.pdf": f.attestation(2025, "7258.00"),
+        "e.pdf": f.fee(D2, "0.00"),
     }
     for name, txt in docs.items():
         (folder / name).write_bytes(f.fake_pdf(txt))

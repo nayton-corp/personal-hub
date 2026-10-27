@@ -59,6 +59,15 @@ def test_relogin_with_typed_code(make_env, bank: Bank) -> None:  # type: ignore[
     assert execute(make_env("viac"), "check").outcome == "ok"
 
 
+def test_relogin_without_code_lands_on_home(make_env, bank: Bank) -> None:  # type: ignore[no-untyped-def]
+    # VIAC ne demande pas toujours de code : après le mot de passe, l'app ouvre l'accueil
+    bank.viac_session = False
+    bank.viac_2fa = False
+    assert flow.relogin(make_env("viac"), lambda: pytest.fail("aucun code attendu")).outcome == "ok"
+    assert bank.viac_session
+    assert "/api/otp" not in bank.calls
+
+
 def test_relogin_with_wrong_code(make_env, bank: Bank) -> None:  # type: ignore[no-untyped-def]
     bank.viac_session = False
     with pytest.raises(Failure) as exc:

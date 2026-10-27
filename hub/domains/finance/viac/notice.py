@@ -4,19 +4,24 @@ Une opération par document : achat ou vente de parts, dividende, intérêts, co
 versement, retrait. Les motifs de lecture sont ceux du script du Mac ; ce qui ne se lit pas
 entièrement est refusé (`viac.unrecognized`) au lieu de devenir une ligne « inconnu ». Les
 attestations fiscales et les relevés récapitulatifs sont reconnus et n'écrivent rien : une
-attestation cite des versements, elle ne doit pas en devenir un.
+attestation cite des versements, elle ne doit pas en devenir un. Un décompte de commission
+à 0 CHF (mois sans frais) est reconnu de la même façon : il n'y a rien à comptabiliser.
 """
 
 from __future__ import annotations
 
 import re
+from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from typing import Literal
 
+from hub.core.money import DECIMAL_CONTEXT
 from hub.domains.finance.viac import DATE, NUM, PORTFOLIO, ViacError, first, iso, num
 from hub.domains.finance.viac.models import Ignored, Notice, NoticeKind
 
-Document = Literal["report", "notice", "attestation", "statement"]
+Document = Literal["report", "notice", "attestation", "statement", "nil_fee"]
 HEAD_LINES = 15
+FEE_BOOKED = rf"Montant débité:\s+Valuta\s+({DATE})\s+CHF\s+({NUM})"
+QTY_PLACES = 8  # parts recalculées quand l'avis les arrondit à zéro
 
 
 def _head(txt: str) -> str:
@@ -32,6 +37,10 @@ def classify(txt: str) -> Document:
         return "attestation"
     if re.search(r"^\s*Relevé\b", head, re.M):
         return "statement"
+    if re.search(r"^\s*Commission\s*$", txt, re.M):
+        m = re.search(FEE_BOOKED, txt)
+        if m and num(m.group(2)) == 0:
+            return "nil_fee"
     return "notice"
 
 
@@ -41,6 +50,8 @@ def ignored(txt: str) -> Ignored | None:
         return Ignored(document="attestation")
     if kind == "statement":
         return Ignored(document="statement")
+    if kind == "nil_fee":
+        return Ignored(document="nil_fee")
     return None
 
 
@@ -109,7 +120,7 @@ def parse(txt: str) -> Notice:
         kind = "fee"
         rate = first(r"p\.a\..*?:\s+([\d.]+%)", txt) or ""
         detail = f"taux effectif {rate}".strip()
-        when, amount = _booked(rf"Montant débité:\s+Valuta\s+({DATE})\s+CHF\s+({NUM})", txt)
+        when, amount = _booked(FEE_BOOKED, txt)
     elif m := re.search(r"^\s*(Versement|Retrait)\b", txt, re.M):
         kind = "deposit" if m.group(1) == "Versement" else "withdrawal"
         when, amount = _booked(rf"(?:Valeur|Valuta)\s+({DATE})\s+CHF\s+({NUM})", txt)
@@ -119,6 +130,13 @@ def parse(txt: str) -> Notice:
     if value == 0:
         raise ViacError("viac.unrecognized", "montant nul")
     quantity = num(qty) if qty is not None else None
+    if quantity == 0 and price is not None and price_ccy == "CHF" and num(price) > 0:
+        # petit achat de rééquilibrage : VIAC arrondit les parts à 2 décimales et imprime
+        # « 0.00 parts » ; le montant comptabilisé et le cours donnent les parts réelles
+        with localcontext(DECIMAL_CONTEXT):
+            quantity = (value / num(price)).quantize(
+                Decimal(1).scaleb(-QTY_PLACES), rounding=ROUND_HALF_EVEN
+            )
     if quantity is not None and quantity <= 0:
         raise ViacError("viac.unrecognized", "nombre de parts invalide")
     return Notice(

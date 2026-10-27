@@ -99,6 +99,7 @@ class Report(_Frozen):
 
 
 class Ignored(_Frozen):
-    """Document reconnu qui n'écrit rien (attestation fiscale, relevé récapitulatif)."""
+    """Document reconnu qui n'écrit rien (attestation fiscale, relevé récapitulatif,
+    commission à 0 CHF)."""
 
-    document: Literal["attestation", "statement"]
+    document: Literal["attestation", "statement", "nil_fee"]

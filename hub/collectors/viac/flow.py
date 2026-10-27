@@ -163,8 +163,9 @@ def run(env: Env, kind: Kind) -> Result:
 
 
 def relogin(env: Env, ask_code: Callable[[], str]) -> Result:
-    """Connexion assistée : identifiants des secrets, code 2FA tapé au terminal. Le profil
-    reste dans le volume du collecteur ; le run de contrôle qui suit rend la reprise possible."""
+    """Connexion assistée : identifiants des secrets, code 2FA tapé au terminal s'il est
+    demandé. Le profil reste dans le volume du collecteur ; le run de contrôle qui suit rend la
+    reprise possible."""
     sel = env.selectors(SELECTORS)
     with env.browser(sel) as b:
         b.goto(sel.site("documents"), "login.open")
@@ -189,9 +190,14 @@ def relogin(env: Env, ask_code: Callable[[], str]) -> Result:
             {
                 "otp": lambda: b.find("login.otp", 0) is not None,
                 "rows": lambda: b.find("documents.row", 0) is not None,
+                # sans 2FA, l'app quitte le formulaire pour son accueil, pas pour Documents
+                "away": lambda: b.find("login.password", 0) is None,
             },
             30_000,
         )
+        if otp == "away":
+            b.settle()  # un champ de code peut encore arriver après la navigation
+            otp = "otp" if b.find("login.otp", 3_000) is not None else "away"
         if otp is None:
             b.snap("login.otp")
             raise Failure("selector_missing", "login.otp")
