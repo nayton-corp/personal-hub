@@ -38,10 +38,11 @@ fi
 
 if [ "$first_deploy" = 0 ]; then
   say "Vérification avant migration"
-  once "$TAG" hub verify || { echo "verify échoue AVANT migration : arrêt, rien n'a changé"; exit 1; }
+  # l'image en place : la nouvelle voit un schéma « pas à jour » tant que la migration n'a pas eu lieu
+  once "${PREV:-$TAG}" hub verify || { echo "verify échoue AVANT migration : arrêt, rien n'a changé"; exit 1; }
   say "Arrêt des services qui écrivent, puis copie des bases ($STAMP)"
   compose "${PREV:-$TAG}" stop api importer scheduler litestream 2>/dev/null || true
-  once "$TAG" hub backup --stamp "$STAMP"
+  once "${PREV:-$TAG}" hub backup --stamp "$STAMP"
 fi
 
 rollback() {
