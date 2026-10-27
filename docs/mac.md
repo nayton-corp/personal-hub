@@ -83,6 +83,13 @@ hubc run --rm --no-deps scheduler hub verify
 hubc logs -f api
 ```
 
+## 6. Collecteurs (lot 5)
+
+Les bots BCF et VIAC et le collecteur Revolut tournent dans trois conteneurs du profil
+`collectors`, avec la même image pour tous : mise en place, premiers passages et Revolut dans
+[collectors.md](collectors.md). La migration vers le Pi (LP-01..03) est repoussée ; rien dans
+les collecteurs ne dépend du Mac.
+
 ## Risque assumé de la phase 1
 
 Les données vivent sur la machine de tous les jours. Une session macOS compromise peut piloter

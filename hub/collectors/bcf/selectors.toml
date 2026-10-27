@@ -1,0 +1,36 @@
+# Sélecteurs du bot BCF, repris du script du Mac (bcf_bot.py, 27/10/2026).
+# Un changement du site se corrige ici seulement. Les noms d'étape apparaissent dans les
+# alertes (`selector_missing` : export.button) ; jamais le texte de la page.
+
+[site]
+url = "https://login.bcf.ch/authn/signin?Location=https%3A%2F%2Fwww.bcf.ch%2Ffr%2Fe-banking&lang=fr"
+logged_in = "Déconnexion"
+# refus reconnu à l'écran : auth_error tout de suite, sans attendre le push trois minutes
+auth_refused = "(?i)mot de passe (incorrect|erron|invalide)|identifiants? (incorrect|erron|invalide)|(contrat|accès|compte) (bloqué|verrouillé|suspendu)"
+unavailable = "(?i)maintenance|momentanément indisponible|service indisponible"
+nothing_to_export = "(?i)rien à exporter|aucun mouvement|aucune donnée|pas de mouvement"
+date_format = "%d/%m/%Y"
+
+[login]
+password = "input[type=password]"
+contract = "input[type=text], input[type=tel], input[type=number], input:not([type=password]):not([type=hidden]):not([type=checkbox]):not([type=submit])"
+
+[statement]
+link = "a[ui-sref^=\"account.statement(\"], a[href*=\"/statement\"]"
+all_entries = "a:has-text('Toutes les écritures'), [role=link]:has-text('Toutes les écritures')"
+
+[export]
+button = "a:has-text('Exporter'), button:has-text('Exporter'), [role=button]:has-text('Exporter'), [role=link]:has-text('Exporter')"
+form = "input[name=format]"
+format_camt = "input[name=format][value=CAMT053]"
+all_accounts = "input[name=dataSource][value=allAccounts]"
+already_fetched = "input[name=alreadyFetchedBookings]"
+date_from = "#findatepick_0_text"
+download = "button[on-click*=\"onClickDownload\"], button.primary:has-text('Télécharger'), button:has-text('Télécharger')"
+
+[logout]
+button = "a:has-text('Déconnexion'), button:has-text('Déconnexion')"
+
+[clicks]
+# lecture seule : Mouvements, Exporter, Télécharger, Déconnexion ; tout autre clic fait échouer
+allowed = ["statement.link", "statement.all_entries", "export.button", "export.download", "logout.button"]

@@ -58,8 +58,13 @@ class ParsedStatement(_Frozen):
     entries: list[ParsedEntry]
     anomalies: list[Anomaly]
     ignored_pending: int  # écritures PDNG ou INFO, non importées
+    # compte sans IBAN unique (Revolut : un compte par devise, même IBAN) : clé `external_ref`
+    account_ref: str | None = None
+    # solde d'ouverture déduit (Revolut : solde annoncé moins les écritures), pour ouvrir le
+    # compte seulement ; jamais un point de contrôle
+    derived_opening: Balance | None = None
 
 
 class ParsedFile(_Frozen):
-    version: Literal["04", "08"]
+    version: Literal["04", "08", "revolut-eb1", "revolut-csv1"]
     statements: list[ParsedStatement]

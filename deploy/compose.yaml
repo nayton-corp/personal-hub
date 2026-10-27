@@ -19,6 +19,18 @@ x-hub-env: &hub-env
   HUB_SERVER__PUBLIC_ORIGIN: ${HUB_PUBLIC_ORIGIN:?HUB_PUBLIC_ORIGIN manquant dans deploy/.env}
   TZ: Europe/Zurich
 
+x-collector: &collector
+  <<: *hardening
+  image: hub-collector:${HUB_TAG:-dev}
+  profiles: [collectors]
+  environment: *hub-env
+  tmpfs: [/tmp]
+  shm_size: 512m                         # Chromium
+  secrets: [age_key]
+  networks: [hub]
+  depends_on: [api]
+  stop_grace_period: 30s
+
 services:
   api:                                   # FastAPI, un seul worker
     <<: *hardening
@@ -29,6 +41,7 @@ services:
       - data:/srv/hub/data
       - archive:/srv/hub/archive
       - ${HUB_INBOX:?HUB_INBOX manquant}:/srv/hub/inbox
+      - ${HUB_SECRETS:?HUB_SECRETS manquant}:/srv/hub/config/secrets.enc.yaml:ro   # sujet ntfy
     secrets: [age_key]
     networks: [hub]
     healthcheck:
@@ -61,7 +74,7 @@ services:
       - backup:/srv/hub/backup
       - ${HUB_REPLICA:?HUB_REPLICA manquant}:/replica:ro
       - ${HUB_RESTIC_LOCAL:?HUB_RESTIC_LOCAL manquant}:/restic
-      - ${HUB_SECRETS:?HUB_SECRETS manquant}:/srv/hub/config/secrets.enc.yaml:ro
+      - ${HUB_SECRETS}:/srv/hub/config/secrets.enc.yaml:ro
     secrets: [age_key]
     networks: [hub]
 
@@ -103,22 +116,41 @@ services:
     restart: unless-stopped
     depends_on: [web]
 
-  collector-bcf:                         # lot 5 : ne voit que la boîte d'entrée et son profil
-    <<: *hardening
-    image: hub-collector:${HUB_TAG:-dev}
-    profiles: [collectors]
+  # --- lot 5 : collecteurs, profil « collectors » (docker compose --profile collectors up -d) ---
+  # Chacun ne voit que la boîte d'entrée, son propre volume (profil du navigateur, mémoire) et
+  # son propre fichier de secrets : un bot compromis ne lit ni la base ni les accès des autres.
+  collector-bcf:
+    <<: *collector
+    command: ["hub-collector", "daemon", "bcf"]
     volumes:
       - ${HUB_INBOX}:/srv/hub/inbox
-      - collector-profiles:/var/lib/hub-collector
-    secrets: [age_key]
-    networks: [hub]
+      - collector-bcf:/var/lib/hub-collector
+      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/bcf.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
+
+  collector-viac:
+    <<: *collector
+    command: ["hub-collector", "daemon", "viac"]
+    volumes:
+      - ${HUB_INBOX}:/srv/hub/inbox
+      - collector-viac:/var/lib/hub-collector
+      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/viac.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
+
+  collector-revolut:                     # API Enable Banking, pas de navigateur
+    <<: *collector
+    command: ["hub-collector", "daemon", "revolut"]
+    volumes:
+      - ${HUB_INBOX}:/srv/hub/inbox
+      - collector-revolut:/var/lib/hub-collector
+      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/revolut.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
 
 volumes:
   data: {}
   archive: {}
   backup: {}
   ts-state: {}
-  collector-profiles: {}
+  collector-bcf: {}
+  collector-viac: {}
+  collector-revolut: {}
 
 networks:
   hub: {}

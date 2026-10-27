@@ -31,6 +31,7 @@ dev:  # API locale sur http://localhost:8710, app servie par l'API, données dan
 image:
 	docker build --platform linux/arm64 --target hub -t hub:dev .
 	docker build --platform linux/arm64 --target web -t hub-web:dev .
+	docker build --platform linux/arm64 --target collector -t hub-collector:dev .
 
 preflight:
 	deploy/mac-preflight.sh

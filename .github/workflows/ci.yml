@@ -28,6 +28,8 @@ jobs:
       - run: uv sync --frozen
       - name: pdftotext pour les PDF VIAC
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y poppler-utils
+      - name: Chromium pour les collecteurs (faux sites locaux, lot 5)
+        run: uv run playwright install --with-deps chromium
       - name: Aucune donnée réelle dans le dépôt
         run: scripts/check_no_data.sh
       - name: Secrets (gitleaks)
@@ -74,7 +76,18 @@ jobs:
           tags: hub-web:ci
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+      - name: Image collecteurs (linux/arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: collector
+          platforms: linux/arm64
+          push: false
+          tags: hub-collector:ci
+          cache-from: type=gha,scope=collector
+          cache-to: type=gha,mode=max,scope=collector
       - name: Le compose reste valide
         run: |
           cp deploy/.env.example deploy/.env
           docker compose --env-file deploy/.env -f deploy/compose.yaml config --quiet
+          docker compose --env-file deploy/.env -f deploy/compose.yaml --profile collectors config --quiet

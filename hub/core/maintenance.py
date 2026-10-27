@@ -13,7 +13,7 @@ from typing import Any
 
 from sqlalchemy import Engine
 
-from hub.core import passkeys, proposals, ratelimit, secrets, sessions
+from hub.core import collectors, passkeys, proposals, ratelimit, secrets, sessions
 from hub.core.clock import utcnow
 from hub.core.context import HubContext
 from hub.core.db import backup, integrity_check
@@ -33,7 +33,10 @@ def nightly(hub: HubContext) -> dict[str, Any]:
     with hub.core.engine.begin() as conn:
         expired = proposals.expire(conn)
         purged = (
-            sessions.purge_expired(conn) + passkeys.purge_challenges(conn) + ratelimit.purge(conn)
+            sessions.purge_expired(conn)
+            + passkeys.purge_challenges(conn)
+            + ratelimit.purge(conn)
+            + collectors.purge_links(conn)
         )
     report = proposals.reconcile(hub)
     for d in hub.registry:

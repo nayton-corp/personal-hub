@@ -15,6 +15,12 @@ public_origin = "https://hub.example.ts.net"
 [auth]
 session_hours = 12
 
+[collectors]                  # lot 5 : lu par les conteneurs collector-* seulement
+api_url = "http://api:8710"   # réseau compose « hub »
+home = "/var/lib/hub-collector"
+# horaires (heure de Zurich) ; Revolut : au plus 4 synchros par jour sans l'utilisateur
+schedules = { bcf = "30 7 * * 1-5", viac = "0 9 * * 0", revolut = "15 7,13,19 * * *" }
+
 [secrets]
 file = "/srv/hub/config/secrets.enc.yaml"
 age_key_file = "/run/secrets/age_key"

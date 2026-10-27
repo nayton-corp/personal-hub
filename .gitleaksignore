@@ -1,0 +1,2 @@
+# faux positif : URL du réseau compose dans un test (http://api:8710/api/collectors/bcf), pas une clé
+326f792d696199de10503c4eca6c99dec9b5d147:tests/collectors/test_runtime.py:generic-api-key:206

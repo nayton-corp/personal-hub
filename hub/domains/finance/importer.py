@@ -31,7 +31,7 @@ from hub.core.db import begin_immediate
 from hub.core.ids import new_id, urn
 from hub.core.logging import get_logger
 from hub.core.text import mask_iban
-from hub.domains.finance import catalog, dedup, ledger, rules
+from hub.domains.finance import catalog, dedup, ledger, revolut, rules
 from hub.domains.finance.camt import parser
 from hub.domains.finance.camt.models import Balance, ParsedEntry, ParsedFile, ParsedStatement
 from hub.domains.finance.viac import ViacError
@@ -48,7 +48,7 @@ VIAC_NOTICE = "viac_notice"
 VIAC_REPORT = "viac_report"
 VIAC_OTHER = "viac_other"  # attestation, relevé récapitulatif ou PDF refusé
 VIAC_SOURCES = frozenset({VIAC_NOTICE, VIAC_REPORT, VIAC_OTHER})
-INBOX_SUFFIXES = frozenset({".xml", ".zip", ".pdf"})
+INBOX_SUFFIXES = frozenset({".xml", ".zip", ".pdf", ".json", ".csv"})
 APPLY_IMPORT = "apply_import"
 # anomalies qu'une validation `apply_import` peut accepter ; les autres demandent d'abord un
 # compte, une ouverture ou un relevé conforme
@@ -338,15 +338,17 @@ class ImportService:
             return FileOutcome(f.name, None, "duplicate", "import.duplicate_file"), None
         if viac_text.is_pdf(f.data):
             return self._stage_viac(f, digest)
+        source = revolut.source_of(f.data) or SOURCE
         try:
-            parsed = parser.parse(f.data)
-        except parser.CamtError as exc:
+            parsed = self.reread(source, f.data)
+        except (parser.CamtError, revolut.RevolutError) as exc:
             stats: dict[str, Any] = {"reason": exc.code, "detail": exc.reason}
-            import_id = self._record(f, digest, "rejected", stats, None)
+            import_id = self._record(f, digest, "rejected", stats, None, source=source)
             log.warning("import.rejected", import_id=import_id, reason=exc.code)
             return FileOutcome(f.name, import_id, "rejected", exc.code), None
+        assert isinstance(parsed, ParsedFile)  # noqa: S101 - camt.053 ou Revolut
         stats = {"version": parsed.version}
-        import_id = self._record(f, digest, "staged", stats, parsed)
+        import_id = self._record(f, digest, "staged", stats, parsed, source=source)
         return FileOutcome(f.name, import_id, "staged"), parsed
 
     def _stage_viac(self, f: Incoming, digest: str) -> tuple[FileOutcome, Staged | None]:
@@ -384,7 +386,11 @@ class ImportService:
             if only is None or (import_id, s.index) in only
         ]
         work.sort(
-            key=lambda w: (w[1].iban or "", w[1].opening.on_date if w[1].opening else "", w[0])
+            key=lambda w: (
+                w[1].iban or w[1].account_ref or "",
+                w[1].opening.on_date if w[1].opening else "",
+                w[0],
+            )
         )
         outcomes = [self._apply_statement(import_id, s) for import_id, s in work]
         docs = sorted(
@@ -488,16 +494,19 @@ class ImportService:
         return self.process([Incoming(name, data)])
 
     def parsed(self, conn: Connection, import_id: str) -> ParsedFile:
-        """Relit un import depuis son archive chiffrée."""
+        """Relit un import (camt.053 ou Revolut) depuis son archive chiffrée."""
         row = conn.execute(
-            text("SELECT archive_path FROM imports WHERE id = :i"), {"i": import_id}
+            text("SELECT archive_path, source FROM imports WHERE id = :i"), {"i": import_id}
         ).first()
         if row is None or not row[0]:
             raise ImportRefused("import.not_found", "import inconnu")
         try:
-            return parser.parse(self.archiver.load(row[0]))
+            staged = self.reread(row[1], self.archiver.load(row[0]))
         except (secrets.SecretsError, OSError) as exc:
             raise ImportRefused("import.archive_unavailable", "archive illisible") from exc
+        if not isinstance(staged, ParsedFile):
+            raise ImportRefused("import.not_applicable", "document sans relevé")
+        return staged
 
     def review_plan(self, conn: Connection, import_id: str) -> list[tuple[int, Plan]]:
         """Relevés en attente d'un import et ce que leur validation écrirait (lecture seule).
@@ -571,6 +580,8 @@ class ImportService:
             if isinstance(doc, str):
                 raise ImportRefused("import.not_applicable", f"document {doc}")
             return doc
+        if source in revolut.SOURCES:
+            return revolut.parse(source, data)
         return parser.parse(data)
 
 
@@ -651,7 +662,10 @@ class Plan:
 def plan_statement(conn: Connection, st: ParsedStatement) -> Plan:
     """Contrôles du point 5 de la section 4, en lecture seule."""
     reasons: list[str] = list(st.anomalies)
-    account = catalog.account_by_iban(conn, st.iban) if st.iban else None
+    if st.account_ref is not None:
+        account = catalog.account_by_ref(conn, st.account_ref)
+    else:
+        account = catalog.account_by_iban(conn, st.iban) if st.iban else None
     if account is None:
         reasons.append("unknown_account")
         return Plan(None, sorted(set(reasons)), [], [], 0)
@@ -668,7 +682,7 @@ def plan_statement(conn: Connection, st: ParsedStatement) -> Plan:
     ):
         reasons.append("before_opening")
 
-    iban = account.iban or ""
+    iban = account.iban or account.external_ref or ""
     keys = dedup.keys(iban, st.entries)
     existing = _existing_keys(conn, keys)
     fresh = [(e, k) for e, k in zip(st.entries, keys, strict=True) if k not in existing]
@@ -686,11 +700,15 @@ def plan_statement(conn: Connection, st: ParsedStatement) -> Plan:
             break
 
     checkpoints: list[tuple[str, str, int]] = []
-    if st.opening is not None and st.closing is not None:
-        total = st.opening.amount_minor + sum(e.amount_minor for e in st.entries)
-        if total != st.closing.amount_minor:
-            reasons.append("internal_check_failed")
-        for kind, bal in (("OPBD", st.opening), ("CLBD", st.closing)):
+    # un relevé Revolut n'annonce qu'un solde final : contrôlé seul, sans ouverture annoncée
+    if st.closing is not None and (st.opening is not None or st.account_ref is not None):
+        announced = [("CLBD", st.closing)]
+        if st.opening is not None:
+            total = st.opening.amount_minor + sum(e.amount_minor for e in st.entries)
+            if total != st.closing.amount_minor:
+                reasons.append("internal_check_failed")
+            announced.insert(0, ("OPBD", st.opening))
+        for kind, bal in announced:
             known = conn.execute(
                 text(
                     "SELECT amount_minor FROM checkpoints WHERE account_id = :a AND on_date = :d "
@@ -1212,3 +1230,50 @@ def import_viac_history(service: ImportService, folder: Path) -> HistoryReport:
             ).scalars()
             report.warnings = sorted({r for x in flagged for r in json.loads(x)})
         return report
+
+
+# --- Revolut (lot 5) --------------------------------------------------------------------------
+
+
+def revolut_pending(service: ImportService) -> dict[str, list[tuple[str, ParsedStatement]]]:
+    """Relevés Revolut en attente, par clé de compte (`revolut:CHF`), relus depuis l'archive."""
+    with service.engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT DISTINCT i.id, i.source, i.archive_path FROM imports i "
+                "JOIN import_statements s ON s.import_id = i.id "
+                "WHERE s.status = 'needs_review' AND i.source IN (:eb, :csv) "
+                "ORDER BY i.received_at"
+            ),
+            {"eb": revolut.EB_SOURCE, "csv": revolut.CSV_SOURCE},
+        ).fetchall()
+    out: dict[str, list[tuple[str, ParsedStatement]]] = {}
+    for import_id, source, archive_path in rows:
+        try:
+            pf = revolut.parse(source, service.archiver.load(archive_path))
+        except (revolut.RevolutError, secrets.SecretsError, OSError, ImportRefused):
+            continue
+        for st in pf.statements:
+            if st.account_ref is not None:
+                out.setdefault(st.account_ref, []).append((import_id, st))
+    return out
+
+
+def open_revolut(service: ImportService, account: catalog.Account) -> tuple[bool, list[str]]:
+    """Ouvre un compte Revolut avec le solde déduit du plus ancien relevé en attente (la reprise
+    complète faite à la liaison), puis rejoue ses relevés. Renvoie (ouvert, imports rejoués)."""
+    pending = revolut_pending(service).get(account.external_ref or "", [])
+    with_opening = [(i, st) for i, st in pending if st.derived_opening is not None]
+    if not with_opening:
+        return False, [i for i, _ in pending]
+    _import_id, oldest = min(
+        with_opening,
+        key=lambda x: (x[1].derived_opening.on_date, x[0]),  # type: ignore[union-attr]
+    )
+    opening = oldest.derived_opening
+    assert opening is not None  # noqa: S101
+    with begin_immediate(service.engine) as conn:
+        open_account(conn, account.id, opening.on_date, opening.amount_minor, account.currency)
+    ids = sorted({i for i, _ in pending})
+    service.retry_needs_review(ids)
+    return True, ids

@@ -1,0 +1,33 @@
+# Sélecteurs du bot VIAC, repris du script du Mac (viac_bot.py, 27/10/2026).
+# Le bot ne lit plus l'accueil : il va droit à Documents. Sa liste blanche contient
+# Documents (lien d'un document), page suivante, Créer un rapport.
+
+[site]
+url = "https://app.viac.ch/"
+documents = "https://app.viac.ch/#/documents"
+unavailable = "(?i)maintenance|momentanément indisponible|service indisponible"
+date_format = "%d.%m.%Y"
+
+[login]
+password = "input[type=password]"
+user = "input[type=tel], input[type=email], input[type=text], input[autocomplete*=user]"
+# code 2FA à saisir : seulement pendant `hub-collector relogin viac`, jamais dans un run planifié
+otp = "input[autocomplete=one-time-code], input[inputmode=numeric], input[name*=code i], input[name*=otp i]"
+
+[documents]
+row = "tr.mat-mdc-row"
+cell = ".cell-content"
+link = "a.spec-get-single-document"
+next = "button.mat-mdc-paginator-navigation-next"
+
+[report]
+button = "button.spec-generate-reporting"
+date = ".cdk-overlay-container input, [role=dialog] input, mat-dialog-container input"
+create = ".cdk-overlay-container button:has-text('Créer'), [role=dialog] button:has-text('Créer'), mat-dialog-container button:has-text('Créer')"
+
+[wanted]
+# documents téléchargés (début du nom) ; les attestations fiscales sont ignorées à l'import
+prefixes = ["Rapport", "Relevé des opérations boursières", "Dividende", "Intérêts", "Décompte de commission", "Versement", "Retrait", "Attestation", "Relevé"]
+
+[clicks]
+allowed = ["documents.link", "documents.next", "report.button", "report.create"]
