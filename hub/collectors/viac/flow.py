@@ -1,7 +1,8 @@
 """Bot VIAC : documents nouveaux (PDF) et rapport hebdomadaire, vers la boîte d'entrée.
 
-Le 2FA de VIAC demande un code : impossible dans un run planifié. Si la session a expiré, le run
-s'arrête en `auth_error` (le collecteur passe en mode dégradé) sans jamais tenter de connexion ;
+VIAC ne garde la session que dans des cookies de session, perdus à la fermeture du navigateur :
+un run planifié se reconnecte donc avec les identifiants des secrets. Si VIAC demande un code
+2FA, impossible sans quelqu'un : le run s'arrête en `auth_error` (mode dégradé) et
 `hub-collector relogin viac` refait la connexion avec le code tapé au terminal. Les PDF déjà vus
 sont reconnus par leur empreinte SHA-256. Le bot lit seulement la liste des documents (nom,
 date) pour choisir quoi télécharger ; le contenu passe par les parseurs du domaine Finance.
@@ -147,7 +148,13 @@ def run(env: Env, kind: Kind) -> Result:
     last = env.memory.get("last_date", "1900-01-01")
     since = (date.fromisoformat(last) - timedelta(days=env.cfg.viac_overlap_days)).isoformat()
     with env.browser(sel) as b:
-        open_documents(b)
+        try:
+            open_documents(b)
+        except Failure as exc:
+            if exc.detail != "session.expired":
+                raise
+            login(b, env, None)
+            open_documents(b)  # formulaire à nouveau : identifiants refusés
         if kind == "check":
             for name in ("documents.link", "report.button"):
                 if b.find(name, 5_000) is None:
@@ -162,10 +169,45 @@ def run(env: Env, kind: Kind) -> Result:
     return Result("ok", files) if files else Result("nothing_new")
 
 
+def login(b: Browser, env: Env, ask_code: Callable[[], str] | None) -> None:
+    """Remplit le formulaire affiché avec les identifiants des secrets. Un code 2FA demandé
+    sans `ask_code` (run planifié) arrête tout en `auth_error`."""
+    user = b.find("login.user", 2_000)
+    if user is not None:
+        user.fill(env.secret("email"))
+    password = b.require("login.password")
+    password.fill(env.secret("password"))
+    password.press("Enter")
+    state = b.wait_for(
+        {
+            "otp": lambda: b.find("login.otp", 0) is not None,
+            "rows": lambda: b.find("documents.row", 0) is not None,
+            # sans 2FA, l'app quitte le formulaire pour son accueil, pas pour Documents
+            "away": lambda: b.find("login.password", 0) is None,
+        },
+        30_000,
+    )
+    if state == "away":
+        b.settle()  # un champ de code peut encore arriver après la navigation
+        state = "otp" if b.find("login.otp", 3_000) is not None else "away"
+    if state is None:
+        b.snap("login.otp")
+        raise Failure("selector_missing", "login.otp")
+    if state == "otp":
+        if ask_code is None:
+            raise Failure("auth_error", "login.otp_required")
+        code = ask_code()
+        if not code:
+            raise Failure("auth_error", "login.otp_empty")
+        field = b.require("login.otp")
+        field.fill(str(code).strip())
+        field.press("Enter")
+        b.settle()  # la navigation lancée par Entrée doit finir avant d'aller ailleurs
+
+
 def relogin(env: Env, ask_code: Callable[[], str]) -> Result:
     """Connexion assistée : identifiants des secrets, code 2FA tapé au terminal s'il est
-    demandé. Le profil reste dans le volume du collecteur ; le run de contrôle qui suit rend la
-    reprise possible."""
+    demandé. Le profil reste dans le volume du collecteur."""
     sel = env.selectors(SELECTORS)
     with env.browser(sel) as b:
         b.goto(sel.site("documents"), "login.open")
@@ -180,35 +222,7 @@ def relogin(env: Env, ask_code: Callable[[], str]) -> Result:
             return Result("ok")
         if state is None:
             raise Failure("selector_missing", "login.password")
-        user = b.find("login.user", 2_000)
-        if user is not None:
-            user.fill(env.secret("email"))
-        password = b.require("login.password")
-        password.fill(env.secret("password"))
-        password.press("Enter")
-        otp = b.wait_for(
-            {
-                "otp": lambda: b.find("login.otp", 0) is not None,
-                "rows": lambda: b.find("documents.row", 0) is not None,
-                # sans 2FA, l'app quitte le formulaire pour son accueil, pas pour Documents
-                "away": lambda: b.find("login.password", 0) is None,
-            },
-            30_000,
-        )
-        if otp == "away":
-            b.settle()  # un champ de code peut encore arriver après la navigation
-            otp = "otp" if b.find("login.otp", 3_000) is not None else "away"
-        if otp is None:
-            b.snap("login.otp")
-            raise Failure("selector_missing", "login.otp")
-        if otp == "otp":
-            code = ask_code()
-            if not code:
-                raise Failure("auth_error", "login.otp_empty")
-            field = b.require("login.otp")
-            field.fill(str(code).strip())
-            field.press("Enter")
-            b.settle()  # la navigation lancée par Entrée doit finir avant d'aller ailleurs
+        login(b, env, ask_code)
         open_documents(b)  # attend la liste ; formulaire à nouveau : code refusé
         b.page.wait_for_timeout(2_000)  # laisse l'app enregistrer sa session dans le profil
     return Result("ok")

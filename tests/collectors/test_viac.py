@@ -38,10 +38,19 @@ def test_second_run_downloads_nothing(make_env) -> None:  # type: ignore[no-unty
     assert len(inbox_files(first.inbox_root)) == count
 
 
-def test_expired_session_is_auth_error_without_login(make_env, bank: Bank) -> None:  # type: ignore[no-untyped-def]
+def test_expired_session_logs_in_again_without_code(make_env, bank: Bank) -> None:  # type: ignore[no-untyped-def]
+    # VIAC ne garde la session que dans des cookies de session : chaque run se reconnecte
+    bank.viac_session = False
+    bank.viac_2fa = False
+    result = execute(make_env("viac"), "run")
+    assert result.outcome == "ok"
+    assert "/api/viac-login" in bank.calls
+
+
+def test_expired_session_with_code_is_auth_error(make_env, bank: Bank) -> None:  # type: ignore[no-untyped-def]
     bank.viac_session = False
     result = execute(make_env("viac"), "run")
-    assert (result.outcome, result.detail) == ("auth_error", "session.expired")
+    assert (result.outcome, result.detail) == ("auth_error", "login.otp_required")
     assert "/api/otp" not in bank.calls
 
 
