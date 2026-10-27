@@ -163,8 +163,9 @@ def run(env: Env, kind: Kind) -> Result:
 
 
 def relogin(env: Env, ask_code: Callable[[], str]) -> Result:
-    """Connexion assistée : identifiants des secrets, code 2FA tapé au terminal s'il est demandé. Le profil
-    reste dans le volume du collecteur ; le run de contrôle qui suit rend la reprise possible."""
+    """Connexion assistée : identifiants des secrets, code 2FA tapé au terminal s'il est
+    demandé. Le profil reste dans le volume du collecteur ; le run de contrôle qui suit rend la
+    reprise possible."""
     sel = env.selectors(SELECTORS)
     with env.browser(sel) as b:
         b.goto(sel.site("documents"), "login.open")
