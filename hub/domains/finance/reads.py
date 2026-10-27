@@ -16,7 +16,7 @@ from sqlalchemy import Connection, text
 
 from hub.core.money import Money
 from hub.core.text import mask_iban, normalize
-from hub.domains.finance import valuation
+from hub.domains.finance import ledger, valuation
 
 OTHERS = "autres"
 MIN_COUNT_FOR_AGGREGATES = 3
@@ -163,7 +163,7 @@ def _entry(r: Any) -> dict[str, Any]:
         "booking_date": r[4],
         "value_date": r[5],
         "amount": money(r[6], r[7]),
-        "counterparty": r[8],
+        "counterparty": ledger.party(r[8]),
         "counterparty_iban": mask_iban(r[9]),
         "label": r[10],
         "remittance": r[11],
@@ -432,14 +432,17 @@ def _direction(amounts: list[int]) -> str:
 def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
     rows = conn.execute(
         text(
-            "SELECT e.counterparty, e.currency, e.amount_minor, e.id FROM entries e "
+            "SELECT e.counterparty, e.label, e.currency, e.amount_minor, e.id FROM entries e "
             "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
             "WHERE vc.category_id IS NULL AND e.kind = 'movement' ORDER BY e.booking_date DESC"
         )
     ).fetchall()
     groups: dict[tuple[str, str], list[tuple[int, str]]] = {}
-    for cp, ccy, amount, entry_id in rows:
-        groups.setdefault((normalize(cp) or "(inconnu)", ccy), []).append((int(amount), entry_id))
+    for cp, label, ccy, amount, entry_id in rows:
+        # sans vraie contrepartie, on groupe par libellé : un nom de remplissage réunirait
+        # des marchands sans rapport, et « Toujours » en ferait une règle beaucoup trop large
+        key = normalize(ledger.party(cp) or label) or "(inconnu)"
+        groups.setdefault((key, ccy), []).append((int(amount), entry_id))
     out: list[dict[str, Any]] = [
         {
             "counterparty": k[0],

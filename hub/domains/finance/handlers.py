@@ -67,7 +67,7 @@ def _entry_brief(r: Any) -> dict[str, Any]:
         "id": r.id,
         "booking_date": r.booking_date,
         "amount": Money(int(r.amount_minor), r.currency).to_api(),
-        "counterparty": r.counterparty or r.label or None,
+        "counterparty": ledger.party(r.counterparty) or r.label or None,
     }
 
 

@@ -25,6 +25,7 @@ from tests.finance.conftest import (
     D,
     finance_settings,
     ready_account,
+    rows,
     simple_stmt,
     without_seed_rules,
 )
@@ -203,6 +204,36 @@ def test_review_and_search(client: TestClient, ctx: HubContext, fin: FinanceDoma
     assert core[0]["domain"] == "finance"
     ref = client.get(f"/api/resolve?urn={core[0]['urn']}", headers=h).json()
     assert ref["href"].startswith("/finance/entries/")
+
+
+def test_placeholder_counterparty_is_hidden(
+    client: TestClient, ctx: HubContext, fin: FinanceDomain
+) -> None:
+    # BCF écrit « NOTPROVIDED » à la place du nom pour les paiements par carte et TWINT
+    without_seed_rules(fin)
+    ready_account(fin, 100_000)
+    stmt = Stmt(
+        opening=Decimal("1000.00"),
+        opening_date=D,
+        entries=[
+            Tx("12.50", True, D, counterparty="NOTPROVIDED", label="Migros Fictif"),
+            Tx("3.00", True, D, counterparty="NOTPROVIDED", label="Parking Fictif"),
+            Tx("4.00", True, D, counterparty="Not Provided", label="Kiosque Fictif"),
+        ],
+    )
+    fin.importer.process([Incoming("a.xml", camt053(stmt))])
+    # le registre garde la valeur de la banque : elle entre dans la clé de dédoublonnage
+    stored = rows(fin, "SELECT DISTINCT counterparty FROM entries WHERE kind = 'movement'")
+    assert sorted(str(r[0]) for r in stored) == ["NOTPROVIDED", "Not Provided"]
+    h = token(ctx, "brain")
+    items = client.get("/api/finance/entries", headers=h).json()["items"]
+    assert {e["counterparty"] for e in items if e["kind"] == "movement"} == {None}
+    groups = client.get("/api/finance/review", headers=h).json()["groups"]
+    assert sorted(g["counterparty"] for g in groups) == [
+        "kiosque fictif",
+        "migros fictif",
+        "parking fictif",
+    ]
 
 
 def test_upload_and_import_detail(client: TestClient, ctx: HubContext, fin: FinanceDomain) -> None:
