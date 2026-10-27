@@ -1,0 +1,109 @@
+[project]
+name = "personal-hub"
+version = "0.1.0"
+description = "Personal Hub : registre financier personnel, auto-hébergé"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic==1.20.1",
+    "fastapi==0.162.0",
+    "pydantic==2.14.1",
+    "pydantic-settings==2.16.1",
+    "pyrage==1.4.0",
+    "python-ulid==4.0.1",
+    "pyyaml==6.0.3",
+    "sqlalchemy==2.1.6",
+    "structlog==26.1.0",
+    "typer==0.27.3",
+    "tzdata==2026.5",
+    "uvicorn==0.54.0",
+    "webauthn==3.0.1",
+]
+
+[project.scripts]
+hub = "hub.cli:main"
+
+[dependency-groups]
+dev = [
+    "cbor2==6.1.5",
+    "cryptography==50.0.2",
+    "httpx==0.28.1",
+    "hypothesis==6.170.12",
+    "import-linter==2.15",
+    "mypy==2.4.0",
+    "pre-commit==4.7.0",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.17.3",
+    "types-pyyaml==6.0.12.20260906",
+]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hub"]
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["hub/web"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "TID", "RUF", "SIM", "PT", "DTZ"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # textes en français : apostrophes et espaces typographiques
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+"hub/core/migrations/**" = ["E501"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+packages = ["hub"]
+
+[[tool.mypy.overrides]]
+module = ["pyrage.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = ["migrations: tests de schéma et de migrations (section 9)"]
+filterwarnings = ["error::DeprecationWarning:hub.*"]
+
+[tool.coverage.run]
+source = ["hub"]
+omit = ["hub/core/migrations/env.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\.$"]
+
+[tool.importlinter]
+root_package = "hub"
+include_external_packages = false
+
+[[tool.importlinter.contracts]]
+name = "Le cœur ne dépend d'aucun domaine (couches core → domains)"
+type = "layers"
+layers = ["hub.domains", "hub.core"]
+
+[[tool.importlinter.contracts]]
+name = "Ni l'API ni la CLI n'importent un domaine : elles passent par le registre"
+type = "forbidden"
+source_modules = ["hub.core", "hub.api", "hub.cli"]
+forbidden_modules = ["hub.domains"]
+
+[[tool.importlinter.contracts]]
+name = "Les domaines sont indépendants entre eux (lecture croisée par public.py)"
+type = "independence"
+modules = ["hub.domains.*"]
+ignore_imports = ["hub.domains.** -> hub.domains.*.public"]
+unmatched_ignore_imports_alerting = "none"
