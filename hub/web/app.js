@@ -1,35 +1,26 @@
-// Coquille de l'app (L0-09) : connexion par passkey et page d'état. Aucun script en ligne :
-// la CSP de Caddy n'autorise que les fichiers servis par le hub.
+// Coquille de l'app (L0-09) : connexion par passkey, puis les vues Finance (L2-03). Aucun
+// script en ligne : la CSP de Caddy n'autorise que les fichiers servis par le hub.
+import { start } from "./finance.js";
+import { api } from "./store.js";
 import { creationOptions, credentialJSON, requestOptions } from "./webauthn.js";
 
 const $ = (id) => document.getElementById(id);
-const views = ["loading", "bootstrap", "login", "status"];
+const AUTH_VIEWS = ["loading", "bootstrap", "login"];
+let started = false;
 
-function show(name) {
-  for (const v of views) $(`view-${v}`).hidden = v !== name;
+function showAuth(name) {
+  for (const v of AUTH_VIEWS) $(`view-${v}`).hidden = v !== name;
+  for (const s of document.querySelectorAll("[data-tab]")) s.hidden = true;
+  $("tabbar").hidden = true;
+  $("top-icons").hidden = true;
+  $("pg-title").textContent = "Personal Hub";
+  $("pg-sub").textContent = "";
 }
 
 function say(text, error = false) {
   const el = $("message");
   el.textContent = text || "";
   el.classList.toggle("error", error);
-}
-
-async function api(path, body) {
-  const res = await fetch(`/api${path}`, {
-    method: body === undefined ? "GET" : "POST",
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: "same-origin",
-  });
-  if (res.status === 204) return null;
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error(data.title || `Erreur ${res.status}`);
-    err.type = data.type;
-    throw err;
-  }
-  return data;
 }
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString("fr-CH", { timeZone: "Europe/Zurich" }) : "—");
@@ -43,7 +34,7 @@ function row(dl, label, value, ok) {
   dl.append(dt, dd);
 }
 
-async function renderStatus(session) {
+async function renderSettings(session) {
   const [health, keys] = await Promise.all([api("/health"), api("/auth/passkeys")]);
   const dl = $("health");
   dl.replaceChildren();
@@ -68,17 +59,26 @@ async function renderStatus(session) {
   badge.hidden = false;
   badge.textContent = keys.items.length < 2 ? "1 seule passkey" : `${keys.items.length} passkeys`;
   badge.className = `badge ${keys.items.length < 2 ? "bad" : "ok"}`;
-  show("status");
+}
+
+async function enter(session) {
+  for (const v of AUTH_VIEWS) $(`view-${v}`).hidden = true;
+  $("tabbar").hidden = false;
+  $("top-icons").hidden = false;
+  if (!started) {
+    started = true;
+    start();
+  }
+  await renderSettings(session);
 }
 
 async function refresh() {
   try {
     const session = await api("/auth/session");
-    if (session.authenticated) return renderStatus(session);
-    $("badge").hidden = true;
-    show(session.needs_bootstrap ? "bootstrap" : "login");
+    if (session.authenticated) return enter(session);
+    showAuth(session.needs_bootstrap ? "bootstrap" : "login");
   } catch (e) {
-    show("login");
+    showAuth("login");
     say(`Hub injoignable : ${e.message}`, true);
   }
 }
@@ -127,7 +127,11 @@ $("form-backup").addEventListener("submit", guard(async () => {
   $("backup-name").value = "";
   say("Passkey de secours ajoutée.");
 }));
-$("btn-logout").addEventListener("click", guard(() => api("/auth/logout", {})));
+$("btn-logout").addEventListener("click", guard(async () => {
+  await api("/auth/logout", {});
+  location.reload();
+}));
+window.addEventListener("hub:auth", () => refresh());
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 refresh();

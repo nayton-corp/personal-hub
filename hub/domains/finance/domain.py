@@ -1,27 +1,31 @@
-"""Domaine Finance : registre BCF et import camt.053 (lot 1)."""
+"""Domaine Finance : registre BCF, import camt.053 (lot 1) et lectures de l'app (lot 2)."""
 
 from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from datetime import date
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import typer
 from fastapi import APIRouter
 from sqlalchemy import Engine, text
 
+from hub.core.clock import utcnow
 from hub.core.db import make_engine
 from hub.core.domain import Event, Health, Hit, McpTool, ProposalKind, Ref
 from hub.core.ids import Urn, urn
 from hub.core.logging import get_logger
 from hub.core.migrations import runner
 from hub.core.settings import Settings
-from hub.domains.finance import ledger, reads
+from hub.domains.finance import ledger, reads, snapshots
 from hub.domains.finance.importer import Archiver, ImportService, recipient_from_key
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 2  # 0002_fts
+SCHEMA_VERSION = 3  # 0003_snapshots
+TZ = ZoneInfo("Europe/Zurich")  # le jour civil des chiffres de l'app
 log = get_logger("hub.finance")
 
 
@@ -44,7 +48,10 @@ class FinanceDomain:
             inbox=settings.paths.inbox,
             archiver=Archiver(settings.paths.archive, recipient, key_file),
             lock_file=settings.paths.data / "finance.history.lock",
+            on_applied=self.refresh_snapshots,
         )
+        cap = section.get("pillar3a_cap_minor")
+        self.pillar3a_cap: int | None = int(cap) if cap is not None else None
 
     def engine(self) -> Engine:
         return self._engine
@@ -134,7 +141,16 @@ class FinanceDomain:
         with self._engine.connect() as conn:
             return ledger.verify(conn)
 
+    def today(self) -> date:
+        """Date civile à Zurich : fixe « aujourd'hui » pour les chiffres de l'app."""
+        return utcnow().astimezone(TZ).date()
+
+    def refresh_snapshots(self, *, force: bool = False) -> snapshots.Refresh:
+        return snapshots.refresh(self._engine, self.today(), force=force)
+
     def nightly(self) -> None:
+        refreshed = self.refresh_snapshots(force=True)
+        log.info("snapshots.nightly", rows=refreshed.rows)
         result = self.verify_ledger()
         if result.ok:
             log.info("ledger.verified", links=result.links)

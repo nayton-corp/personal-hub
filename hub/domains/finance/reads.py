@@ -280,41 +280,101 @@ def _merge_small(rows: list[dict[str, Any]], currency: str) -> list[dict[str, An
     return kept
 
 
+@dataclass(frozen=True)
+class Line:
+    """Total d'une catégorie sur une période, montant signé du registre."""
+
+    category: str
+    group: str
+    minor: int
+    count: int
+
+
+# Tant que les règles du lot 3 n'existent pas, presque tout est sans catégorie : une écriture
+# sans catégorie compte en dépense variable si elle est négative, en revenu sinon. Elle garde
+# l'identifiant « a-categoriser » pour rester visible.
+_LINES = (
+    "SELECT coalesce(v.category_id, :unc), "
+    "CASE WHEN c.grp IS NOT NULL THEN c.grp WHEN v.amount_minor < 0 THEN 'variable' "
+    "ELSE 'income' END, sum(v.amount_minor), count(DISTINCT v.entry_seq) "
+    "FROM v_entry_allocation v JOIN entries e ON e.seq = v.entry_seq "
+    "LEFT JOIN categories c ON c.id = v.category_id "
+    "WHERE v.account_id IN {ids} AND v.currency = :ccy AND e.kind != 'opening' "
+    "AND v.booking_date >= :s AND v.booking_date < :e GROUP BY 1, 2 ORDER BY 3, 1"
+)
+
+
+def period_lines(conn: Connection, start: str, end: str, currency: str = "CHF") -> list[Line]:
+    """Totaux par catégorie des comptes de budget, entre `start` inclus et `end` exclu."""
+    ids, params = _in("a", _budget_accounts(conn))
+    rows = conn.execute(
+        text(_LINES.format(ids=ids)),
+        {**params, "unc": UNCATEGORIZED, "ccy": currency, "s": start, "e": end},
+    ).fetchall()
+    return [Line(r[0], r[1], int(r[2]), int(r[3])) for r in rows]
+
+
+@dataclass(frozen=True)
+class Totals:
+    income: int
+    fixed: int  # dépenses, en positif
+    variable: int
+    invested: int  # vers les catégories d'épargne (3a, placements), en positif
+    transfers: int
+    uncategorized: int
+
+    @property
+    def expenses(self) -> int:
+        return self.fixed + self.variable
+
+    @property
+    def savings(self) -> int:
+        """Ce qui reste des revenus après les dépenses (épargne et placements compris)."""
+        return self.income - self.expenses
+
+    @classmethod
+    def of(cls, lines: list[Line]) -> Totals:
+        g: dict[str, int] = {}
+        for x in lines:
+            g[x.group] = g.get(x.group, 0) + x.minor
+        return cls(
+            income=g.get("income", 0),
+            fixed=-g.get("fixed", 0),
+            variable=-g.get("variable", 0),
+            invested=-g.get("savings", 0),
+            transfers=g.get("transfer", 0),
+            uncategorized=sum(x.minor for x in lines if x.category == UNCATEGORIZED),
+        )
+
+
 def summary(
     conn: Connection, month: str, *, aggregates_only: bool, currency: str = "CHF"
 ) -> dict[str, Any]:
     start, end = month_bounds(month)
-    ids, params = _in("a", _budget_accounts(conn))
-    rows = conn.execute(
-        text(
-            "SELECT coalesce(v.category_id, :unc), coalesce(c.grp, 'uncategorized'), "
-            "sum(v.amount_minor), count(DISTINCT v.entry_seq) "
-            "FROM v_entry_allocation v JOIN entries e ON e.seq = v.entry_seq "
-            "LEFT JOIN categories c ON c.id = v.category_id "
-            f"WHERE v.account_id IN {ids} AND v.currency = :ccy AND e.kind != 'opening' "
-            "AND v.booking_date >= :s AND v.booking_date < :e "
-            "GROUP BY 1, 2 ORDER BY 3"
-        ),
-        {**params, "unc": UNCATEGORIZED, "ccy": currency, "s": start, "e": end},
-    ).fetchall()
+    lines = period_lines(conn, start, end, currency)
     by_category = [
-        {"category": r[0], "group": r[1], "total": money(r[2], currency), "count": r[3]}
-        for r in rows
+        {
+            "category": x.category,
+            "group": x.group,
+            "total": money(x.minor, currency),
+            "count": x.count,
+        }
+        for x in lines
     ]
     groups: dict[str, int] = {}
-    for r in rows:
-        groups[r[1]] = groups.get(r[1], 0) + int(r[2])
-    expenses = -(groups.get("fixed", 0) + groups.get("variable", 0))
+    for x in lines:
+        groups[x.group] = groups.get(x.group, 0) + x.minor
+    t = Totals.of(lines)
     if aggregates_only:
         by_category = _merge_small(by_category, currency)
     return {
         "month": month,
         "currency": currency,
-        "income": money(groups.get("income", 0), currency),
-        "expenses": money(expenses, currency),
-        "savings": money(-groups.get("savings", 0), currency),
-        "transfers": money(groups.get("transfer", 0), currency),
-        "uncategorized": money(groups.get("uncategorized", 0), currency),
+        "income": money(t.income, currency),
+        "expenses": money(t.expenses, currency),
+        "savings": money(t.invested, currency),
+        "transfers": money(t.transfers, currency),
+        "uncategorized": money(t.uncategorized, currency),
         "by_group": {g: money(v, currency) for g, v in sorted(groups.items())},
         "by_category": by_category,
     }
@@ -327,7 +387,11 @@ def trend(
     start, _ = month_bounds(first)
     _, end = month_bounds(until)
     ids, params = _in("a", _budget_accounts(conn))
-    cat_clause = "AND v.category_id = :cat" if category else "AND c.grp IN ('fixed', 'variable')"
+    cat_clause = (
+        "AND v.category_id = :cat"
+        if category
+        else "AND (c.grp IN ('fixed', 'variable') OR (c.id IS NULL AND v.amount_minor < 0))"
+    )
     rows = conn.execute(
         text(
             "SELECT substr(v.booking_date, 1, 7), sum(v.amount_minor), count(*) "
@@ -345,35 +409,6 @@ def trend(
         total, count = found.get(m, (0, 0))
         series.append({"month": m, "total": money(total, currency), "count": count})
     return series
-
-
-def budget(conn: Connection, month: str, *, aggregates_only: bool) -> dict[str, Any]:
-    """Réel et cible par catégorie ; les cibles arrivent par proposition au lot 3."""
-    s = summary(conn, month, aggregates_only=aggregates_only)
-    targets = {
-        r[0]: (int(r[1]), r[2])
-        for r in conn.execute(
-            text(
-                "SELECT b.category_id, b.monthly_minor, b.currency FROM budgets b "
-                "WHERE b.seq = (SELECT max(seq) FROM budgets WHERE category_id = b.category_id "
-                "AND valid_from <= :m)"
-            ),
-            {"m": f"{month}-01"},
-        )
-    }
-    lines = []
-    for row in s["by_category"]:
-        target = targets.get(row["category"])
-        spent = -row["total"]["minor"]
-        lines.append(
-            {
-                "category": row["category"],
-                "spent": money(spent, s["currency"]),
-                "target": money(target[0], target[1]) if target else None,
-                "over": bool(target and spent > target[0]),
-            }
-        )
-    return {"month": month, "lines": lines, "income": s["income"], "expenses": s["expenses"]}
 
 
 def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:

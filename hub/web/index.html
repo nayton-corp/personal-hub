@@ -13,17 +13,23 @@
   <link rel="icon" href="/icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="/styles.css">
+  <script src="/vendor/d3.v7.9.0.min.js" defer></script>
   <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <header class="bar">
-    <h1>Personal Hub</h1>
-    <span id="badge" class="badge" hidden></span>
+  <header class="bar-top">
+    <div><h1 id="pg-title">Personal Hub</h1><div class="sub" id="pg-sub"></div></div>
+    <div class="icons" id="top-icons" hidden>
+      <button class="icon" id="btn-hide" type="button" aria-label="Masquer les montants" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <button class="icon" id="btn-src" type="button" aria-label="Sources et réglages" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    </div>
   </header>
-  <main>
+
+  <main id="root">
+    <!-- ================= CONNEXION (L0-09) ================= -->
     <section id="view-loading" class="card"><p>Chargement…</p></section>
 
-    <section id="view-bootstrap" class="card" hidden>
+    <section id="view-bootstrap" class="card form" hidden>
       <h2>Première passkey</h2>
       <p>Sur le Mac, lance <code>hub auth bootstrap-code</code> puis saisis le code ici.
         Il ne sert qu'une fois et expire au bout de quelques minutes.</p>
@@ -33,36 +39,154 @@
                spellcheck="false" required placeholder="a1b2c3-d4e5f6-0a1b2c">
         <label for="device">Nom de l'appareil</label>
         <input id="device" name="device" maxlength="60" placeholder="iPhone">
-        <button type="submit">Créer la passkey</button>
+        <button class="btn" type="submit">Créer la passkey</button>
       </form>
     </section>
 
     <section id="view-login" class="card" hidden>
       <h2>Connexion</h2>
       <p>Utilise Face ID ou la passkey de secours.</p>
-      <button id="btn-login" type="button">Se connecter avec une passkey</button>
+      <button id="btn-login" class="btn" type="button">Se connecter avec une passkey</button>
     </section>
 
-    <section id="view-status" hidden>
-      <div class="card">
-        <h2>État</h2>
-        <dl id="health" class="grid"></dl>
+    <!-- ================= ACCUEIL ================= -->
+    <section id="accueil" class="stack" data-tab hidden>
+      <div id="empty-home" class="card" hidden>
+        <h2>Pas encore de données</h2>
+        <p class="note">Le registre est vide. Sur le Mac : <code>hub finance accounts add</code> pour
+          créer le compte BCF, puis dépose un export camt.053 dans <code>inbox/</code> ou lance
+          <code>hub finance import-history</code>.</p>
+      </div>
+      <div id="stale-banner" class="banner" hidden></div>
+
+      <div class="card" id="c-hero">
+        <div class="head flush"><span class="lbl">Patrimoine net</span><div class="seg sm" id="mode-seg"><button type="button" data-v="chf" aria-pressed="true">CHF</button><button type="button" data-v="pct">%</button></div></div>
+        <div class="hero amt" id="hero-val">—</div>
+        <div><span class="delta" id="hero-delta"><span class="amt">—</span><span></span><span class="m"></span></span></div>
+        <div class="chart h190" id="ch-wealth"><div class="tip"></div></div>
+        <div class="seg" id="range-seg"><button type="button" data-v="1">1 M</button><button type="button" data-v="3">3 M</button><button type="button" data-v="ytd">YTD</button><button type="button" data-v="12" aria-pressed="true">1 A</button><button type="button" data-v="all">Tout</button></div>
+      </div>
+
+      <div class="card" id="c-mois">
+        <div class="month" id="month-home"><button type="button" data-step="-1" aria-label="Mois précédent">‹</button><b>—</b><button type="button" data-step="1" aria-label="Mois suivant">›</button></div>
+        <div class="kv"><span>Revenus</span><b class="amt" id="k-income">—</b></div>
+        <div class="kv"><span>Dépenses <span class="s" id="k-budget-sub"></span></span><b class="amt" id="k-expenses">—</b></div>
+        <div class="kv"><span>Épargne et investissements</span><b class="amt up" id="k-savings">—</b></div>
+        <div class="kv total"><span>Reste à vivre <span class="s" id="k-days"></span></span><b class="amt" id="k-rest">—</b></div>
+        <div class="bar mt"><i id="bar-budget"></i></div>
+        <div class="small muted mt-s" id="k-used">—</div>
+        <button class="link mt" id="go-budget" type="button">Voir le budget</button>
+      </div>
+
+      <div class="card" id="c-todo">
+        <h2>À traiter</h2>
+        <p class="note">Ce qui attend une action de ta part.</p>
+        <div id="todo-list"></div>
+      </div>
+    </section>
+
+    <!-- ================= PATRIMOINE ================= -->
+    <section id="patrimoine" class="stack" data-tab hidden>
+      <div class="chips" id="env-chips">
+        <button type="button" data-v="all" aria-pressed="true">Tout</button><button type="button" data-v="cash">Cash</button><button type="button" data-v="pilier3a">3e pilier</button><button type="button" data-v="ibkr">IBKR</button><button type="button" data-v="crypto">Crypto</button>
       </div>
       <div class="card">
-        <h2>Session</h2>
-        <p id="session-info"></p>
+        <span class="lbl" id="pat-lbl">Patrimoine net</span>
+        <div class="hero amt" id="pat-val">—</div>
+        <div><span class="delta" id="pat-delta"><span class="amt">—</span><span class="m">depuis janvier</span></span></div>
+        <div class="chart h160" id="ch-pat"><div class="tip"></div></div>
+      </div>
+      <div class="card">
+        <div class="head"><h2>Allocation</h2><span class="note">par enveloppe</span></div>
+        <div class="hbars" id="alloc"></div>
+      </div>
+      <div class="card">
+        <div class="head"><h2>D'où vient la progression</h2><span class="note">depuis janvier</span></div>
+        <div class="kv"><span>Versements nets</span><b class="amt" id="p-deposits">—</b></div>
+        <div class="kv"><span>Effet marché</span><b class="amt" id="p-market">—</b></div>
+        <div class="kv total"><span>Variation totale</span><b class="amt" id="p-total">—</b></div>
+        <p class="note mt">Les positions VIAC et IBKR arrivent au lot 4 : d'ici là, l'effet marché reste nul.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h2>Comptes</h2><span class="note" id="comptes-note">—</span></div>
+        <div id="acct-list"></div>
+      </div>
+    </section>
+
+    <!-- ================= BUDGET ================= -->
+    <section id="budget" class="stack" data-tab hidden>
+      <div class="card">
+        <div class="month" id="month-budget"><button type="button" data-step="-1" aria-label="Mois précédent">‹</button><b>—</b><button type="button" data-step="1" aria-label="Mois suivant">›</button></div>
+        <div class="head flush"><span class="lbl" id="bud-lbl">Reste à vivre</span><div class="seg sm" id="period-seg"><button type="button" data-v="m" aria-pressed="true">Ce mois</button><button type="button" data-v="q">3 mois</button></div></div>
+        <div class="hero amt" id="bud-val">—</div>
+        <div class="small muted" id="bud-sub">—</div>
+        <div class="bar mt"><i id="bar-bud"></i></div>
+      </div>
+      <div class="card">
+        <div class="head"><h2>Où va l'argent</h2><button class="link" id="btn-sankey" type="button">Voir le flux complet</button></div>
+        <div id="flow-lines"></div>
+        <div class="chart h360" id="ch-sankey" hidden><div class="tip"></div></div>
+      </div>
+      <div class="card">
+        <div class="head"><h2>Catégories</h2><span class="note" id="cat-note">—</span></div>
+        <div id="cat-list"></div>
+      </div>
+      <div class="card">
+        <div class="head"><h2>Tendance</h2><span class="note">6 mois</span></div>
+        <div class="chart h180" id="ch-months"><div class="tip"></div></div>
+        <div class="legend"><span><i class="c-fixed"></i>Fixe</span><span><i class="c-variable"></i>Variable</span><span><i class="c-savings"></i>Épargne</span></div>
+      </div>
+    </section>
+
+    <!-- ================= JOURNAL ================= -->
+    <section id="journal" class="stack" data-tab hidden>
+      <div>
+        <input class="search" id="tx-search" type="search" placeholder="Rechercher (3 lettres au moins)" aria-label="Rechercher une écriture">
+        <div class="chips" id="tx-chips"><button type="button" data-v="all" aria-pressed="true">Toutes</button><button type="button" data-v="todo">À catégoriser<b id="todo-count"></b></button></div>
+      </div>
+      <div class="card">
+        <div id="tx-list"></div>
+        <button class="more" id="tx-more" type="button" hidden>Plus d'écritures</button>
+      </div>
+    </section>
+
+    <!-- ================= SOURCES ET RÉGLAGES ================= -->
+    <section id="sources" class="stack" data-tab hidden>
+      <div class="card">
+        <div class="head"><h2>Fraîcheur des comptes</h2><span class="note">au-delà de 45 jours : à rafraîchir</span></div>
+        <div id="fresh-list"></div>
+      </div>
+      <div class="card">
+        <h2>Exporter</h2>
+        <p class="note">Le journal complet en CSV, tel qu'il est au registre.</p>
+        <a class="btn secondary" id="export-link" href="/api/finance/export.csv" download>Télécharger le journal (CSV)</a>
+      </div>
+      <div class="card">
+        <h2>État</h2>
+        <dl id="health" class="grid mt"></dl>
+      </div>
+      <div class="card form">
+        <div class="head"><h2>Session</h2><span id="badge" class="badge" hidden></span></div>
+        <p id="session-info" class="note"></p>
         <h3>Passkeys</h3>
         <ul id="passkeys" class="list"></ul>
         <form id="form-backup">
           <label for="backup-name">Ajouter une passkey de secours</label>
           <input id="backup-name" maxlength="60" placeholder="Clé de secours">
-          <button type="submit" class="secondary">Ajouter</button>
+          <button type="submit" class="btn secondary">Ajouter</button>
         </form>
-        <button id="btn-logout" type="button" class="secondary">Se déconnecter</button>
+        <button id="btn-logout" type="button" class="btn secondary">Se déconnecter</button>
       </div>
     </section>
 
     <p id="message" class="message" role="status" aria-live="polite"></p>
   </main>
+
+  <nav class="tabbar" id="tabbar" aria-label="Navigation" hidden><div class="in">
+    <button type="button" data-tab="accueil" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Accueil</button>
+    <button type="button" data-tab="patrimoine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Patrimoine</button>
+    <button type="button" data-tab="budget"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Budget</button>
+    <button type="button" data-tab="journal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>Journal</button>
+  </div></nav>
 </body>
 </html>

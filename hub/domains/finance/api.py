@@ -6,17 +6,18 @@ import re
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 
 from hub.core.auth import AppSession, Principal, require
-from hub.core.clock import utcnow
 from hub.core.errors import Problem
-from hub.domains.finance import reads
+from hub.domains.finance import insights, reads, snapshots
 from hub.domains.finance.importer import ImportRefused
 
 if TYPE_CHECKING:
     from hub.domains.finance.domain import FinanceDomain
 
 MONTH = r"^\d{4}-(0[1-9]|1[0-2])$"
+PERIOD = r"^[mq]$"
 DATE = r"^\d{4}-\d{2}-\d{2}$"
 MAX_UPLOAD = 50 * 1024 * 1024
 _NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip)$", re.I)
@@ -29,13 +30,21 @@ def _aggregates_only(p: Principal) -> bool:
     return not (p.is_app or p.allows("finance:read"))
 
 
-def _this_month() -> str:
-    return utcnow().strftime("%Y-%m")
-
-
 def build_router(domain: FinanceDomain) -> APIRouter:
     r = APIRouter()
     engine = domain.engine()
+
+    def _this_month() -> str:
+        return domain.today().strftime("%Y-%m")
+
+    def _month(month: str | None) -> str:
+        """Mois demandé (mois en cours par défaut) ; un mois futur n'a pas encore de chiffres."""
+        value = month or _this_month()
+        try:
+            insights.as_of(value, domain.today())
+        except insights.FutureMonth:
+            raise Problem("validation.params", "mois futur") from None
+        return value
 
     @r.get("/accounts")
     def accounts(_p: AnyReader) -> dict[str, Any]:
@@ -75,14 +84,91 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         p: AnyReader, month: Annotated[str | None, Query(pattern=MONTH)] = None
     ) -> dict[str, Any]:
         with engine.connect() as conn:
-            return reads.summary(conn, month or _this_month(), aggregates_only=_aggregates_only(p))
+            return reads.summary(conn, _month(month), aggregates_only=_aggregates_only(p))
 
     @r.get("/budget")
     def budget(
+        p: AnyReader,
+        month: Annotated[str | None, Query(pattern=MONTH)] = None,
+        period: Annotated[str, Query(pattern=PERIOD)] = "m",
+    ) -> dict[str, Any]:
+        """Réel et cible par catégorie de dépense, dépassements, reste à vivre, jours restants.
+        `period=q` : les trois mois complets avant `month`."""
+        m = _month(month)
+        with engine.connect() as conn:
+            return insights.budget(
+                conn, m, period, domain.today(), aggregates_only=_aggregates_only(p)
+            )
+
+    @r.get("/budget/totals")
+    def budget_totals(
+        _p: AnyReader,
+        month: Annotated[str | None, Query(pattern=MONTH)] = None,
+        period: Annotated[str, Query(pattern=PERIOD)] = "m",
+    ) -> dict[str, Any]:
+        """Revenus, dépenses (fixes, variables), épargne, placements et taux d'épargne."""
+        m = _month(month)
+        with engine.connect() as conn:
+            return insights.budget_totals(conn, m, period)
+
+    @r.get("/budget/months")
+    def budget_months(
+        _p: AnyReader,
+        month: Annotated[str | None, Query(pattern=MONTH)] = None,
+        months: Annotated[int, Query(ge=1, le=36)] = 6,
+    ) -> dict[str, Any]:
+        """Les totaux du budget mois par mois, jusqu'à `month` compris."""
+        m = _month(month)
+        with engine.connect() as conn:
+            return insights.budget_months(conn, m, months)
+
+    @r.get("/kpis")
+    def kpis(
+        _p: AnyReader, month: Annotated[str | None, Query(pattern=MONTH)] = None
+    ) -> dict[str, Any]:
+        """Chiffres clés de l'accueil : patrimoine et variations, mois, liquidités, à traiter."""
+        m = _month(month)
+        with engine.connect() as conn:
+            return insights.kpis(conn, m, domain.today(), pillar3a_cap=domain.pillar3a_cap)
+
+    @r.get("/networth/history")
+    def networth_history(
+        _p: AnyReader,
+        from_: Annotated[str | None, Query(alias="from", pattern=DATE)] = None,
+        to: Annotated[str | None, Query(pattern=DATE)] = None,
+    ) -> dict[str, Any]:
+        """Instantanés : patrimoine, versements cumulés et valeur par enveloppe."""
+        domain.refresh_snapshots()
+        with engine.connect() as conn:
+            return snapshots.history(conn, from_, to)
+
+    @r.get("/flows")
+    def flows(
         p: AnyReader, month: Annotated[str | None, Query(pattern=MONTH)] = None
     ) -> dict[str, Any]:
+        """Revenus → groupes (fixe, variable, épargne) → catégories, et le reste sur compte."""
+        m = _month(month)
         with engine.connect() as conn:
-            return reads.budget(conn, month or _this_month(), aggregates_only=_aggregates_only(p))
+            return insights.flows(conn, m, aggregates_only=_aggregates_only(p))
+
+    @r.get("/export.csv", response_class=StreamingResponse)
+    def export_csv(
+        _session: AppSession,
+        from_: Annotated[str | None, Query(alias="from", pattern=DATE)] = None,
+        to: Annotated[str | None, Query(pattern=DATE)] = None,
+    ) -> StreamingResponse:
+        """Journal complet en CSV (UTF-8, séparateur virgule) : tout s'exporte."""
+
+        def body() -> Any:
+            with engine.connect() as conn:
+                yield from insights.export_csv(conn, from_, to)
+
+        name = f"finance-{domain.today().isoformat()}.csv"
+        return StreamingResponse(
+            body(),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        )
 
     @r.get("/trend")
     def trend(
