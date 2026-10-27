@@ -197,6 +197,18 @@ class ImportService:
 
     # --- réception -----------------------------------------------------------------------
 
+    def _waiting(self, digest: str) -> str | None:
+        """Import déjà reçu dont un relevé attend encore (needs_review)."""
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT i.id FROM imports i JOIN import_statements s ON s.import_id = i.id "
+                    "WHERE i.file_sha256 = :h AND s.status = 'needs_review' LIMIT 1"
+                ),
+                {"h": digest},
+            ).first()
+        return None if row is None else str(row[0])
+
     def _known(self, digest: str) -> bool:
         with self.engine.connect() as conn:
             row = conn.execute(
@@ -802,16 +814,27 @@ def import_history(service: ImportService, folder: Path) -> HistoryReport:
                 for f in expand(p.name, p.read_bytes()):
                     files.setdefault(sha256(f.data), f)
         parsed: list[tuple[Incoming, ParsedFile]] = []
+        # un fichier déjà reçu (déposé d'abord dans l'inbox) et resté en attente fait partie de
+        # la reprise : il compte pour l'ouverture, puis il est rejoué depuis l'archive
+        waiting: list[str] = []
+        waiting_parsed: list[ParsedFile] = []
         for f in files.values():
-            if service._known(sha256(f.data)):
-                continue
+            digest = sha256(f.data)
+            import_id = service._waiting(digest) if service._known(digest) else None
+            if service._known(digest) and import_id is None:
+                continue  # déjà appliqué
             try:
-                parsed.append((f, parser.parse(f.data)))
+                pf = parser.parse(f.data)
             except parser.CamtError as exc:
                 return HistoryReport(ok=False, error=f"{exc.code} : {safe_name(f.name)}")
+            if import_id is None:
+                parsed.append((f, pf))
+            else:
+                waiting.append(import_id)
+                waiting_parsed.append(pf)
 
         by_iban: dict[str, list[_Span]] = {}
-        for _f, pf in parsed:
+        for pf in [pf for _f, pf in parsed] + waiting_parsed:
             for s in pf.statements:
                 if s.iban is None or s.opening is None or s.closing is None:
                     return HistoryReport(ok=False, error="relevé sans IBAN ou sans soldes")
@@ -860,6 +883,8 @@ def import_history(service: ImportService, folder: Path) -> HistoryReport:
                     account.currency,
                 )
         batch = service.process(f for f, _ in parsed)
+        if waiting:
+            batch.statements = _settle(service, batch.statements, waiting)
         report.batch = batch.counters()
         report.ok = report.batch["needs_review"] == 0 and report.batch["rejected_files"] == 0
         with service.engine.connect() as conn:
@@ -881,6 +906,26 @@ def import_history(service: ImportService, folder: Path) -> HistoryReport:
                     }
                 )
         return report
+
+
+def _settle(
+    service: ImportService, outcomes: list[StatementOutcome], waiting: list[str]
+) -> list[StatementOutcome]:
+    """Rejoue les relevés en attente de la reprise jusqu'à ce que plus rien n'avance : un relevé
+    déjà reçu peut précéder ou suivre les nouveaux. Rend le dernier état de chaque relevé."""
+    final = {(o.import_id, o.index): o for o in outcomes}
+    pending = set(waiting) | {o.import_id for o in outcomes if o.status == "needs_review"}
+    while pending:
+        retried = service.retry_needs_review(sorted(pending))
+        for o in retried:
+            before = final.get((o.import_id, o.index))
+            if before is not None:
+                o.new += before.new
+            final[(o.import_id, o.index)] = o
+        if not any(o.status == "applied" for o in retried):
+            break
+        pending = {o.import_id for o in retried if o.status == "needs_review"}
+    return list(final.values())
 
 
 @dataclass(frozen=True)
