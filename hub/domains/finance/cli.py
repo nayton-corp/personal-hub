@@ -77,6 +77,8 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
     app.add_typer(imports, name="imports")
     viac = typer.Typer(no_args_is_help=True, help="VIAC (pilier 3a)")
     app.add_typer(viac, name="viac")
+    revolut_app = typer.Typer(no_args_is_help=True, help="Revolut (Enable Banking, CSV)")
+    app.add_typer(revolut_app, name="revolut")
     engine = domain.engine()
 
     def ready() -> None:
@@ -348,6 +350,76 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
         _out(report.public())
         if not report.ok:
             raise typer.Exit(1)
+
+    @revolut_app.command("pending")
+    def revolut_pending() -> None:
+        """Comptes Revolut vus dans des fichiers en attente : clé, nombre d'écritures, période,
+        motifs. Aucun montant."""
+        ready()
+        out = []
+        for ref, items in sorted(importer.revolut_pending(domain.importer).items()):
+            dates = [e.booking_date for _, st in items for e in st.entries]
+            with engine.connect() as conn:
+                known = catalog.account_by_ref(conn, ref) is not None
+            out.append(
+                {
+                    "ref": ref,
+                    "account_exists": known,
+                    "imports": len({i for i, _ in items}),
+                    "entries": sum(len(st.entries) for _, st in items),
+                    "from": min(dates, default=None),
+                    "to": max(dates, default=None),
+                    "can_open": any(st.derived_opening for _, st in items),
+                }
+            )
+        _out(out)
+
+    @revolut_app.command("add-account")
+    def revolut_add_account(
+        ref: Annotated[str, typer.Argument(help="clé vue dans `pending`, ex. revolut:CHF")],
+        name: Annotated[str, typer.Option(help="ex. « Revolut CHF »")],
+        budget: Annotated[bool, typer.Option(help="compte suivi par le budget")] = True,
+        liquid: Annotated[bool, typer.Option(help="compte dans les liquidités")] = True,
+    ) -> None:
+        """Crée le compte (proposition validée au terminal), l'ouvre avec le solde déduit de la
+        reprise complète, puis applique ses relevés en attente."""
+        ready()
+        m = re.fullmatch(r"revolut:([A-Z]{3})(:[a-z0-9-]+)?", ref)
+        if m is None:
+            typer.echo("clé attendue : revolut:CHF ou revolut:EUR:produit", err=True)
+            raise typer.Exit(1)
+        with engine.connect() as conn:
+            account = catalog.account_by_ref(conn, ref)
+        if account is None:
+            result = propose_and_accept(
+                domain,
+                "create_account",
+                {
+                    "institution": "Revolut",
+                    "name": name,
+                    "kind": "cash",
+                    "currency": m.group(1),
+                    "external_ref": ref,
+                    "liquid": liquid,
+                    "budget_account": budget,
+                },
+            )
+            with engine.connect() as conn:
+                account = catalog.get_account(conn, str(result["account_id"]))
+        with engine.connect() as conn:
+            opened = conn.execute(
+                text("SELECT 1 FROM entries WHERE account_id = :a LIMIT 1"), {"a": account.id}
+            ).first()
+        if opened:
+            outcomes = domain.importer.retry_needs_review()
+            _out({"id": account.id, "opened": False, "retried": len(outcomes)})
+            return
+        done, ids = importer.open_revolut(domain.importer, account)
+        if not done:
+            typer.echo(
+                "aucun relevé avec solde : ouvrir à la main (hub finance accounts open)", err=True
+            )
+        _out({"id": account.id, "opened": done, "imports": len(ids)})
 
     @imports.command("list")
     def imports_list(

@@ -32,7 +32,7 @@ def test_full_cycle(tmp_path: Path) -> None:
     assert run("verify")[0] == 1
     code, out = run("db", "upgrade")
     assert code == 0
-    assert json.loads(out)["core"] == "0001_core_init"
+    assert json.loads(out)["core"] == "0002_collectors"
     assert json.loads(run("db", "status")[1])["core"]["current"] is True
 
     code, out = run("token", "create", "brain-mac", "--scope", "brain")

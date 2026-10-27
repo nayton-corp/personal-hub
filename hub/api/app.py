@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 
 import hub
-from hub.api import routes_auth, routes_core
+from hub.api import routes_auth, routes_collectors, routes_core
 from hub.core import errors
 from hub.core.context import HubContext
 
@@ -45,6 +45,7 @@ def create_app(hub_ctx: HubContext, *, migrate: bool = False) -> FastAPI:
 
     app.include_router(routes_core.router, prefix="/api")
     app.include_router(routes_auth.router, prefix="/api")
+    app.include_router(routes_collectors.router, prefix="/api")
     for domain in hub_ctx.registry:
         app.include_router(
             domain.router(),

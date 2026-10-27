@@ -183,3 +183,80 @@ class DigestItemOut(ProposalOut):
 class DigestOut(BaseModel):
     day: str
     items: list[DigestItemOut]
+
+
+# --- collecteurs (lot 5) ----------------------------------------------------------------------
+
+
+class CollectorRunOut(BaseModel):
+    id: str
+    kind: str
+    outcome: str
+    started_at: str
+    ended_at: str | None
+    files: int
+    detail: str | None
+
+
+class CollectorOut(BaseModel):
+    name: str
+    label: str
+    mode: str
+    consecutive_failures: int
+    since: str
+    check_requested: bool
+    last_run: CollectorRunOut | None
+    last_success_at: str | None
+    can_enable: bool
+
+
+class CollectorListOut(BaseModel):
+    items: list[CollectorOut]
+
+
+class CollectorRunsOut(BaseModel):
+    items: list[CollectorRunOut]
+
+
+class CollectorRunIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["run", "check"] = "run"
+    outcome: Literal[
+        "ok",
+        "nothing_new",
+        "auth_pending_timeout",
+        "site_unavailable",
+        "selector_missing",
+        "invalid_file",
+        "auth_error",
+        "unknown",
+    ]
+    started_at: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
+    ended_at: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
+    files: int = Field(default=0, ge=0, le=1000)
+    detail: str | None = Field(default=None, max_length=200)
+
+
+class CollectorModeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["enabled", "disabled"]
+
+
+class CollectorNotifyIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    event: Literal["auth_pending", "consent_expiring"]
+
+
+class CollectorNotifyOut(BaseModel):
+    sent: bool
+
+
+class CollectorLinkIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    state: str = Field(min_length=16, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class CollectorLinkOut(BaseModel):
+    state: str
+    expires_at: str | None = None
+    code: str | None = None

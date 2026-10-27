@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from hub.core.coredb import CoreDB
+from hub.core.notify import Notifier
 from hub.core.registry import Registry
 from hub.core.settings import Settings
 
@@ -14,6 +15,10 @@ class HubContext:
     settings: Settings
     core: CoreDB
     registry: Registry
+    notifier: Notifier = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.notifier = Notifier(self.settings)
 
     @classmethod
     def build(cls, settings: Settings, registry: Registry | None = None) -> HubContext:

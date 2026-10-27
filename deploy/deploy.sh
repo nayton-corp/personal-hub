@@ -27,6 +27,7 @@ if [ -z "${HUB_SKIP_BUILD:-}" ]; then
   say "Construction des images $TAG ($PLATFORM)"
   docker build --platform "$PLATFORM" --target hub -t "hub:$TAG" "$ROOT"
   docker build --platform "$PLATFORM" --target web -t "hub-web:$TAG" "$ROOT"
+  docker build --platform "$PLATFORM" --target collector -t "hub-collector:$TAG" "$ROOT"
 fi
 
 first_deploy=0
@@ -63,6 +64,7 @@ say "Vérification après migration"
 once "$TAG" hub verify || rollback "verify échoue après migration"
 
 say "Démarrage"
+# COMPOSE_PROFILES=collectors dans deploy/.env : les collecteurs suivent la même image
 compose "$TAG" up -d --remove-orphans
 
 say "Contrôle de santé (30 s)"

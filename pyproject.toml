@@ -21,8 +21,16 @@ dependencies = [
     "webauthn==3.0.1",
 ]
 
+[project.optional-dependencies]
+# conteneurs collecteurs seulement (image Playwright) ; l'image du hub n'en a pas besoin
+collectors = [
+    "cryptography==50.0.2",
+    "playwright==1.63.0",
+]
+
 [project.scripts]
 hub = "hub.cli:main"
+hub-collector = "hub.collectors.cli:main"
 
 [project.entry-points."hub.domains"]
 finance = "hub.domains.finance:create"
@@ -36,6 +44,7 @@ dev = [
     "import-linter==2.15",
     "lxml-stubs>=0.5.1",
     "mypy==2.4.0",
+    "playwright==1.63.0",
     "pre-commit==4.7.0",
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
@@ -65,6 +74,9 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # textes en français : apostrophes et 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S104", "S105", "S106", "S608", "DTZ001"]
 "hub/core/migrations/**" = ["E501"]
+# pages HTML et lignes CSV factices des tests de collecteurs
+"tests/collectors/fakebank.py" = ["E501"]
+"tests/finance/test_revolut.py" = ["E501"]
 "hub/domains/*/migrations/**" = ["E501"]
 # SQL assemblé à partir de noms de tables et de marques :n internes ; les valeurs restent liées
 "hub/domains/finance/{ledger,reads,importer,domain,insights,handlers}.py" = ["S608"]
@@ -107,7 +119,13 @@ layers = ["hub.domains", "hub.core"]
 name = "Ni l'API ni la CLI n'importent un domaine : elles passent par le registre"
 type = "forbidden"
 source_modules = ["hub.core", "hub.api", "hub.cli"]
-forbidden_modules = ["hub.domains"]
+forbidden_modules = ["hub.domains", "hub.collectors"]
+
+[[tool.importlinter.contracts]]
+name = "Les collecteurs ne voient ni les domaines ni l'API : ils déposent des fichiers et déclarent leurs runs"
+type = "forbidden"
+source_modules = ["hub.collectors"]
+forbidden_modules = ["hub.domains", "hub.api", "hub.cli"]
 
 [[tool.importlinter.contracts]]
 name = "Les domaines sont indépendants entre eux (lecture croisée par public.py)"

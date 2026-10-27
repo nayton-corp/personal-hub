@@ -179,7 +179,7 @@ coût moyen, plus-value, poids) ; l'onglet Patrimoine les affiche.
    Patrimoine (valeur VIAC égale au dernier rapport), puis supprime le dossier du Mac.
 
 Ensuite, un nouveau PDF déposé dans `~/PersonalHub/inbox/` est traité comme un relevé BCF.
-La collecte automatique (bot VIAC) arrive au lot 5. Pour lancer le hub hors conteneur sur le
+La collecte automatique (bot VIAC) est décrite dans [collectors.md](collectors.md). Pour lancer le hub hors conteneur sur le
 Mac, installe d'abord poppler : `brew install poppler`.
 
 **Reconstruction par rejeu.** `fin rebuild --out /srv/hub/data/rebuild` reconstruit le
@@ -192,6 +192,17 @@ budgets, points de contrôle, imports, opérations, positions et cours ; code 1 
 avec des compteurs et des identifiants opaques seulement. Un écart attendu : une catégorie posée
 par une règle depuis désactivée. La base reconstruite ouvre une nouvelle époque du journal ;
 la mettre en service se fait hub arrêté (remplacer `finance.db`, puis `fin verify-ledger`).
+
+## Revolut (lot 5)
+
+Deux sources pour les mêmes comptes : les fichiers `hub.revolut.v1` du collecteur Enable
+Banking et le CSV exporté de l'app (secours). Chaque compte Revolut est identifié par
+`revolut:<DEVISE>` (compte courant) ou `revolut:<DEVISE>:<produit>`, au lieu d'un IBAN. Un
+fichier dont le compte n'existe pas attend (`unknown_account`) ; `fin revolut pending` liste ces
+comptes sans montant, `fin revolut add-account <ref> --name …` les ouvre et rejoue l'attente.
+Seul le solde comptabilisé (`CLBD`, `ITBD`) devient un point de contrôle ; les écritures en
+attente sont ignorées jusqu'à leur comptabilisation. Les doublons entre synchros et entre CSV
+et Enable Banking sont traités comme pour la BCF. Mise en place : [collectors.md](collectors.md).
 
 ## Autres commandes
 

@@ -26,6 +26,7 @@ const path = {
   totals: () => `/finance/budget/totals?month=${P.month}&period=${P.period}`,
   months: () => `/finance/budget/months?month=${P.month}&months=6`,
   flows: () => `/finance/flows?month=${P.month}`,
+  collectors: () => "/collectors",
 };
 
 function pressed(id, value) {
@@ -440,7 +441,69 @@ function journal() {
 
 // --- sources --------------------------------------------------------------------------------
 
+const MODE_LABEL = { enabled: "actif", degraded: "suspendu", disabled: "désactivé" };
+const OUTCOME_LABEL = {
+  ok: "réussi", nothing_new: "rien de nouveau", auth_pending_timeout: "validation non faite",
+  auth_error: "connexion refusée", site_unavailable: "site indisponible",
+  selector_missing: "page changée", invalid_file: "fichier refusé", unknown: "erreur",
+};
+let collBusy = false;
+
+async function collectorAction(name, call, done) {
+  if (collBusy) return;
+  collBusy = true;
+  $("coll-msg").textContent = "";
+  try {
+    await call();
+    $("coll-msg").textContent = done;
+  } catch (e) {
+    $("coll-msg").textContent = e.message;
+  } finally {
+    collBusy = false;
+    store.cache.delete(path.collectors());
+    store.notify();
+  }
+}
+
+function collectorButton(label, fn) {
+  const b = el("button", "link", label);
+  b.type = "button";
+  b.disabled = collBusy;
+  b.addEventListener("click", fn);
+  return b;
+}
+
+// mode, dernier passage et actions ; jamais de montant : le collecteur n'en remonte aucun
+function collectorsCard() {
+  const list = $("coll-list");
+  list.replaceChildren();
+  const c = store.use(path.collectors());
+  if (c.status !== "ok") {
+    list.append(el("div", "empty", failed(c) || "Chargement…"));
+    return;
+  }
+  for (const s of c.data.items) {
+    const last = s.last_run;
+    const when = last ? `${OUTCOME_LABEL[last.outcome] || last.outcome} le ${date(last.started_at.slice(0, 10))}` : "jamais lancé";
+    const sub = s.check_requested ? `${when} · contrôle demandé` : when;
+    const r = row(initials(s.label), s.label, sub, MODE_LABEL[s.mode] || s.mode, null, "", s.mode === "enabled");
+    if (s.mode !== "enabled") r.querySelector(".n span").classList.add("warn");
+    r.querySelector(".v b").className = s.mode === "enabled" ? "muted" : "warn";
+    const v = r.querySelector(".v");
+    const post = (what, body) => api(`/collectors/${s.name}/${what}`, body);
+    if (s.mode === "enabled") {
+      v.append(collectorButton("Désactiver", () => collectorAction(s.name, () => post("mode", { mode: "disabled" }), `${s.label} désactivé.`)));
+    } else if (s.can_enable) {
+      v.append(collectorButton("Réactiver", () => collectorAction(s.name, () => post("mode", { mode: "enabled" }), `${s.label} réactivé.`)));
+    } else if (!s.check_requested) {
+      v.append(collectorButton("Contrôler", () => collectorAction(s.name, () => post("check", {}), "Contrôle demandé : le collecteur le lance dans la minute.")));
+    }
+    list.append(r);
+  }
+}
+
 function sources() {
+  collectorsCard();
   const list = $("fresh-list");
   list.replaceChildren();
   const f = store.use(path.freshness());

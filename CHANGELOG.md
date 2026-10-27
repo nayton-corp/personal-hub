@@ -2,6 +2,27 @@
 
 ## [Non publié]
 
+### Lot 5 — Collecteurs
+
+- Cœur : schéma `0002_collectors` (type de passage, contrôle demandé, liaisons), table des
+  échecs de la section 8 (suspension, alertes, retour manuel après un contrôle réussi),
+  alertes ntfy génériques, routes `/api/collectors` (état, passages, mode, contrôle, liaison
+  Revolut et page de retour), purge nocturne des liaisons.
+- Paquet `hub.collectors` (image `collector`, Chromium de Playwright 1.63) : dépôt atomique
+  dans la boîte d'entrée avec contrôle de forme et quarantaine, sélecteurs nommés et liste
+  blanche de clics, captures `--diagnose` purgées après 7 jours, boucle planifiée.
+- Bot BCF (camt.053 depuis J-10, validation push de 3 min, refus détecté tout de suite) et bot
+  VIAC (liste Documents, avis nouveaux, rapport tous les 6 jours, `relogin` avec code 2FA tapé
+  dans le conteneur), sélecteurs repris des scripts du Mac.
+- Revolut par Enable Banking : JWT RS256, liaison avec reprise complète dans la fenêtre de
+  5 minutes, au plus 4 synchros par jour, alerte avant la fin du consentement.
+- Finance : import des JSON Enable Banking et du CSV Revolut (comptes `revolut:<devise>`,
+  ouverture au solde déduit), `fin revolut pending` et `add-account`.
+- App : carte Collecteurs dans l'onglet Sources (désactiver, contrôler, réactiver).
+- Compose : services `collector-bcf`, `collector-viac`, `collector-revolut` (profil
+  `collectors`, un volume et un fichier de secrets chacun) ; l'API lit le sujet ntfy ; CI :
+  Chromium pour les tests, image collecteur.
+
 ### Lot 4 — VIAC et patrimoine minimal
 
 - Schéma `0005_viac` : instruments, opérations (`trades`), positions (`holdings`) et cours
