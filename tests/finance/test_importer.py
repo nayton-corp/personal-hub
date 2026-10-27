@@ -291,6 +291,30 @@ def test_history_opens_and_applies_everything(finance: FinanceDomain, tmp_path: 
     assert "déjà ouvert" in (again.error or "")
 
 
+def test_history_takes_files_already_waiting_in_review(
+    finance: FinanceDomain, tmp_path: Path
+) -> None:
+    """Relevés déposés d'abord dans l'inbox (compte pas encore ouvert : no_opening), puis
+    repris par import-history : ils ouvrent le compte et sont appliqués, pas ignorés."""
+    add_account(finance)
+    months = _months(date(2016, 1, 1), 3)
+    folder = _folder(tmp_path, months)
+    first = finance.importer.process(
+        [Incoming(p.name, p.read_bytes()) for p in sorted(folder.iterdir())[:2]]
+    )
+    assert first.counters()["needs_review"] == 2
+    report = importer.import_history(finance.importer, folder)
+    assert report.ok, report.public()
+    assert report.batch["applied"] == 3
+    assert report.accounts[0]["entries"] == 6
+    waiting = "SELECT count(*) FROM import_statements WHERE status = 'needs_review'"
+    assert rows(finance, waiting) == [(0,)]
+    # rejouée, la reprise ne trouve plus rien à faire
+    again = importer.import_history(finance.importer, folder)
+    assert again.ok
+    assert again.batch["files"] == 0
+
+
 def test_history_order_does_not_matter(tmp_path: Path) -> None:
     """Sur fixtures : 2016 puis 2024, ou l'inverse, donne le même registre."""
     from tests.finance.conftest import finance_settings
