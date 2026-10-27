@@ -75,6 +75,11 @@ o.onsubmit = (e) => {{ e.preventDefault();
     if (t === 'ok') location.href = '/documents'; }}); }};
 </script>"""
 
+VIAC_HOME = """<h1>Accueil</h1><p>Vos portefeuilles</p>
+<script>
+window.onhashchange = () => {{ if (location.hash === '#/documents') location.href = '/documents'; }};
+</script>"""
+
 VIAC_DOCS = """
 <table><tbody>{rows}</tbody></table>
 <button class="mat-mdc-paginator-navigation-next" disabled>›</button>
@@ -114,6 +119,8 @@ class Bank:
     viac_session: bool = True
     otp: str = "123456"
     viac_2fa: bool = True  # False : connexion sans code, arrivée sur l'accueil
+    # comme le vrai VIAC : un rechargement complet juste après la connexion la perd
+    viac_fresh: bool = False
     documents: list[tuple[str, str]] = field(
         default_factory=lambda: [
             ("Versement", "03.10.2026"),
@@ -154,6 +161,7 @@ def _handler(bank: Bank) -> type[BaseHTTPRequestHandler]:
                 )
             elif path == "/api/viac-login":
                 bank.viac_session = True
+                bank.viac_fresh = True
                 self._send(b"ok", "text/plain")
             elif path == "/api/otp":
                 if data == bank.otp:
@@ -188,6 +196,10 @@ def _handler(bank: Bank) -> type[BaseHTTPRequestHandler]:
             elif path == "/logout":
                 self._page("BCF", "<p>Au revoir</p>")
             elif path == "/documents":
+                if bank.viac_fresh:
+                    bank.viac_fresh = False
+                    if not self.headers.get("Referer"):  # rechargement, pas navigation de l'app
+                        bank.viac_session = False
                 if not bank.viac_session:
                     direct = "false" if bank.viac_2fa else "true"
                     self._page("VIAC", VIAC_LOGIN.format(direct=direct))
@@ -197,7 +209,7 @@ def _handler(bank: Bank) -> type[BaseHTTPRequestHandler]:
                 )
                 self._page("VIAC", VIAC_DOCS.format(rows=rows))
             elif path == "/viac-home":
-                self._page("VIAC", "<h1>Accueil</h1><p>Vos portefeuilles</p>")
+                self._page("VIAC", VIAC_HOME)
             elif path.startswith("/doc/"):
                 i = int(path.rsplit("/", 1)[1])
                 _name, _on = bank.documents[i]
