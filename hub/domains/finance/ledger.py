@@ -113,6 +113,18 @@ class NewEntry:
     proposal_id: str | None = None
 
 
+# noms de remplissage que la banque met à la place d'une contrepartie absente (BCF : cartes,
+# TWINT) ; le registre les garde tels quels, ils entrent dans la clé de dédoublonnage
+PLACEHOLDER_PARTIES = frozenset({"notprovided", "not provided"})
+
+
+def party(counterparty: str | None) -> str | None:
+    """La contrepartie à montrer, sans les noms de remplissage."""
+    if not counterparty or normalize(counterparty) in PLACEHOLDER_PARTIES:
+        return None
+    return counterparty
+
+
 def search_text(counterparty: str | None, label: str, remittance: str) -> str:
     return normalize(" ".join(p for p in (counterparty, label, remittance) if p))
 

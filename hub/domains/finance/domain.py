@@ -98,7 +98,10 @@ class FinanceDomain:
                 ).first()
                 if row:
                     return Ref(
-                        value, row[0] or row[1] or "écriture", row[2], f"/finance/entries/{u.id}"
+                        value,
+                        ledger.party(row[0]) or row[1] or "écriture",
+                        row[2],
+                        f"/finance/entries/{u.id}",
                     )
             elif u.type == "account":
                 row = conn.execute(
