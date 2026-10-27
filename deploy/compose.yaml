@@ -42,7 +42,6 @@ services:
     <<: *hardening
     image: hub:${HUB_TAG:-dev}
     command: ["hub", "finance", "watch-inbox", "--poll", "30"]
-    profiles: [finance]                  # activé au lot 1, quand le domaine Finance existe
     environment: *hub-env
     volumes:
       - data:/srv/hub/data
@@ -66,7 +65,7 @@ services:
     secrets: [age_key]
     networks: [hub]
 
-  litestream:                            # réplication continue de core.db (et finance.db au lot 1)
+  litestream:                            # réplication continue de core.db et finance.db
     <<: *hardening
     image: litestream/litestream:0.5.2@sha256:e4fd484cb1cd9d6fa58fff7127d551118e150ab75b389cf868a053152ba6c9c0
     command: ["replicate", "-config", "/etc/litestream.yml"]

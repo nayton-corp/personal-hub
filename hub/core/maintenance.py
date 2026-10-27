@@ -56,8 +56,8 @@ class VerifyReport:
 
 
 def verify(hub: HubContext) -> VerifyReport:
-    """Intégrité SQLite de chaque base, puis santé de chaque domaine (le lot 1 y ajoute
-    `verify-ledger`)."""
+    """Intégrité SQLite de chaque base, puis contrôle profond de chaque domaine (verify-ledger
+    pour Finance)."""
     report = VerifyReport(ok=True)
     for name, (_engine, path) in databases(hub).items():
         if not path.exists():
@@ -71,8 +71,8 @@ def verify(hub: HubContext) -> VerifyReport:
         report.checks["core.schema"] = "not at head"
         report.ok = False
     for d in hub.registry:
-        health = d.health()
-        report.checks[f"{d.name}.health"] = "ok" if health.ok else "failed"
+        health = d.verify()
+        report.checks[f"{d.name}.verify"] = "ok" if health.ok else "failed"
         report.ok &= health.ok
     return report
 

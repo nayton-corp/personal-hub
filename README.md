@@ -5,7 +5,8 @@ Registre financier personnel, auto-hébergé. Le domaine Finance vient en premie
 spécification d'implémentation vivent dans le document « Personal Hub — plan de
 développement » ; ce dépôt en suit les tickets, lot par lot.
 
-État : **lot 0 (Socle)**. Aucun domaine n'est encore installé ; Finance arrive au lot 1.
+État : **lot 1 (Registre BCF)**. Le domaine Finance importe les relevés camt.053 dans un
+registre en ajout seul ; voir [docs/finance.md](docs/finance.md).
 
 ## Règles qui ne se discutent pas
 
@@ -23,11 +24,11 @@ hub/core/           cœur : réglages, Money, journaux filtrés, erreurs problem
                     jetons, passkeys, propositions, contrat de domaine, registre, tâches de fond
 hub/core/migrations Alembic de core.db (SQL explicite, pas de downgrade)
 hub/api/            application FastAPI et routes du cœur
-hub/domains/        domaines (Finance au lot 1), isolés par import-linter
+hub/domains/        domaines, isolés par import-linter ; finance/ : registre, camt.053, API
 hub/web/            coquille de l'app (PWA), servie par Caddy
 hub/cli.py          commande `hub`
 deploy/             compose, Caddy, Tailscale, Litestream, crontab, deploy.sh
-docs/               mise en route sur le Mac, kit de secours
+docs/               mise en route sur le Mac, domaine Finance, kit de secours
 tests/              pytest, Hypothesis ; domaine factice et authentificateur WebAuthn logiciel
 ```
 
@@ -53,7 +54,8 @@ Un changement voulu du contrat d'API se valide avec `make openapi`, puis relectu
 | `hub token create NOM -s brain` · `list` · `revoke ID` | jetons à portée, montrés une seule fois |
 | `hub auth bootstrap-code` | code à usage unique pour inscrire la première passkey |
 | `hub serve` | API, un seul worker |
-| `hub verify` | `integrity_check` de chaque base et santé des domaines |
+| `hub verify` | `integrity_check` de chaque base, puis `verify-ledger` |
+| `hub finance …` | comptes, catégories, imports, reprise d'historique ([docs/finance.md](docs/finance.md)) |
 | `hub backup [--restic]` · `hub restore STAMP` | copies `.backup` vérifiées, restic, restauration |
 | `hub nightly` · `hub reconcile` | expirations, purges, réconciliation des propositions |
 | `hub scheduler deploy/crontab` | tâches planifiées du conteneur `scheduler` |

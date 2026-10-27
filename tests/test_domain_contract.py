@@ -100,7 +100,7 @@ def test_registry_rules(settings: Settings, tmp_path: Path) -> None:
         reg.add(rogue)
     with pytest.raises(Problem):
         reg.get("ghost")
-    assert len(Registry.discover(settings)) == 0  # aucun domaine installé au lot 0
+    assert Registry.discover(settings).names() == ["finance"]  # point d'entrée hub.domains
 
 
 def test_reversible_kind_needs_inverse() -> None:

@@ -84,4 +84,4 @@ hubc logs -f api
 Les données vivent sur la machine de tous les jours. Une session macOS compromise peut piloter
 Docker, donc lire les bases ; les conteneurs protègent le hub contre ses propres composants,
 pas contre ta session. D'ici la migration vers le Pi : FileVault actif, aucune donnée réelle
-avant L1-11, prototype claude.ai supprimé au lot 4.
+avant L1-11 ([docs/finance.md](finance.md)), prototype claude.ai supprimé au lot 4.

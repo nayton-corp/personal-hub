@@ -53,3 +53,17 @@ def section(file: Path, key_file: Path, name: str) -> dict[str, Any]:
 def encrypt_for(recipient: str, plain: bytes) -> bytes:
     """Utilisé par les tests et par `hub secrets encrypt` ; la clé publique suffit."""
     return bytes(pyrage.encrypt(plain, [pyrage.x25519.Recipient.from_str(recipient)]))
+
+
+def recipient(key_file: Path) -> str:
+    """Clé publique de l'identité de la machine (chiffrer vers soi-même, ex. l'archive)."""
+    return str(_identity(key_file).to_public())
+
+
+def decrypt_with(key_file: Path, data: bytes) -> bytes:
+    try:
+        return bytes(pyrage.decrypt(data, [_identity(key_file)]))
+    except SecretsError:
+        raise
+    except Exception as exc:
+        raise SecretsError("déchiffrement impossible") from exc
