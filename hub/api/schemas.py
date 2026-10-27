@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -33,6 +33,9 @@ class ProposalCreateIn(BaseModel):
     params: dict[str, Any]
     reason: str | None = Field(default=None, max_length=500)
     bundle_id: str | None = Field(default=None, max_length=40)
+    # un modèle déclare false quand la proposition ne vient pas d'un texte externe ; sinon
+    # elle reste au palier human quelle que soit la politique
+    external_text: bool | None = None
 
 
 class PreviewOut(BaseModel):
@@ -134,3 +137,49 @@ class PasskeyOut(BaseModel):
 
 class PasskeysOut(BaseModel):
     items: list[PasskeyOut]
+
+
+class ApprovalChallengeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    proposal_ids: list[str] = Field(min_length=1, max_length=50)
+    action: Literal["accept", "revert"] = "accept"
+
+
+class ApprovalChallengeOut(BaseModel):
+    challenge_id: str
+    options: dict[str, Any]
+    approval_digest: str
+
+
+class AcceptIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    proposal_ids: list[str] = Field(min_length=1, max_length=50)
+    challenge_id: str = Field(max_length=40)
+    assertion: dict[str, Any]
+
+
+class AcceptResultOut(BaseModel):
+    id: str
+    status: str
+    result: dict[str, Any] | None = None
+    problem: dict[str, Any] | None = None
+
+
+class AcceptOut(BaseModel):
+    results: list[AcceptResultOut]
+
+
+class RevertIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    challenge_id: str = Field(max_length=40)
+    assertion: dict[str, Any]
+
+
+class DigestItemOut(ProposalOut):
+    reversible: bool
+    reverted_by: str | None
+
+
+class DigestOut(BaseModel):
+    day: str
+    items: list[DigestItemOut]

@@ -67,7 +67,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # textes en français : apostrophes et 
 "hub/core/migrations/**" = ["E501"]
 "hub/domains/*/migrations/**" = ["E501"]
 # SQL assemblé à partir de noms de tables et de marques :n internes ; les valeurs restent liées
-"hub/domains/finance/{ledger,reads,importer,domain,insights}.py" = ["S608"]
+"hub/domains/finance/{ledger,reads,importer,domain,insights,handlers}.py" = ["S608"]
 
 [tool.mypy]
 strict = true

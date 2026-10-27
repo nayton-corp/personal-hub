@@ -10,7 +10,7 @@ let started = false;
 
 function showAuth(name) {
   for (const v of AUTH_VIEWS) $(`view-${v}`).hidden = v !== name;
-  for (const s of document.querySelectorAll("[data-tab]")) s.hidden = true;
+  for (const s of document.querySelectorAll("section[data-tab]")) s.hidden = true;
   $("tabbar").hidden = true;
   $("top-icons").hidden = true;
   $("pg-title").textContent = "Personal Hub";

@@ -1,6 +1,6 @@
 # Domaine Finance : registre BCF
 
-Ce que fait le lot 1, et comment reprendre ton historique BCF sur le Mac (ticket L1-11).
+Ce que font les lots 1 à 3, et comment reprendre ton historique BCF et tes règles sur le Mac.
 Toutes les commandes passent par le conteneur `importer`, le seul qui voit la boîte d'entrée :
 
 ```
@@ -41,9 +41,9 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
 
 - **Mois.** Le mois affiché est toujours un paramètre ; l'app part du mois civil à Zurich.
   `period=q` couvre les trois mois complets avant le mois choisi. Un mois futur est refusé.
-- **Sans catégorie.** Tant que les règles du lot 3 n'existent pas, une écriture sans
-  catégorie compte en dépense variable si elle est négative, en revenu sinon, sous le nom
-  « À catégoriser ».
+- **Sans catégorie.** Les règles (lot 3) catégorisent à l'import ; ce qui reste sans
+  catégorie compte en dépense variable si c'est négatif, en revenu sinon, sous le nom
+  « À catégoriser », jusqu'à ce que tu le catégorises.
 - **Portée aggregates.** Une catégorie de moins de 3 écritures sur la période rejoint
   « Autres » (flux, budget, résumé).
 - **Instantanés.** Une ligne par fin de mois depuis la première écriture, plus une pour
@@ -84,12 +84,54 @@ La reprise n'est possible qu'une fois par compte : dès qu'un compte a des écri
 plus ancien est refusé (`before_opening`). Revenir plus loin demanderait une reconstruction
 (lot 4).
 
+## Catégories et Double Sas (lot 3)
+
+**Règles.** Chaque écriture importée reçoit la catégorie de la règle active qui la reconnaît,
+la plus prioritaire d'abord (priorité la plus basse, puis identifiant). Une règle ne touche
+jamais une écriture que tu as catégorisée toi-même. Les règles de `bcf_aggregate.py` sont
+déjà en base (préfixe `seed-`) ; reprends en plus ton fichier de règles, une fois :
+
+```
+mkdir -p ~/PersonalHub/inbox/rules
+cp ~/Downloads/viac_out/bcf_rules.json ~/PersonalHub/inbox/rules/
+fin rules import-legacy /srv/hub/inbox/rules/bcf_rules.json
+rm -r ~/PersonalHub/inbox/rules
+```
+
+La sortie ne donne que des compteurs (règles ajoutées, gardées, désactivées, catégories
+créées, écritures catégorisées). Une règle `seed-` ou `legacy-` absente du fichier est
+désactivée ; tes IBAN propres sont ignorés (les virements internes ont leurs règles
+système). `fin rules list [--all]` montre les règles, `fin rules run` les rejoue.
+
+**Double Sas.** Rien ne change au registre sans une proposition validée. L'app montre
+« À valider » sur l'Accueil : coche, puis un seul Face ID valide tout le lot. Le défi signé
+porte la révision et l'empreinte de chaque proposition ; si un import change ce qu'une
+proposition toucherait entre l'aperçu et la validation, elle revient avec une nouvelle
+révision (409) et rien n'est appliqué. Dans le Journal, le filtre « À catégoriser » groupe
+les écritures par contrepartie : « Ces N écritures » les recatégorise, « Toujours » crée une
+règle qui sert aussi aux prochains imports.
+
+| Proposition | Effet | Inverse |
+|---|---|---|
+| `recategorize` | catégorie d'une écriture (ou ventilation en lignes) | oui |
+| `create_rule` · `disable_rule` | règle, appliquée tout de suite à ce qu'elle peut toucher | — |
+| `set_budget` | cible mensuelle d'une catégorie de dépense, dès le 1er du mois | oui |
+| `add_note` | note sur une écriture | — |
+| `apply_import` | applique un relevé en attente dont les motifs se forcent | — |
+| `create_account` · `create_category` | comptes et catégories (le CLI passe par là) | — |
+
+Un relevé en attente pour un motif qui se force (`ledger_check_failed`, `near_duplicate`…)
+devient une carte `apply_import` à valider ; il est rejoué avant d'appliquer. Depuis le Mac,
+`hubc run --rm --no-deps importer hub proposals list|show|accept|reject` fait la même chose
+sans Face ID (le terminal du Mac vaut validation).
+
 ## Autres commandes
 
 | Commande | Rôle |
 |---|---|
-| `fin accounts add|list|open` | comptes ; `open` crée un solde d'ouverture à la main |
-| `fin categories add|list` | catégories (17 fournies, dont `transfer-own`) |
+| `fin accounts add|list|open` | comptes (`add` passe par une proposition `create_account`) ; `open` crée un solde d'ouverture à la main |
+| `fin categories add|list` | catégories, créées par une proposition `create_category` |
+| `fin rules list [--all]` · `fin rules run` · `fin rules import-legacy FICHIER` | règles de catégorisation |
 | `fin imports list [--status …]` · `fin imports retry [ID…]` | suivi et rejeu des imports |
 | `fin watch-inbox --once` | un passage de la boîte d'entrée |
 | `fin verify-ledger` | chaîne et empreintes, code 1 au moindre écart |

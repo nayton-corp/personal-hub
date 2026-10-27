@@ -78,6 +78,14 @@
         <button class="link mt" id="go-budget" type="button">Voir le budget</button>
       </div>
 
+      <div class="card" id="c-props" hidden>
+        <h2>À valider</h2>
+        <p class="note">Rien ne change au registre sans ton Face ID. Coche pour n'en valider qu'une partie.</p>
+        <div id="prop-list"></div>
+        <button class="btn" id="prop-accept" type="button" hidden>Valider avec Face ID</button>
+        <p class="message" id="prop-msg" role="status"></p>
+      </div>
+
       <div class="card" id="c-todo">
         <h2>À traiter</h2>
         <p class="note">Ce qui attend une action de ta part.</p>
@@ -143,6 +151,12 @@
       <div>
         <input class="search" id="tx-search" type="search" placeholder="Rechercher (3 lettres au moins)" aria-label="Rechercher une écriture">
         <div class="chips" id="tx-chips"><button type="button" data-v="all" aria-pressed="true">Toutes</button><button type="button" data-v="todo">À catégoriser<b id="todo-count"></b></button></div>
+      </div>
+      <div class="card" id="c-review" hidden>
+        <h2>À catégoriser</h2>
+        <p class="note">Par contrepartie. « Toujours » crée une règle qui servira aussi aux prochains imports.</p>
+        <div id="review-list"></div>
+        <p class="message" id="review-msg" role="status"></p>
       </div>
       <div class="card">
         <div id="tx-list"></div>

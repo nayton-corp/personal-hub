@@ -9,7 +9,12 @@ from sqlalchemy import text
 
 import hub
 from hub.api.schemas import (
+    AcceptIn,
+    AcceptOut,
+    ApprovalChallengeIn,
+    ApprovalChallengeOut,
     CoreHealthOut,
+    DigestOut,
     DomainHealthOut,
     HealthOut,
     HitOut,
@@ -19,10 +24,12 @@ from hub.api.schemas import (
     ProposalListOut,
     ProposalOut,
     RefOut,
+    RevertIn,
     SearchOut,
 )
-from hub.core import proposals
+from hub.core import passkeys, proposals
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal, require
+from hub.core.clock import utcnow
 from hub.core.errors import Problem
 from hub.core.ids import Urn
 
@@ -79,6 +86,7 @@ def list_proposals(
     status: Annotated[str | None, Query(pattern="^[a-z_]+$")] = "pending",
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
 ) -> ProposalListOut:
+    proposals.sync_events(hub_ctx)  # cartes demandées par les domaines (imports en attente…)
     with hub_ctx.core.engine.connect() as conn:
         items = proposals.list_by_status(conn, status, limit)
     visible = [
@@ -112,6 +120,7 @@ def create_proposal(
         reason=body.reason,
         bundle_id=body.bundle_id,
         create_key=idempotency_key,
+        external_text=body.external_text,
     )
     if not created:
         response.status_code = 200
@@ -130,6 +139,65 @@ def get_proposal(proposal_id: str, hub_ctx: Ctx, principal: Reader) -> ProposalO
 @router.post("/proposals/{proposal_id}/reject", response_model=ProposalOut, tags=["propositions"])
 def reject_proposal(proposal_id: str, hub_ctx: Ctx, principal: AppSession) -> ProposalOut:
     return ProposalOut.model_validate(proposals.reject(hub_ctx, principal, proposal_id).public())
+
+
+@router.post("/approvals/challenge", response_model=ApprovalChallengeOut, tags=["propositions"])
+def approval_challenge(
+    body: ApprovalChallengeIn, hub_ctx: Ctx, _principal: AppSession
+) -> ApprovalChallengeOut:
+    """Défi WebAuthn qui contient `approval_digest` : un seul Face ID pour tout le lot."""
+    items = proposals.load_many(hub_ctx, body.proposal_ids)
+    digest = proposals.approval_digest(items, body.action)
+    with hub_ctx.core.engine.begin() as conn:
+        out = passkeys.approval_options(conn, hub_ctx.settings, digest)
+    return ApprovalChallengeOut(**out, approval_digest=digest)
+
+
+@router.post("/proposals/accept", response_model=AcceptOut, tags=["propositions"])
+def accept_proposals(body: AcceptIn, hub_ctx: Ctx, principal: AppSession) -> AcceptOut:
+    """Valide un lot signé ; chaque proposition s'applique seule, avec son propre statut. Une
+    signature qui porte sur une autre révision ou une autre empreinte est refusée."""
+    items = proposals.load_many(hub_ctx, body.proposal_ids)
+    with hub_ctx.core.engine.begin() as conn:
+        signature = passkeys.verify_approval(
+            conn,
+            hub_ctx.settings,
+            body.challenge_id,
+            body.assertion,
+            proposals.approval_digest(items),
+        )
+    results = proposals.accept(hub_ctx, principal, items, signature)
+    return AcceptOut.model_validate({"results": [r.public() for r in results]})
+
+
+@router.post("/proposals/{proposal_id}/revert", response_model=AcceptOut, tags=["propositions"])
+def revert_proposal(
+    proposal_id: str, body: RevertIn, hub_ctx: Ctx, principal: AppSession
+) -> AcceptOut:
+    """Crée et applique l'inverse d'une proposition réversible (un Face ID)."""
+    (p,) = proposals.load_many(hub_ctx, [proposal_id])
+    proposals.inverse_of(hub_ctx, p)  # refuse avant de consommer le défi
+    with hub_ctx.core.engine.begin() as conn:
+        signature = passkeys.verify_approval(
+            conn,
+            hub_ctx.settings,
+            body.challenge_id,
+            body.assertion,
+            proposals.approval_digest([p], "revert"),
+        )
+    outcome = proposals.revert(hub_ctx, principal, p, signature)
+    return AcceptOut.model_validate({"results": [outcome.public()]})
+
+
+@router.get("/digest", response_model=DigestOut, tags=["propositions"])
+def day_digest(
+    hub_ctx: Ctx,
+    _principal: AppSession,
+    day: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
+) -> DigestOut:
+    """Effets appliqués au palier auto_digest, avec leur inverse d'un geste."""
+    value = day or utcnow().date().isoformat()
+    return DigestOut.model_validate({"day": value, "items": proposals.digest(hub_ctx, value)})
 
 
 @router.get("/search", response_model=SearchOut, tags=["cœur"])

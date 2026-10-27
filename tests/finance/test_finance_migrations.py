@@ -60,7 +60,14 @@ def test_seed_data(finance: FinanceDomain) -> None:
         assert conn.execute(
             text("SELECT grp FROM categories WHERE id='transfer-own'")
         ).scalar() == ("transfer")
-        assert conn.execute(text("SELECT version FROM rules_meta")).scalar() == 1
+        # 0004_rules : règles de départ de bcf_aggregate.py, version des règles + 1
+        assert conn.execute(text("SELECT version FROM rules_meta")).scalar() == 2
+        seeds = conn.execute(text("SELECT count(*) FROM rules WHERE id LIKE 'seed-%'")).scalar()
+        assert seeds is not None
+        assert seeds > 250
+        assert conn.execute(text("SELECT name FROM categories WHERE id='voyages'")).scalar() == (
+            "Vacances"
+        )
 
 
 def seed_every_table(finance: FinanceDomain) -> None:

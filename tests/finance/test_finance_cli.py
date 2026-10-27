@@ -13,6 +13,7 @@ import typer
 from typer.testing import CliRunner
 
 from hub import cli as hub_cli
+from hub.core.coredb import CoreDB
 from hub.core.settings import get_settings
 from hub.domains.finance.domain import FinanceDomain
 from tests.factories.camt import IBAN, camt053
@@ -24,6 +25,9 @@ runner = CliRunner()
 
 @pytest.fixture
 def app(finance: FinanceDomain) -> typer.Typer:
+    core = CoreDB.from_settings(finance.settings)  # les propositions vivent dans core.db
+    core.migrate()
+    core.dispose()
     sub = finance.cli()
     assert sub is not None
     return sub
@@ -73,10 +77,14 @@ def test_watch_inbox_once_and_imports(app: typer.Typer, finance: FinanceDomain) 
     assert code == 0
     assert json.loads(out)["needs_review"] == 1  # compte inconnu
     assert "needs_review" in run(app, "imports", "list")[1]
-    # ajouter le compte rejoue l'import ; il manque encore l'ouverture
+    # ajouter le compte (proposition create_account) rejoue l'import ; il manque l'ouverture
     code, out = run(app, "accounts", "add", "Privé", "--iban", IBAN)
-    assert json.loads(out.splitlines()[1]) == {"retried": 1, "applied": 0}
-    account_id = json.loads(out.splitlines()[0])["id"]
+    assert code == 0
+    created = json.loads(out)
+    assert created["proposal"]
+    account_id = created["id"]
+    assert "unknown_account" not in run(app, "imports", "list")[1]
+    assert "no_opening" in run(app, "imports", "list")[1]
     run(app, "accounts", "open", account_id, "--on", "2026-09-30", "--amount", "1000")
     code, out = run(app, "imports", "retry")
     assert json.loads(out) == {"retried": 1, "applied": 1, "still_needs_review": 0}

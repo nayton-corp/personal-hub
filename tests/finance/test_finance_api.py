@@ -21,7 +21,13 @@ from hub.domains.finance import ledger
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
 from tests.factories.camt import OTHER_IBAN, Stmt, Tx, camt053
-from tests.finance.conftest import D, finance_settings, ready_account, simple_stmt
+from tests.finance.conftest import (
+    D,
+    finance_settings,
+    ready_account,
+    simple_stmt,
+    without_seed_rules,
+)
 
 
 @pytest.fixture
@@ -37,6 +43,7 @@ def ctx(tmp_path: Path) -> Iterator[HubContext]:
 def fin(ctx: HubContext) -> FinanceDomain:
     domain = ctx.registry.get("finance")
     assert isinstance(domain, FinanceDomain)
+    without_seed_rules(domain)
     return domain
 
 
@@ -180,11 +187,14 @@ def test_review_and_search(client: TestClient, ctx: HubContext, fin: FinanceDoma
     fin.importer.process([Incoming("a.xml", camt053(simple_stmt("1000.00")))])
     h = token(ctx, "brain")
     groups = client.get("/api/finance/review", headers=h).json()["groups"]
+    ids = groups[0].pop("entry_ids")
     assert groups[0] == {
         "counterparty": "jean exemple",
         "count": 2,
         "total": {"minor": -4000, "currency": "CHF", "display": "-40.00"},
+        "direction": "debit",
     }
+    assert len(ids) == 2  # de quoi proposer une recatégorisation par écriture
     hits = client.get("/api/finance/search?q=EMPLOYEUR", headers=h).json()["items"]
     assert [x["counterparty"] for x in hits] == ["Employeur Fictif SA"]
     assert client.get("/api/finance/search?q=%20%20a%20%20", headers=h).status_code == 422
@@ -221,7 +231,7 @@ def test_upload_and_import_detail(client: TestClient, ctx: HubContext, fin: Fina
 
 def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
     r = client.get("/api/health").json()
-    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 3, "ok": True}
+    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 4, "ok": True}
     events = loaded.events_since(0, 10)
     assert [e.type for e in events] == ["entries.appended", "import.applied"]
     assert loaded.applied([]) == {}

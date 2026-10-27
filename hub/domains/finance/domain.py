@@ -1,4 +1,5 @@
-"""Domaine Finance : registre BCF, import camt.053 (lot 1) et lectures de l'app (lot 2)."""
+"""Domaine Finance : registre BCF, import camt.053 (lot 1), lectures de l'app (lot 2),
+règles de catégorisation et propositions du Double Sas (lot 3)."""
 
 from __future__ import annotations
 
@@ -11,20 +12,22 @@ from zoneinfo import ZoneInfo
 
 import typer
 from fastapi import APIRouter
-from sqlalchemy import Engine, text
+from sqlalchemy import Connection, Engine, text
 
-from hub.core.clock import utcnow
-from hub.core.db import make_engine
+from hub.core import canonical
+from hub.core.clock import now_iso, utcnow
+from hub.core.db import begin_immediate, make_engine
 from hub.core.domain import Event, Health, Hit, McpTool, ProposalKind, Ref
 from hub.core.ids import Urn, urn
 from hub.core.logging import get_logger
 from hub.core.migrations import runner
 from hub.core.settings import Settings
-from hub.domains.finance import ledger, reads, snapshots
+from hub.domains.finance import importer, ledger, reads, snapshots
+from hub.domains.finance.handlers import build_kinds
 from hub.domains.finance.importer import Archiver, ImportService, recipient_from_key
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 3  # 0003_snapshots
+SCHEMA_VERSION = 4  # 0004_rules
 TZ = ZoneInfo("Europe/Zurich")  # le jour civil des chiffres de l'app
 log = get_logger("hub.finance")
 
@@ -33,8 +36,6 @@ class FinanceDomain:
     name = "finance"
     schema_version = SCHEMA_VERSION
     scopes = frozenset({"finance:read", "finance:propose", "finance:aggregates"})
-    # les types de proposition (Double Sas) arrivent au lot 3
-    proposal_kinds: Mapping[str, ProposalKind] = {}
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -52,6 +53,7 @@ class FinanceDomain:
         )
         cap = section.get("pillar3a_cap_minor")
         self.pillar3a_cap: int | None = int(cap) if cap is not None else None
+        self.proposal_kinds: Mapping[str, ProposalKind] = build_kinds(self)
 
     def engine(self) -> Engine:
         return self._engine
@@ -137,6 +139,32 @@ class FinanceDomain:
             ).fetchall()
         return {pid: json.loads(res) for pid, res in rows}
 
+    def record_applied(
+        self, conn: Connection, proposal_id: str, kind: str, result: dict[str, Any]
+    ) -> None:
+        ledger.append(
+            conn,
+            "applied_proposals",
+            {
+                "proposal_id": proposal_id,
+                "kind": kind,
+                "result_json": canonical.dumps(result),
+                "applied_at": now_iso(),
+            },
+        )
+        ledger.append_event(
+            conn, "proposal.applied", urn("core", "proposal", proposal_id), {"kind": kind}
+        )
+
+    def request_reviews(self) -> int:
+        """Redemande une carte `apply_import` pour chaque import en attente : une carte expirée
+        est ainsi régénérée tant que l'import reste à valider (création idempotente)."""
+        with begin_immediate(self._engine) as conn:
+            ids = conn.execute(
+                text("SELECT id FROM imports WHERE status = 'needs_review' ORDER BY received_at")
+            ).scalars()
+            return sum(importer.request_review(conn, i) for i in list(ids))
+
     def verify_ledger(self) -> ledger.VerifyResult:
         with self._engine.connect() as conn:
             return ledger.verify(conn)
@@ -151,6 +179,7 @@ class FinanceDomain:
     def nightly(self) -> None:
         refreshed = self.refresh_snapshots(force=True)
         log.info("snapshots.nightly", rows=refreshed.rows)
+        log.info("imports.review_requested", count=self.request_reviews())
         result = self.verify_ledger()
         if result.ok:
             log.info("ledger.verified", links=result.links)

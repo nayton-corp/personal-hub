@@ -5,6 +5,7 @@ import * as charts from "./charts.js";
 import {
   chf, chf2, date, dayName, daysSince, el, initials, monthName, pct, ratio, signed, spct, units,
 } from "./format.js";
+import { pendingCard, pendingPath, reviewCard } from "./proposals.js";
 import { api, shiftMonth, store } from "./store.js";
 
 const $ = (id) => document.getElementById(id);
@@ -172,17 +173,22 @@ function home() {
     text("k-budget-sub", k.budget ? `budget ${chf(units(k.budget))}` : "");
     text("k-days", k.days_left ? `${k.days_left} jours restants` : "");
     const used = ratio(k.budget_used);
-    text("k-used", used == null ? "Pas encore de budget : les cibles arrivent avec le lot 3." : `${pct(used)} du budget consommé`);
+    text("k-used", used == null ? "Pas encore de budget : fixe des cibles par catégorie pour suivre le reste à vivre." : `${pct(used)} du budget consommé`);
     setBar("bar-budget", used);
   }
+
+  pendingCard();
 
   // à traiter
   const todo = $("todo-list");
   todo.replaceChildren();
   if (!k) return;
   const items = [];
+  const pending = store.data(pendingPath);
+  const n = pending ? pending.items.length : 0;
+  if (n > 0) items.push([`${n} proposition${n > 1 ? "s" : ""} à valider`, "un seul Face ID pour tout le lot", "accueil", String(n)]);
   if (k.stale_accounts > 0) items.push([`${k.stale_accounts} compte${k.stale_accounts > 1 ? "s" : ""} à rafraîchir`, `dernier relevé de plus de ${STALE_DAYS} jours`, "sources", "!"]);
-  if (k.to_categorize > 0) items.push([`${k.to_categorize} écriture${k.to_categorize > 1 ? "s" : ""} à catégoriser`, "la validation en un tap arrive au lot 3", "journal", String(k.to_categorize)]);
+  if (k.to_categorize > 0) items.push([`${k.to_categorize} écriture${k.to_categorize > 1 ? "s" : ""} à catégoriser`, "par contrepartie, en un Face ID", "journal", String(k.to_categorize)]);
   const p3 = k.pillar3a;
   if (p3 && p3.margin.minor > 0) items.push([`Marge 3a ${p3.year} : ${chf(units(p3.margin))} CHF`, `versé ${chf(units(p3.paid))} sur ${chf(units(p3.cap))}`, "patrimoine", "3a"]);
   if (!items.length) todo.append(el("div", "empty", "Rien à traiter."));
@@ -190,7 +196,10 @@ function home() {
     const r = row(ini, title, sub, "", null, "", tab !== "patrimoine");
     r.classList.add("go");
     r.querySelector(".v").replaceChildren(el("span", "muted", "›"));
-    r.addEventListener("click", () => store.set(tab === "journal" ? { tab, tx: "todo" } : { tab }));
+    r.addEventListener("click", () => {
+      if (tab === "accueil") $("c-props").scrollIntoView({ behavior: "smooth" });
+      else store.set(tab === "journal" ? { tab, tx: "todo" } : { tab });
+    });
     todo.append(r);
   }
 }
@@ -270,7 +279,7 @@ function budget() {
     text("bud-lbl", P.period === "m" ? `Reste à vivre${b.days_left ? ` · ${b.days_left} jours` : ""}` : "Reste sur 3 mois de budget");
     text("bud-val", rest == null ? chf(spent) : chf(rest));
     $("bud-val").className = `hero amt${rest != null && rest < 0 ? " down" : ""}`;
-    text("bud-sub", goal == null ? `${chf(spent)} dépensés · aucun budget défini (lot 3)` : `${chf(spent)} dépensés sur ${chf(goal)} de budget · ${pct(spent / goal)}`);
+    text("bud-sub", goal == null ? `${chf(spent)} dépensés · aucun budget défini` : `${chf(spent)} dépensés sur ${chf(goal)} de budget · ${pct(spent / goal)}`);
     setBar("bar-bud", goal ? spent / goal : null);
   } else {
     text("bud-val", "—");
@@ -373,6 +382,7 @@ function journal() {
   }
   const k = store.data(path.kpis());
   text("todo-count", k && k.to_categorize ? String(k.to_categorize) : "");
+  reviewCard(path.categories());
   const cats = store.data(path.categories());
   const names = Object.fromEntries((cats ? cats.items : []).map((c) => [c.id, c.name]));
   const acc = store.data(path.accounts());
@@ -490,6 +500,10 @@ export function start() {
     if (document.visibilityState === "visible") store.invalidate();
   });
   window.addEventListener("resize", () => store.notify());
+  // une validation a changé le registre : le journal se relit
+  window.addEventListener("hub:changed", () => {
+    tx.key = null;
+  });
   store.on(draw);
   draw();
 }

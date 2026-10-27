@@ -165,6 +165,14 @@ class DemoDomain:
             ).fetchall()
         return {pid: json.loads(res) for pid, res in rows}
 
+    def record_applied(
+        self, conn: Connection, proposal_id: str, kind: str, result: dict[str, Any]
+    ) -> None:
+        conn.execute(
+            text("INSERT INTO applied_proposals VALUES (:p, :k, :r, :at)"),
+            {"p": proposal_id, "k": kind, "r": canonical.dumps(result), "at": now_iso()},
+        )
+
     def mark_applied(self, proposal_id: str, result: dict[str, Any]) -> None:
         with self._engine.begin() as conn:
             conn.execute(
