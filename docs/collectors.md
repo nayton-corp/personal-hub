@@ -92,8 +92,10 @@ Les commandes supposent l'alias `hubc` de [mac.md](mac.md) et partent du clone d
 6. **Laisser tourner** : décommente `COMPOSE_PROFILES=collectors` dans `deploy/.env`, puis
    `hubc up -d`. À partir de là, `make deploy` met aussi les collecteurs à jour.
 
-**VIAC : reconnexion.** La session VIAC finit par expirer ; le collecteur passe alors en
-`auth_error` et tu reçois une alerte. Arrête-le, reconnecte-le, relance-le :
+**VIAC : reconnexion.** VIAC ne garde la session que le temps du navigateur : chaque passage se
+reconnecte avec l'e-mail et le mot de passe des secrets. Sans 2FA sur le compte, il n'y a rien
+d'autre à faire. Si VIAC demande un code, le passage s'arrête en `auth_error`
+(`login.otp_required`) et tu reçois une alerte. Arrête le collecteur, reconnecte-le, relance-le :
 ```
 hubc stop collector-viac
 hubc run --rm -it collector-viac hub-collector relogin viac
