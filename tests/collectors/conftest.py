@@ -76,6 +76,8 @@ def make_env(tmp_path: Path, site: str, fake_hub: FakeHub):  # type: ignore[no-u
             "bcf": {"contract": "123456", "password": "secret-test"},
             "viac": {"email": "test@example.invalid", "password": "secret-test"},
             "revolut": {"application_id": "app-test", "private_key": "x"},
+            "ibkr": {"flex_token": "jeton-test", "query_id": "123456"},
+            "market": {},
         }[name]
         return Env(
             name,

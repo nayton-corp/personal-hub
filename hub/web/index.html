@@ -96,7 +96,7 @@
     <!-- ================= PATRIMOINE ================= -->
     <section id="patrimoine" class="stack" data-tab hidden>
       <div class="chips" id="env-chips">
-        <button type="button" data-v="all" aria-pressed="true">Tout</button><button type="button" data-v="cash">Cash</button><button type="button" data-v="pilier3a">3e pilier</button><button type="button" data-v="ibkr">IBKR</button><button type="button" data-v="crypto">Crypto</button>
+        <button type="button" data-v="all" aria-pressed="true">Tout</button><button type="button" data-v="cash">Cash</button><button type="button" data-v="pilier3a">3e pilier</button><button type="button" data-v="titres">Titres</button><button type="button" data-v="crypto">Crypto</button>
       </div>
       <div class="card">
         <span class="lbl" id="pat-lbl">Patrimoine net</span>
@@ -119,6 +119,12 @@
         <div class="head"><h2>Positions</h2><span class="note" id="positions-note">—</span></div>
         <div id="pos-list"></div>
         <p class="note mt warn" id="pos-missing" hidden></p>
+      </div>
+      <div class="card" id="c-look" hidden>
+        <div class="head"><h2>Transparence</h2><span class="note" id="look-note">—</span></div>
+        <div class="seg sm" id="look-seg"><button type="button" data-v="region" aria-pressed="true">Régions</button><button type="button" data-v="sector">Secteurs</button><button type="button" data-v="currency">Devises</button><button type="button" data-v="holding">Top 10</button></div>
+        <div class="hbars mt" id="look-bars"></div>
+        <p class="note mt" id="look-foot"></p>
       </div>
       <div class="card">
         <div class="head"><h2>Comptes</h2><span class="note" id="comptes-note">—</span></div>
@@ -143,6 +149,11 @@
       <div class="card">
         <div class="head"><h2>Catégories</h2><span class="note" id="cat-note">—</span></div>
         <div id="cat-list"></div>
+      </div>
+      <div class="card" id="c-subs" hidden>
+        <div class="head"><h2>Abonnements</h2><span class="note" id="subs-note">—</span></div>
+        <div id="subs-list"></div>
+        <p class="note mt">Paiements réguliers repérés dans le registre (même montant, même rythme). Les prochaines échéances sont estimées.</p>
       </div>
       <div class="card">
         <div class="head"><h2>Tendance</h2><span class="note">6 mois</span></div>

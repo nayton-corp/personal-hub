@@ -38,7 +38,7 @@ export function shiftMonth(month, delta) {
   return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`;
 }
 
-const DEFAULTS = { tab: "accueil", range: "12", mode: "chf", env: "all", period: "m", tx: "all", q: "" };
+const DEFAULTS = { tab: "accueil", range: "12", mode: "chf", env: "all", period: "m", tx: "all", q: "", look: "region" };
 
 function remembered() {
   try {

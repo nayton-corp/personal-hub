@@ -188,7 +188,8 @@ leurs identifiants, catégories, règles dans leur état final, cours de change)
 puis chaque import relu depuis son archive chiffrée et chaque proposition validée, dans
 l'ordre où ils sont arrivés. Il compare ensuite les deux bases (`fin compare <base>` fait la
 comparaison seule) : soldes, écritures, catégories, totaux mensuels, notes, étiquettes,
-budgets, points de contrôle, imports, opérations, positions et cours ; code 1 au moindre écart,
+budgets, points de contrôle, imports, opérations, positions, cours, change, compositions,
+virements appariés et abonnements ; code 1 au moindre écart,
 avec des compteurs et des identifiants opaques seulement. Un écart attendu : une catégorie posée
 par une règle depuis désactivée. La base reconstruite ouvre une nouvelle époque du journal ;
 la mettre en service se fait hub arrêté (remplacer `finance.db`, puis `fin verify-ledger`).
@@ -203,6 +204,80 @@ comptes sans montant, `fin revolut add-account <ref> --name …` les ouvre et re
 Seul le solde comptabilisé (`CLBD`, `ITBD`) devient un point de contrôle ; les écritures en
 attente sont ignorées jusqu'à leur comptabilisation. Les doublons entre synchros et entre CSV
 et Enable Banking sont traités comme pour la BCF. Mise en place : [collectors.md](collectors.md).
+
+## Patrimoine complet (lot 6)
+
+**Enveloppes.** Le patrimoine net se lit en quatre enveloppes : `cash`, `pilier3a`, `titres`
+(l'ancienne enveloppe « IBKR » : tous les comptes de titres, IBKR, Revolut, autres) et
+`crypto`. Tout est valorisé en CHF : un compte en devise est converti au dernier cours de
+change connu à la date (BCE par le collecteur « market », ou cours IBKR), une position vaut ses
+parts fois son dernier cours, converti de la devise du cours. `kpis` et
+`networth/history` signalent les cours qui manquent au lieu d'inventer une valeur.
+
+**IBKR (Flex Query).** Un compte IBKR devient un compte `ibkr:<n°>:titres` (les positions) et
+un compte de liquidités par devise (`ibkr:<n°>:CHF`, `ibkr:<n°>:USD`…), créés au premier relevé
+qui les cite et ouverts la veille de ce relevé à son solde de départ. Ce qui est écrit :
+
+| Ligne du relevé | Écriture |
+|---|---|
+| Versement, retrait | `IBKR/DEPOSIT`, catégorie `transfer-own` (un apport) |
+| Achat, vente d'un titre | liquidités dans la devise du titre, titres en CHF (cours du jour d'IBKR), l'opération et son cours ; `transfer-titres` |
+| Change | deux écritures `IBKR/FX` (une par devise), `transfer-own` |
+| Commission | `IBKR/FEE/COMMISSION`, `frais-placement` |
+| Dividende, retenue, intérêts | `IBKR/INCOME/…`, `rendement` |
+| Positions ouvertes, cours de change | positions et cours du jour du relevé |
+| Solde de fin par devise | point de contrôle `CLBD` ; un écart est signalé (`ledger_check_failed`) sans bloquer |
+
+Les relevés quotidiens se chevauchent sans doublon (clé : `transactionID` d'IBKR). Mise en
+place :
+
+1. `fin ibkr add-account U1234567 --name "IBKR"` (le n° est en haut du relevé) ;
+2. reprise de l'historique : dans le Client Portal, une Flex Query « Activity » (voir
+   [collectors.md](collectors.md)) lancée par périodes d'un an au plus, au format XML, dans
+   `~/PersonalHub/inbox/ibkr-history/`, puis `fin ibkr import-history /srv/hub/inbox/ibkr-history`.
+   Comme pour VIAC, tout est lu avant d'écrire, et le plus ancien relevé ouvre les comptes.
+
+**Cryptos.** Un portefeuille se déclare avec `fin crypto add-wallet ledger-btc --label "Ledger"`
+(compte `crypto:ledger-btc`) ; le collecteur « market » relève chaque jour le solde de ses
+adresses publiques et le cours (CoinGecko, en CHF). Une crypto détenue chez Revolut ou sur une
+plateforme passe par le CSV de positions ci-dessous.
+
+**Positions saisies à la main (titres et cryptos Revolut, autres).** Les placements Revolut ne
+passent pas par PSD2. Déclare le compte une fois :
+`fin positions add-account revolut:invest --name "Revolut actions" --institution Revolut`
+(`--kind crypto` pour les cryptos), puis dépose quand tu veux un CSV comme :
+```
+date,account,instrument,name,kind,quantity,price,currency
+2026-10-27,revolut:invest,US0378331005,Apple,stock,3,230.10,USD
+2026-10-27,revolut:crypto,BTC,,crypto,0.01,,
+```
+Chaque couple (compte, date) est un relevé complet des positions ; le cours est facultatif
+(sinon le dernier cours connu). Le registre ne voit pas d'écriture : l'argent envoyé vers ce
+compte compte comme un versement s'il est catégorisé `transfer-titres`.
+
+**Transparence des fonds.** `GET /api/finance/lookthrough?dimension=region|sector|currency|holding`
+ventile les positions selon ce que les fonds détiennent. Deux fichiers sont reconnus : la liste
+des lignes publiée par l'émetteur (iShares, Vanguard… : le fichier doit avoir l'ISIN du fonds
+dans son nom, par ex. `IE00B3RBWM25_holdings.csv`), ou un CSV générique
+`isin,dimension,bucket,weight_pct,on_date`. Sans composition, un fonds est classé d'après
+lui-même (catégorie VIAC, crypto), sinon « Non ventilé ».
+
+**Virements appariés.** Un débit et un crédit de mes comptes à 5 jours au plus s'apparient, par
+ordre de confiance : IBAN de contrepartie, référence commune, puis montant seul quand il est
+unique dans la fenêtre. Le côté sans catégorie d'une paire compte comme `transfer-own` dans le
+budget ; un virement entre mes comptes sans autre côté apparaît dans « À traiter ». Route :
+`GET /api/finance/transfers` (compteurs seuls pour la portée `aggregates`).
+
+**Abonnements.** Les paiements au même commerçant, au même rythme (semaine, mois, trimestre,
+année) et à montant proche deviennent des abonnements, avec leur prochaine échéance et le total
+mensuel (`GET /api/finance/recurring`, carte « Abonnements » du Budget). La portée
+`aggregates` ne voit que des totaux par catégorie, et rien sous trois abonnements.
+`fin derived` recalcule virements et abonnements (c'est fait aussi après chaque import).
+
+**Raiffeisen.** L'export camt.053 de Raiffeisen (e-banking → Paiements → Relevés de compte,
+format ISO 20022) se lit comme celui de la BCF : déclare le compte avec son IBAN,
+`fin accounts add "Raiffeisen épargne" --iban CH… --institution Raiffeisen`, puis dépose le
+fichier dans la boîte d'entrée.
 
 ## Autres commandes
 

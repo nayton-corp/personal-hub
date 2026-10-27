@@ -75,10 +75,18 @@ Flow = Callable[[Env, Kind], Result]
 
 def flows() -> dict[str, Flow]:
     from hub.collectors.bcf import flow as bcf
+    from hub.collectors.ibkr import flow as ibkr
+    from hub.collectors.market import flow as market
     from hub.collectors.revolut import flow as revolut
     from hub.collectors.viac import flow as viac
 
-    return {"bcf": bcf.run, "viac": viac.run, "revolut": revolut.run}
+    return {
+        "bcf": bcf.run,
+        "viac": viac.run,
+        "revolut": revolut.run,
+        "ibkr": ibkr.run,
+        "market": market.run,
+    }
 
 
 def execute(env: Env, kind: Kind, flow: Flow | None = None) -> Result:

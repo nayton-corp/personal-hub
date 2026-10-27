@@ -58,7 +58,8 @@ def test_parse_flex() -> None:
     )
     assert st.currencies == {"CHF", "USD"}
     assert [c.currency for c in st.cash] == ["CHF", "USD"]  # BASE_SUMMARY laissé de côté
-    assert st.positions is not None and st.positions[0].key == f.VT[0]
+    assert st.positions is not None
+    assert st.positions[0].key == f.VT[0]
     assert [t.category for t in st.trades] == ["CASH", "STK"]
     assert [c.code for c in st.cash_txs] == [
         "IBKR/DEPOSIT",
@@ -126,7 +127,8 @@ def test_import_creates_currency_accounts_and_values_in_chf(finance: FinanceDoma
     assert v.by_envelope["titres"] == 599_800 + 135_228 + 284_400
     assert v.net_worth == v.by_envelope["titres"]
     assert v.deposits == 1_000_000  # le versement seul : change, achats, frais, dividende exclus
-    assert v.missing_fx == [] and v.missing_prices == []
+    assert v.missing_fx == []
+    assert v.missing_prices == []
     with finance.engine().connect() as conn:
         assert (
             valuation.account_value(valuation.Positions(conn), titles.id, 0, "2026-03-31")[0]
@@ -203,7 +205,8 @@ def test_history_import(finance: FinanceDomain, tmp_path: Path) -> None:
     )
     (folder / "q4.xml").write_bytes(f.flex(first))
     refused = importer.import_ibkr_history(finance.importer, folder)
-    assert not refused.ok and "compte IBKR inconnu" in str(refused.error)
+    assert not refused.ok
+    assert "compte IBKR inconnu" in str(refused.error)
     add_ibkr(finance)
     report = importer.import_ibkr_history(finance.importer, folder)
     assert report.ok, report.public()

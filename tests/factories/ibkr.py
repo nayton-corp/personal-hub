@@ -34,36 +34,43 @@ class Flex:
     rates: list[tuple[str, str]] = field(default_factory=list)  # devise, cours vers CHF
 
     def statement(self) -> str:
+        acct, to = self.account, d8(self.to_date)
+        head = _attrs(
+            accountId=acct,
+            fromDate=d8(self.from_date),
+            toDate=to,
+            period="Custom",
+            whenGenerated=to + ";101010",
+        )
+        info = _attrs(accountId=acct, currency=self.base, name="Personne Fictive")
+        summary = _attrs(accountId=acct, currency="BASE_SUMMARY", startingCash="0", endingCash="0")
         parts = [
-            f"<FlexStatement {_attrs(accountId=self.account, fromDate=d8(self.from_date), toDate=d8(self.to_date), period='Custom', whenGenerated=d8(self.to_date) + ';101010')}>",
-            f"<AccountInformation {_attrs(accountId=self.account, currency=self.base, name='Personne Fictive')} />",
+            f"<FlexStatement {head}>",
+            f"<AccountInformation {info} />",
             "<CashReport>",
-            f"<CashReportCurrency {_attrs(accountId=self.account, currency='BASE_SUMMARY', startingCash='0', endingCash='0')} />",
+            f"<CashReportCurrency {summary} />",
         ]
-        parts += [
-            f"<CashReportCurrency {_attrs(accountId=self.account, currency=c, startingCash=s, endingCash=e)} />"
-            for c, s, e in self.cash
-        ]
+        for c, start, end in self.cash:
+            row = _attrs(accountId=acct, currency=c, startingCash=start, endingCash=end)
+            parts.append(f"<CashReportCurrency {row} />")
         parts.append("</CashReport>")
         if self.positions is not None:
             parts.append("<OpenPositions>")
             for p in self.positions:
-                parts.append(
-                    f"<OpenPosition {_attrs(accountId=self.account, levelOfDetail='SUMMARY', reportDate=d8(self.to_date), **p)} />"
-                )
+                row = _attrs(accountId=acct, levelOfDetail="SUMMARY", reportDate=to, **p)
+                parts.append(f"<OpenPosition {row} />")
             parts.append("</OpenPositions>")
         parts.append("<Trades>")
-        parts += [f"<Trade {_attrs(accountId=self.account, **t)} />" for t in self.trades]
+        parts += [f"<Trade {_attrs(accountId=acct, **t)} />" for t in self.trades]
         parts.append("</Trades><CashTransactions>")
         parts += [
-            f"<CashTransaction {_attrs(accountId=self.account, levelOfDetail='DETAIL', **c)} />"
+            f"<CashTransaction {_attrs(accountId=acct, levelOfDetail='DETAIL', **c)} />"
             for c in self.cash_txs
         ]
         parts.append("</CashTransactions><ConversionRates>")
-        parts += [
-            f"<ConversionRate {_attrs(reportDate=d8(self.to_date), fromCurrency=c, toCurrency='CHF', rate=r)} />"
-            for c, r in self.rates
-        ]
+        for c, r in self.rates:
+            row = _attrs(reportDate=to, fromCurrency=c, toCurrency="CHF", rate=r)
+            parts.append(f"<ConversionRate {row} />")
         parts.append("</ConversionRates></FlexStatement>")
         return "".join(parts)
 

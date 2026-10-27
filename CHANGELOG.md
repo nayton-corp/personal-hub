@@ -2,6 +2,29 @@
 
 ## [Non publié]
 
+### Lot 6 — Patrimoine complet
+
+- Schéma `0006_wealth` : instruments élargis (cryptos, symboles, sorte), compositions des fonds,
+  tables dérivées `transfer_links` et `recurring`, vue d'allocation (un virement apparié compte
+  comme `transfer-own`), devises supplémentaires, règles système `IBKR/…`.
+- IBKR : relevés Flex Query (comptes de liquidités par devise créés au premier relevé, achats,
+  ventes, change, commissions, dividendes, positions, cours, soldes de fin comme points de
+  contrôle), dédoublonnage par `transactionID`, `fin ibkr add-account` et `import-history`.
+- Valorisation multi-devise : comptes et positions convertis en CHF au dernier cours connu ;
+  l'enveloppe `ibkr` devient `titres`.
+- Fichiers `hub.market.v1` (change BCE, cours, soldes crypto), CSV de positions saisies à la
+  main (placements Revolut), compositions de fonds (listes d'émetteur ou CSV générique) ; `fin
+  crypto add-wallet`, `fin positions add-account`, `fin derived`.
+- Virements appariés (IBAN, référence, montant), abonnements récurrents avec prochaine
+  échéance ; routes `lookthrough`, `recurring`, `transfers` ; `kpis.unmatched_transfers`.
+- Collecteurs `ibkr` (Flex Web Service) et `market` (BCE, CoinGecko, mempool.space, nœud
+  Ethereum, Yahoo facultatif), sans navigateur ; services compose correspondants.
+- App : enveloppe Titres, positions de toutes les enveloppes, carte Transparence, carte
+  Abonnements, virements sans autre côté dans « À traiter », comptes en devise affichés avec
+  leur devise.
+- Reconstruction : les documents du lot 6 se rejouent ; `compare` couvre change,
+  compositions, virements appariés et abonnements. Raiffeisen (camt.053) couvert par un test.
+
 ### Lot 5 — Collecteurs
 
 - Cœur : schéma `0002_collectors` (type de passage, contrôle demandé, liaisons), table des

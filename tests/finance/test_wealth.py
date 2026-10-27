@@ -32,11 +32,12 @@ from hub.domains.finance import (
 )
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
-from tests.factories.camt import IBAN
+from tests.factories.camt import IBAN, Stmt, Tx, camt053
 from tests.finance.conftest import (
     add_account,
     finance_settings,
     open_account,
+    ready_account,
     rows,
     without_seed_rules,
 )
@@ -425,7 +426,45 @@ def test_transfers_are_matched(finance: FinanceDomain) -> None:
         ).scalar_one()
         assert cat == "transfer-own"
         s = transfers.summary(conn, detailed=True)
-    assert s["pairs"] == 2 and s["by_method"] == {"amount": 1, "iban": 1}
+    assert s["pairs"] == 2
+    assert s["by_method"] == {"amount": 1, "iban": 1}
+
+
+RAIFFEISEN_IBAN = "CH3880808001234567890"  # clearing Raiffeisen, numéro fictif
+
+
+def test_raiffeisen_camt_and_transfer_from_bcf(finance: FinanceDomain) -> None:
+    """Raiffeisen exporte le même camt.053 (souvent en .04) : un compte déclaré avec son IBAN
+    suffit, et le virement BCF → Raiffeisen s'apparie par les IBAN."""
+    without_seed_rules(finance)
+    ready_account(finance, 100_000)
+    with begin_immediate(finance.engine()) as conn:
+        raif = catalog.add_account(
+            conn, institution="Raiffeisen", name="Épargne", iban=RAIFFEISEN_IBAN
+        )
+    open_account(finance, raif, "2026-09-30", 0)
+    day = date(2026, 10, 5)
+    out = Stmt(
+        Decimal("1000.00"),
+        day,
+        [Tx("400.00", True, day, counterparty="Moi", counterparty_iban=RAIFFEISEN_IBAN)],
+    )
+    arrival = Stmt(
+        Decimal("0.00"),
+        day,
+        [Tx("400.00", False, date(2026, 10, 6), counterparty="Moi", counterparty_iban=IBAN)],
+        iban=RAIFFEISEN_IBAN,
+        stmt_id="RAIF-1",
+    )
+    report = finance.importer.process(
+        [Incoming("bcf.xml", camt053(out)), Incoming("raiffeisen.xml", camt053(arrival, "04"))]
+    )
+    assert [s.status for s in report.statements] == ["applied", "applied"]
+    finance.refresh_derived()
+    assert rows(finance, "SELECT method FROM transfer_links") == [("iban",)]
+    with finance.engine().connect() as conn:
+        v = valuation.value_at(conn, "2026-10-06")
+    assert v.by_envelope["cash"] == 100_000
 
 
 def test_recurring_detection(finance: FinanceDomain) -> None:
@@ -459,14 +498,17 @@ def test_recurring_detection(finance: FinanceDomain) -> None:
     }
     assert found["NETFLIX.COM 91234"] == ("monthly", -1790, "2026-11-05", 1)
     assert found["Assurance RC"] == ("yearly", -48_500, "2026-11-14", 1)
-    assert found["Salle de sport"][0] == "monthly" and found["Salle de sport"][3] == 0
+    assert found["Salle de sport"][0] == "monthly"
+    assert found["Salle de sport"][3] == 0
     assert "Migros" not in found
     with finance.engine().connect() as conn:
         full = recurring.listing(conn, date(2026, 10, 27), aggregates_only=False)
         agg = recurring.listing(conn, date(2026, 10, 27), aggregates_only=True)
-    assert full["count"] == 2 and full["due_30d"] == 2
+    assert full["count"] == 2
+    assert full["due_30d"] == 2
     assert full["monthly_total"] == [{"minor": 1790 + 4042, "currency": "CHF", "display": "58.32"}]
-    assert "items" not in agg and agg["monthly_total"] == []  # moins de 3 : rien ne sort
+    assert "items" not in agg
+    assert agg["monthly_total"] == []
 
 
 def test_recurring_helpers() -> None:
@@ -496,13 +538,16 @@ def test_routes(ctx: HubContext) -> None:
     agg = {"Authorization": f"Bearer {agg_secret}"}
     with TestClient(create_app(ctx), base_url="https://hub.example.ts.net") as client:
         r = client.get("/api/finance/lookthrough?dimension=sector", headers=agg)
-        assert r.status_code == 200 and r.json()["items"] == []
+        assert r.status_code == 200
+        assert r.json()["items"] == []
         bad = client.get("/api/finance/lookthrough?dimension=planet", headers=agg)
         assert bad.status_code in (400, 422)
         assert client.get("/api/finance/recurring", headers=read).json()["items"] == []
         assert "items" not in client.get("/api/finance/recurring", headers=agg).json()
         t = client.get("/api/finance/transfers", headers=agg).json()
-        assert t["pairs"] == 0 and "unmatched_items" not in t
+        assert t["pairs"] == 0
+        assert "unmatched_items" not in t
         assert client.get("/api/finance/transfers", headers=read).json()["unmatched_items"] == []
         k = client.get("/api/finance/kpis", headers=agg).json()
-        assert k["unmatched_transfers"] == 0 and set(k["envelopes"]) >= {"titres", "crypto"}
+        assert k["unmatched_transfers"] == 0
+        assert set(k["envelopes"]) >= {"titres", "crypto"}

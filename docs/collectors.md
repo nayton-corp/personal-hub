@@ -1,6 +1,6 @@
-# Collecteurs (lot 5) : BCF, VIAC et Revolut
+# Collecteurs (lots 5 et 6) : BCF, VIAC, Revolut, IBKR et cours
 
-Trois conteneurs déposent les exports officiels dans `~/PersonalHub/inbox/`, où l'importeur les
+Cinq conteneurs déposent les exports officiels dans `~/PersonalHub/inbox/`, où l'importeur les
 traite comme un fichier déposé à la main. Ils tournent sur le Mac comme le reste (phase 1) ; les
 mêmes images et le même `deploy/compose.yaml` serviront sur le Pi.
 
@@ -9,12 +9,15 @@ mêmes images et le même `deploy/compose.yaml` serviront sur le Pi.
 | `collector-bcf` | navigateur sans tête, connexion avec validation push dans l'app BCF | 07:30 du lundi au vendredi | export camt.053 depuis J-10, « déjà téléchargées » coché |
 | `collector-viac` | navigateur sans tête, profil gardé dans son volume | dimanche 09:00 | avis PDF nouveaux de la liste Documents, et un rapport tous les 6 jours |
 | `collector-revolut` | API Enable Banking (PSD2), sans navigateur | 07:15, 13:15, 19:15 | un `revolut-<empreinte>.json` par compte, seulement s'il a changé |
+| `collector-ibkr` | Flex Web Service d'IBKR (jeton en lecture seule), sans navigateur | 06:45 du mardi au samedi | le relevé Flex XML de la veille |
+| `collector-market` | API publiques (BCE, CoinGecko, mempool.space, nœud Ethereum public, Yahoo facultatif) | 06:15 | un `market.json` : change, cours, soldes des portefeuilles |
 
 Ce qu'un collecteur voit : la boîte d'entrée, son propre volume (profil du navigateur, mémoire
 de ce qu'il a déjà déposé) et son propre fichier de secrets. Il ne lit jamais les bases et ne
 remonte au hub que l'issue de chaque passage (`ok`, `nothing_new`, `auth_error`…), le nombre de
 fichiers et une étape ou un nom de sélecteur, jamais un montant ni un texte de page. Un fichier
-qui n'a pas la forme attendue (camt.053 ou zip de camt.053, PDF complet, JSON `hub.revolut.v1`)
+qui n'a pas la forme attendue (camt.053 ou zip de camt.053, PDF complet, JSON `hub.revolut.v1`, relevé Flex,
+JSON `hub.market.v1`)
 part dans `inbox/quarantine/` au lieu d'être déposé.
 
 ## Quand ça casse
@@ -156,3 +159,53 @@ dépose le fichier dans `~/PersonalHub/inbox/`. Seules les lignes `COMPLETED` co
 déduits ; chaque ligne est vérifiée contre la colonne de solde. Un recouvrement avec un fichier
 Enable Banking est reconnu (`near_duplicate`) et n'écrit rien deux fois. Les placements (actions,
 crypto) ne passent pas par PSD2 : ils viendront au lot 6.
+
+## IBKR par le Flex Web Service (lot 6)
+
+1. **La requête Flex.** Client Portal → Performance & Reports → Flex Queries → Activity Flex
+   Query → « + ». Nom `hub`, format XML, période « Last Business Day », dates `yyyyMMdd`.
+   Sections : Account Information, Cash Report, Open Positions (niveau Summary), Trades
+   (niveau Execution), Cash Transactions (niveau Detail), Conversion Rates ; toutes les
+   colonnes. Note le numéro de la requête (Query ID).
+2. **Le jeton.** Même page, « Flex Web Service Configuration » : active le service et génère un
+   jeton (valable jusqu'à un an ; note sa date de fin). Il ne permet que de lire les relevés.
+3. **Secrets** (`ibkr.enc.yaml`, comme à l'étape 3 plus haut) :
+   ```yaml
+   collector-ibkr:
+     token: "hub_…"          # hub token create collector-ibkr -s collector
+     flex_token: "…"
+     query_id: "123456"
+   ```
+4. **Contrôle** : `hubc run --rm collector-ibkr hub-collector run ibkr --check` (demande un relevé sans
+   rien déposer), puis `hubc run --rm collector-ibkr hub-collector run ibkr`. Le compte doit
+   être déclaré (`fin ibkr add-account`, voir [finance.md](finance.md)) ; sinon le relevé
+   attend (`unknown_account`).
+
+Un jeton expiré ou révoqué donne `auth_error` (codes 1011 à 1016 et 1020 d'IBKR) ; un service
+occupé, `site_unavailable`, et le passage suivant réessaie.
+
+## Cours et cryptos (lot 6)
+
+Le collecteur `market` n'a besoin d'aucun compte. Ses réglages sont dans `deploy/settings.toml`,
+section `[collectors.market]` : devises (`currencies`), cryptos suivies (`crypto`, symbole → id
+CoinGecko) et, pour un titre qui n'a pas d'autre source de cours, `quotes = { "<ISIN>" =
+"<symbole Yahoo>" }`. Le premier passage reprend un an d'historique (la limite gratuite de
+CoinGecko) ; les suivants une semaine, pour combler un jour manqué.
+
+Les adresses des portefeuilles sont publiques mais disent ce que tu possèdes : elles vont dans
+les secrets (`market.enc.yaml`) :
+```yaml
+collector-market:
+  token: "hub_…"              # hub token create collector-market -s collector
+  coingecko_key: ""           # facultatif : clé « demo » gratuite, plus de marge de requêtes
+  wallets:
+    - account: "crypto:ledger-btc"     # fin crypto add-wallet ledger-btc
+      asset: "BTC"
+      addresses: ["bc1q…", "bc1q…"]    # adresses de réception (pas de xpub)
+    - account: "crypto:metamask"
+      asset: "ETH"
+      addresses: ["0x…"]
+```
+Seuls BTC et ETH sont lus sur la chaîne ; une autre crypto passe par le CSV de positions. Une
+source facultative en panne (CoinGecko, Yahoo) n'empêche pas le dépôt du reste : le passage
+est `ok` avec le détail `partial …`, et le suivant reprend la même fenêtre.

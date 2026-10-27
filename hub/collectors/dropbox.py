@@ -81,6 +81,25 @@ def is_revolut_json(data: bytes) -> bool:
     )
 
 
+def is_flex(data: bytes) -> bool:
+    """Relevé Flex Query IBKR (lot 6) : racine `FlexQueryResponse` avec ses relevés."""
+    if b"<!ENTITY" in data[:4096] or b"<!DOCTYPE" in data[:4096]:
+        return False
+    try:
+        root = etree.fromstring(data, _xml_parser())
+    except etree.XMLSyntaxError:
+        return False
+    return root.tag == "FlexQueryResponse" and root.find("FlexStatements") is not None
+
+
+def is_market_json(data: bytes) -> bool:
+    try:
+        doc = json.loads(data, parse_float=str)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    return isinstance(doc, dict) and doc.get("format") == "hub.market.v1"
+
+
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
