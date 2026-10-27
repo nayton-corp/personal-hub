@@ -1,4 +1,5 @@
-"""Service d'import camt.053 (tickets L1-06 et L1-13), section 4 de la spécification.
+"""Service d'import camt.053 (tickets L1-06 et L1-13), section 4 de la spécification, et
+des documents VIAC en PDF (ticket L4-05).
 
 Réception → validation → analyse → mise en attente → rapprochement → application → archivage.
 Les fichiers d'un lot sont appliqués triés par compte puis par date d'OPBD, une transaction par
@@ -33,10 +34,21 @@ from hub.core.text import mask_iban
 from hub.domains.finance import catalog, dedup, ledger, rules
 from hub.domains.finance.camt import parser
 from hub.domains.finance.camt.models import Balance, ParsedEntry, ParsedFile, ParsedStatement
+from hub.domains.finance.viac import ViacError
+from hub.domains.finance.viac import apply as viac_apply
+from hub.domains.finance.viac import notice as viac_notice
+from hub.domains.finance.viac import report as viac_report
+from hub.domains.finance.viac import text as viac_text
+from hub.domains.finance.viac.models import Notice, Report
 
 log = get_logger("hub.finance.import")
 
 SOURCE = "camt053"
+VIAC_NOTICE = "viac_notice"
+VIAC_REPORT = "viac_report"
+VIAC_OTHER = "viac_other"  # attestation, relevé récapitulatif ou PDF refusé
+VIAC_SOURCES = frozenset({VIAC_NOTICE, VIAC_REPORT, VIAC_OTHER})
+INBOX_SUFFIXES = frozenset({".xml", ".zip", ".pdf"})
 APPLY_IMPORT = "apply_import"
 # anomalies qu'une validation `apply_import` peut accepter ; les autres demandent d'abord un
 # compte, une ouverture ou un relevé conforme
@@ -75,7 +87,7 @@ class Incoming:
 class FileOutcome:
     name: str
     import_id: str | None
-    status: Literal["staged", "duplicate", "rejected"]
+    status: Literal["staged", "duplicate", "rejected", "ignored"]
     reason: str | None = None
 
 
@@ -99,6 +111,7 @@ class BatchReport:
             "files": len(self.files),
             "duplicate_files": sum(f.status == "duplicate" for f in self.files),
             "rejected_files": sum(f.status == "rejected" for f in self.files),
+            "ignored_files": sum(f.status == "ignored" for f in self.files),
             "statements": len(self.statements),
             "applied": sum(s.status == "applied" for s in self.statements),
             "needs_review": sum(s.status == "needs_review" for s in self.statements),
@@ -116,7 +129,7 @@ def safe_name(name: str) -> str:
 
 
 def expand(name: str, data: bytes) -> list[Incoming]:
-    """Un .zip devient un fichier par membre .xml, taille décompressée plafonnée."""
+    """Un .zip devient un fichier par membre .xml ou .pdf, taille décompressée plafonnée."""
     if not name.lower().endswith(".zip"):
         return [Incoming(name, data)]
     out: list[Incoming] = []
@@ -127,7 +140,7 @@ def expand(name: str, data: bytes) -> list[Incoming]:
             if len(members) > MAX_ZIP_MEMBERS:
                 raise ImportRefused("import.invalid_schema", "archive zip : trop de fichiers")
             for info in members:
-                if not info.filename.lower().endswith(".xml"):
+                if not info.filename.lower().endswith((".xml", ".pdf")):
                     continue
                 if info.file_size > parser.MAX_BYTES:
                     raise ImportRefused("import.invalid_schema", "archive zip : fichier trop gros")
@@ -142,6 +155,53 @@ def expand(name: str, data: bytes) -> list[Incoming]:
     except zipfile.BadZipFile as exc:
         raise ImportRefused("import.invalid_schema", "archive zip illisible") from exc
     return out
+
+
+@dataclass(frozen=True)
+class ViacDoc:
+    """Un document VIAC lu : un avis ou un rapport."""
+
+    notice: Notice | None = None
+    report: Report | None = None
+
+    @property
+    def on_date(self) -> str:
+        if self.notice is not None:
+            return self.notice.value_date
+        assert self.report is not None  # noqa: S101
+        return self.report.on_date
+
+    @property
+    def order(self) -> tuple[str, int]:
+        """Même jour : versements, puis achats et ventes, puis le reste, rapports en dernier."""
+        if self.notice is None:
+            return self.on_date, 9
+        rank = {"deposit": 0, "withdrawal": 0, "sell": 1, "buy": 2}
+        return self.on_date, rank.get(self.notice.kind, 3)
+
+    def statements(self) -> list[tuple[int, str | None, str | None]]:
+        """Lignes de `import_statements` : (rang, OPBD, CLBD). Un avis : liquidités (0) et
+        titres (1) s'il s'agit d'un achat ou d'une vente ; un rapport : deux par portefeuille."""
+        if self.notice is not None:
+            on = self.notice.value_date
+            return [(i, on, on) for i in range(2 if self.notice.is_trade else 1)]
+        assert self.report is not None  # noqa: S101
+        on = self.report.on_date
+        return [(i, None, on) for i in range(2 * len(self.report.portfolios))]
+
+
+def read_viac(text_of: Callable[[bytes], str], data: bytes) -> ViacDoc | str:
+    """Le document lu, ou le type du document ignoré (« attestation », « statement »)."""
+    txt = text_of(data)
+    kind = viac_notice.classify(txt)
+    if kind == "report":
+        return ViacDoc(report=viac_report.parse(txt))
+    if kind == "notice":
+        return ViacDoc(notice=viac_notice.parse(txt))
+    return kind
+
+
+Staged = ParsedFile | ViacDoc
 
 
 class Archiver:
@@ -187,8 +247,10 @@ class ImportService:
         archiver: Archiver,
         lock_file: Path,
         on_applied: Callable[[], object] | None = None,
+        pdf_text: Callable[[bytes], str] = viac_text.pdftotext,
     ) -> None:
         self.engine = engine
+        self.pdf_text = pdf_text
         self.inbox = inbox
         self.archiver = archiver
         self.lock_file = lock_file
@@ -211,6 +273,9 @@ class ImportService:
         status: str,
         stats: dict[str, Any],
         parsed: ParsedFile | None,
+        *,
+        source: str = SOURCE,
+        rows: list[tuple[int, str | None, str | None]] | None = None,
     ) -> str:
         import_id = new_id()
         now = now_iso()
@@ -225,7 +290,7 @@ class ImportService:
                 ),
                 {
                     "id": import_id,
-                    "src": SOURCE,
+                    "src": source,
                     "h": digest,
                     "n": safe_name(f.name),
                     "at": now,
@@ -234,28 +299,33 @@ class ImportService:
                     "ap": archive_path,
                 },
             )
-            for s in parsed.statements if parsed else []:
+            if rows is None:
+                rows = [
+                    (
+                        s.index,
+                        s.opening.on_date if s.opening else None,
+                        s.closing.on_date if s.closing else None,
+                    )
+                    for s in (parsed.statements if parsed else [])
+                ]
+            for index, opbd, clbd in rows:
                 conn.execute(
                     text(
                         "INSERT INTO import_statements (import_id, stmt_index, opbd_date, "
                         "clbd_date, status, updated_at) VALUES (:i, :x, :o, :c, 'pending', :at)"
                     ),
-                    {
-                        "i": import_id,
-                        "x": s.index,
-                        "o": s.opening.on_date if s.opening else None,
-                        "c": s.closing.on_date if s.closing else None,
-                        "at": now,
-                    },
+                    {"i": import_id, "x": index, "o": opbd, "c": clbd, "at": now},
                 )
         return import_id
 
-    def stage(self, f: Incoming) -> tuple[FileOutcome, ParsedFile | None]:
+    def stage(self, f: Incoming) -> tuple[FileOutcome, Staged | None]:
         digest = sha256(f.data)
         if self._known(digest):
             self.archiver.store(f.data, "duplicates", f"{digest[:16]}-{safe_name(f.name)}")
             log.info("import.duplicate_file")
             return FileOutcome(f.name, None, "duplicate", "import.duplicate_file"), None
+        if viac_text.is_pdf(f.data):
+            return self._stage_viac(f, digest)
         try:
             parsed = parser.parse(f.data)
         except parser.CamtError as exc:
@@ -267,15 +337,37 @@ class ImportService:
         import_id = self._record(f, digest, "staged", stats, parsed)
         return FileOutcome(f.name, import_id, "staged"), parsed
 
+    def _stage_viac(self, f: Incoming, digest: str) -> tuple[FileOutcome, Staged | None]:
+        try:
+            doc = read_viac(self.pdf_text, f.data)
+        except ViacError as exc:
+            stats: dict[str, Any] = {"reason": exc.code, "detail": exc.reason}
+            import_id = self._record(f, digest, "rejected", stats, None, source=VIAC_OTHER)
+            log.warning("import.rejected", import_id=import_id, reason=exc.code)
+            return FileOutcome(f.name, import_id, "rejected", exc.code), None
+        if isinstance(doc, str):
+            stats = {"document": doc, "statements": 0, "new": 0, "duplicates": 0, "reasons": []}
+            import_id = self._record(f, digest, "applied", stats, None, source=VIAC_OTHER, rows=[])
+            log.info("import.ignored", import_id=import_id, document=doc)
+            return FileOutcome(f.name, import_id, "ignored", f"viac.{doc}"), None
+        source = VIAC_NOTICE if doc.notice is not None else VIAC_REPORT
+        stats = {"document": source}
+        import_id = self._record(
+            f, digest, "staged", stats, None, source=source, rows=doc.statements()
+        )
+        return FileOutcome(f.name, import_id, "staged"), doc
+
     # --- rapprochement et application ----------------------------------------------------
 
     def apply_all(
-        self, staged: dict[str, ParsedFile], only: set[tuple[str, int]] | None = None
+        self, staged: dict[str, Staged], only: set[tuple[str, int]] | None = None
     ) -> list[StatementOutcome]:
-        """Applique les relevés triés par compte puis par OPBD, une transaction chacun."""
+        """Applique les relevés triés par compte puis par OPBD, une transaction chacun, puis les
+        documents VIAC dans l'ordre des dates, une transaction par document."""
         work = [
             (import_id, s)
             for import_id, pf in staged.items()
+            if isinstance(pf, ParsedFile)
             for s in pf.statements
             if only is None or (import_id, s.index) in only
         ]
@@ -283,6 +375,22 @@ class ImportService:
             key=lambda w: (w[1].iban or "", w[1].opening.on_date if w[1].opening else "", w[0])
         )
         outcomes = [self._apply_statement(import_id, s) for import_id, s in work]
+        docs = sorted(
+            ((i, d) for i, d in staged.items() if isinstance(d, ViacDoc)),
+            key=lambda w: (w[1].order, w[0]),
+        )
+        for import_id, doc in docs:
+            indexes = None if only is None else {x for i, x in only if i == import_id}
+            with begin_immediate(self.engine) as conn:
+                done = apply_viac(conn, import_id, doc, indexes)
+            log.info(
+                "import.viac",
+                import_id=import_id,
+                status=sorted({o.status for o in done}),
+                reasons=sorted({r for o in done for r in o.reasons}),
+                new=sum(o.new for o in done),
+            )
+            outcomes += done
         for import_id in sorted({o.import_id for o in outcomes}):
             self._finish(import_id)
         if self.on_applied and any(o.status == "applied" for o in outcomes):
@@ -320,7 +428,7 @@ class ImportService:
         for p in sorted(self.inbox.iterdir()):
             if not p.is_file() or p.name.startswith("."):
                 continue
-            if p.suffix.lower() not in {".xml", ".zip"}:
+            if p.suffix.lower() not in INBOX_SUFFIXES:
                 continue
             if now - p.stat().st_mtime < SETTLE_SECONDS:
                 continue
@@ -329,7 +437,7 @@ class ImportService:
 
     def process(self, files: Iterable[Incoming]) -> BatchReport:
         report = BatchReport()
-        staged: dict[str, ParsedFile] = {}
+        staged: dict[str, Staged] = {}
         for raw in files:
             try:
                 members = expand(raw.name, raw.data)
@@ -380,7 +488,10 @@ class ImportService:
             raise ImportRefused("import.archive_unavailable", "archive illisible") from exc
 
     def review_plan(self, conn: Connection, import_id: str) -> list[tuple[int, Plan]]:
-        """Relevés en attente d'un import et ce que leur validation écrirait (lecture seule)."""
+        """Relevés en attente d'un import et ce que leur validation écrirait (lecture seule).
+        Un document VIAC n'a rien à forcer : il attend un compte ou une ouverture."""
+        if source_of(conn, import_id) in VIAC_SOURCES:
+            return []
         waiting = set(
             conn.execute(
                 text(
@@ -416,7 +527,8 @@ class ImportService:
         with self.engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    "SELECT s.import_id, s.stmt_index, i.archive_path FROM import_statements s "
+                    "SELECT s.import_id, s.stmt_index, i.archive_path, i.source "
+                    "FROM import_statements s "
                     "JOIN imports i ON i.id = s.import_id WHERE s.status = 'needs_review' "
                     "ORDER BY i.received_at"
                 )
@@ -424,13 +536,13 @@ class ImportService:
         wanted = [r for r in rows if import_ids is None or r[0] in import_ids]
         if not wanted:
             return []
-        staged: dict[str, ParsedFile] = {}
+        staged: dict[str, Staged] = {}
         only = set()
-        for import_id, index, archive_path in wanted:
+        for import_id, index, archive_path, source in wanted:
             if import_id not in staged:
                 try:
-                    staged[import_id] = parser.parse(self.archiver.load(archive_path))
-                except (ImportRefused, secrets.SecretsError, OSError) as exc:
+                    staged[import_id] = self.reread(source, self.archiver.load(archive_path))
+                except (ImportRefused, secrets.SecretsError, OSError, ViacError) as exc:
                     if quiet:
                         log.warning("import.retry_unavailable", error=type(exc).__name__)
                         return []
@@ -439,6 +551,74 @@ class ImportService:
                     raise ImportRefused("import.archive_unavailable", "archive illisible") from exc
             only.add((import_id, index))
         return self.apply_all(staged, only)
+
+    def reread(self, source: str, data: bytes) -> Staged:
+        """Relit un fichier archivé selon sa source."""
+        if source in VIAC_SOURCES:
+            doc = read_viac(self.pdf_text, data)
+            if isinstance(doc, str):
+                raise ImportRefused("import.not_applicable", f"document {doc}")
+            return doc
+        return parser.parse(data)
+
+
+def source_of(conn: Connection, import_id: str) -> str | None:
+    row = conn.execute(text("SELECT source FROM imports WHERE id = :i"), {"i": import_id}).first()
+    return str(row[0]) if row else None
+
+
+def _set_statement(
+    conn: Connection, import_id: str, index: int, account_id: str | None, o: StatementOutcome
+) -> None:
+    conn.execute(
+        text(
+            "UPDATE import_statements SET account_id = :a, status = :s, reasons_json = :r, "
+            "new_entries = :n, duplicates = :d, updated_at = :at "
+            "WHERE import_id = :i AND stmt_index = :x"
+        ),
+        {
+            "a": account_id,
+            "s": o.status,
+            "r": canonical.dumps(o.reasons),
+            "n": o.new,
+            "d": o.duplicates,
+            "at": now_iso(),
+            "i": import_id,
+            "x": index,
+        },
+    )
+
+
+def apply_viac(
+    conn: Connection, import_id: str, doc: ViacDoc, indexes: set[int] | None = None
+) -> list[StatementOutcome]:
+    """Applique un document VIAC (ou, pour un rapport, ses portefeuilles en attente)."""
+    out: list[StatementOutcome] = []
+    if doc.notice is not None:
+        r = viac_apply.apply_notice(conn, import_id, doc.notice)
+        status: Literal["applied", "needs_review"] = (
+            "applied" if r.status == "applied" else "needs_review"
+        )
+        main = StatementOutcome(import_id, 0, status, r.reasons, r.new, r.duplicates)
+        _set_statement(conn, import_id, 0, r.cash_id, main)
+        out.append(main)
+        if doc.notice.is_trade:
+            _set_statement(
+                conn, import_id, 1, r.titles_id, StatementOutcome(import_id, 1, status, r.reasons)
+            )
+        return out
+    assert doc.report is not None  # noqa: S101
+    for k, p in enumerate(doc.report.portfolios):
+        if indexes is not None and not {2 * k, 2 * k + 1} & indexes:
+            continue
+        r = viac_apply.apply_portfolio(conn, import_id, doc.report.on_date, p)
+        status = "applied" if r.status == "applied" else "needs_review"
+        cash = StatementOutcome(import_id, 2 * k, status, r.reasons, 0, 0)
+        titles = StatementOutcome(import_id, 2 * k + 1, status, r.reasons, r.new, r.duplicates)
+        _set_statement(conn, import_id, 2 * k, r.cash_id, cash)
+        _set_statement(conn, import_id, 2 * k + 1, r.titles_id, titles)
+        out += [cash, titles]
+    return out
 
 
 @dataclass
@@ -764,12 +944,14 @@ class HistoryReport:
     batch: dict[str, int] = field(default_factory=dict)
     error: str | None = None
     missing: list[dict[str, str]] = field(default_factory=list)  # périodes manquantes
+    warnings: list[str] = field(default_factory=list)  # écarts signalés, non bloquants
 
     def public(self) -> dict[str, Any]:
         return {
             "ok": self.ok,
             "error": self.error,
             "missing": self.missing,
+            "warnings": self.warnings,
             "accounts": self.accounts,
             "batch": self.batch,
         }
@@ -888,3 +1070,100 @@ class _Span:
     stmt: ParsedStatement
     opening: Balance
     closing: Balance
+
+
+def _viac_docs(service: ImportService, folder: Path) -> tuple[list[Incoming], list[ViacDoc]]:
+    files: dict[str, Incoming] = {}
+    for p in sorted(folder.rglob("*")):
+        if p.is_file() and not p.name.startswith(".") and p.suffix.lower() in {".pdf", ".zip"}:
+            for f in expand(p.name, p.read_bytes()):
+                if f.name.lower().endswith(".pdf"):
+                    files.setdefault(sha256(f.data), f)
+    fresh = [f for digest, f in files.items() if not service._known(digest)]
+    docs = []
+    for f in fresh:
+        try:
+            doc = read_viac(service.pdf_text, f.data)
+        except ViacError as exc:
+            raise ImportRefused(exc.code, f"{exc.reason} : {safe_name(f.name)}") from None
+        if isinstance(doc, ViacDoc):
+            docs.append(doc)
+    return fresh, docs
+
+
+def import_viac_history(service: ImportService, folder: Path) -> HistoryReport:
+    """`hub finance viac import-history <dossier>` : lit tous les PDF VIAC (sous-dossiers
+    compris) avant d'écrire, ouvre les deux comptes de chaque portefeuille à zéro la veille du
+    plus ancien document, puis applique tout dans l'ordre des dates. Un PDF illisible ou un
+    portefeuille inconnu arrête tout ; rien n'est écrit."""
+    with _locked(service.lock_file):
+        try:
+            fresh, docs = _viac_docs(service, folder)
+        except ImportRefused as exc:
+            return HistoryReport(ok=False, error=f"{exc.code} : {exc.detail}")
+        first: dict[str, str] = {}
+        for doc in docs:
+            numbers = (
+                [doc.notice.portfolio]
+                if doc.notice is not None
+                else [p.number for p in doc.report.portfolios]  # type: ignore[union-attr]
+            )
+            for n in numbers:
+                first[n] = min(first.get(n, doc.on_date), doc.on_date)
+
+        pairs: list[tuple[str, catalog.Account, catalog.Account]] = []
+        with service.engine.connect() as conn:
+            for number in sorted(first):
+                cash = catalog.account_by_ref(conn, viac_apply.cash_ref(number))
+                titles = catalog.account_by_ref(conn, viac_apply.titles_ref(number))
+                if cash is None or titles is None:
+                    return HistoryReport(
+                        ok=False,
+                        error=f"portefeuille inconnu : {number} (hub finance viac add-portfolio)",
+                    )
+                for a in (cash, titles):
+                    if conn.execute(
+                        text("SELECT 1 FROM entries WHERE account_id = :a LIMIT 1"), {"a": a.id}
+                    ).first():
+                        return HistoryReport(ok=False, error=f"registre déjà ouvert : {number}")
+                pairs.append((number, cash, titles))
+
+        for number, cash, titles in pairs:
+            with begin_immediate(service.engine) as conn:
+                for a in (cash, titles):
+                    open_account(conn, a.id, _day_before(first[number]), 0, a.currency)
+        batch = service.process(fresh)
+        report = HistoryReport(ok=True, batch=batch.counters())
+        report.ok = report.batch["needs_review"] == 0 and report.batch["rejected_files"] == 0
+        with service.engine.connect() as conn:
+            for number, cash, titles in pairs:
+                row = conn.execute(
+                    text(
+                        "SELECT count(*), min(booking_date), max(booking_date) FROM entries "
+                        "WHERE account_id IN (:c, :t) AND kind = 'movement'"
+                    ),
+                    {"c": cash.id, "t": titles.id},
+                ).one()
+                count = conn.execute(
+                    text("SELECT count(DISTINCT on_date) FROM holdings WHERE account_id = :t"),
+                    {"t": titles.id},
+                ).scalar_one()
+                report.accounts.append(
+                    {
+                        "account": number,
+                        "entries": row[0],
+                        "from": row[1],
+                        "to": row[2],
+                        "reports": count,
+                    }
+                )
+            # écarts relevés par les rapports : signalés, jamais bloquants
+            flagged = conn.execute(
+                text(
+                    "SELECT s.reasons_json FROM import_statements s JOIN imports i "
+                    "ON i.id = s.import_id WHERE i.source = :src AND s.reasons_json != '[]'"
+                ),
+                {"src": VIAC_REPORT},
+            ).scalars()
+            report.warnings = sorted({r for x in flagged for r in json.loads(x)})
+        return report

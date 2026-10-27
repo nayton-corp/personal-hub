@@ -52,6 +52,34 @@ FIELDS: dict[str, dict[int, tuple[str, ...]]] = {
     "taggings": {1: ("entry_seq", "tag_id", "active", "proposal_id", "created_at")},
     "applied_proposals": {1: ("proposal_id", "kind", "result_json", "applied_at")},
     "events": {1: ("type", "urn", "payload_json", "created_at")},
+    # lot 4 : opérations sur titres, positions relevées et cours
+    "trades": {
+        1: (
+            "account_id",
+            "trade_date",
+            "isin",
+            "quantity",
+            "amount_minor",
+            "currency",
+            "dedup_key",
+            "import_id",
+            "created_at",
+        )
+    },
+    "holdings": {
+        1: (
+            "account_id",
+            "on_date",
+            "isin",
+            "quantity",
+            "value_minor",
+            "currency",
+            "cost_price",
+            "import_id",
+            "created_at",
+        )
+    },
+    "prices": {1: ("isin", "on_date", "price", "currency", "source", "import_id", "created_at")},
 }
 
 # colonnes volontairement hors empreinte : identité de ligne, dérivés recalculables, empreinte

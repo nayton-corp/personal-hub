@@ -9,6 +9,7 @@ identifiants et des compteurs, jamais le contenu d'une écriture.
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
@@ -25,6 +26,8 @@ from hub.core.money import Money
 from hub.core.registry import Registry
 from hub.core.text import mask_iban
 from hub.domains.finance import catalog, importer, legacy, rules
+from hub.domains.finance import viac as viac_patterns
+from hub.domains.finance.viac import apply as viac_apply
 
 if TYPE_CHECKING:
     from hub.domains.finance.domain import FinanceDomain
@@ -72,6 +75,8 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
     app.add_typer(accounts, name="accounts")
     app.add_typer(categories, name="categories")
     app.add_typer(imports, name="imports")
+    viac = typer.Typer(no_args_is_help=True, help="VIAC (pilier 3a)")
+    app.add_typer(viac, name="viac")
     engine = domain.engine()
 
     def ready() -> None:
@@ -225,7 +230,7 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
         poll: Annotated[int, typer.Option(min=1, help="secondes entre deux passages")] = 30,
         once: Annotated[bool, typer.Option(help="un seul passage")] = False,
     ) -> None:
-        """Surveille `inbox/` (xml et zip) ; chaque passage traite tout ce qui est prêt."""
+        """Surveille `inbox/` (xml, zip et PDF VIAC) ; traite tout ce qui est prêt."""
         ready()
         while True:
             report = domain.importer.process_inbox()
@@ -246,6 +251,53 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
         except importer.ImportRefused as exc:
             typer.echo(exc.detail, err=True)
             raise typer.Exit(1) from exc
+        _out(report.public())
+        if not report.ok:
+            raise typer.Exit(1)
+
+    @viac.command("add-portfolio")
+    def viac_add_portfolio(
+        number: Annotated[str, typer.Argument(help="n° de portefeuille, ex. 3.123.456.789.01")],
+        name: Annotated[str, typer.Option(help="ex. « VIAC 1 »")],
+    ) -> None:
+        """Crée les deux comptes d'un portefeuille : liquidités 3a et titres (deux propositions
+        `create_account` validées depuis le terminal)."""
+        ready()
+        if not re.fullmatch(viac_patterns.PORTFOLIO, number):
+            typer.echo("numéro attendu : 3.123.456.789.01", err=True)
+            raise typer.Exit(1)
+        out = {}
+        for side, ref, label in (
+            ("cash", viac_apply.cash_ref(number), "liquidités"),
+            ("titres", viac_apply.titles_ref(number), "titres"),
+        ):
+            with engine.connect() as conn:
+                found = catalog.account_by_ref(conn, ref)
+            if found is not None:
+                out[side] = found.id
+                continue
+            result = propose_and_accept(
+                domain,
+                "create_account",
+                {
+                    "institution": "VIAC",
+                    "name": f"{name} {label}",
+                    "kind": "pension",
+                    "currency": "CHF",
+                    "external_ref": ref,
+                },
+            )
+            out[side] = str(result["account_id"])
+        _out(out)
+
+    @viac.command("import-history")
+    def viac_import_history(
+        folder: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    ) -> None:
+        """Reprise des PDF VIAC (avis et rapports, sous-dossiers compris) : ouvre les comptes à
+        zéro la veille du plus ancien document, puis applique tout par date. Compteurs seuls."""
+        ready()
+        report = importer.import_viac_history(domain.importer, folder)
         _out(report.public())
         if not report.ok:
             raise typer.Exit(1)

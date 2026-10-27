@@ -19,6 +19,9 @@ PROTECTED = (
     "applied_proposals",
     "events",
     "journal",
+    "trades",
+    "holdings",
+    "prices",
     "audit",
     "links",
 )
