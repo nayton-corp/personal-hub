@@ -1,0 +1,15 @@
+.git
+.venv
+**/__pycache__
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.hypothesis
+tests
+var
+data
+deploy/.env
+deploy/*.key
+deploy/secrets*
+*.db
+*.db-*

@@ -1,0 +1,129 @@
+# deploy/compose.yaml — identique sur le Mac (phase 1) et sur le Pi (après migration).
+# Usage : make up / make deploy TAG=… (voir docs/mac.md). Variables : deploy/.env.
+#
+# Règles de la phase 1 (spécification, section 10.0) :
+# - les bases SQLite vivent dans le volume nommé « data », jamais dans un dossier du Mac ;
+# - aucun port publié : l'app n'est joignable que par le nœud Tailscale « hub » ;
+# - seule la clé age vit sur le Mac, passée en secret Docker.
+name: hub
+
+x-hardening: &hardening
+  user: "10001:10001"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: [/tmp]
+  restart: unless-stopped
+
+x-hub-env: &hub-env
+  HUB_SERVER__PUBLIC_ORIGIN: ${HUB_PUBLIC_ORIGIN:?HUB_PUBLIC_ORIGIN manquant dans deploy/.env}
+  TZ: Europe/Zurich
+
+services:
+  api:                                   # FastAPI, un seul worker
+    <<: *hardening
+    image: hub:${HUB_TAG:-dev}
+    command: ["hub", "serve", "--workers", "1"]
+    environment: *hub-env
+    volumes:
+      - data:/srv/hub/data
+      - archive:/srv/hub/archive
+      - ${HUB_INBOX:?HUB_INBOX manquant}:/srv/hub/inbox
+    secrets: [age_key]
+    networks: [hub]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8710/api/health', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  importer:                              # lot 1 : surveille la boîte d'entrée (scrutation 30 s)
+    <<: *hardening
+    image: hub:${HUB_TAG:-dev}
+    command: ["hub", "finance", "watch-inbox", "--poll", "30"]
+    profiles: [finance]                  # activé au lot 1, quand le domaine Finance existe
+    environment: *hub-env
+    volumes:
+      - data:/srv/hub/data
+      - archive:/srv/hub/archive
+      - ${HUB_INBOX}:/srv/hub/inbox
+    secrets: [age_key]
+    networks: [hub]
+
+  scheduler:                             # verify 02:15, sauvegarde 02:30, nuit 03:00
+    <<: *hardening
+    image: hub:${HUB_TAG:-dev}
+    command: ["hub", "scheduler", "/srv/hub/app/deploy/crontab"]
+    environment: *hub-env
+    volumes:
+      - data:/srv/hub/data
+      - archive:/srv/hub/archive
+      - backup:/srv/hub/backup
+      - ${HUB_REPLICA:?HUB_REPLICA manquant}:/replica:ro
+      - ${HUB_RESTIC_LOCAL:?HUB_RESTIC_LOCAL manquant}:/restic
+      - ${HUB_SECRETS:?HUB_SECRETS manquant}:/srv/hub/config/secrets.enc.yaml:ro
+    secrets: [age_key]
+    networks: [hub]
+
+  litestream:                            # réplication continue de core.db (et finance.db au lot 1)
+    <<: *hardening
+    image: litestream/litestream:0.5.2@sha256:e4fd484cb1cd9d6fa58fff7127d551118e150ab75b389cf868a053152ba6c9c0
+    command: ["replicate", "-config", "/etc/litestream.yml"]
+    volumes:
+      - data:/srv/hub/data
+      - ${HUB_REPLICA}:/replica
+      - ./litestream.yml:/etc/litestream.yml:ro
+    network_mode: none
+
+  web:                                   # Caddy : fichiers de l'app, CSP, proxy /api
+    <<: *hardening
+    image: hub-web:${HUB_TAG:-dev}
+    environment:
+      XDG_CONFIG_HOME: /tmp/caddy
+      XDG_DATA_HOME: /tmp/caddy
+    networks: [hub]
+    depends_on: [api]
+
+  tailscale:                             # nœud « hub » du tailnet ; tailscale serve termine le TLS
+    image: tailscale/tailscale:v1.90.6@sha256:8eb8b450a85856807e8a216c4697333e15f8701cb6d344bed851bf6aa6a9605c
+    hostname: hub
+    environment:
+      TS_HOSTNAME: hub
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_USERSPACE: "true"
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_EXTRA_ARGS: --advertise-tags=tag:hub
+    volumes:
+      - ts-state:/var/lib/tailscale
+      - ./serve.json:/config/serve.json:ro
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [hub]
+    restart: unless-stopped
+    depends_on: [web]
+
+  collector-bcf:                         # lot 5 : ne voit que la boîte d'entrée et son profil
+    <<: *hardening
+    image: hub-collector:${HUB_TAG:-dev}
+    profiles: [collectors]
+    volumes:
+      - ${HUB_INBOX}:/srv/hub/inbox
+      - collector-profiles:/var/lib/hub-collector
+    secrets: [age_key]
+    networks: [hub]
+
+volumes:
+  data: {}
+  archive: {}
+  backup: {}
+  ts-state: {}
+  collector-profiles: {}
+
+networks:
+  hub: {}
+
+secrets:
+  age_key:
+    file: ${HUB_AGE_KEY:?HUB_AGE_KEY manquant}

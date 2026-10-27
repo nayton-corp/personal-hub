@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Hub">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Personal Hub</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="bar">
+    <h1>Personal Hub</h1>
+    <span id="badge" class="badge" hidden></span>
+  </header>
+  <main>
+    <section id="view-loading" class="card"><p>Chargement…</p></section>
+
+    <section id="view-bootstrap" class="card" hidden>
+      <h2>Première passkey</h2>
+      <p>Sur le Mac, lance <code>hub auth bootstrap-code</code> puis saisis le code ici.
+        Il ne sert qu'une fois et expire au bout de quelques minutes.</p>
+      <form id="form-bootstrap">
+        <label for="code">Code d'amorçage</label>
+        <input id="code" name="code" autocomplete="one-time-code" autocapitalize="off"
+               spellcheck="false" required placeholder="a1b2c3-d4e5f6-0a1b2c">
+        <label for="device">Nom de l'appareil</label>
+        <input id="device" name="device" maxlength="60" placeholder="iPhone">
+        <button type="submit">Créer la passkey</button>
+      </form>
+    </section>
+
+    <section id="view-login" class="card" hidden>
+      <h2>Connexion</h2>
+      <p>Utilise Face ID ou la passkey de secours.</p>
+      <button id="btn-login" type="button">Se connecter avec une passkey</button>
+    </section>
+
+    <section id="view-status" hidden>
+      <div class="card">
+        <h2>État</h2>
+        <dl id="health" class="grid"></dl>
+      </div>
+      <div class="card">
+        <h2>Session</h2>
+        <p id="session-info"></p>
+        <h3>Passkeys</h3>
+        <ul id="passkeys" class="list"></ul>
+        <form id="form-backup">
+          <label for="backup-name">Ajouter une passkey de secours</label>
+          <input id="backup-name" maxlength="60" placeholder="Clé de secours">
+          <button type="submit" class="secondary">Ajouter</button>
+        </form>
+        <button id="btn-logout" type="button" class="secondary">Se déconnecter</button>
+      </div>
+    </section>
+
+    <p id="message" class="message" role="status" aria-live="polite"></p>
+  </main>
+</body>
+</html>
