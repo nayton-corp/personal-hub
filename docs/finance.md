@@ -4,7 +4,7 @@ Ce que font les lots 1 à 3, et comment reprendre ton historique BCF et tes règ
 Toutes les commandes passent par le conteneur `importer`, le seul qui voit la boîte d'entrée :
 
 ```
-alias hubc='docker compose --env-file deploy/.env -f deploy/compose.yaml'
+alias hubc='HUB_TAG=$(cat deploy/.current-tag) docker compose --env-file deploy/.env -f deploy/compose.yaml'
 alias fin='hubc run --rm --no-deps importer hub finance'
 ```
 

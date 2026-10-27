@@ -50,8 +50,8 @@ gardé dans le volume `ts-state`.
 ## 3. Première passkey
 
 ```
-docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm --no-deps scheduler \
-  hub auth bootstrap-code
+HUB_TAG=$(cat deploy/.current-tag) docker compose --env-file deploy/.env -f deploy/compose.yaml \
+  run --rm --no-deps scheduler hub auth bootstrap-code
 ```
 
 Sur l'iPhone (Tailscale actif), ouvre `HUB_PUBLIC_ORIGIN`, saisis le code, valide par
@@ -71,10 +71,13 @@ appareil) depuis la page d'état. Partager → « Sur l'écran d'accueil » inst
 
 ## 5. Commandes utiles
 
+Une commande à la main doit viser l'image déployée : `deploy/.current-tag` la retient
+(sans elle, compose cherche `hub:dev` et échoue en « pull access denied »).
+
 Les bases ne s'ouvrent jamais depuis macOS ; toute commande passe par un conteneur jetable :
 
 ```
-alias hubc='docker compose --env-file deploy/.env -f deploy/compose.yaml'
+alias hubc='HUB_TAG=$(cat deploy/.current-tag) docker compose --env-file deploy/.env -f deploy/compose.yaml'
 hubc run --rm --no-deps scheduler hub token create brain-mac -s brain
 hubc run --rm --no-deps scheduler hub verify
 hubc logs -f api
