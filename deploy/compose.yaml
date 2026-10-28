@@ -17,7 +17,8 @@ x-hardening: &hardening
 
 x-hub-env: &hub-env
   HUB_SERVER__PUBLIC_ORIGIN: ${HUB_PUBLIC_ORIGIN:?HUB_PUBLIC_ORIGIN manquant dans deploy/.env}
-  TZ: Europe/Zurich
+  TZ: ${HUB_TZ:-Europe/Zurich}
+  HUB_TZ: ${HUB_TZ:-Europe/Zurich}
 
 x-collector: &collector
   <<: *hardening

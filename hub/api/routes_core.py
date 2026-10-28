@@ -20,6 +20,8 @@ from hub.api.schemas import (
     HitOut,
     LinkOut,
     LinksOut,
+    ProfileIn,
+    ProfileOut,
     ProposalCreateIn,
     ProposalListOut,
     ProposalOut,
@@ -27,7 +29,7 @@ from hub.api.schemas import (
     RevertIn,
     SearchOut,
 )
-from hub.core import passkeys, proposals
+from hub.core import passkeys, profile, proposals
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal, require
 from hub.core.clock import utcnow
 from hub.core.errors import Problem
@@ -77,6 +79,29 @@ def _searcher(principal: CurrentPrincipal, hub_ctx: Ctx) -> Principal:
 
 
 Searcher = Annotated[Principal, Depends(_searcher)]
+
+
+@router.get("/profile", response_model=ProfileOut, tags=["cœur"])
+def get_profile(hub_ctx: Ctx, _principal: Reader) -> ProfileOut:
+    with hub_ctx.core.engine.connect() as conn:
+        return ProfileOut.model_validate(profile.get(conn).public())
+
+
+@router.post("/profile", response_model=ProfileOut, tags=["cœur"])
+def update_profile(body: ProfileIn, hub_ctx: Ctx, principal: AppSession) -> ProfileOut:
+    fields = body.model_fields_set
+    try:
+        with hub_ctx.core.engine.begin() as conn:
+            p = profile.update(
+                conn,
+                principal.actor,
+                display_name=body.display_name if "display_name" in fields else None,
+                country=body.country,
+                clear_name="display_name" in fields and not (body.display_name or "").strip(),
+            )
+    except profile.ProfileError as exc:
+        raise Problem("validation.params", str(exc)) from None
+    return ProfileOut.model_validate(p.public())
 
 
 @router.get("/proposals", response_model=ProposalListOut, tags=["propositions"])

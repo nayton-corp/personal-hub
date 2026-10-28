@@ -36,9 +36,12 @@ class Toolbox:
     domains: list[dict[str, Any]] = field(default_factory=list)
     loaded: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     owner: dict[str, str] = field(default_factory=dict)
+    profile: dict[str, Any] = field(default_factory=dict)
 
     def start(self) -> None:
-        self.domains = self.api.capabilities()
+        hello = self.api.hello()
+        self.domains = hello["domains"]
+        self.profile = hello.get("profile") or {}
         if self.autoload and len(self.domains) == 1:
             self.load(self.domains[0]["domain"])
 

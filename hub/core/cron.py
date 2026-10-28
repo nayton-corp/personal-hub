@@ -6,7 +6,6 @@ repris supercronic pour ne pas embarquer un binaire de plus dans l'image.
 
 from __future__ import annotations
 
-import os
 import shlex
 import subprocess
 import time
@@ -16,6 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from hub.core.clock import local_tz
 from hub.core.logging import get_logger
 
 log = get_logger("hub.scheduler")
@@ -110,7 +110,7 @@ def tick(jobs: list[Job], at: datetime, runner: Runner = _run) -> list[tuple[str
 
 def run_forever(crontab: Path, tz: str | None = None) -> None:  # pragma: no cover - boucle
     jobs = parse(crontab.read_text())
-    zone = ZoneInfo(tz or os.environ.get("TZ", "Europe/Zurich"))
+    zone = ZoneInfo(tz) if tz else local_tz()
     log.info("scheduler.start", jobs=len(jobs))
     while True:
         now = datetime.now(zone)

@@ -1,7 +1,7 @@
 // Coquille de l'app (L0-09) : connexion par passkey, puis les vues Finance (L2-03). Aucun
 // script en ligne : la CSP de Caddy n'autorise que les fichiers servis par le hub.
 import { start } from "./finance.js";
-import { api } from "./store.js";
+import { api, setTimeZone, store, timeZone } from "./store.js";
 import { creationOptions, credentialJSON, requestOptions } from "./webauthn.js";
 
 const $ = (id) => document.getElementById(id);
@@ -23,7 +23,7 @@ function say(text, error = false) {
   el.classList.toggle("error", error);
 }
 
-const fmt = (iso) => (iso ? new Date(iso).toLocaleString("fr-CH", { timeZone: "Europe/Zurich" }) : "—");
+const fmt = (iso) => (iso ? new Date(iso).toLocaleString("fr-CH", { timeZone: timeZone() }) : "—");
 
 function row(dl, label, value, ok) {
   const dt = document.createElement("dt");
@@ -34,8 +34,17 @@ function row(dl, label, value, ok) {
   dl.append(dt, dd);
 }
 
+function renderProfile(p) {
+  if (setTimeZone(p.timezone)) store.invalidate();
+  $("profile-name").value = p.display_name || "";
+  $("profile-country").value = p.country;
+  const modules = p.modules.length ? ` · modules : ${p.modules.join(", ")}` : "";
+  $("profile-info").textContent = `Fuseau ${p.timezone} (HUB_TZ)${modules}.`;
+}
+
 async function renderSettings(session) {
-  const [health, keys] = await Promise.all([api("/health"), api("/auth/passkeys")]);
+  const [health, keys, profile] = await Promise.all([api("/health"), api("/auth/passkeys"), api("/profile")]);
+  renderProfile(profile);
   const dl = $("health");
   dl.replaceChildren();
   row(dl, "Hub", `${health.status} · v${health.version}`, health.status === "ok");
@@ -126,6 +135,14 @@ $("form-backup").addEventListener("submit", guard(async () => {
   await register(null, $("backup-name").value.trim() || "Passkey de secours");
   $("backup-name").value = "";
   say("Passkey de secours ajoutée.");
+}));
+$("form-profile").addEventListener("submit", guard(async () => {
+  await api("/profile", {
+    display_name: $("profile-name").value.trim(),
+    country: $("profile-country").value.trim().toUpperCase(),
+  });
+  store.invalidate(); // le pays ouvre ou ferme le pilier 3a des chiffres clés
+  say("Profil enregistré.");
 }));
 $("btn-logout").addEventListener("click", guard(async () => {
   await api("/auth/logout", {});

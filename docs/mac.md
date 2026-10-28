@@ -58,6 +58,12 @@ Sur l'iPhone (Tailscale actif), ouvre `HUB_PUBLIC_ORIGIN`, saisis le code, valid
 Face ID, puis ajoute tout de suite une **passkey de secours** (clé matérielle ou autre
 appareil) depuis la page d'état. Partager → « Sur l'écran d'accueil » installe l'app.
 
+Dans **Sources → Profil**, donne le prénom qu'emploiera l'assistant et le pays de l'instance :
+la Suisse (par défaut) ouvre le module pilier 3a, un autre pays le ferme. Le fuseau vient de
+`HUB_TZ` dans `deploy/.env` (Europe/Zurich par défaut) ; il fixe le jour civil des chiffres et
+les horaires des collecteurs et des tâches. En ligne de commande :
+`hubc run --rm --no-deps scheduler hub profile set --name Camille --country CH`.
+
 ## 4. Critères d'acceptation à cocher
 
 - [ ] `/api/health` répond depuis le téléphone par Tailscale.

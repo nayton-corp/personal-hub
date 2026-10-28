@@ -2,6 +2,19 @@
 
 ## [Non publié]
 
+### Hub générique — G1 : profil de l'instance
+
+- `core.db` (migration `0003_profile`) : profil de l'instance, prénom et pays. Une base existante
+  reçoit la Suisse, sans prénom. Routes `GET /api/profile` (app et jetons de lecture) et
+  `POST /api/profile` (app seulement), carte « Profil » dans Sources, `hub profile show|set`.
+- Le pays ouvre les modules qui lui sont propres : le pilier 3a (chiffres clés, outil
+  `finance_networth`, alerte de fin d'année) ne s'affiche plus hors de Suisse.
+- Fuseau de l'instance : `HUB_TZ` (Europe/Zurich par défaut), posé par compose dans tous les
+  conteneurs, remplace les fuseaux de Zurich écrits dans le code (jour civil des chiffres,
+  horaires des collecteurs et du planificateur, navigateur des robots, dates de l'app).
+- Assistant : le prénom et le pays viennent du profil (`GET /api/tools` le renvoie) ; plus aucun
+  prénom dans le code, les prompts ni l'exemple `deploy/.env`.
+
 ### Cryptos automatiques
 
 - Collecteur `market` : un portefeuille BTC peut se donner par sa clé publique étendue (`xpub`,

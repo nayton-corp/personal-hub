@@ -4,7 +4,7 @@ Huit conteneurs déposent les exports officiels dans `~/PersonalHub/inbox/`, où
 traite comme un fichier déposé à la main. Ils tournent sur le Mac comme le reste (phase 1) ; les
 mêmes images et le même `deploy/compose.yaml` serviront sur le Pi.
 
-| Collecteur | Comment | Quand (heure de Zurich) | Ce qu'il dépose |
+| Collecteur | Comment | Quand (fuseau de l'instance) | Ce qu'il dépose |
 |---|---|---|---|
 | `collector-bcf` | navigateur sans tête, connexion avec validation push dans l'app BCF | 07:30 du lundi au vendredi | export camt.053 depuis J-10, « déjà téléchargées » coché |
 | `collector-viac` | navigateur sans tête, profil gardé dans son volume | dimanche 09:00 | avis PDF nouveaux de la liste Documents, et un rapport tous les 6 jours |

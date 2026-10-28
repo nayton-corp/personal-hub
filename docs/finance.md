@@ -40,7 +40,7 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
 | `budget/months?month=&months=6` | les mêmes totaux, mois par mois (graphique Tendance) |
 | `export.csv?from=&to=` | journal complet en CSV (session passkey seulement) |
 
-- **Mois.** Le mois affiché est toujours un paramètre ; l'app part du mois civil à Zurich.
+- **Mois.** Le mois affiché est toujours un paramètre ; l'app part du mois civil dans le fuseau de l'instance (`HUB_TZ`, Zurich par défaut).
   `period=q` couvre les trois mois complets avant le mois choisi. Un mois futur est refusé.
 - **Sans catégorie.** Les règles (lot 3) catégorisent à l'import ; ce qui reste sans
   catégorie compte en dépense variable si c'est négatif, en revenu sinon, sous le nom

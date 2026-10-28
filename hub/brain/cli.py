@@ -14,7 +14,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
-from zoneinfo import ZoneInfo
 
 import typer
 
@@ -27,10 +26,10 @@ from hub.brain.suggest import Memory, suggest
 from hub.brain.toolbox import Toolbox
 from hub.core import cron
 from hub.core import logging as hub_logging
+from hub.core.clock import local_tz
 from hub.core.logging import get_logger
 from hub.core.settings import get_settings
 
-TZ = ZoneInfo("Europe/Zurich")
 CRONTAB = Path("/srv/hub/app/deploy/brain-crontab")
 CHECK_QUESTION = "Combien ai-je dépensé en restaurants ce mois-ci ?"
 CHECK_CATEGORY = "restaurants"
@@ -63,7 +62,7 @@ def _model(cfg: BrainConfig) -> OpenAICompatible:
 
 
 def _today() -> datetime:
-    return datetime.now(TZ)
+    return datetime.now(local_tz())
 
 
 @app.command()

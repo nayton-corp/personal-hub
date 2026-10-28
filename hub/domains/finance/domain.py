@@ -9,14 +9,13 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import typer
 from fastapi import APIRouter
 from sqlalchemy import Connection, Engine, text
 
-from hub.core import canonical
-from hub.core.clock import now_iso, utcnow
+from hub.core import canonical, profile
+from hub.core.clock import local_today, now_iso
 from hub.core.db import begin_immediate, make_engine
 from hub.core.domain import Event, Health, Hit, McpTool, ProposalKind, Ref
 from hub.core.ids import Urn, urn
@@ -37,7 +36,6 @@ from hub.domains.finance.importer import Archiver, ImportService, recipient_from
 
 MIGRATIONS = Path(__file__).parent / "migrations"
 SCHEMA_VERSION = 8  # 0008_crypto_cost
-TZ = ZoneInfo("Europe/Zurich")  # le jour civil des chiffres de l'app
 log = get_logger("hub.finance")
 
 
@@ -67,6 +65,14 @@ class FinanceDomain:
         cap = section.get("pillar3a_cap_minor")
         self.pillar3a_cap: int | None = int(cap) if cap is not None else None
         self.proposal_kinds: Mapping[str, ProposalKind] = build_kinds(self)
+
+    def pillar3a(self) -> dict[str, Any]:
+        """Options du pilier 3a pour les chiffres clés et les sentinelles : le module s'ouvre
+        selon le pays du profil (Suisse)."""
+        return {
+            "pillar3a": profile.load(self.settings).has("pillar3a"),
+            "pillar3a_cap": self.pillar3a_cap,
+        }
 
     def engine(self) -> Engine:
         return self._engine
@@ -188,8 +194,8 @@ class FinanceDomain:
             return ledger.verify(conn)
 
     def today(self) -> date:
-        """Date civile à Zurich : fixe « aujourd'hui » pour les chiffres de l'app."""
-        return utcnow().astimezone(TZ).date()
+        """Date civile de l'instance : fixe « aujourd'hui » pour les chiffres de l'app."""
+        return local_today()
 
     def refresh_snapshots(self, *, force: bool = False) -> snapshots.Refresh:
         refreshed = snapshots.refresh(self._engine, self.today(), force=force)
@@ -207,7 +213,7 @@ class FinanceDomain:
 
     def run_sentinels(self) -> list[sentinels.Alert]:
         with begin_immediate(self._engine) as conn:
-            raised = sentinels.run(conn, self.today(), pillar3a_cap=self.pillar3a_cap)
+            raised = sentinels.run(conn, self.today(), **self.pillar3a())
         for a in raised:
             log.info("sentinel.alert", kind=a.kind)
         return raised

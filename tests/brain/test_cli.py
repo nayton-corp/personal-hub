@@ -17,6 +17,7 @@ from hub.brain import cli
 from hub.brain.config import BrainConfig, TokenMissing, config, token
 from hub.brain.llm import LlmError, Reply
 from hub.core import secrets
+from hub.core.clock import local_tz
 from hub.core.context import HubContext
 from hub.core.settings import Secrets, Settings
 from hub.domains.finance.domain import FinanceDomain
@@ -64,7 +65,7 @@ def wired(
 
         monkeypatch.setattr(cli, "_toolbox", toolbox)
         monkeypatch.setattr(cli, "_model", lambda _cfg: model)
-        monkeypatch.setattr(cli, "_today", lambda: datetime(2026, 10, 27, 9, 0, tzinfo=cli.TZ))
+        monkeypatch.setattr(cli, "_today", lambda: datetime(2026, 10, 27, 9, 0, tzinfo=local_tz()))
         monkeypatch.setattr(cli, "_cfg", lambda: BrainConfig(state_dir=ctx.settings.paths.data))
 
     return setup

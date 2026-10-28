@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from hub.collectors.base import (
     CollectorConfig,
@@ -23,11 +22,10 @@ from hub.collectors.browser import Browser, Selectors, open_browser, purge_diag
 from hub.collectors.client import HubClient, HubUnavailable
 from hub.collectors.dropbox import Inbox
 from hub.core import cron
-from hub.core.clock import now_iso, utcnow
+from hub.core.clock import local_today, local_tz, now_iso
 from hub.core.logging import get_logger
 
 log = get_logger("hub.collector")
-TZ = ZoneInfo("Europe/Zurich")
 
 
 @dataclass
@@ -41,7 +39,7 @@ class Env:
     inbox_root: Path
     client: HubClient | None = None
     diagnose: bool = False
-    today: date = field(default_factory=lambda: utcnow().astimezone(TZ).date())
+    today: date = field(default_factory=local_today)
     memory: Memory = field(init=False)
     inbox: Inbox = field(init=False)
 
@@ -172,8 +170,9 @@ def run_forever(
     log.info("collector.daemon_start", collectors=names)
     last_poll = 0
     last_purge = ""
-    for at in _minutes(datetime.now(TZ)):
-        time.sleep(max(0, (at - datetime.now(TZ)).total_seconds()))
+    tz = local_tz()
+    for at in _minutes(datetime.now(tz)):
+        time.sleep(max(0, (at - datetime.now(tz)).total_seconds()))
         if at.date().isoformat() != last_purge:
             last_purge = at.date().isoformat()
             purge_diag(cfg.diag, cfg.diag_keep_days)

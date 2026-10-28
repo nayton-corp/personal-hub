@@ -272,8 +272,24 @@ class CapabilityOut(BaseModel):
     aggregates_only: bool
 
 
+class ProfileOut(BaseModel):
+    display_name: str | None
+    country: str
+    timezone: str
+    modules: list[str]
+
+
+class ProfileIn(BaseModel):
+    """Champs absents : inchangés ; `display_name` vide : prénom effacé."""
+
+    model_config = ConfigDict(extra="forbid")
+    display_name: str | None = Field(default=None, max_length=60)
+    country: str | None = Field(default=None, pattern=r"^[A-Za-z]{2}$")
+
+
 class CapabilitiesOut(BaseModel):
     domains: list[CapabilityOut]
+    profile: ProfileOut
 
 
 class ToolOut(BaseModel):
