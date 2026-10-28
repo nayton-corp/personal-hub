@@ -299,3 +299,55 @@ def test_viac_pdf_upload_and_holdings(
         client.get("/api/finance/holdings?on=31.03.2026", headers=token(ctx, "brain")).status_code
         == 422
     )
+
+
+def test_pending_accounts_then_created_from_a_proposal(
+    ctx: HubContext, fin: FinanceDomain, client: TestClient
+) -> None:
+    """G5 : l'app liste les comptes que des relevés attendent (sans montant), puis la création
+    validée ouvre un compte Revolut au solde déduit, comme `fin revolut add-account`."""
+    from hub.domains.finance.cli import propose_and_accept
+    from tests.finance.test_revolut import FIRST, drop, eb_file
+
+    drop(fin, "revolut-a.json", eb_file(FIRST, full=True))
+    reader = token(ctx, "finance:read")
+    r = client.get("/api/finance/accounts/pending", headers=reader)
+    assert r.status_code == 200
+    assert r.json()["items"] == [
+        {
+            "ref": "revolut:CHF",
+            "institution": "Revolut",
+            "kind": "cash",
+            "currency": "CHF",
+            "imports": 1,
+            "entries": 2,
+            "from": "2026-10-20",
+            "to": "2026-10-21",
+            "can_open": True,
+        }
+    ]
+    assert "1250" not in r.text
+    assert (
+        client.get(
+            "/api/finance/accounts/pending", headers=token(ctx, "finance:aggregates")
+        ).status_code
+        == 403
+    )
+    propose_and_accept(
+        fin,
+        "create_account",
+        {
+            "institution": "Revolut",
+            "name": "Revolut CHF",
+            "currency": "CHF",
+            "external_ref": "revolut:CHF",
+            "liquid": True,
+            "budget_account": True,
+        },
+    )
+    with fin.engine().connect() as conn:
+        total = conn.execute(text("SELECT sum(amount_minor) FROM entries")).scalar_one()
+    assert total == 18750
+    assert client.get("/api/finance/accounts/pending", headers=reader).json()["items"] == []
+    accounts = client.get("/api/finance/accounts", headers=reader).json()["items"]
+    assert accounts[0]["external_ref"] == "revolut:CHF"

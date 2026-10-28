@@ -4,6 +4,7 @@ déclaration au hub, et boucle planifiée d'un service collecteur (G4 : `collect
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager
@@ -146,6 +147,56 @@ def execute(env: Env, kind: Kind, flow: Flow | None = None) -> Result:
     return result
 
 
+# --- consentement demandé depuis l'app (G5) ---------------------------------------------------
+
+# connexions dont la liaison tourne dans un fil : leurs runs attendent qu'elle finisse
+LINKING: set[str] = set()
+_linking = threading.Lock()
+
+
+def link_now(env: Env, redirect_url: str) -> Result:
+    """Liaison Enable Banking lancée depuis l'app : l'adresse d'autorisation remonte au hub,
+    qui l'affiche ; le retour du navigateur débloque la reprise complète. Déclarée comme un
+    contrôle, réussi ou non ; ne lève jamais."""
+    from hub.collectors.revolut import flow as open_banking
+
+    def show(url: str) -> None:
+        if env.client is not None:
+            env.client.set_link_url(env.name, url)
+
+    def linked(e: Env, _kind: Kind) -> Result:
+        return open_banking.link(e, redirect_url, show)
+
+    try:
+        return execute(env, "check", linked)
+    finally:
+        if env.client is not None:
+            try:
+                env.client.set_link_url(env.name, None)
+            except HubUnavailable as exc:
+                log.warning("collector.link_clear_failed", collector=env.name, error=str(exc))
+
+
+def start_link(env: Env, redirect_url: str) -> threading.Thread | None:
+    """La liaison attend le retour jusqu'à 15 minutes : elle tourne à côté de la boucle, une
+    seule à la fois par connexion."""
+    with _linking:
+        if env.name in LINKING:
+            return None
+        LINKING.add(env.name)
+
+    def work() -> None:
+        try:
+            link_now(env, redirect_url)
+        finally:
+            with _linking:
+                LINKING.discard(env.name)
+
+    thread = threading.Thread(target=work, name=f"link-{env.name}", daemon=True)
+    thread.start()
+    return thread
+
+
 # --- boucle du conteneur ---------------------------------------------------------------------
 
 
@@ -168,12 +219,16 @@ def tick(
     *,
     poll_checks: bool,
     runner: Callable[[Env, Kind], Result] = execute,
-) -> list[tuple[str, Kind, str]]:
-    """Une minute de la boucle : runs planifiés si la connexion est `enabled`, contrôles
-    demandés depuis l'app. Sans réponse du hub, rien ne part : un run doit pouvoir être déclaré.
-    Les secrets d'une connexion ne sont déchiffrés que si elle tourne maintenant."""
-    done: list[tuple[str, Kind, str]] = []
+    linker: Callable[[Env], object] | None = None,
+) -> list[tuple[str, str, str]]:
+    """Une minute de la boucle : runs planifiés si la connexion est `enabled`, contrôles et
+    consentements demandés depuis l'app. Sans réponse du hub, rien ne part : un run doit
+    pouvoir être déclaré. Les secrets d'une connexion ne sont déchiffrés que si elle tourne
+    maintenant."""
+    done: list[tuple[str, str, str]] = []
     for item in items:
+        if item.id in LINKING:
+            continue
         scheduled = bool(item.schedule) and due(str(item.schedule), at)
         if not scheduled and not poll_checks:
             continue
@@ -181,6 +236,17 @@ def tick(
             state = client.state(item.id) if client else {"mode": "enabled"}
         except HubUnavailable as exc:
             log.warning("collector.hub_unavailable", collector=item.id, error=str(exc))
+            continue
+        if state.get("link_requested") and linker is not None:
+            if item.connector != "enable_banking":
+                continue
+            try:
+                env = make_env(item)
+            except Exception as exc:
+                done.append((item.id, "check", _refused(client, item.id, "check", exc).outcome))
+                continue
+            linker(env)
+            done.append((item.id, "link", "started"))
             continue
         kind: Kind
         if state.get("check_requested"):
@@ -221,7 +287,11 @@ def assigned(client: HubClient, runner: str) -> list[Assigned] | None:
 
 
 def run_forever(
-    make_env: Callable[[Assigned], Env], runner: str, cfg: CollectorConfig, client: HubClient
+    make_env: Callable[[Assigned], Env],
+    runner: str,
+    cfg: CollectorConfig,
+    client: HubClient,
+    linker: Callable[[Env], object] | None = None,
 ) -> None:  # pragma: no cover - boucle
     log.info("collector.daemon_start", runner=runner)
     last_poll = 0
@@ -237,4 +307,4 @@ def run_forever(
             last_poll = time.monotonic_ns()
         items = assigned(client, runner)
         if items is not None:
-            tick(make_env, items, client, at, poll_checks=poll)
+            tick(make_env, items, client, at, poll_checks=poll, linker=linker)

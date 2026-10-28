@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 from hub.api.schemas import (
     CollectorLinkIn,
     CollectorLinkOut,
+    CollectorLinkUrlIn,
     CollectorListOut,
     CollectorModeIn,
     CollectorNotifyIn,
@@ -191,7 +192,7 @@ def notify(
     else:
         msg = Message(
             f"Collecte {name_label} : consentement à renouveler",
-            "Le consentement expire bientôt : relance la liaison depuis le terminal.",
+            "Le consentement expire bientôt : relance la liaison depuis l'app (Sources).",
             "high",
         )
     return CollectorNotifyOut(sent=hub_ctx.notifier.send(msg))
@@ -209,6 +210,22 @@ def request_check(name: str, hub_ctx: Ctx, principal: AppSession) -> CollectorOu
     """Demande un run de contrôle (connexion et sélecteurs, sans téléchargement)."""
     with hub_ctx.core.engine.begin() as conn:
         return _out(collectors.request_check(conn, name, principal.actor))
+
+
+@router.post("/{name}/link", response_model=CollectorOut)
+def request_link(name: str, hub_ctx: Ctx, principal: AppSession) -> CollectorOut:
+    """Nouveau consentement Enable Banking : le service collecteur ouvre l'autorisation dans la
+    minute ; l'adresse à ouvrir apparaît ensuite dans `link_url`."""
+    with hub_ctx.core.engine.begin() as conn:
+        return _out(collectors.request_link(conn, name, principal.actor))
+
+
+@router.put("/{name}/link-url", response_model=CollectorOut)
+def set_link_url(
+    name: str, body: CollectorLinkUrlIn, hub_ctx: Ctx, _principal: Collector
+) -> CollectorOut:
+    with hub_ctx.core.engine.begin() as conn:
+        return _out(collectors.set_link_url(conn, name, body.url))
 
 
 @router.post("/{name}/links", response_model=CollectorLinkOut, status_code=201)
@@ -254,7 +271,7 @@ def callback(
         detail = f" : {error_description}" if error_description else ""
         text = f"Liaison {label} refusée ({error}){detail}."
     else:
-        text = f"Liaison {label} inconnue ou expirée : relance-la depuis le terminal."
+        text = f"Liaison {label} inconnue ou expirée : relance-la depuis l'app."
     page = (
         "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
         f"<title>Personal Hub</title><p>{escape(text)}</p>"

@@ -339,3 +339,99 @@ def test_cli_add_set_secrets_remove(tmp_path: Path, cli_env: Path) -> None:
     assert _cli("connections", "remove", "n26")[0] == 0
     assert _cli("connections", "remove", "n26")[0] != 0
     assert _cli("connections", "list")[1] == ""
+
+
+# --- G5 : consentement depuis l'app, portefeuilles ----------------------------------------------
+
+
+def test_app_requests_a_link_and_sees_the_url(khub: HubContext, kclient: TestClient) -> None:
+    recipient = secrets.recipient(khub.settings.secrets.age_key_file)
+    with khub.core.engine.begin() as conn:
+        connections.create(
+            conn,
+            "n26",
+            "enable_banking",
+            "system:test",
+            settings={"aspsp_name": "N26", "aspsp_country": "DE"},
+        )
+        connections.create(conn, "bcf", "bcf", "system:test")
+    collector = bearer(_token(khub, "collector"))
+    app_session(khub, kclient)
+    assert kclient.post("/api/collectors/n26/link", json={}).status_code == 422  # sans secrets
+    assert kclient.post("/api/collectors/bcf/link", json={}).status_code == 422
+    with khub.core.engine.begin() as conn:
+        connections.set_secrets(
+            conn, "n26", {"application_id": "a", "private_key": "k"}, recipient, "x"
+        )
+    r = kclient.post("/api/collectors/n26/link", json={})
+    assert (r.json()["link_requested"], r.json()["link_url"]) == (True, None)
+    assert kclient.get("/api/collectors/n26", headers=collector).json()["link_requested"]
+    # l'app ne peut pas poser l'adresse ; le collecteur, si
+    put = {"url": "https://bank.example/auth?state=x"}
+    assert kclient.put("/api/collectors/n26/link-url", json=put).status_code in {401, 403}
+    bad = {"url": "http://bank.example/auth"}
+    assert (
+        kclient.put("/api/collectors/n26/link-url", json=bad, headers=collector).status_code == 422
+    )
+    r = kclient.put("/api/collectors/n26/link-url", json=put, headers=collector)
+    assert (r.json()["link_requested"], r.json()["link_url"]) == (False, put["url"])
+    state = next(s for s in kclient.get("/api/collectors").json()["items"] if s["name"] == "n26")
+    assert state["link_url"] == put["url"]
+    r = kclient.put("/api/collectors/n26/link-url", json={"url": None}, headers=collector)
+    assert r.json()["link_url"] is None
+
+
+def test_wallet_settings_are_checked(khub: HubContext) -> None:
+    btc = {"account": "crypto:ledger", "asset": "btc", "xpub": "zpub6r…", "script": "wpkh"}
+    eth = {"account": "crypto:metamask", "asset": "ETH", "addresses": ["0x" + "a" * 40]}
+    with khub.core.engine.begin() as conn:
+        c = connections.create(
+            conn, "market", "market", "system:test", settings={"wallets": [btc, eth]}
+        )
+        assert c.settings["wallets"][0]["asset"] == "BTC"
+        assert c.settings["wallets"][0]["script"] == "wpkh"  # les champs en plus restent
+        for wrong in (
+            "pas une liste",
+            [{"account": "ledger", "asset": "BTC", "addresses": ["bc1q"]}],
+            [{"account": "crypto:x", "asset": "DOGE", "addresses": ["D"]}],
+            [{"account": "crypto:x", "asset": "BTC"}],
+            [{"account": "crypto:x", "asset": "ETH", "xpub": "xpub6…"}],
+            [{"account": "crypto:x", "asset": "BTC", "xpub": "xprv9…"}],
+            [{"account": "crypto:x", "asset": "SOL", "addresses": [1]}],
+        ):
+            with pytest.raises(Problem):
+                connections.update(conn, "market", "system:test", settings={"wallets": wrong})
+
+
+def test_import_moves_wallets_out_of_secrets(tmp_path: Path, cli_env: Path) -> None:
+    folder = tmp_path / "old"
+    folder.mkdir()
+    wallets = [{"account": "crypto:ledger", "asset": "BTC", "xpub": "zpub6r…"}]
+    _write(
+        folder / "market.enc.yaml",
+        cli_env,
+        {"collector-market": {"token": "hub_x", "coingecko_key": "cg", "wallets": wallets}},
+    )
+    assert _cli("db", "upgrade")[0] == 0
+    assert _cli("connections", "import", str(folder), "--no-service-files")[0] == 0
+    market = json.loads(_cli("connections", "list")[1])
+    assert market["settings"]["wallets"] == wallets
+    assert market["has_secrets"] is True  # la clé CoinGecko reste chiffrée
+    settings = get_settings()
+    hub = HubContext.build(settings)
+    with hub.core.engine.connect() as conn:
+        blob = connections.require(conn, "market").secrets
+    hub.dispose()
+    assert blob is not None
+    assert json.loads(secrets.decrypt_with(cli_env, blob)) == {"coingecko_key": "cg"}
+
+    # une installation de G4 déjà reprise : les portefeuilles sortent au déploiement suivant
+    with HubContext.build(settings).core.engine.begin() as conn:
+        connections.update(conn, "market", "x", settings={})
+        connections.set_secrets(
+            conn, "market", {"wallets": wallets}, secrets.recipient(cli_env), "x"
+        )
+    out = json.loads(_cli("connections", "import", str(folder), "--no-service-files")[1])
+    assert out["kept"] == ["market"]
+    market = json.loads(_cli("connections", "list")[1])
+    assert (market["settings"]["wallets"], market["has_secrets"]) == (wallets, False)

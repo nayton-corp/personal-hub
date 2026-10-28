@@ -457,6 +457,7 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
             raise typer.Exit(1)
         with engine.connect() as conn:
             account = catalog.account_by_ref(conn, ref)
+        created = account is None
         if account is None:
             result = propose_and_accept(
                 domain,
@@ -477,6 +478,9 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
             opened = conn.execute(
                 text("SELECT 1 FROM entries WHERE account_id = :a LIMIT 1"), {"a": account.id}
             ).first()
+        if opened and created:  # la validation l'a ouvert (même chemin que l'app, G5)
+            _out({"id": account.id, "opened": True, "imports": None})
+            return
         if opened:
             outcomes = domain.importer.retry_needs_review()
             _out({"id": account.id, "opened": False, "retried": len(outcomes)})

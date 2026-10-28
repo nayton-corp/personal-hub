@@ -49,7 +49,7 @@ function outcome(results) {
   return [parts.join(", "), failed > 0];
 }
 
-function propose(kind, params, bundle) {
+export function propose(kind, params, bundle) {
   return api("/proposals", { domain: "finance", kind, params, bundle_id: bundle });
 }
 

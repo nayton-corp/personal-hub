@@ -191,6 +191,17 @@ main { max-width: 34rem; margin: 0 auto; padding: 0 16px 104px; }
        text-align: center; text-decoration: none; }
 .btn.secondary { background: transparent; color: var(--acc); border: 1px solid var(--line); }
 .btn:disabled { opacity: .6; }
+.form select, .form textarea { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px;
+              border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.form textarea { min-height: 84px; resize: vertical; font-family: ui-monospace, Menlo, monospace; font-size: 14px; }
+.form .check { display: flex; align-items: center; gap: 8px; color: var(--fg); }
+.form .check input { width: auto; }
+.form h3 { margin: 18px 0 0; font-size: 1rem; }
+.form .hint { font-size: var(--fs-caption); color: var(--muted); margin: 4px 0 0; }
+.form .acts { display: flex; gap: 10px; flex-wrap: wrap; }
+.form .acts .btn { flex: 1 1 140px; width: auto; }
+.wallet { border: 1px solid var(--line); border-radius: 12px; padding: 4px 12px 12px; margin-top: 10px; }
+.btn.danger { background: transparent; color: var(--bad); border: 1px solid var(--line); }
 .grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
 .grid dt { color: var(--muted); }
 .grid dd { margin: 0; text-align: right; }
@@ -216,3 +227,4 @@ main { max-width: 34rem; margin: 0 auto; padding: 0 16px 104px; }
             border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
 .link:disabled { opacity: .5; cursor: default; }
 .card .message:empty { min-height: 0; margin: 0; }
+.row .v .link + .link { margin-left: 14px; }

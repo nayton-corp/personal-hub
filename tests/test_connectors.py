@@ -74,6 +74,17 @@ def test_connection_settings_complete_the_service_config() -> None:
     assert old == cfg  # les horaires d'avant G4 sont ignorés
 
 
+def test_market_reads_wallets_from_settings_and_legacy_secrets(tmp_path: Path) -> None:
+    from hub.collectors.market import flow
+    from hub.collectors.runtime import Env
+
+    ledger = {"account": "crypto:ledger", "asset": "btc", "addresses": ["bc1qxyz"]}
+    phantom = {"account": "crypto:phantom", "asset": "SOL", "addresses": ["Fz1"]}
+    cfg = base.for_connection(base.CollectorConfig(home=tmp_path), "market", {"wallets": [ledger]})
+    env = Env("market", cfg, {"wallets": [phantom]}, tmp_path / "inbox")
+    assert [w["account"] for w in flow.wallet_entries(env)] == ["crypto:ledger", "crypto:phantom"]
+
+
 def test_catalog_route_is_for_the_app(client: TestClient, hub: HubContext, make_token) -> None:  # type: ignore[no-untyped-def]
     path = "/api/collectors/catalog"
     assert (

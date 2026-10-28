@@ -12,6 +12,7 @@ from hub.core import proposals
 from hub.core.auth import AppSession, Ctx, Principal, require
 from hub.core.errors import Problem
 from hub.domains.finance import (
+    catalog,
     insights,
     lookthrough,
     reads,
@@ -31,6 +32,7 @@ DATE = r"^\d{4}-\d{2}-\d{2}$"
 MAX_UPLOAD = 50 * 1024 * 1024
 _NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip|pdf|json|csv|xlsx)$", re.I)
 DIMENSION = r"^(region|sector|currency|holding)$"
+_REVOLUT_REF = re.compile(r"revolut:([A-Z]{3})(:[a-z0-9-]+)?")
 
 Reader = Annotated[Principal, Depends(require("app", "finance:read"))]
 AnyReader = Annotated[Principal, Depends(require("app", "finance:read", "finance:aggregates"))]
@@ -250,6 +252,34 @@ def build_router(domain: FinanceDomain) -> APIRouter:
     def categories(_p: AnyReader) -> dict[str, Any]:
         with engine.connect() as conn:
             return {"items": reads.categories(conn)}
+
+    @r.get("/accounts/pending")
+    def pending_accounts(_p: Reader) -> dict[str, Any]:
+        """Comptes vus dans des relevés en attente (Enable Banking, CSV Revolut) mais pas encore
+        créés : clé, devise, nombre d'écritures et période. Aucun montant."""
+        from hub.domains.finance import importer
+
+        out = []
+        for ref, items in sorted(importer.revolut_pending(domain.importer).items()):
+            with engine.connect() as conn:
+                if catalog.account_by_ref(conn, ref) is not None:
+                    continue
+            dates = [e.booking_date for _, st in items for e in st.entries]
+            m = _REVOLUT_REF.fullmatch(ref)
+            out.append(
+                {
+                    "ref": ref,
+                    "institution": "Revolut",
+                    "kind": "cash",
+                    "currency": m.group(1) if m else None,
+                    "imports": len({i for i, _ in items}),
+                    "entries": sum(len(st.entries) for _, st in items),
+                    "from": min(dates, default=None),
+                    "to": max(dates, default=None),
+                    "can_open": any(st.derived_opening for _, st in items),
+                }
+            )
+        return {"items": out}
 
     @r.get("/freshness")
     def freshness(_p: AnyReader) -> dict[str, Any]:

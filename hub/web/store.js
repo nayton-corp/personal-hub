@@ -10,9 +10,10 @@ export class ApiError extends Error {
   }
 }
 
-export async function api(path, body) {
+// GET sans corps, POST avec ; `method` pour PATCH, PUT et DELETE (connexions, G5)
+export async function api(path, body, method) {
   const res = await fetch(`/api${path}`, {
-    method: body === undefined ? "GET" : "POST",
+    method: method || (body === undefined ? "GET" : "POST"),
     headers: body === undefined ? {} : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials: "same-origin",

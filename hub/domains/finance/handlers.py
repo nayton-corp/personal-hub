@@ -577,8 +577,19 @@ class CreateAccountHandler:
         return {"account_id": a.id, "iban": mask_iban(a.iban)}
 
     def after_commit(self, params: BaseModel, result: dict[str, Any]) -> None:
-        """Les imports en attente sur cet IBAN sont relancés."""
-        self.domain.importer.retry_needs_review(quiet=True)
+        """Les imports en attente sur ce compte sont relancés ; un compte Revolut (Enable
+        Banking) s'ouvre d'abord au solde déduit de sa reprise complète, comme
+        `fin revolut add-account`."""
+        assert isinstance(params, CreateAccount)  # noqa: S101
+        service = self.domain.importer
+        if (params.external_ref or "").startswith("revolut:"):
+            from hub.domains.finance import importer
+
+            with self.domain.engine().connect() as conn:
+                account = catalog.get_account(conn, str(result["account_id"]))
+            if importer.open_revolut(service, account)[0]:
+                return
+        service.retry_needs_review(quiet=True)
 
 
 class CreateCategory(_Params):

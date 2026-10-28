@@ -19,6 +19,9 @@
 	handle {
 		root * /srv/web
 		try_files {path} /index.html
+		# revalidés à chaque chargement (ETag) : après un déploiement, Safari ne mélange
+		# jamais un module neuf et un ancien (l'app restait sur « Chargement… »)
+		header Cache-Control "no-cache"
 		file_server
 	}
 
@@ -30,7 +33,4 @@
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		-Server
 	}
-
-	@sw path /sw.js
-	header @sw Cache-Control "no-cache"
 }
