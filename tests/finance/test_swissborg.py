@@ -206,6 +206,13 @@ def test_import_values_history_and_arrival_cost(finance: FinanceDomain) -> None:
         ("SWISSBORG/FEE/PERIODIC", -1_600, "frais-placement"),
     ]
     assert rows(finance, "SELECT count(*) FROM trades") == [(6,)]
+    # le net d'un retrait (ce qui arrive sur la Ledger) est gardé pour l'apparier
+    sent = rows(
+        finance,
+        "SELECT remittance, json_extract(fx_json, '$.quantity') FROM entries "
+        "WHERE bank_tx_code = 'SWISSBORG/WITHDRAWAL'",
+    )
+    assert sent == [("-0.0098 BTC", "-0.0098")]
     # rien de tout ça n'est un versement au patrimoine
     assert later.deposits == 0
     # le même relevé redéposé est un doublon ; le rejouer n'ajoute rien

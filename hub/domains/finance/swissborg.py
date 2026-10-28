@@ -22,6 +22,7 @@ from decimal import Decimal, InvalidOperation, localcontext
 
 from sqlalchemy import Connection, text
 
+from hub.core import canonical
 from hub.core.ids import urn
 from hub.core.money import DECIMAL_CONTEXT, Money, base_currency
 from hub.domains.finance import assets, catalog, ibkr, ledger, manual, valuation, xlsx
@@ -315,13 +316,18 @@ def _write_move(
 ) -> None:
     """Les écritures de la ligne (montant en devise de base, quantité en libellé) et son
     mouvement de parts dans `trades`, qui donne le prix de revient."""
-    legs = [(leg, code, label, values.of(m, q, usd)) for leg, code, label, q, usd in _legs(m)]
+    legs = [
+        (leg, code, label, q, usd, values.of(m, q, usd)) for leg, code, label, q, usd in _legs(m)
+    ]
     cost = values.of(m, m.delta, _delta_usd(m))
     if cost is None or any(v is None for *_x, v in legs):
         writer.result.review("missing_fx")
         return
-    for leg, code, label, amount in legs:
+    for leg, code, label, qty, usd, amount in legs:
         if amount:
+            # quantité de la jambe (le net d'un retrait : ce qui arrive sur le portefeuille),
+            # pour l'apparier à son arrivée sur un autre compte
+            detail = {"quantity": assets.qty_text(qty), "currency": m.currency, "usd": str(usd)}
             writer.entry(
                 account,
                 f"{m.key}|{leg}",
@@ -330,7 +336,8 @@ def _write_move(
                 code,
                 label,
                 counterparty="SwissBorg",
-                remittance=f"{assets.qty_text(m.delta)} {m.currency}",
+                remittance=f"{assets.qty_text(qty)} {m.currency}",
+                fx_json=canonical.dumps(detail),
             )
     if m.delta == 0:
         return
