@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from datetime import timedelta
 
 import pytest
@@ -245,3 +246,27 @@ def test_notifier_retries_a_passing_network_failure(
 
     monkeypatch.setattr(hub.notifier, "sender", lambda _u, _m: (_ for _ in ()).throw(OSError()))
     assert not hub.notifier.send(Message("Personal Hub", "test"))
+
+
+def test_simultaneous_collectors_do_not_lock_the_database(client: TestClient, make_token) -> None:  # type: ignore[no-untyped-def]
+    # les démons des collecteurs appellent l'API dans la même milliseconde, chaque minute pile ;
+    # la vérification du jeton écrit last_used_at et ne doit pas finir en « database is locked »
+    secrets = [make_token("collector", name=f"c{i}") for i in range(6)]
+    barrier = threading.Barrier(len(secrets))
+    statuses: list[int] = []
+
+    def tick(secret: str) -> None:
+        for _ in range(15):
+            barrier.wait(timeout=30)
+            try:
+                r = client.get("/api/collectors/bcf", headers=bearer(secret))
+                statuses.append(r.status_code)
+            except Exception:  # le client de test relance l'erreur du serveur
+                statuses.append(500)
+
+    workers = [threading.Thread(target=tick, args=(s,)) for s in secrets]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+    assert set(statuses) == {200}
