@@ -221,7 +221,10 @@ collector-market:
 une sur mempool.space, jusqu'à 20 adresses jamais utilisées de suite (`gap_limit`). Une `zpub`
 est Native SegWit, une `ypub` SegWit ; une `xpub` ne le dit pas (Ledger Live en donne une même
 pour un compte Native SegWit), les quatre types sont alors parcourus, sauf si `script` le fixe.
-Une clé privée (`xprv`…) est refusée. **ETH** : le solde natif et les jetons de `erc20_tokens`
+Une clé privée (`xprv`…) est refusée. mempool.space refuse les requêtes trop rapprochées : le
+collecteur attend une seconde entre deux adresses (`mempool_pause_seconds`) et, sur un refus
+(429), réessaie après 10, 30 puis 60 secondes. Fixer `script` évite de parcourir trois types
+d'adresse pour rien. **ETH** : le solde natif et les jetons de `erc20_tokens`
 (USDC et USDT par défaut). **SOL** : le solde natif et les jetons de `spl_tokens` (USDC, USDT) ;
 les autres jetons, souvent du spam, sont ignorés, et le SOL en staking n'est pas lu.
 

@@ -15,6 +15,8 @@
 - Collecteurs `binance`, `kucoin` et `coinbase` (API officielles, clés en lecture seule, un
   conteneur et un fichier de secrets chacun) : soldes de la plateforme vers `crypto:<plateforme>`.
 - Cours CoinGecko par défaut : SOL, USDC et USDT en plus de BTC et ETH.
+- mempool.space : une seconde entre deux adresses BTC, et sur un refus 429 un nouvel essai après
+  10, 30 puis 60 secondes (une liste de 48 adresses était coupée après une vingtaine).
 
 ### Lot 7 — IA locale
 

@@ -420,3 +420,25 @@ def test_coinbase_ed25519_key_and_bad_key(make_env: Any) -> None:
     with pytest.raises(Failure) as exc:
         coinbase.run(make_env("coinbase", creds=bad), "run", Http(coinbase_api(verify)))
     assert (exc.value.outcome, exc.value.detail) == ("auth_error", "secret:private_key")
+
+
+def test_mempool_rate_limit_is_paced_and_retried(make_env: Any, pauses: list[int]) -> None:
+    creds = {"wallets": [{"account": "crypto:ledger", "asset": "BTC", "addresses": [RECEIVE_0]}]}
+    refusals = [429, 429]
+    inner = chain({RECEIVE_0: 100_000_000})
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if "mempool" in url and refusals:
+            return refusals.pop(), b""
+        status, body = inner.route(method, url, headers, data)
+        return status, body
+
+    env = make_env("market", creds=creds)
+    assert market.run(env, "run", Http(Fake(route))).detail is None
+    assert pauses == [1, 10, 1, 30, 1]  # une seconde avant chaque requête, 10 s puis 30 s
+    assert held(dropped(env)[0]) == [("crypto:ledger", "CRYPTO:BTC", Decimal("1"))]
+    pauses.clear()
+    refusals.extend([429] * 4)
+    again = market.run(make_env("market", creds=creds), "run", Http(Fake(route)))
+    assert again.detail == "partial wallet.ledger:site_unavailable"
+    assert [p for p in pauses if p > 1] == [10, 30, 60]
