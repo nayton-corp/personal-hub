@@ -223,3 +223,24 @@ def test_callback_flow(client: TestClient, make_token) -> None:  # type: ignore[
     )
     assert "refusée" in refused.text
     assert client.get(f"/api/collectors/revolut/links/{state}", headers=token).status_code == 404
+
+
+def test_notifier_retries_a_passing_network_failure(
+    hub: HubContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("hub.core.notify.topic", lambda _s: "topic-test")
+    pauses: list[int] = []
+    calls: list[str] = []
+
+    def flaky(url: str, _msg: Message) -> None:
+        calls.append(url)
+        if len(calls) < 3:
+            raise OSError("dns")
+
+    monkeypatch.setattr(hub.notifier, "sender", flaky)
+    monkeypatch.setattr(hub.notifier, "pause", pauses.append)
+    assert hub.notifier.send(Message("Personal Hub", "test"))
+    assert (len(calls), pauses) == (3, [2, 5])
+
+    monkeypatch.setattr(hub.notifier, "sender", lambda _u, _m: (_ for _ in ()).throw(OSError()))
+    assert not hub.notifier.send(Message("Personal Hub", "test"))

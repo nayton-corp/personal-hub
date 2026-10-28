@@ -8,6 +8,7 @@ Sans sujet, rien n'est envoyé et seul le journal en garde la trace.
 from __future__ import annotations
 
 import base64
+import time
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -31,6 +32,10 @@ class Message:
 
 
 Sender = Callable[[str, Message], None]
+
+# pauses entre les essais : un raté réseau passager (DNS juste après un redémarrage) ne perd pas
+# l'alerte
+RETRY_PAUSES = (2, 5)
 
 
 def topic(settings: Settings) -> str | None:
@@ -72,6 +77,7 @@ class Notifier:
     def __init__(self, settings: Settings, sender: Sender | None = None) -> None:
         self.settings = settings
         self.sender = sender or _post
+        self.pause: Callable[[int], None] = time.sleep
         self.sent: list[Message] = []
 
     def send(self, msg: Message) -> bool:
@@ -80,11 +86,15 @@ class Notifier:
             log.info("notify.skipped", reason="no_topic", title=msg.title)
             return False
         url = f"{self.settings.notify.ntfy_url.rstrip('/')}/{target}"
-        try:
-            self.sender(url, msg)
-        except Exception as exc:  # une notification perdue ne doit rien casser
-            log.warning("notify.failed", error=type(exc).__name__)
-            return False
+        for pause in (*RETRY_PAUSES, None):
+            try:
+                self.sender(url, msg)
+                break
+            except Exception as exc:  # une notification perdue ne doit rien casser
+                if pause is None:
+                    log.warning("notify.failed", error=type(exc).__name__)
+                    return False
+                self.pause(pause)
         self.sent.append(msg)
         log.info("notify.sent", title=msg.title, priority=msg.priority)
         return True
