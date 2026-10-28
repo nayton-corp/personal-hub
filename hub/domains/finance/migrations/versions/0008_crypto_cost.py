@@ -3,8 +3,8 @@
 Les paiements de la catégorie « Crypto » (virements vers SwissBorg, Binance, Coinbase…) achètent
 des cryptos tenues hors registre : comme « Achats et ventes de titres », ils ne sortent plus du
 patrimoine (calcul dans `valuation`, sans changement de schéma). Cette révision ajoute seulement
-les règles de départ de la catégorie qui manquent (KuCoin), sans recréer une règle supprimée
-d'une autre catégorie.
+les règles de départ ajoutées à la catégorie (KuCoin et d'autres plateformes courantes en Suisse
+et en Europe), sans recréer une règle supprimée.
 
 Revision ID: 0008_crypto_cost
 Revises: 0007_alerts
@@ -22,6 +22,19 @@ branch_labels = None
 depends_on = None
 
 CREATED_AT = "2026-10-28T00:00:00.000Z"
+ADDED = frozenset(
+    {
+        "kucoin",
+        "bitpanda",
+        "bitstamp",
+        "crypto.com",
+        "bitvavo",
+        "bybit",
+        "pocket bitcoin",
+        "bitcoin suisse",
+        "mt pelerin",
+    }
+)
 
 
 def upgrade() -> None:
@@ -30,7 +43,7 @@ def upgrade() -> None:
         return
     specs, _needed = legacy.convert(legacy.DEFAULT_RULES)
     for s in specs:
-        if s.category_id != "crypto" or s.pattern != "kucoin":
+        if s.category_id != "crypto" or s.pattern not in ADDED:
             continue
         conn.execute(
             text(

@@ -64,8 +64,12 @@ def test_seed_data(finance: FinanceDomain) -> None:
             text("SELECT grp FROM categories WHERE id='transfer-own'")
         ).scalar() == ("transfer")
         # 0004_rules : règles de départ de bcf_aggregate.py ; 0005_viac : règles VIAC ;
-        # 0006_wealth : règles IBKR ; 0008_crypto_cost : KuCoin
+        # 0006_wealth : règles IBKR ; 0008_crypto_cost : plateformes crypto
         assert conn.execute(text("SELECT version FROM rules_meta")).scalar() == 5
+        crypto = {
+            r[0] for r in conn.execute(text("SELECT pattern FROM rules WHERE category_id='crypto'"))
+        }
+        assert {"swissborg", "kucoin", "bitpanda", "crypto.com", "pocket bitcoin"} <= crypto
         seeds = conn.execute(text("SELECT count(*) FROM rules WHERE id LIKE 'seed-%'")).scalar()
         assert seeds is not None
         assert seeds > 250
