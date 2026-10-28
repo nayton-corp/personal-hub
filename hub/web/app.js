@@ -138,6 +138,7 @@ $("btn-login").addEventListener("click", guard(login));
 $("form-backup").addEventListener("submit", guard(async () => {
   await register(null, $("backup-name").value.trim() || "Passkey de secours");
   $("backup-name").value = "";
+  store.invalidate(); // les premiers pas comptent les passkeys
   say("Passkey de secours ajoutée.");
 }));
 $("form-profile").addEventListener("submit", guard(async () => {

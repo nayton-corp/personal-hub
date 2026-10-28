@@ -115,3 +115,8 @@ done
 
 echo "$TAG" > "$STATE"
 say "Déployé : $TAG (précédent : ${PREV:-aucun})"
+
+if [ "$first_deploy" = 1 ]; then
+  say "Première passkey : ouvre ${HUB_PUBLIC_ORIGIN:-l'app} et saisis ce code"
+  once "$TAG" hub auth bootstrap-code || true
+fi

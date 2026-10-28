@@ -1,5 +1,5 @@
-# Raccourcis. Développement : make install / make check. Mac en conteneurs : voir docs/mac.md.
-.PHONY: install check lint test migrations-test image deploy restore-test preflight dev openapi
+# Raccourcis. Développement : make install / make check. Installation : docs/installation.md.
+.PHONY: init install check lint test migrations-test image deploy restore-test preflight dev openapi
 
 install:
 	uv sync --frozen
@@ -32,6 +32,9 @@ image:
 	docker build --platform linux/arm64 --target hub -t hub:dev .
 	docker build --platform linux/arm64 --target web -t hub-web:dev .
 	docker build --platform linux/arm64 --target collector -t hub-collector:dev .
+
+init:  # première installation : clé age, secrets, dossiers, deploy/.env
+	deploy/init.sh
 
 preflight:
 	deploy/mac-preflight.sh

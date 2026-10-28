@@ -8,15 +8,17 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
-from hub.core import proposals
+from hub.core import profile, proposals
 from hub.core.auth import AppSession, Ctx, Principal, require
 from hub.core.errors import Problem
 from hub.domains.finance import (
     catalog,
     insights,
     lookthrough,
+    packs,
     reads,
     recurring,
+    rules,
     sentinels,
     snapshots,
     transfers,
@@ -252,6 +254,35 @@ def build_router(domain: FinanceDomain) -> APIRouter:
     def categories(_p: AnyReader) -> dict[str, Any]:
         with engine.connect() as conn:
             return {"items": reads.categories(conn)}
+
+    @r.get("/rules/packs")
+    def rule_packs(_p: Reader) -> dict[str, Any]:
+        """Packs de règles livrés, version installée, ceux du pays de l'instance, et le nombre
+        de règles actives hors système (parcours d'accueil)."""
+        country = profile.load(domain.settings).country
+        with engine.connect() as conn:
+            done = packs.installed(conn)
+            active = sum(
+                1
+                for x in rules.list_rules(conn)
+                if x.active and not x.id.startswith(rules.SYSTEM_PREFIX)
+            )
+        return {
+            "items": [
+                {
+                    "name": p.name,
+                    "label": p.label,
+                    "description": p.description,
+                    "country": p.country,
+                    "version": p.version,
+                    "installed": done.get(p.name),
+                    "rules": len(p.specs()),
+                }
+                for p in packs.available().values()
+            ],
+            "suggested": [p.name for p in packs.defaults_for(country)],
+            "active_rules": active,
+        }
 
     @r.get("/accounts/pending")
     def pending_accounts(_p: Reader) -> dict[str, Any]:

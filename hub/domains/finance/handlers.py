@@ -22,7 +22,7 @@ from hub.core.errors import Problem
 from hub.core.ids import new_id
 from hub.core.money import Money, base_currency
 from hub.core.text import mask_iban, normalize
-from hub.domains.finance import catalog, importer, ledger, rules
+from hub.domains.finance import catalog, importer, ledger, packs, rules
 
 if TYPE_CHECKING:
     from hub.domains.finance.domain import FinanceDomain
@@ -618,6 +618,44 @@ class CreateCategoryHandler:
         return {"category_id": params.id}
 
 
+# --- packs de règles (G6) -------------------------------------------------------------------
+
+
+class InstallPack(_Params):
+    name: Slug
+
+
+def _pack(name: str) -> packs.Pack:
+    found = packs.available().get(name)
+    if found is None:
+        raise _bad(f"pack inconnu : {name}")
+    return found
+
+
+class InstallPackHandler:
+    """Installe ou met à jour un pack livré avec le hub ; ses règles catégorisent aussitôt les
+    écritures sans catégorie. Une règle déjà présente sous une autre origine n'est pas doublée."""
+
+    def preview(self, conn: Connection, params: BaseModel) -> Preview:
+        assert isinstance(params, InstallPack)  # noqa: S101
+        pack = _pack(params.name)
+        report = packs.install(conn, pack, dry_run=True)
+        before = packs.installed(conn).get(pack.name)
+        verb = "Mettre à jour" if before is not None else "Installer"
+        return Preview(
+            summary=(
+                f"{verb} le pack « {pack.label} » v{pack.version} : {report.added} règles, "
+                f"{report.categories_added} catégories"
+            ),
+            details=report.public(),
+            fingerprint=_fp("install_pack", rules.version(conn), pack.name, pack.version, before),
+        )
+
+    def apply(self, conn: Connection, params: BaseModel, proposal_id: str) -> dict[str, Any]:
+        assert isinstance(params, InstallPack)  # noqa: S101
+        return packs.install(conn, _pack(params.name)).public()
+
+
 def build_kinds(domain: FinanceDomain) -> Mapping[str, ProposalKind]:
     return {
         "recategorize": ProposalKind(
@@ -642,4 +680,5 @@ def build_kinds(domain: FinanceDomain) -> Mapping[str, ProposalKind]:
         ),
         "create_account": ProposalKind(CreateAccount, CreateAccountHandler(domain)),
         "create_category": ProposalKind(CreateCategory, CreateCategoryHandler()),
+        "install_pack": ProposalKind(InstallPack, InstallPackHandler()),
     }

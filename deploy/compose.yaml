@@ -20,6 +20,7 @@ x-hub-env: &hub-env
   TZ: ${HUB_TZ:-Europe/Zurich}
   HUB_TZ: ${HUB_TZ:-Europe/Zurich}
   HUB_CURRENCY: ${HUB_CURRENCY:-CHF}
+  HUB_COUNTRY: ${HUB_COUNTRY:-CH}
 
 x-collector: &collector
   <<: *hardening

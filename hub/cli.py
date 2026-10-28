@@ -444,6 +444,36 @@ def proposals_create(
 
 
 @app.command()
+def init(
+    config: Annotated[Path, typer.Option(help="Clé age et secrets (ex. ~/.config/hub).")],
+    home: Annotated[Path, typer.Option(help="Boîte d'entrée et sauvegardes locales.")],
+    env_file: Annotated[Path, typer.Option("--env", help="Fichier écrit.")] = Path("deploy/.env"),
+    template: Annotated[Path, typer.Option(help="Modèle.")] = Path("deploy/.env.example"),
+    origin: Annotated[
+        str, typer.Option(help="Adresse Tailscale du hub, connue après le 1er démarrage.")
+    ] = "https://hub.votre-tailnet.ts.net",
+    tz: Annotated[str, typer.Option(help="Fuseau (IANA).")] = "Europe/Zurich",
+    currency: Annotated[str, typer.Option(help="Devise de base, fixée ensuite.")] = "CHF",
+    country: Annotated[str, typer.Option(help="Pays (ISO, deux lettres).")] = "CH",
+) -> None:
+    """Prépare une première installation : clé age, secrets chiffrés, dossiers et deploy/.env.
+    Ne remplace rien de ce qui existe."""
+    from hub.core import install
+
+    choices = install.Choices(config, home, origin, tz, currency, country)
+    try:
+        report = install.run(choices, env_file, template)
+    except (install.InitError, secrets.SecretsError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from None
+    for path in report.created:
+        typer.echo(f"créé    {path}")
+    for path in report.kept:
+        typer.echo(f"gardé   {path}")
+    typer.echo(f"clé publique age : {report.public_key}")
+
+
+@app.command()
 def nightly() -> None:
     """Expiration des propositions, purges, réconciliation, tâches de nuit des domaines."""
     from hub.core.maintenance import nightly as run

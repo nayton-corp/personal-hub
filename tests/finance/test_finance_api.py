@@ -351,3 +351,42 @@ def test_pending_accounts_then_created_from_a_proposal(
     assert client.get("/api/finance/accounts/pending", headers=reader).json()["items"] == []
     accounts = client.get("/api/finance/accounts", headers=reader).json()["items"]
     assert accounts[0]["external_ref"] == "revolut:CHF"
+
+
+def test_rule_packs_listed_then_installed_from_a_proposal(
+    ctx: HubContext, fin: FinanceDomain, client: TestClient
+) -> None:
+    """G6 : les premiers pas proposent les packs du pays quand aucune règle n'est active ; la
+    proposition validée les installe."""
+    from hub.domains.finance.cli import propose_and_accept
+
+    with begin_immediate(fin.engine()) as conn:
+        conn.execute(text("DELETE FROM rules WHERE id LIKE 'pack-ch-%'"))
+        conn.execute(text("DELETE FROM rule_packs WHERE name = 'ch'"))
+    reader = token(ctx, "finance:read")
+    body = client.get("/api/finance/rules/packs", headers=reader).json()
+    assert body["suggested"] == ["base", "ch"]
+    assert body["active_rules"] == 0
+    found = {p["name"]: p for p in body["items"]}
+    assert found["base"]["installed"] == 1
+    assert found["ch"]["installed"] is None
+    assert found["ch"]["country"] == "CH"
+    assert found["ch"]["rules"] > 0
+    assert (
+        client.get("/api/finance/rules/packs", headers=token(ctx, "finance:aggregates")).status_code
+        == 403
+    )
+    result = propose_and_accept(fin, "install_pack", {"name": "ch"})
+    assert result["added"] == found["ch"]["rules"]
+    body = client.get("/api/finance/rules/packs", headers=reader).json()
+    assert {p["name"]: p["installed"] for p in body["items"]}["ch"] == 1
+    assert body["active_rules"] == found["ch"]["rules"]
+
+
+def test_install_pack_refuses_an_unknown_pack(fin: FinanceDomain) -> None:
+    import typer
+
+    from hub.domains.finance.cli import propose_and_accept
+
+    with pytest.raises(typer.Exit):
+        propose_and_accept(fin, "install_pack", {"name": "atlantide"})
