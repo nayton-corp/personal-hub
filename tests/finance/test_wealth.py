@@ -328,6 +328,70 @@ def test_deposits_ignore_off_ledger_purchases(finance: FinanceDomain) -> None:
     assert (v.net_worth, v.deposits) == (400_000, 500_000)
 
 
+def test_crypto_performance_from_bank_payments_and_arrivals(finance: FinanceDomain) -> None:
+    """Investi = virements de la catégorie « Crypto » ; coût par actif = valeur à l'arrivée."""
+    without_seed_rules(finance)
+    bank = add_account(finance)
+    open_account(finance, bank, "2026-09-30", 500_000)
+    crypto_rule = rules.Rule("system-viac-trade", "search_text", "x", "any", "crypto", 14, True)
+    with begin_immediate(finance.engine()) as conn:
+        for on, amount in [("2026-10-01", -100_000), ("2026-10-10", -50_000)]:
+            seq = _entry(conn, bank, on, amount, counterparty="SwissBorg")
+            rules.categorize(conn, seq, crypto_rule, proposal_id=None, created_at=f"{on}T00:00Z")
+    add_ref(finance, "crypto:ledger", "crypto", "Ledger")
+    price = {"kind": "crypto", "currency": "CHF", "source": "coingecko", "instrument": "BTC"}
+    doc = market_doc(
+        prices=[
+            {**price, "on_date": d, "price": p}
+            for d, p in [("2026-10-02", "50000"), ("2026-10-11", "60000"), ("2026-10-27", "70000")]
+        ],
+        balances=[
+            {"account": "crypto:ledger", "instrument": "BTC", "on_date": d, "quantity": q}
+            for d, q in [("2026-10-02", "0.019"), ("2026-10-11", "0.027"), ("2026-10-27", "0.027")]
+        ],
+    )
+    finance.importer.process([Incoming("market.json", doc)])
+    with finance.engine().connect() as conn:
+        v = valuation.value_at(conn, "2026-10-27")
+        h = insights.holdings(conn, "2026-10-27")
+    # le virement achète des cryptos : il ne sort pas du patrimoine
+    assert (v.net_worth, v.deposits) == (350_000 + 189_000, 500_000)
+    (line,) = h["items"]
+    # 0.019 arrivés à 50 000, puis 0.008 à 60 000
+    assert (line["cost"]["minor"], line["gain"]["minor"]) == (143_000, 46_000)
+    c = h["crypto"]
+    assert (c["invested"]["minor"], c["value"]["minor"], c["result"]["minor"]) == (
+        150_000,
+        189_000,
+        39_000,
+    )
+    assert c["missing_prices"] is False
+
+
+def test_arrival_cost_follows_sales_and_missing_prices(finance: FinanceDomain) -> None:
+    add_ref(finance, "crypto:phantom", "crypto", "Phantom")
+    sol = {"kind": "crypto", "currency": "CHF", "source": "coingecko", "instrument": "SOL"}
+    doc = market_doc(
+        prices=[{**sol, "on_date": "2026-10-01", "price": "100"}],
+        balances=[
+            {"account": "crypto:phantom", "instrument": i, "on_date": d, "quantity": q}
+            for i, d, q in [
+                ("SOL", "2026-10-01", "4"),
+                ("SOL", "2026-10-05", "1"),  # trois quarts vendus : un quart du coût reste
+                ("SOL", "2026-10-06", "1"),
+                ("ABC", "2026-10-06", "5"),  # sans cours : pas de coût
+            ]
+        ],
+    )
+    finance.importer.process([Incoming("market.json", doc)])
+    with finance.engine().connect() as conn:
+        h = insights.holdings(conn, "2026-10-06")
+    costs = {i["isin"]: i["cost"] and i["cost"]["minor"] for i in h["items"]}
+    assert costs == {"CRYPTO:SOL": 10_000, "CRYPTO:ABC": None}
+    assert h["crypto"]["invested"]["minor"] == 0
+    assert h["crypto"]["missing_prices"] is True
+
+
 # --- transparence -------------------------------------------------------------------------------
 
 ISHARES = (

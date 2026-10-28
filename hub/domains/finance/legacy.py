@@ -356,7 +356,15 @@ DEFAULT_RULES: dict[str, Any] = {
         "IBKR": ["interactive brokers", "ibkr"],
         "Revolut": ["revolut"],
         "Raiffeisen": ["raiffeisen"],
-        "Crypto (exchange)": ["swissborg", "kraken", "binance", "coinbase", "relai", "bity"],
+        "Crypto (exchange)": [
+            "swissborg",
+            "kraken",
+            "binance",
+            "coinbase",
+            "relai",
+            "bity",
+            "kucoin",
+        ],
     },
 }
 

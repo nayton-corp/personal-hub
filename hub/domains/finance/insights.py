@@ -237,9 +237,12 @@ def holdings(conn: Connection, on_date: str) -> dict[str, Any]:
         r[0]: (r[1], r[2], r[3])
         for r in conn.execute(text("SELECT isin, name, asset_class, sub_class FROM instruments"))
     }
-    accts = {
-        r[0]: r[1] for r in conn.execute(text("SELECT id, name FROM accounts WHERE kind != 'cash'"))
-    }
+    rows = conn.execute(text("SELECT id, name, kind FROM accounts WHERE kind != 'cash'"))
+    accts, crypto = {}, set()
+    for account_id, name, kind in rows:
+        accts[account_id] = name
+        if kind == "crypto":
+            crypto.add(account_id)
     kinds = {r[0]: r[1] for r in conn.execute(text("SELECT isin, kind FROM instruments"))}
     lines = [
         line
@@ -249,7 +252,10 @@ def holdings(conn: Connection, on_date: str) -> dict[str, Any]:
     total = sum(x.value for x in lines)
     items = []
     for x in lines:
-        cost = _cost(conn, x.account_id, x.isin, x.quantity, on_date)
+        if x.account_id in crypto:
+            cost = _arrival_cost(positions, x.account_id, x.isin, x.quantity, on_date)
+        else:
+            cost = _cost(conn, x.account_id, x.isin, x.quantity, on_date)
         name, asset_class, sub_class = names.get(x.isin, (x.isin, None, None))
         items.append(
             {
@@ -278,6 +284,64 @@ def holdings(conn: Connection, on_date: str) -> dict[str, Any]:
         "value": money(total, CCY),
         "cost": money(sum(costs), CCY) if len(costs) == len(items) else None,
         "missing_prices": sorted({x.isin for x in lines if x.price is None}),
+        "crypto": _crypto(
+            conn, positions.fx, [x for x in lines if x.account_id in crypto], on_date
+        ),
+    }
+
+
+def _arrival_cost(
+    positions: valuation.Positions, account_id: str, isin: str, quantity: Decimal, on_date: str
+) -> int | None:
+    """Prix de revient d'une crypto sans achats connus (portefeuille, plateforme) : chaque hausse
+    de quantité d'un relevé au suivant coûte sa valeur en CHF ce jour-là ; une baisse retire sa
+    part du coût. Le gain se mesure donc depuis l'arrivée sur le portefeuille."""
+    with localcontext(DECIMAL_CONTEXT):
+        held, cost = Decimal(0), Decimal(0)
+        for d, snapshot in positions.reports.get(account_id, []):
+            if d > on_date:
+                break
+            q = snapshot[isin][0] if isin in snapshot else Decimal(0)
+            if q > held:
+                known = positions.price(isin, d)
+                added = positions.fx.convert((q - held) * known[1], known[2], d) if known else None
+                if added is None:
+                    return None
+                cost += added
+            elif q < held:
+                cost -= cost * (held - q) / held
+            held = q
+        return int(quantize(cost, 0)) if held == quantity else None
+
+
+def _crypto(
+    conn: Connection, fx: valuation.FxTable, lines: list[valuation.Line], on_date: str
+) -> dict[str, Any] | None:
+    """Performance globale des cryptos : investi = paiements nets de la catégorie « Crypto »
+    (virements vers SwissBorg, Binance…, moins ce qui en revient), en CHF au change du jour du
+    paiement ; résultat = valeur des portefeuilles moins investi. Ce qui attend chez une
+    plateforme sans relevé compte comme investi sans valeur."""
+    invested = 0
+    rows = conn.execute(
+        text(
+            f"SELECT e.booking_date, e.amount_minor, e.currency FROM entries e "
+            f"{valuation.CATEGORY_JOIN} WHERE vc.category_id = :c AND e.booking_date <= :d"
+        ),
+        {"c": valuation.CRYPTO_PURCHASE, "d": on_date},
+    )
+    for booked, amount, currency in rows:
+        chf = fx.to_base(-int(amount), str(currency), str(booked))
+        if chf is None:
+            return None
+        invested += chf
+    if not invested and not lines:
+        return None
+    value = sum(x.value for x in lines)
+    return {
+        "invested": money(invested, CCY),
+        "value": money(value, CCY),
+        "result": money(value - invested, CCY),
+        "missing_prices": any(x.price is None for x in lines),
     }
 
 

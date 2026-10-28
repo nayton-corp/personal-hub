@@ -300,6 +300,10 @@ function positions() {
   const gains = items.map((p) => (p.gain ? units(p.gain) : null));
   const gain = gains.every((g) => g != null) ? gains.reduce((s, g) => s + g, 0) : null;
   text("positions-note", gain == null ? `${chf(value)} CHF` : `plus-value ${signed(gain)} CHF`);
+  // cryptos : investi = virements de la catégorie « Crypto » ; le gain par ligne compte depuis
+  // l'arrivée sur le portefeuille, le résultat global depuis le virement (frais compris)
+  const c = h.crypto;
+  if (P.env === "crypto" && c) text("positions-note", `investi ${chf(units(c.invested))} · résultat ${signed(units(c.result))} CHF`);
   for (const p of items) {
     const unit = p.kind === "crypto" ? "" : " parts";
     const share = value ? pct(units(p.value) / value, 1) : "—";
