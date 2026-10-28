@@ -239,8 +239,20 @@ place :
 
 **Cryptos.** Un portefeuille se déclare avec `fin crypto add-wallet ledger-btc --label "Ledger"`
 (compte `crypto:ledger-btc`) ; le collecteur « market » relève chaque jour le solde de ses
-adresses publiques et le cours (CoinGecko, en CHF). Une crypto détenue chez Revolut ou sur une
-plateforme passe par le CSV de positions ci-dessous.
+adresses publiques et le cours (CoinGecko, en CHF) ; Binance, KuCoin et Coinbase ont leur
+collecteur. Une crypto détenue chez Revolut passe par le CSV de positions ci-dessous.
+
+**Performance des cryptos.** Deux mesures, dans la carte Positions de l'enveloppe crypto :
+- *globale* : investi = paiements nets de la catégorie « Crypto » (virements vers SwissBorg,
+  Binance, Coinbase, KuCoin…, reconnus par les règles, moins ce qui en revient), en CHF au change
+  du jour ; résultat = valeur des portefeuilles moins investi, frais compris. Ce qui attend
+  chez une plateforme sans relevé (SwissBorg) compte comme investi sans valeur ;
+- *par actif* : prix de revient = valeur en CHF de chaque arrivée sur le portefeuille, le jour
+  où le relevé la voit (une baisse retire sa part du coût). Le gain se mesure depuis l'arrivée,
+  pas depuis l'achat sur la plateforme.
+
+Un paiement « Crypto » achète une position tenue hors registre : comme « Achats et ventes de
+titres », il ne compte pas comme une sortie du patrimoine dans les versements.
 
 **Positions saisies à la main (titres et cryptos Revolut, autres).** Les placements Revolut ne
 passent pas par PSD2. Déclare le compte une fois :

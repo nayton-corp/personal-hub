@@ -15,6 +15,11 @@
 - Collecteurs `binance`, `kucoin` et `coinbase` (API officielles, clés en lecture seule, un
   conteneur et un fichier de secrets chacun) : soldes de la plateforme vers `crypto:<plateforme>`.
 - Cours CoinGecko par défaut : SOL, USDC et USDT en plus de BTC et ETH.
+- Performance des cryptos (Finance) : `GET /finance/holdings` porte un bloc `crypto` (investi =
+  paiements nets de la catégorie « Crypto », valeur, résultat) et un prix de revient par crypto
+  (valeur à l'arrivée sur le portefeuille). Les paiements « Crypto » ne comptent plus comme
+  sortie du patrimoine. Migration `0008_crypto_cost` : règles de départ KuCoin, Bitpanda,
+  Bitstamp, Crypto.com, Bitvavo, Bybit, Pocket Bitcoin, Bitcoin Suisse et Mt Pelerin.
 - Historique BTC : au premier passage, le solde de chaque jour où il a bougé est relu sur la
   chaîne (transactions des adresses utilisées) et déposé en relevés passés. Avant la fenêtre
   d'un an de CoinGecko, change BCE et clôtures publiques Binance (USD) pour le valoriser.

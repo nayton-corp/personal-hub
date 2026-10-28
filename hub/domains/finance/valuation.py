@@ -9,10 +9,11 @@ Un compte à positions est tenu en CHF : sa valeur est toujours en CHF.
 
 Les versements cumulés sont toutes les écritures, sauf le rendement, les frais et les
 mouvements internes d'un courtier (codes VIAC/INCOME, VIAC/FEE, IBKR/TRADE, IBKR/FX,
-IBKR/INCOME, IBKR/FEE) et les paiements catégorisés « Achats et ventes de titres » : ce
-paiement achète une position tenue hors registre (crypto, actions Revolut), il ne sort pas du
-patrimoine. Un versement au 3a ou à IBKR est un apport, un dividende un effet marché. L'effet
-marché est la différence entre la valeur et les versements. Un compte dans une autre devise est
+IBKR/INCOME, IBKR/FEE) et les paiements catégorisés « Achats et ventes de titres » ou
+« Crypto » : ce paiement achète une position tenue hors registre (actions Revolut, cryptos chez
+SwissBorg ou sur une Ledger), il ne sort pas du patrimoine. Un versement au 3a ou à IBKR est
+un apport, un dividende un effet marché. L'effet marché est la différence entre la valeur et
+les versements. Un compte dans une autre devise est
 converti au dernier cours de `fx_rates` connu à la date ; sans cours, il est laissé de côté et
 signalé dans `missing_fx`.
 """
@@ -34,11 +35,13 @@ ENVELOPES = {"cash": "cash", "pension": "pilier3a", "securities": "titres", "cry
 ENVELOPE_ORDER = ("cash", "pilier3a", "titres", "crypto")
 # hors versements : rendement, frais et mouvements internes des courtiers (préfixes de code)
 NOT_DEPOSITS = ("VIAC/INCOME", "VIAC/FEE", "IBKR/TRADE", "IBKR/FX", "IBKR/INCOME", "IBKR/FEE")
-OFF_LEDGER_PURCHASE = "transfer-titres"
+# achats de positions tenues hors registre : actions Revolut, cryptos (virements vers SwissBorg…)
+OFF_LEDGER_PURCHASES = ("transfer-titres", "crypto")
+CRYPTO_PURCHASE = "crypto"
 _CODES = " OR ".join(f"e.bank_tx_code LIKE '{c}%'" for c in NOT_DEPOSITS)
+_PURCHASES = ", ".join(f"'{c}'" for c in OFF_LEDGER_PURCHASES)
 DEPOSITS_SQL = (
-    f"sum(CASE WHEN {_CODES} OR vc.category_id = '{OFF_LEDGER_PURCHASE}' "
-    "THEN 0 ELSE e.amount_minor END)"
+    f"sum(CASE WHEN {_CODES} OR vc.category_id IN ({_PURCHASES}) THEN 0 ELSE e.amount_minor END)"
 )
 CATEGORY_JOIN = "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq"
 
