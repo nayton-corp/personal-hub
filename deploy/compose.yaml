@@ -118,73 +118,33 @@ services:
     restart: unless-stopped
     depends_on: [web]
 
-  # --- lot 5 : collecteurs, profil « collectors » (docker compose --profile collectors up -d) ---
-  # Chacun ne voit que la boîte d'entrée, son propre volume (profil du navigateur, mémoire) et
-  # son propre fichier de secrets : un bot compromis ne lit ni la base ni les accès des autres.
-  collector-bcf:
+  # --- collecteurs, profil « collectors » (COMPOSE_PROFILES=collectors dans deploy/.env) ---
+  # G4 : deux services au lieu d'un par banque. Chacun demande chaque minute au hub les connexions
+  # qu'il exécute (app ou `hub connections`) et ne déchiffre les secrets d'une connexion qu'au
+  # moment de son run. Ils ne voient que la boîte d'entrée et leur volume (profils du navigateur,
+  # mémoire), jamais la base ; leur fichier de secrets ne porte que leur jeton.
+  collector-browser:                     # robots qui téléchargent l'export officiel (BCF, VIAC)
     <<: *collector
-    command: ["hub-collector", "daemon", "bcf"]
+    command: ["hub-collector", "daemon"]
+    environment:
+      <<: *hub-env
+      HUB_COLLECTOR_RUNNER: browser
     volumes:
       - ${HUB_INBOX}:/srv/hub/inbox
-      - collector-bcf:/var/lib/hub-collector
-      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/bcf.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
+      - collector-browser:/var/lib/hub-collector
+      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/collector-browser.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
 
-  collector-viac:
+  collector-api:                         # Enable Banking, IBKR Flex, cours publics, plateformes crypto
     <<: *collector
-    command: ["hub-collector", "daemon", "viac"]
+    command: ["hub-collector", "daemon"]
+    environment:
+      <<: *hub-env
+      HUB_COLLECTOR_RUNNER: api
+    shm_size: 64m                        # pas de navigateur
     volumes:
       - ${HUB_INBOX}:/srv/hub/inbox
-      - collector-viac:/var/lib/hub-collector
-      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/viac.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
-
-  collector-revolut:                     # API Enable Banking, pas de navigateur
-    <<: *collector
-    command: ["hub-collector", "daemon", "revolut"]
-    volumes:
-      - ${HUB_INBOX}:/srv/hub/inbox
-      - collector-revolut:/var/lib/hub-collector
-      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/revolut.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
-
-  # --- lot 6 : API officielles ou publiques, pas de navigateur ---
-  collector-ibkr:                        # Flex Web Service, jeton Flex en lecture seule
-    <<: *collector
-    command: ["hub-collector", "daemon", "ibkr"]
-    volumes:
-      - ${HUB_INBOX}:/srv/hub/inbox
-      - collector-ibkr:/var/lib/hub-collector
-      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/ibkr.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
-
-  collector-market:                      # change BCE, CoinGecko, soldes des adresses publiques
-    <<: *collector
-    command: ["hub-collector", "daemon", "market"]
-    volumes:
-      - ${HUB_INBOX}:/srv/hub/inbox
-      - collector-market:/var/lib/hub-collector
-      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/market.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
-
-  collector-binance:                # Binance : Spot, Funding, Simple Earn, clé en lecture seule
-    <<: *collector
-    command: ["hub-collector", "daemon", "binance"]
-    volumes:
-      - ${HUB_INBOX}:/srv/hub/inbox
-      - collector-binance:/var/lib/hub-collector
-      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/binance.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
-
-  collector-kucoin:                 # KuCoin : comptes et Earn, clé « General » seulement
-    <<: *collector
-    command: ["hub-collector", "daemon", "kucoin"]
-    volumes:
-      - ${HUB_INBOX}:/srv/hub/inbox
-      - collector-kucoin:/var/lib/hub-collector
-      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/kucoin.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
-
-  collector-coinbase:               # Coinbase : portefeuilles, clé CDP « View » seulement
-    <<: *collector
-    command: ["hub-collector", "daemon", "coinbase"]
-    volumes:
-      - ${HUB_INBOX}:/srv/hub/inbox
-      - collector-coinbase:/var/lib/hub-collector
-      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/coinbase.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
+      - collector-api:/var/lib/hub-collector
+      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/collector-api.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
 
   # --- lot 7 : IA locale, profil « brain » (COMPOSE_PROFILES=collectors,brain) ---
   # Passerelle MCP et assistant. Ne voit le hub que par l'API, avec ses propres jetons (« brain »
@@ -209,14 +169,8 @@ volumes:
   archive: {}
   backup: {}
   ts-state: {}
-  collector-bcf: {}
-  collector-viac: {}
-  collector-revolut: {}
-  collector-ibkr: {}
-  collector-market: {}
-  collector-binance: {}
-  collector-kucoin: {}
-  collector-coinbase: {}
+  collector-browser: {}
+  collector-api: {}
   brain: {}
 
 networks:

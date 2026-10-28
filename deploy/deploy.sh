@@ -3,7 +3,8 @@
 #   deploy/deploy.sh <tag>
 # 1. construit les images linux/arm64 ; 2. verify dans un conteneur jetable (arrêt si échec) ;
 # 3. copie .backup des bases ; 4. migrations ; 5. second verify, sinon restauration et retour
-# à l'image précédente ; 6. compose up ; 7. /api/health dans les 30 s, sinon retour arrière.
+# à l'image précédente ; 6. connexions des collecteurs (reprise d'avant G4, fichiers des deux
+# services) ; 7. compose up ; 8. /api/health dans les 30 s, sinon retour arrière.
 set -euo pipefail
 
 TAG="${1:?usage: deploy/deploy.sh <tag>}"
@@ -45,6 +46,27 @@ if [ "$first_deploy" = 0 ]; then
   once "${PREV:-$TAG}" hub backup --stamp "$STAMP"
 fi
 
+# G4 : les volumes des anciens conteneurs (un par collecteur) sont recopiés une fois dans ceux
+# des deux services, pour garder les profils du navigateur (appareil reconnu par la banque) et
+# la mémoire (session Enable Banking, empreintes déjà vues). Les anciens volumes restent.
+merge_collector_volumes() {
+  local old target
+  for old in bcf viac revolut ibkr market binance kucoin coinbase; do
+    docker volume inspect "hub_collector-$old" >/dev/null 2>&1 || continue
+    case "$old" in bcf|viac) target=browser ;; *) target=api ;; esac
+    docker volume inspect "hub_collector-$target" >/dev/null 2>&1 || docker volume create \
+      --label com.docker.compose.project=hub --label "com.docker.compose.volume=collector-$target" \
+      "hub_collector-$target" >/dev/null
+    docker ps -q --filter label=com.docker.compose.project=hub \
+      --filter "label=com.docker.compose.service=collector-$old" | xargs -r docker stop >/dev/null
+    docker run --rm --user 0:0 --entrypoint sh \
+      -v "hub_collector-$old:/from:ro" -v "hub_collector-$target:/to" "hub-collector:$TAG" -c \
+      'test -e "/to/.from-$0" || { cp -an /from/. /to/ && touch "/to/.from-$0"; }
+       chown 10001:10001 /to && chmod 0700 /to' "$old"
+    echo "volume collector-$old recopié dans collector-$target"
+  done
+}
+
 rollback() {
   say "RETOUR ARRIÈRE : $1"
   compose "$TAG" stop api importer scheduler litestream web 2>/dev/null || true
@@ -63,6 +85,15 @@ once "$TAG" hub db upgrade || rollback "migration en échec"
 
 say "Vérification après migration"
 once "$TAG" hub verify || rollback "verify échoue après migration"
+
+if [ -n "${HUB_COLLECTOR_SECRETS:-}" ]; then
+  say "Connexions des collecteurs (reprise des anciens fichiers, jetons des deux services)"
+  # sans effet une fois faite : une connexion qui a ses secrets les garde, un fichier existant reste
+  mkdir -p "$HUB_COLLECTOR_SECRETS"
+  compose "$TAG" run --rm --no-deps -v "$HUB_COLLECTOR_SECRETS:/import" scheduler \
+    hub connections import /import || rollback "reprise des connexions en échec"
+  merge_collector_volumes
+fi
 
 say "Démarrage"
 # COMPOSE_PROFILES=collectors dans deploy/.env : les collecteurs suivent la même image

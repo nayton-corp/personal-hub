@@ -15,15 +15,11 @@ public_origin = "https://hub.example.ts.net"
 [auth]
 session_hours = 12
 
-[collectors]                  # lot 5 : lu par les conteneurs collector-* seulement
+[collectors]                  # infrastructure des services collector-api et collector-browser
 api_url = "http://api:8710"   # réseau compose « hub »
 home = "/var/lib/hub-collector"
-# horaires : ceux du catalogue (hub/core/connectors.py, fuseau HUB_TZ) ; pour en changer un :
-# schedules = { bcf = "30 7 * * 1-5" }   (Revolut : au plus 4 synchros par jour sans l'utilisateur)
-# lot 6 : cours publics ; quotes = { "<ISIN>" = "<symbole Yahoo>" } pour les titres sans autre cours
-[collectors.market]
-currencies = ["EUR", "USD", "GBP"]
-crypto = { BTC = "bitcoin", ETH = "ethereum", SOL = "solana", USDC = "usd-coin", USDT = "tether" }
+# G4 : horaires, banque Enable Banking, devises et cryptos suivies sont des réglages de chaque
+# connexion (app ou `hub connections set`), plus de ce fichier.
 
 # lot 7 : IA locale, lu par le conteneur « brain » seulement. Le modèle tourne en natif sur le Mac
 # (Ollama, GPU) ; MLX : llm_url = "http://host.docker.internal:8080/v1" et model = le dépôt MLX.

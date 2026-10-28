@@ -2,6 +2,32 @@
 
 ## [Non publié]
 
+### Hub générique — G4 : connexions en base, deux services collecteurs
+
+- Ce que l'instance collecte est une liste de connexions dans `core.db` (migration
+  `0004_connections`) : connecteur du catalogue, identifiant, nom, horaire, réglages sans secret
+  et secrets chiffrés par age vers la clé de la machine. L'API les chiffre à la saisie et ne les
+  relit jamais ; seul le service collecteur qui exécute la connexion les déchiffre, au run.
+- Les huit conteneurs collecteurs deviennent deux services, `collector-browser` (BCF, VIAC) et
+  `collector-api` (le reste), qui demandent chaque minute leurs connexions prêtes au hub
+  (`GET /api/collectors/runner/{service}`, portée `collector`). Plusieurs connexions d'un même
+  connecteur sont possibles (deux banques par Enable Banking, par exemple).
+- Le connecteur « revolut » devient `enable_banking` (réglages `aspsp_name`, `aspsp_country`…) ;
+  la connexion existante garde l'identifiant « revolut », donc son URL de retour et son état.
+- `hub connections list|catalog|add|set|secrets|remove|import` et, pour l'app,
+  `GET|POST /api/collectors/connections`, `PATCH …/{id}`, `PUT …/{id}/secrets`,
+  `DELETE …/{id}`. `hub connections secrets ID --file -` lit un YAML sur l'entrée standard.
+- `hub-collector run|relogin|link|aspsps|consent <connexion>` ; `hub-collector revolut
+  link|aspsps|status` reste.
+- Reprise automatique par `make deploy` : la migration crée une connexion par collecteur connu,
+  `hub connections import` reprend les secrets des `<nom>.enc.yaml` (sans l'ancien jeton) et les
+  horaires de `[collectors] schedules`, écrit les fichiers et jetons des deux services, et les
+  anciens volumes sont recopiés dans ceux des services. Les anciens jetons restent valides pour
+  un retour arrière ; à révoquer une fois la version validée.
+- `[collectors] schedules` n'est plus lu au run : les horaires vivent dans les connexions.
+- Limite connue : l'importeur Finance des fichiers Enable Banking reste au format Revolut
+  (`hub.revolut.v1`, comptes `revolut:`) ; une autre banque demandera son adaptation.
+
 ### Hub générique — G1b : devise de base
 
 - La devise de base vient de `HUB_CURRENCY` (CHF par défaut), posée par compose comme `HUB_TZ`

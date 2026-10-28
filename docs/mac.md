@@ -90,10 +90,11 @@ hubc run --rm --no-deps scheduler hub verify
 hubc logs -f api
 ```
 
-## 6. Collecteurs (lot 5)
+## 6. Collecteurs
 
-Les bots BCF et VIAC et le collecteur Revolut tournent dans trois conteneurs du profil
-`collectors`, avec la même image pour tous : mise en place, premiers passages et Revolut dans
+Les connexions (BCF, VIAC, banques par Enable Banking, IBKR, cours, plateformes crypto) tournent
+dans deux conteneurs du profil `collectors`, `collector-browser` et `collector-api`, avec la même
+image : connexions, mise en place, premiers passages et reprise d'avant G4 dans
 [collectors.md](collectors.md). La migration vers le Pi (LP-01..03) est repoussée ; rien dans
 les collecteurs ne dépend du Mac.
 

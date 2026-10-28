@@ -42,6 +42,7 @@ PROBLEM_TYPES: dict[str, tuple[int, str]] = {
     "collector.unknown": (404, "Collecteur inconnu"),
     "collector.check_required": (409, "Un contrôle réussi est nécessaire avant la reprise"),
     "collector.link_unknown": (404, "Liaison inconnue ou expirée"),
+    "connection.exists": (409, "Connexion déjà présente"),
     "rate_limited": (429, "Trop de tentatives"),
     "busy.retry": (503, "Base occupée, réessayer"),
     "internal": (500, "Erreur interne"),

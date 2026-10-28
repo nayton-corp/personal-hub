@@ -18,7 +18,8 @@ from hub.collectors import dropbox
 from hub.collectors.base import CollectorConfig, Failure, Kind, Memory, Result
 from hub.collectors.browser import Selectors, purge_diag
 from hub.collectors.client import HubClient, HubUnavailable
-from hub.collectors.runtime import Env, due, execute, tick
+from hub.collectors.runtime import Assigned, Env, assigned, due, execute, tick
+from hub.core import connectors
 from tests.collectors.conftest import FakeHub
 from tests.collectors.fakebank import camt_file
 from tests.factories.camt import zipped
@@ -31,17 +32,25 @@ def _env(tmp_path: Path, hub: Any, name: str = "bcf") -> Env:
     return Env(name, CollectorConfig(home=tmp_path / "c"), {}, tmp_path / "inbox", hub)
 
 
+def _schedule(name: str) -> str:
+    spec = connectors.get(name)
+    assert spec is not None
+    return spec.schedule
+
+
 def test_schedules() -> None:
-    cfg = CollectorConfig()
-    assert due(cfg.schedules["bcf"], MONDAY_0730)
-    assert not due(cfg.schedules["bcf"], MONDAY_0730 + timedelta(days=5))  # samedi
-    assert due(cfg.schedules["viac"], datetime(2026, 11, 1, 9, 0, tzinfo=TZ))  # dimanche
-    revolut = [
+    assert due(_schedule("bcf"), MONDAY_0730)
+    assert not due(_schedule("bcf"), MONDAY_0730 + timedelta(days=5))  # samedi
+    assert due(_schedule("viac"), datetime(2026, 11, 1, 9, 0, tzinfo=TZ))  # dimanche
+    syncs = [
         h
         for h in range(24)
-        if due(cfg.schedules["revolut"], MONDAY_0730.replace(hour=h, minute=15))
+        if due(_schedule("enable_banking"), MONDAY_0730.replace(hour=h, minute=15))
     ]
-    assert len(revolut) <= 4
+    assert len(syncs) <= 4
+
+
+BCF = Assigned("bcf", "bcf", "BCF", _schedule("bcf"), {}, None)
 
 
 def _runner(log: list[tuple[str, Kind]]):  # type: ignore[no-untyped-def]
@@ -66,9 +75,9 @@ def test_tick(tmp_path: Path, mode: str, check: bool, at: datetime, expected: li
     hub = FakeHub(mode=mode, check_requested=check)
     log: list[tuple[str, Kind]] = []
     tick(
-        lambda n: _env(tmp_path, hub, n),
-        ["bcf"],
-        CollectorConfig(),
+        lambda item: _env(tmp_path, hub, item.id),
+        [BCF],
+        hub,  # type: ignore[arg-type]
         at,
         poll_checks=True,
         runner=_runner(log),
@@ -82,15 +91,46 @@ def test_tick_without_hub_runs_nothing(tmp_path: Path) -> None:
             raise HubUnavailable("down")
 
     log: list[tuple[str, Kind]] = []
+    down = Down()
     tick(
-        lambda n: _env(tmp_path, Down(), n),
-        ["bcf"],
-        CollectorConfig(),
+        lambda item: _env(tmp_path, down, item.id),
+        [BCF],
+        down,  # type: ignore[arg-type]
         MONDAY_0730,
         poll_checks=True,
         runner=_runner(log),
     )
     assert log == []
+
+
+def test_tick_reports_a_connection_it_cannot_open(tmp_path: Path) -> None:
+    """Secrets illisibles ou réglage invalide : un run « unknown » déclaré, pas de flux."""
+    hub = FakeHub()
+    log: list[tuple[str, Kind]] = []
+
+    def broken(_item: Assigned) -> Env:
+        raise ValueError("secrets")
+
+    done = tick(broken, [BCF], hub, MONDAY_0730, poll_checks=False, runner=_runner(log))  # type: ignore[arg-type]
+    assert (done, log) == ([("bcf", "run", "unknown")], [])
+    assert hub.runs == [("bcf", "run", "unknown")]
+
+
+def test_assigned_connections(tmp_path: Path) -> None:
+    raw = {"id": "n26", "connector": "enable_banking", "schedule": None, "secrets": None}
+
+    class Hub(FakeHub):
+        def connections(self, runner: str) -> list[dict[str, Any]]:
+            assert runner == "api"
+            return [raw]
+
+    class Down(FakeHub):
+        def connections(self, runner: str) -> list[dict[str, Any]]:
+            raise HubUnavailable("down")
+
+    (item,) = assigned(Hub(), "api")  # type: ignore[arg-type,misc]
+    assert (item.id, item.label, item.settings) == ("n26", "n26", {})
+    assert assigned(Down(), "api") is None  # type: ignore[arg-type]
 
 
 def test_execute_maps_exceptions_and_reports(tmp_path: Path) -> None:

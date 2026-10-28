@@ -6,8 +6,8 @@ API publiques et sans identifiant bancaire.
 - cryptos : CoinGecko, un an d'historique au premier run (limite de l'offre gratuite) ;
 - titres cotés (facultatif) : le graphique quotidien de Yahoo Finance, pour les lignes qui
   n'ont pas d'autre source de cours (titres Revolut par exemple) ;
-- portefeuilles : le solde des adresses publiques, lues dans la section de secrets
-  `collector-market` (champ `wallets`) : BTC par mempool.space (adresses, ou xpub d'un Ledger
+- portefeuilles : le solde des adresses publiques, lues dans les secrets de la
+  connexion (champ `wallets`) : BTC par mempool.space (adresses, ou xpub d'un Ledger
   dont les adresses sont dérivées ici), ETH et ses jetons USDC/USDT par un nœud RPC public, SOL
   et ses jetons par le RPC public de Solana.
 

@@ -1,9 +1,11 @@
 """Catalogue des connecteurs (chantier « hub générique », G3).
 
-Chaque source de données que le hub sait collecter est déclarée ici, une fois : son nom de
-collecteur, sa méthode, son pays, les types de comptes qu'elle alimente, les champs de secrets
-qu'elle attend et son horaire par défaut. Les listes de collecteurs du cœur, des conteneurs
-et de l'app en sont tirées ; l'écran « Connexions » (G5) s'appuiera sur ce catalogue.
+Chaque source de données que le hub sait collecter est déclarée ici, une fois : son nom, sa
+méthode, son pays, les types de comptes qu'elle alimente, les champs de secrets qu'elle attend,
+les réglages qu'elle accepte et son horaire par défaut. Une *connexion* (G4, `connections` dans
+`core.db`) est l'usage d'un connecteur par l'instance : un identifiant (« revolut »), ses
+secrets chiffrés, son horaire et ses réglages. Un même connecteur peut servir plusieurs
+connexions, par exemple Enable Banking pour deux banques.
 
 Méthodes, par ordre de préférence : `open_banking` (Enable Banking, banques de l'UE), `api`
 (API officielle du fournisseur, clé en lecture seule), `public` (données publiques, sans
@@ -18,11 +20,14 @@ from typing import Any, Literal
 
 Method = Literal["open_banking", "api", "public", "browser"]
 METHODS: tuple[Method, ...] = ("open_banking", "api", "public", "browser")
+Runner = Literal["api", "browser"]
+RUNNERS: tuple[Runner, ...] = ("api", "browser")
+ENABLE_BANKING = ("aspsp_name", "aspsp_country", "psu_type", "consent_days", "max_syncs_per_day")
 
 
 @dataclass(frozen=True)
 class Connector:
-    name: str  # nom du collecteur : service compose, section de secrets `collector-<nom>`
+    name: str
     label: str
     method: Method
     country: str | None  # ISO 3166-1, ou None pour un service international
@@ -30,6 +35,13 @@ class Connector:
     secrets: tuple[str, ...]  # champs obligatoires de la section `collector-<nom>`
     schedule: str  # horaire par défaut, fuseau de l'instance
     formats: tuple[str, ...]  # sources d'import des fichiers qu'il dépose (`imports.source`)
+    settings: tuple[str, ...] = ()  # réglages sans secret qu'une connexion peut donner
+    required: tuple[str, ...] = ()  # réglages qu'une nouvelle connexion doit donner
+
+    @property
+    def runner(self) -> Runner:
+        """Service collecteur qui l'exécute : les robots ont Chromium, les autres non."""
+        return "browser" if self.method == "browser" else "api"
 
     def public(self) -> dict[str, Any]:
         return {
@@ -41,6 +53,9 @@ class Connector:
             "secrets": list(self.secrets),
             "schedule": self.schedule,
             "formats": list(self.formats),
+            "settings": list(self.settings),
+            "required_settings": list(self.required),
+            "runner": self.runner,
         }
 
 
@@ -66,14 +81,16 @@ CATALOG: tuple[Connector, ...] = (
         ("viac_notice", "viac_report"),
     ),
     Connector(
-        "revolut",
-        "Revolut",
+        "enable_banking",
+        "Banque européenne (Enable Banking)",
         "open_banking",
         None,
         ("cash",),
         ("application_id", "private_key"),
-        "15 7,13,19 * * *",  # trois synchros, la quatrième reste pour la main
+        "15 7,13,19 * * *",  # trois synchros, la quatrième reste pour la main (Revolut)
         ("revolut_eb",),
+        ENABLE_BANKING,
+        ("aspsp_name", "aspsp_country"),  # la banque, telle qu'Enable Banking la nomme
     ),
     Connector(
         "ibkr",
@@ -94,6 +111,7 @@ CATALOG: tuple[Connector, ...] = (
         (),  # portefeuilles publics et clé CoinGecko facultatifs
         "15 6 * * *",  # cours de la veille, tous les jours
         ("market",),
+        ("currencies", "crypto", "quotes"),
     ),
     Connector(
         "binance",
@@ -132,8 +150,3 @@ _BY_NAME = {c.name: c for c in CATALOG}
 
 def get(name: str) -> Connector | None:
     return _BY_NAME.get(name)
-
-
-def schedules() -> dict[str, str]:
-    """Horaires par défaut, que `[collectors] schedules` remplace collecteur par collecteur."""
-    return {c.name: c.schedule for c in CATALOG}
