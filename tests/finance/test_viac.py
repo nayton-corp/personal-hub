@@ -417,7 +417,7 @@ def test_pillar3a_counts_viac_deposits(viac: FinanceDomain) -> None:
     open_portfolio(viac)
     send(viac, f.deposit(D1, "3000.00"), f.deposit(D2, "500.00", withdrawal=True))
     with viac.engine().connect() as conn:
-        p = insights.pillar3a(conn, 2026, date(2026, 10, 27))
+        p = insights.pillar3a_year(conn, 2026, date(2026, 10, 27))
     assert (p["paid"]["minor"], p["source"]) == (300000, "viac")
     assert p["margin"]["minor"] == 725800 - 300000
 

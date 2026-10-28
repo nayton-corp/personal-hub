@@ -16,11 +16,10 @@ import secrets as pysecrets
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, Literal
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import Connection, text
 
-from hub.core.clock import iso, now_iso, parse_iso, utcnow
+from hub.core.clock import iso, local_tz, now_iso, parse_iso, utcnow
 from hub.core.coredb import audit
 from hub.core.errors import Problem
 from hub.core.ids import new_id
@@ -52,7 +51,6 @@ HARD = frozenset({"selector_missing", "invalid_file", "auth_error", "unknown"})
 DEGRADE_AFTER = 2  # échecs durs de suite (auth_error : tout de suite)
 SITE_ALERT_AFTER = 3  # site indisponible de suite
 LINK_MINUTES = 15
-TZ = ZoneInfo("Europe/Zurich")
 _DETAIL = re.compile(r"[^a-z0-9_.:\- ]")
 
 
@@ -199,11 +197,12 @@ def _streak(conn: Connection, name: str, outcome: str) -> int:
 
 
 def _first_today(conn: Connection, name: str, outcome: str, run_id: str) -> bool:
-    today = utcnow().astimezone(TZ).date()
+    tz = local_tz()
+    today = utcnow().astimezone(tz).date()
     for r in runs(conn, name, 20):
         if r["id"] == run_id:
             continue
-        if parse_iso(r["started_at"]).astimezone(TZ).date() != today:
+        if parse_iso(r["started_at"]).astimezone(tz).date() != today:
             break
         if r["outcome"] == outcome:
             return False

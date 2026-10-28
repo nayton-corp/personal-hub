@@ -23,10 +23,19 @@ export async function api(path, body) {
   return data;
 }
 
-// Mois civil à Zurich : le serveur ne déduit jamais « ce mois » des données.
+// Fuseau de l'instance, donné par le profil (HUB_TZ) ; Zurich jusqu'à sa réponse.
+let zone = "Europe/Zurich";
+export const timeZone = () => zone;
+export function setTimeZone(tz) {
+  const changed = Boolean(tz) && tz !== zone;
+  if (changed) zone = tz;
+  return changed;
+}
+
+// Mois civil de l'instance : le serveur ne déduit jamais « ce mois » des données.
 export function currentMonth(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Zurich", year: "numeric", month: "2-digit",
+    timeZone: zone, year: "numeric", month: "2-digit",
   }).formatToParts(now);
   const get = (t) => parts.find((p) => p.type === t).value;
   return `${get("year")}-${get("month")}`;

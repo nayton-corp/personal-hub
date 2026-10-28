@@ -1,11 +1,11 @@
 """Suggestions de catégorie : seulement pour un commerçant jamais vu.
 
-La catégorisation reste d'abord affaire de règles et des corrections de Nathan. Pour un
+La catégorisation reste d'abord affaire de règles et des corrections de l'utilisateur. Pour un
 commerçant qui n'a encore aucune écriture catégorisée, le modèle choisit une catégorie dans la
 liste fermée et donne sa raison en une ligne ; chaque écriture devient une carte à valider.
 
 Le nom du commerçant est du texte externe : le modèle le lit comme une donnée, sa réponse est un
-objet JSON contrôlé (catégorie de la liste ou rien), et la carte passe toujours par Nathan.
+objet JSON contrôlé (catégorie de la liste ou rien), et la carte passe toujours par lui.
 Une écriture n'est suggérée qu'une fois (mémoire dans le volume du brain) : une carte refusée
 ne revient pas la nuit suivante.
 """

@@ -63,8 +63,13 @@ class HubApi:
             )
         return loads(raw)
 
+    def hello(self) -> dict[str, Any]:
+        """Domaines ouverts au jeton et profil de l'instance (prénom, pays)."""
+        out: dict[str, Any] = self._call("GET", "")
+        return out
+
     def capabilities(self) -> list[dict[str, Any]]:
-        out: list[dict[str, Any]] = self._call("GET", "")["domains"]
+        out: list[dict[str, Any]] = self.hello()["domains"]
         return out
 
     def tools(self, domain: str) -> list[dict[str, Any]]:

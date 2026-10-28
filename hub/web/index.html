@@ -191,6 +191,18 @@
         <div class="head"><h2>Fraîcheur des comptes</h2><span class="note">au-delà de 45 jours : à rafraîchir</span></div>
         <div id="fresh-list"></div>
       </div>
+      <div class="card form">
+        <h2>Profil</h2>
+        <p class="note">Le prénom qu'emploie l'assistant, et le pays, qui ouvre ses modules (pilier 3a en Suisse).</p>
+        <form id="form-profile">
+          <label for="profile-name">Prénom</label>
+          <input id="profile-name" maxlength="60" autocomplete="given-name">
+          <label for="profile-country">Pays (code ISO à deux lettres)</label>
+          <input id="profile-country" maxlength="2" pattern="[A-Za-z]{2}" required autocapitalize="characters">
+          <button type="submit" class="btn secondary">Enregistrer</button>
+        </form>
+        <p id="profile-info" class="note"></p>
+      </div>
       <div class="card">
         <h2>Exporter</h2>
         <p class="note">Le journal complet en CSV, tel qu'il est au registre.</p>

@@ -297,7 +297,7 @@ class FinanceTools:
         today = self.domain.today()
         month = today.strftime("%Y-%m")
         with self.engine.connect() as conn:
-            k = insights.kpis(conn, month, today, pillar3a_cap=self.domain.pillar3a_cap)
+            k = insights.kpis(conn, month, today, **self.domain.pillar3a())
             p3 = k["pillar3a"]
             return self._wrap(
                 conn,
@@ -310,7 +310,8 @@ class FinanceTools:
                     "change_ytd": amount(k["change_ytd"]["amount"]),
                     "deposits_ytd": amount(k["deposits_ytd"]),
                     "market_ytd": amount(k["market_ytd"]),
-                    "pillar3a": {
+                    "pillar3a": p3
+                    and {
                         "year": p3["year"],
                         "cap": amount(p3["cap"]),
                         "paid": amount(p3["paid"]),

@@ -139,7 +139,7 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         """Chiffres clés de l'accueil : patrimoine et variations, mois, liquidités, à traiter."""
         m = _month(month)
         with engine.connect() as conn:
-            return insights.kpis(conn, m, domain.today(), pillar3a_cap=domain.pillar3a_cap)
+            return insights.kpis(conn, m, domain.today(), **domain.pillar3a())
 
     @r.get("/holdings")
     def holdings(

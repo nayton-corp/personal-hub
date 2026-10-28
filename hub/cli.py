@@ -10,7 +10,7 @@ from typing import Annotated
 import typer
 
 from hub.core import logging as hub_logging
-from hub.core import proposals, sessions, tokens
+from hub.core import profile, proposals, sessions, tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
@@ -26,6 +26,8 @@ app.add_typer(token_app, name="token")
 app.add_typer(auth_app, name="auth")
 proposals_app = typer.Typer(no_args_is_help=True, help="Propositions (Double Sas)")
 app.add_typer(proposals_app, name="proposals")
+profile_app = typer.Typer(no_args_is_help=True, help="Profil de l'instance (prénom, pays)")
+app.add_typer(profile_app, name="profile")
 
 CLI_ACTOR = "system:cli"
 
@@ -147,6 +149,35 @@ def bootstrap_code() -> None:
         code = sessions.create_bootstrap_code(conn, hub.settings.auth.bootstrap_minutes, CLI_ACTOR)
     typer.echo(f"valable {hub.settings.auth.bootstrap_minutes} minutes :", err=True)
     typer.echo(code)
+
+
+@profile_app.command("show")
+def profile_show() -> None:
+    """Profil de l'instance, en JSON ; le fuseau vient de HUB_TZ."""
+    hub = _ready()
+    with hub.core.engine.connect() as conn:
+        typer.echo(json.dumps(profile.get(conn).public(), ensure_ascii=False))
+
+
+@profile_app.command("set")
+def profile_set(
+    name: Annotated[str | None, typer.Option(help="Prénom employé par l'assistant.")] = None,
+    country: Annotated[
+        str | None, typer.Option(help="Pays (ISO, ex. CH) : ouvre les modules du pays.")
+    ] = None,
+    clear_name: Annotated[bool, typer.Option("--clear-name", help="Efface le prénom.")] = False,
+) -> None:
+    """Change le prénom ou le pays de l'instance."""
+    hub = _ready()
+    try:
+        with hub.core.engine.begin() as conn:
+            p = profile.update(
+                conn, CLI_ACTOR, display_name=name, country=country, clear_name=clear_name
+            )
+    except profile.ProfileError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from None
+    typer.echo(json.dumps(p.public(), ensure_ascii=False))
 
 
 def _cli_principal() -> Principal:

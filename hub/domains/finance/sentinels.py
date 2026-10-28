@@ -153,7 +153,7 @@ def _recurring(conn: Connection) -> list[Alert]:
 def _pillar3a(conn: Connection, today: date, cap: int | None) -> list[Alert]:
     if today.month not in PILLAR3A_MONTHS:
         return []
-    p = insights.pillar3a(conn, today.year, today, cap)
+    p = insights.pillar3a_year(conn, today.year, today, cap)
     if int(p["margin"]["minor"]) <= 0:
         return []
     return [
@@ -167,15 +167,20 @@ def _pillar3a(conn: Connection, today: date, cap: int | None) -> list[Alert]:
     ]
 
 
-def evaluate(conn: Connection, today: date, *, pillar3a_cap: int | None = None) -> list[Alert]:
-    return _budget(conn, today) + _recurring(conn) + _pillar3a(conn, today, pillar3a_cap)
+def evaluate(
+    conn: Connection, today: date, *, pillar3a: bool = True, pillar3a_cap: int | None = None
+) -> list[Alert]:
+    p3 = _pillar3a(conn, today, pillar3a_cap) if pillar3a else []
+    return _budget(conn, today) + _recurring(conn) + p3
 
 
-def run(conn: Connection, today: date, *, pillar3a_cap: int | None = None) -> list[Alert]:
+def run(
+    conn: Connection, today: date, *, pillar3a: bool = True, pillar3a_cap: int | None = None
+) -> list[Alert]:
     """Lève les alertes nouvelles (dans la transaction de l'appelant) et demande leur
     notification ; une occasion déjà levée ne l'est plus."""
     raised = []
-    for a in evaluate(conn, today, pillar3a_cap=pillar3a_cap):
+    for a in evaluate(conn, today, pillar3a=pillar3a, pillar3a_cap=pillar3a_cap):
         exists = conn.execute(text("SELECT 1 FROM alerts WHERE key = :k"), {"k": a.key}).first()
         if exists:
             continue

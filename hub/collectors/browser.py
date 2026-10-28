@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from hub.collectors.base import Failure
-from hub.core.clock import utcnow
+from hub.core.clock import local_tz, utcnow
 
 if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Download, ElementHandle, Frame, Page
@@ -69,7 +69,7 @@ def _deadline(timeout_ms: int) -> int:
 
 
 class Browser:
-    """Une session : profil persistant, fuseau de Zurich, téléchargements acceptés."""
+    """Une session : profil persistant, fuseau de l'instance, téléchargements acceptés."""
 
     def __init__(
         self,
@@ -251,7 +251,7 @@ def open_browser(
             headless=headless,
             viewport={"width": 1366, "height": 900},
             locale="fr-CH",
-            timezone_id="Europe/Zurich",
+            timezone_id=local_tz().key,
             accept_downloads=True,
             args=["--disable-dev-shm-usage"],
         )

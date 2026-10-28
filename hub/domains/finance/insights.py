@@ -190,7 +190,9 @@ def to_categorize(conn: Connection) -> int:
     )
 
 
-def pillar3a(conn: Connection, year: int, until: date, cap: int | None = None) -> dict[str, Any]:
+def pillar3a_year(
+    conn: Connection, year: int, until: date, cap: int | None = None
+) -> dict[str, Any]:
     """Versements 3a de l'année : ceux que VIAC a reçus (avis de versement) ou, à défaut, les
     paiements catégorisés « épargne 3a » sur les comptes courants ; le plus grand des deux,
     pour qu'un historique VIAC incomplet ou une catégorie manquante ne sous-estime rien."""
@@ -393,7 +395,12 @@ def _change(now: int, then: int, since: date) -> dict[str, Any]:
 
 
 def kpis(
-    conn: Connection, month: str, today: date, *, pillar3a_cap: int | None = None
+    conn: Connection,
+    month: str,
+    today: date,
+    *,
+    pillar3a: bool = True,
+    pillar3a_cap: int | None = None,
 ) -> dict[str, Any]:
     at = as_of(month, today)
     start = date.fromisoformat(month_bounds(month)[0])
@@ -432,7 +439,7 @@ def kpis(
         "stale_accounts": stale_accounts(conn, today),
         "to_categorize": to_categorize(conn),
         "unmatched_transfers": transfers.summary(conn, detailed=False)["unmatched"],
-        "pillar3a": pillar3a(conn, at.year, at, pillar3a_cap),
+        "pillar3a": pillar3a_year(conn, at.year, at, pillar3a_cap) if pillar3a else None,
         "last_statement": max(clbds) if clbds else None,
         "missing_fx": now.missing_fx,
         "missing_prices": now.missing_prices,

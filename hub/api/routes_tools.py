@@ -12,7 +12,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, Path
 
 from hub.api.schemas import CapabilitiesOut, ToolCallOut, ToolOut, ToolsOut
-from hub.core import tools
+from hub.core import profile, tools
 from hub.core.auth import Ctx, CurrentPrincipal, Principal
 from hub.core.errors import Problem
 
@@ -31,7 +31,11 @@ Token = Annotated[Principal, Depends(_token)]
 
 @router.get("/tools", response_model=CapabilitiesOut)
 def capabilities(hub_ctx: Ctx, principal: Token) -> CapabilitiesOut:
-    return CapabilitiesOut.model_validate({"domains": tools.capabilities(hub_ctx, principal)})
+    with hub_ctx.core.engine.connect() as conn:
+        me = profile.get(conn).public()
+    return CapabilitiesOut.model_validate(
+        {"domains": tools.capabilities(hub_ctx, principal), "profile": me}
+    )
 
 
 @router.get("/tools/{domain}", response_model=ToolsOut)
