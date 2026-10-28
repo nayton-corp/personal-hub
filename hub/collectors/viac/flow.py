@@ -26,10 +26,15 @@ PAGE_ROWS = 20
 MAX_PAGES = 50
 
 
-def open_documents(b: Browser) -> None:
-    """Va sur Documents ; une session expirée montre le formulaire de connexion."""
+def open_documents(b: Browser, *, reload: bool = True) -> None:
+    """Va sur Documents ; une session expirée montre le formulaire de connexion. Juste après
+    une connexion, `reload=False` navigue dans l'app : un rechargement complet pendant que VIAC
+    ouvre sa session la perd."""
     for attempt in range(3):
-        b.goto(b.sel.site("documents"), "documents.open")
+        if reload or attempt:
+            b.goto(b.sel.site("documents"), "documents.open")
+        else:
+            b.page.evaluate("location.hash = '#/documents'")
         state = b.wait_for(
             {
                 "rows": lambda: b.find("documents.row", 0) is not None,
@@ -154,7 +159,7 @@ def run(env: Env, kind: Kind) -> Result:
             if exc.detail != "session.expired":
                 raise
             login(b, env, None)
-            open_documents(b)  # formulaire à nouveau : identifiants refusés
+            open_documents(b, reload=False)  # formulaire à nouveau : identifiants refusés
         if kind == "check":
             for name in ("documents.link", "report.button"):
                 if b.find(name, 5_000) is None:
@@ -223,6 +228,6 @@ def relogin(env: Env, ask_code: Callable[[], str]) -> Result:
         if state is None:
             raise Failure("selector_missing", "login.password")
         login(b, env, ask_code)
-        open_documents(b)  # attend la liste ; formulaire à nouveau : code refusé
+        open_documents(b, reload=False)  # attend la liste ; formulaire à nouveau : code refusé
         b.page.wait_for_timeout(2_000)  # laisse l'app enregistrer sa session dans le profil
     return Result("ok")
