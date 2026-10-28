@@ -2,6 +2,19 @@
 
 ## [Non publié]
 
+### Hub générique — G3 : catalogue de connecteurs
+
+- `hub/core/connectors.py` déclare une fois chaque connecteur : méthode (`open_banking`, `api`,
+  `public`, `browser`), pays, types de comptes, champs de secrets, horaire par défaut, sources
+  d'import. Les listes du cœur (`COLLECTORS`) et des conteneurs (`NAMES`) et les horaires par
+  défaut en sont tirés ; `[collectors] schedules` ne remplace plus que les horaires qu'il nomme.
+  Route `GET /api/collectors/catalog` (app). Des tests vérifient que compose, le code des
+  collecteurs (secrets lus) et le planificateur suivent le catalogue.
+- `hub/domains/finance/institutions.py` déclare les codes d'opération VIAC et IBKR et leur rôle
+  (virement, mouvement interne, effet marché, versement 3a) ; l'appariement, la valorisation et
+  le suivi du 3a les lisent au lieu de listes écrites en dur. Un test vérifie qu'ils concordent
+  avec les règles système des migrations. Aucun changement de résultat.
+
 ### Hub générique — G1 : profil de l'instance
 
 - `core.db` (migration `0003_profile`) : profil de l'instance, prénom et pays. Une base existante

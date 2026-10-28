@@ -18,8 +18,8 @@ session_hours = 12
 [collectors]                  # lot 5 : lu par les conteneurs collector-* seulement
 api_url = "http://api:8710"   # réseau compose « hub »
 home = "/var/lib/hub-collector"
-# horaires (fuseau de l'instance, HUB_TZ) ; Revolut : au plus 4 synchros par jour sans l'utilisateur
-schedules = { bcf = "30 7 * * 1-5", viac = "0 9 * * 0", revolut = "15 7,13,19 * * *", ibkr = "45 6 * * 2-6", market = "15 6 * * *", binance = "20 6 * * *", kucoin = "22 6 * * *", coinbase = "24 6 * * *" }
+# horaires : ceux du catalogue (hub/core/connectors.py, fuseau HUB_TZ) ; pour en changer un :
+# schedules = { bcf = "30 7 * * 1-5" }   (Revolut : au plus 4 synchros par jour sans l'utilisateur)
 # lot 6 : cours publics ; quotes = { "<ISIN>" = "<symbole Yahoo>" } pour les titres sans autre cours
 [collectors.market]
 currencies = ["EUR", "USD", "GBP"]

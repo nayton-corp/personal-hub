@@ -25,10 +25,12 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.core.clock import now_iso
+from hub.domains.finance import institutions
 from hub.domains.finance.reads import money
 
 WINDOW_DAYS = 5
-TRANSFER_CODES = ("VIAC/DEPOSIT", "VIAC/WITHDRAWAL", "IBKR/DEPOSIT")
+TRANSFER_CODES = institutions.prefixes(transfer=True)
+_INTERNAL = institutions.like_any("e.bank_tx_code", institutions.prefixes(internal=True))
 METHOD_RANK = {"iban": 0, "code": 1, "amount": 2}
 
 
@@ -67,14 +69,13 @@ class Link:
 def _moves(conn: Connection) -> list[Move]:
     rows = conn.execute(
         text(
-            "SELECT e.seq, e.id, e.account_id, a.iban, e.booking_date, e.amount_minor, e.currency, "
+            "SELECT e.seq, e.id, e.account_id, a.iban, e.booking_date, e.amount_minor, e.currency, "  # noqa: S608 - codes déclarés
             "e.counterparty_iban, coalesce(e.bank_tx_code, ''), c.grp "
             "FROM entries e JOIN accounts a ON a.id = e.account_id "
             "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
             "LEFT JOIN categories c ON c.id = vc.category_id "
             "WHERE e.kind = 'movement' AND e.amount_minor != 0 "
-            "AND (e.bank_tx_code IS NULL OR (e.bank_tx_code NOT LIKE 'IBKR/TRADE%' "
-            "AND e.bank_tx_code NOT LIKE 'IBKR/FX%' AND e.bank_tx_code NOT LIKE 'VIAC/TRADE%'))"
+            f"AND (e.bank_tx_code IS NULL OR NOT ({_INTERNAL}))"
         )
     ).fetchall()
     return [

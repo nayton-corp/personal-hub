@@ -28,17 +28,18 @@ from decimal import Decimal, localcontext
 from sqlalchemy import Connection, text
 
 from hub.core.money import DECIMAL_CONTEXT, Money
+from hub.domains.finance import institutions
 
 BASE = "CHF"
 # enveloppes de by_envelope_json (spécification, section 2), tirées du type de compte
 ENVELOPES = {"cash": "cash", "pension": "pilier3a", "securities": "titres", "crypto": "crypto"}
 ENVELOPE_ORDER = ("cash", "pilier3a", "titres", "crypto")
 # hors versements : rendement, frais et mouvements internes des courtiers (préfixes de code)
-NOT_DEPOSITS = ("VIAC/INCOME", "VIAC/FEE", "IBKR/TRADE", "IBKR/FX", "IBKR/INCOME", "IBKR/FEE")
+NOT_DEPOSITS = institutions.prefixes(market=True)
 # achats de positions tenues hors registre : actions Revolut, cryptos (virements vers SwissBorg…)
 OFF_LEDGER_PURCHASES = ("transfer-titres", "crypto")
 CRYPTO_PURCHASE = "crypto"
-_CODES = " OR ".join(f"e.bank_tx_code LIKE '{c}%'" for c in NOT_DEPOSITS)
+_CODES = institutions.like_any("e.bank_tx_code", NOT_DEPOSITS)
 _PURCHASES = ", ".join(f"'{c}'" for c in OFF_LEDGER_PURCHASES)
 DEPOSITS_SQL = (
     f"sum(CASE WHEN {_CODES} OR vc.category_id IN ({_PURCHASES}) THEN 0 ELSE e.amount_minor END)"

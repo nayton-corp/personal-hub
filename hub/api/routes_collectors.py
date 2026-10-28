@@ -19,8 +19,10 @@ from hub.api.schemas import (
     CollectorOut,
     CollectorRunIn,
     CollectorRunsOut,
+    ConnectorListOut,
+    ConnectorOut,
 )
-from hub.core import collectors
+from hub.core import collectors, connectors
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal
 from hub.core.errors import Problem
 from hub.core.logging import get_logger
@@ -55,6 +57,14 @@ def _out(state: collectors.State) -> CollectorOut:
 def list_collectors(hub_ctx: Ctx, _principal: Viewer) -> CollectorListOut:
     with hub_ctx.core.engine.begin() as conn:
         return CollectorListOut(items=[_out(s) for s in collectors.list_all(conn)])
+
+
+@router.get("/catalog", response_model=ConnectorListOut)
+def catalog(_principal: AppSession) -> ConnectorListOut:
+    """Les connecteurs que ce hub sait collecter (méthode, pays, secrets attendus)."""
+    return ConnectorListOut(
+        items=[ConnectorOut.model_validate(c.public()) for c in connectors.CATALOG]
+    )
 
 
 @router.get("/{name}", response_model=CollectorOut)

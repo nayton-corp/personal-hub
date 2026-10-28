@@ -19,22 +19,14 @@ from typing import Any, Literal
 
 from sqlalchemy import Connection, text
 
+from hub.core import connectors
 from hub.core.clock import iso, local_tz, now_iso, parse_iso, utcnow
 from hub.core.coredb import audit
 from hub.core.errors import Problem
 from hub.core.ids import new_id
 from hub.core.notify import Message
 
-COLLECTORS: dict[str, str] = {
-    "bcf": "BCF",
-    "viac": "VIAC",
-    "revolut": "Revolut",
-    "ibkr": "IBKR",
-    "market": "Cours et cryptos",
-    "binance": "Binance",
-    "kucoin": "KuCoin",
-    "coinbase": "Coinbase",
-}
+COLLECTORS: dict[str, str] = {c.name: c.label for c in connectors.CATALOG}
 Outcome = Literal[
     "ok",
     "nothing_new",

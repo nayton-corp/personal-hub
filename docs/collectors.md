@@ -13,6 +13,11 @@ mêmes images et le même `deploy/compose.yaml` serviront sur le Pi.
 | `collector-market` | API publiques (BCE, CoinGecko, mempool.space, nœuds Ethereum et Solana publics, Yahoo facultatif) | 06:15 | un `market.json` : change, cours, soldes des portefeuilles |
 | `collector-binance`, `-kucoin`, `-coinbase` | API officielle, clé en lecture seule | 06:20, 06:22, 06:24 | un `<plateforme>.json` : soldes de la plateforme |
 
+Les collecteurs, leurs méthodes, les secrets qu'ils attendent et leurs horaires par défaut sont
+déclarés une seule fois dans `hub/core/connectors.py` (l'app les lit par
+`GET /api/collectors/catalog`). Pour changer un horaire, `[collectors] schedules` dans
+`deploy/settings.toml` ne nomme que le collecteur concerné.
+
 Ce qu'un collecteur voit : la boîte d'entrée, son propre volume (profil du navigateur, mémoire
 de ce qu'il a déjà déposé) et son propre fichier de secrets. Il ne lit jamais les bases et ne
 remonte au hub que l'issue de chaque passage (`ok`, `nothing_new`, `auth_error`…), le nombre de

@@ -18,7 +18,7 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.core.money import DECIMAL_CONTEXT, Money, quantize
-from hub.domains.finance import transfers, valuation
+from hub.domains.finance import institutions, transfers, valuation
 from hub.domains.finance.reads import (
     MIN_COUNT_FOR_AGGREGATES,
     OTHERS,
@@ -36,6 +36,9 @@ from hub.domains.finance.reads import (
 CCY = valuation.BASE
 STALE_DAYS = 45
 EPARGNE_3A = "epargne-3a"
+PENSION_DEPOSITS = institutions.like_any(
+    "bank_tx_code", institutions.prefixes(pension_deposit=True)
+)
 # plafond du 3e pilier A pour un salarié affilié à une caisse de pension, en centimes ;
 # une année absente prend le dernier plafond connu, `[finance] pillar3a_cap_minor` le remplace
 PILLAR_3A_CAP = {2024: 705_600, 2025: 725_800, 2026: 725_800}
@@ -215,7 +218,7 @@ def pillar3a_year(
         conn.execute(
             text(
                 "SELECT coalesce(sum(amount_minor), 0) FROM entries "
-                "WHERE bank_tx_code = 'VIAC/DEPOSIT' AND currency = :ccy "
+                f"WHERE ({PENSION_DEPOSITS}) AND currency = :ccy "
                 "AND booking_date >= :s AND booking_date <= :e"
             ),
             period,

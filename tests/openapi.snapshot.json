@@ -532,6 +532,92 @@
         "title": "CollectorRunsOut",
         "type": "object"
       },
+      "ConnectorListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectorOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ConnectorListOut",
+        "type": "object"
+      },
+      "ConnectorOut": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Accounts",
+            "type": "array"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "formats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Formats",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "method": {
+            "enum": [
+              "open_banking",
+              "api",
+              "public",
+              "browser"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "schedule": {
+            "title": "Schedule",
+            "type": "string"
+          },
+          "secrets": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Secrets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "method",
+          "country",
+          "accounts",
+          "secrets",
+          "schedule",
+          "formats"
+        ],
+        "title": "ConnectorOut",
+        "type": "object"
+      },
       "CoreHealthOut": {
         "properties": {
           "db": {
@@ -1783,6 +1869,28 @@
           }
         },
         "summary": "List Collectors",
+        "tags": [
+          "collecteurs"
+        ]
+      }
+    },
+    "/api/collectors/catalog": {
+      "get": {
+        "description": "Les connecteurs que ce hub sait collecter (méthode, pays, secrets attendus).",
+        "operationId": "catalog_api_collectors_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Catalog",
         "tags": [
           "collecteurs"
         ]
