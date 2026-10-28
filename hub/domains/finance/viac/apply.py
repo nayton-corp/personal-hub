@@ -90,6 +90,16 @@ def unit_price(value_minor: int, quantity: Decimal) -> str:
         return qty_text(price.quantize(Decimal(1).scaleb(-PRICE_PLACES)))
 
 
+def notice_price(n: Notice) -> str:
+    """Cours d'un avis : le cours imprimé quand il est en CHF. Le montant divisé par les parts
+    s'en écarte de quelques pour cent sur les petits achats, dont VIAC arrondit les parts à
+    2 décimales ; il ne sert qu'en devise étrangère, faute de taux sur l'avis."""
+    if n.price is not None and n.price_currency == CCY and n.price > 0:
+        return qty_text(n.price.quantize(Decimal(1).scaleb(-PRICE_PLACES)))
+    assert n.quantity is not None  # noqa: S101 - appelé pour une opération avec parts
+    return unit_price(minor(n.amount), n.quantity)
+
+
 def upsert_instrument(
     conn: Connection,
     isin: str,
@@ -251,7 +261,7 @@ def apply_notice(conn: Connection, import_id: str, n: Notice) -> Outcome:
             conn,
             n.isin,
             n.value_date,
-            unit_price(minor(n.amount), n.quantity),
+            notice_price(n),
             "viac_notice",
             import_id,
         )

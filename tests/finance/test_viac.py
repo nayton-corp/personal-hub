@@ -214,6 +214,13 @@ def test_buy_moves_cash_to_titles(viac: FinanceDomain) -> None:
     assert viac.verify_ledger().ok
 
 
+def test_notice_price_is_the_printed_chf_price(viac: FinanceDomain) -> None:
+    # 4.00 CHF pour « 0.03 part » à 120 : les parts arrondies donneraient 133.33
+    open_portfolio(viac)
+    send(viac, f.buy(D2, "0.03", "4.00", price="120.00"))
+    assert rows(viac, "SELECT price FROM prices WHERE source = 'viac_notice'") == [("120",)]
+
+
 def test_income_and_fees_are_categorized(viac: FinanceDomain) -> None:
     cash, _ = open_portfolio(viac)
     send(viac, f.dividend(D3, "6.00"), f.interest(D3, "0.85"), f.fee(D3, "11.20"))
