@@ -126,7 +126,8 @@ class Inbox:
         if digest in self.memory.seen():
             return False
         self.tmp.mkdir(parents=True, exist_ok=True)
-        part = self.tmp / f"{self.stamp()}-{safe(name)}"
+        # l'empreinte départage deux fichiers de même nom déposés dans la même seconde
+        part = self.tmp / f"{self.stamp()}-{digest[:8]}-{safe(name)}"
         part.write_bytes(data)
         if not check(data):
             self.quarantine.mkdir(parents=True, exist_ok=True)

@@ -100,7 +100,9 @@ def fetch_documents(b: Browser, env: Env, since: str) -> tuple[int, str]:
             data = _wait_download(b, 30_000)
             if data is None:
                 continue  # téléchargement sans réponse : repris au prochain run
-            if env.inbox.drop(f"viac-{on}-{safe(name)}.pdf", data, is_pdf, step="documents.file"):
+            if env.inbox.drop(
+                f"viac-{on}-{safe(portfolio)}-{safe(name)}.pdf", data, is_pdf, step="documents.file"
+            ):
                 files += 1
             seen_keys.add(key)
             newest = max(newest, on)

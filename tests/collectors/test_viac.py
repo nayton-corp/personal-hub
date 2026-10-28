@@ -24,7 +24,7 @@ def test_downloads_new_documents_and_requests_report(make_env, bank: Bank) -> No
     # l'attestation de janvier est antérieure à la date de reprise : la liste s'arrête là
     assert result.outcome == "ok"
     assert result.files == 2  # le versement et le rapport demandé
-    assert any(n.endswith("viac-2026-10-03-Versement.pdf") for n in names)
+    assert any(n.endswith("viac-2026-10-03-Portefeuille-1-Versement.pdf") for n in names)
     assert any(n.endswith("viac-rapport-2026-10-26.pdf") for n in names)
     assert "/report" in bank.calls
 

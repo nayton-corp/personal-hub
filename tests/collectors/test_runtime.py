@@ -148,6 +148,16 @@ def test_drop_is_atomic_and_remembers(tmp_path: Path) -> None:
     assert inbox.clean_tmp(datetime.now(TZ) - timedelta(minutes=5)) == 1
 
 
+def test_same_name_in_the_same_second_keeps_both_files(tmp_path: Path) -> None:
+    # deux versements du même jour, un par portefeuille, portent le même nom chez VIAC
+    inbox = dropbox.Inbox(tmp_path / "inbox", Memory(tmp_path / "m.json"))
+    inbox.stamp = lambda: "20261028T063517"  # type: ignore[method-assign]
+    assert inbox.drop("Versement.pdf", b"%PDF-1\nA\n%%EOF", dropbox.is_pdf, step="s")
+    assert inbox.drop("Versement.pdf", b"%PDF-1\nB\n%%EOF", dropbox.is_pdf, step="s")
+    files = sorted(p.read_bytes() for p in (tmp_path / "inbox").iterdir() if p.is_file())
+    assert files == [b"%PDF-1\nA\n%%EOF", b"%PDF-1\nB\n%%EOF"]
+
+
 def test_selectors_and_purge(tmp_path: Path) -> None:
     path = tmp_path / "s.toml"
     path.write_text('[site]\nurl = "a"\n[x]\nb = "c"\n[clicks]\nallowed = ["x.b"]\n')
