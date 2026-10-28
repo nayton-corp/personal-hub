@@ -29,7 +29,7 @@ MONTH = r"^\d{4}-(0[1-9]|1[0-2])$"
 PERIOD = r"^[mq]$"
 DATE = r"^\d{4}-\d{2}-\d{2}$"
 MAX_UPLOAD = 50 * 1024 * 1024
-_NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip|pdf|json|csv)$", re.I)
+_NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip|pdf|json|csv|xlsx)$", re.I)
 DIMENSION = r"^(region|sector|currency|holding)$"
 
 Reader = Annotated[Principal, Depends(require("app", "finance:read"))]
@@ -262,9 +262,12 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         _session: AppSession,
         name: Annotated[str, Query(max_length=124)],
     ) -> dict[str, Any]:
-        """Corps brut (XML, zip, PDF VIAC, JSON ou CSV) ; même traitement que `inbox/`."""
+        """Corps brut (XML, zip, PDF VIAC, JSON, CSV ou relevé SwissBorg .xlsx) ; même traitement
+        que `inbox/`."""
         if not _NAME.match(name):
-            raise Problem("validation.params", "nom de fichier .xml, .zip, .pdf, .json ou .csv")
+            raise Problem(
+                "validation.params", "nom de fichier .xml, .zip, .pdf, .json, .csv ou .xlsx"
+            )
         body = await request.body()
         if not body or len(body) > MAX_UPLOAD:
             raise Problem("validation.params", "fichier vide ou trop volumineux")

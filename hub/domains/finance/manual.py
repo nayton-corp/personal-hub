@@ -115,7 +115,7 @@ def parse(data: bytes) -> PositionsFile:
     return PositionsFile([Snapshot(a, d, rows) for (a, d), rows in sorted(groups.items())])
 
 
-def apply_snapshot(conn: Connection, import_id: str, s: Snapshot) -> Result:
+def apply_snapshot(conn: Connection, import_id: str, s: Snapshot, source: str = "manual") -> Result:
     result = Result()
     account = catalog.account_by_ref(conn, s.account)
     if account is None:
@@ -141,7 +141,7 @@ def apply_snapshot(conn: Connection, import_id: str, s: Snapshot) -> Result:
         else:
             result.duplicates += 1
         if r.price > 0:
-            assets.add_price(conn, r.key, s.on_date, r.price, r.currency, "manual", import_id)
+            assets.add_price(conn, r.key, s.on_date, r.price, r.currency, source, import_id)
     if result.new:
         ledger.append_event(
             conn,

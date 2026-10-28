@@ -246,13 +246,26 @@ collecteur. Une crypto détenue chez Revolut passe par le CSV de positions ci-de
 - *globale* : investi = paiements nets de la catégorie « Crypto » (virements vers SwissBorg,
   Binance, Coinbase, KuCoin…, reconnus par les règles, moins ce qui en revient), en CHF au change
   du jour ; résultat = valeur des portefeuilles moins investi, frais compris. Ce qui attend
-  chez une plateforme sans relevé (SwissBorg) compte comme investi sans valeur ;
+  chez une plateforme sans relevé compte comme investi sans valeur ;
 - *par actif* : prix de revient = valeur en CHF de chaque arrivée sur le portefeuille, le jour
   où le relevé la voit (une baisse retire sa part du coût). Le gain se mesure depuis l'arrivée,
   pas depuis l'achat sur la plateforme.
 
 Un paiement « Crypto » achète une position tenue hors registre : comme « Achats et ventes de
 titres », il ne compte pas comme une sortie du patrimoine dans les versements.
+
+**SwissBorg.** Pas d'API : le relevé de compte de l'app (Profil → Documents → Relevé de compte,
+format Excel, **depuis l'ouverture du compte**) se dépose tel quel (`.xlsx`) dans la boîte
+d'entrée ou par l'import de l'app. Déclare d'abord le compte : `fin crypto add-wallet swissborg
+--label SwissBorg` (compte `crypto:swissborg`). Les mouvements sont rejoués depuis le premier :
+chaque jour où un solde bouge devient un relevé complet des positions (cryptos, et les francs en
+attente en `SYM:CHF`), avec le cours du jour tiré du fichier (contre-valeur USD ÷ quantité) et
+le change USD/CHF de ses mouvements en francs. Achat, dépôt, rendement et remise de frais
+créditent le net ; vente, retrait et frais périodiques débitent. Un échange entre deux cryptos
+est une vente puis une arrivée : le prix de revient repart de la valeur du jour de l'échange.
+Redéposer un relevé plus récent ajoute les jours nouveaux (ceux déjà lus sont des doublons) :
+il doit toujours couvrir toute la période, sinon les soldes rejoués seraient faux (un solde
+négatif fait refuser le fichier).
 
 **Positions saisies à la main (titres et cryptos Revolut, autres).** Les placements Revolut ne
 passent pas par PSD2. Déclare le compte une fois :

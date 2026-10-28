@@ -278,5 +278,6 @@ Le compte se déclare avec `fin crypto add-wallet binance` (ou `kucoin`, `coinba
 hub-collector run binance --check` lit les soldes sans rien déposer. Une clé révoquée donne
 `auth_error` et suspend ce collecteur seulement.
 
-SwissBorg n'a pas d'API publique : l'argent qui y part se voit dans les virements BCF, et ce qui
-arrive ensuite sur la Ledger est relevé par la xpub.
+SwissBorg n'a pas d'API publique : l'argent qui y part se voit dans les virements BCF, ce qui
+arrive ensuite sur la Ledger est relevé par la xpub, et le solde gardé chez SwissBorg vient de
+son relevé de compte déposé de temps en temps (voir « SwissBorg » dans [finance.md](finance.md)).

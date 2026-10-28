@@ -23,6 +23,10 @@
 - Historique BTC : au premier passage, le solde de chaque jour où il a bougé est relu sur la
   chaîne (transactions des adresses utilisées) et déposé en relevés passés. Avant la fenêtre
   d'un an de CoinGecko, change BCE et clôtures publiques Binance (USD) pour le valoriser.
+- Relevé SwissBorg (`.xlsx`, Profil → Documents → Relevé de compte) : soldes par actif rejoués
+  depuis le premier mouvement, un relevé de positions de `crypto:swissborg` par jour où ils
+  bougent, cours et change USD/CHF tirés du fichier. La boîte d'entrée et l'import de l'app
+  acceptent les `.xlsx` (lecteur interne, première feuille, texte des cellules).
 - mempool.space : une seconde entre deux adresses BTC, et sur un refus 429 un nouvel essai après
   10, 30 puis 60 secondes (une liste de 48 adresses était coupée après une vingtaine).
 
