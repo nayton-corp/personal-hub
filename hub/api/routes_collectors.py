@@ -23,9 +23,11 @@ from hub.api.schemas import (
 from hub.core import collectors
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal
 from hub.core.errors import Problem
+from hub.core.logging import get_logger
 from hub.core.notify import Message
 
 router = APIRouter(prefix="/collectors", tags=["collecteurs"])
+log = get_logger("hub.api.collectors")
 COLLECTOR_SCOPE = "core:collector"
 
 
@@ -140,6 +142,7 @@ def callback(
     state: Annotated[str, Query(max_length=100)] = "",
     code: Annotated[str, Query(max_length=2000)] = "",
     error: Annotated[str, Query(max_length=200)] = "",
+    error_description: Annotated[str, Query(max_length=500)] = "",
 ) -> HTMLResponse:
     """Retour du navigateur après le consentement chez la banque. Sans authentification : le
     `state` est aléatoire et n'est accepté que quelques minutes, et le code ne sert à rien sans
@@ -152,7 +155,10 @@ def callback(
     if accepted:
         text = f"Liaison {label} reçue. La reprise de l'historique démarre : tu peux fermer."
     elif error:
-        text = f"Liaison {label} refusée ({error})."
+        # le détail de la banque sert au diagnostic ; il ne contient ni code ni montant
+        log.warning("collector.link_refused", collector=name, error=error, detail=error_description)
+        detail = f" : {error_description}" if error_description else ""
+        text = f"Liaison {label} refusée ({error}){detail}."
     else:
         text = f"Liaison {label} inconnue ou expirée : relance-la depuis le terminal."
     page = (

@@ -11,6 +11,7 @@ from fastapi import Depends, Request
 
 from hub.core import sessions, tokens
 from hub.core.context import HubContext
+from hub.core.db import begin_immediate
 from hub.core.errors import Problem
 
 SESSION_COOKIE = "hub_session"
@@ -52,7 +53,10 @@ def _bearer(request: Request) -> str | None:
 def current_principal(request: Request, hub: Ctx) -> Principal:
     secret = _bearer(request)
     if secret is not None:
-        with hub.core.engine.begin() as conn:
+        # verify lit puis écrit last_used_at : en BEGIN simple, deux requêtes à la même
+        # milliseconde (les collecteurs, chaque minute pile) font échouer la seconde aussitôt
+        # (« database is locked », sans attendre busy_timeout) ; IMMEDIATE les met en file
+        with begin_immediate(hub.core.engine) as conn:
             info = tokens.verify(conn, secret)
         if info is None:
             raise Problem("auth.invalid")

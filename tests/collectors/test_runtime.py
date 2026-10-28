@@ -219,6 +219,31 @@ def test_hub_client(monkeypatch: pytest.MonkeyPatch) -> None:
         raise urllib.error.HTTPError(request.full_url, 403, "no", {}, None)  # type: ignore[arg-type]
 
     monkeypatch.setattr("urllib.request.urlopen", refuse)
+    pauses: list[int] = []
+    c.pause = pauses.append  # type: ignore[method-assign]
     with pytest.raises(HubUnavailable):
         c.state("bcf")
     assert c.notify("bcf", "auth_pending") is False
+    assert pauses == []  # un refus 4xx ne se réessaie pas
+
+    # « database is locked » côté hub : deux 500 puis la réponse
+    calls: list[str] = []
+
+    def locked_then_ok(request: Any, timeout: float) -> _Response:
+        calls.append(request.full_url)
+        if len(calls) < 3:
+            raise urllib.error.HTTPError(request.full_url, 500, "locked", {}, None)  # type: ignore[arg-type]
+        return _Response(json.dumps({"state": "s", "code": "c"}).encode())
+
+    monkeypatch.setattr("urllib.request.urlopen", locked_then_ok)
+    assert c.take_link("revolut", "s") == "c"
+    assert pauses == [1, 3]
+    calls.clear()
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda r, timeout: (_ for _ in ()).throw(
+            urllib.error.HTTPError(r.full_url, 500, "x", {}, None)  # type: ignore[arg-type]
+        ),
+    )
+    with pytest.raises(HubUnavailable):
+        c.state("bcf")

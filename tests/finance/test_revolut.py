@@ -3,6 +3,7 @@ et dédoublonnés comme des relevés camt.053. Données inventées seulement."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -122,8 +123,9 @@ def test_available_balance_is_never_a_checkpoint() -> None:
 
 def test_pocket_ref_and_unknown_currency() -> None:
     pocket = {**ACCOUNT, "cash_account_type": "SVGS", "product": "Coffre Vacances"}
+    suffix = hashlib.sha256(b"hash-chf-0001").hexdigest()[:6]
     assert revolut.parse_eb(eb_file([], account=pocket)).statements[0].account_ref == (
-        "revolut:CHF:coffre-vacances"
+        f"revolut:CHF:coffre-vacances-{suffix}"
     )
     exotic = {**ACCOUNT, "currency": "HUF"}
     raw = [
@@ -280,3 +282,19 @@ def test_rebuild_replays_revolut(finance: FinanceDomain, app: typer.Typer, tmp_p
     code, out = run(app, "rebuild", "--out", str(tmp_path / "rebuilt"))
     assert code == 0, out
     assert json.loads(out.splitlines()[-1])["compare"]["ok"]
+
+
+def test_pockets_of_the_same_product_keep_separate_refs() -> None:
+    # Revolut UAB met le nom du titulaire comme produit de chaque poche
+    refs = set()
+    for i, ident in enumerate(("3aedc76c", "54c19b50", "b88abc97")):
+        pocket = {
+            "account_id": {"other": {"identification": ident, "scheme_name": "OTHI"}},
+            "currency": "CHF",
+            "cash_account_type": "SVGS",
+            "product": "Titulaire Fictif",
+            "identification_hash": f"hash-pocket-{i}",
+        }
+        refs.add(revolut.parse_eb(eb_file([], account=pocket)).statements[0].account_ref)
+    assert len(refs) == 3
+    assert all(r.startswith("revolut:CHF:titulaire-fictif-") for r in refs)

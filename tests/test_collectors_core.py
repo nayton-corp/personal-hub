@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from datetime import timedelta
 
 import pytest
@@ -219,7 +220,53 @@ def test_callback_flow(client: TestClient, make_token) -> None:  # type: ignore[
         "abc"
     )
     refused = client.get(
-        "/api/collectors/revolut/callback", params={"state": state, "error": "access_denied"}
+        "/api/collectors/revolut/callback",
+        params={"state": state, "error": "access_denied", "error_description": "Annulé"},
     )
-    assert "refusée" in refused.text
+    assert "refusée (access_denied) : Annulé" in refused.text
     assert client.get(f"/api/collectors/revolut/links/{state}", headers=token).status_code == 404
+
+
+def test_notifier_retries_a_passing_network_failure(
+    hub: HubContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("hub.core.notify.topic", lambda _s: "topic-test")
+    pauses: list[int] = []
+    calls: list[str] = []
+
+    def flaky(url: str, _msg: Message) -> None:
+        calls.append(url)
+        if len(calls) < 3:
+            raise OSError("dns")
+
+    monkeypatch.setattr(hub.notifier, "sender", flaky)
+    monkeypatch.setattr(hub.notifier, "pause", pauses.append)
+    assert hub.notifier.send(Message("Personal Hub", "test"))
+    assert (len(calls), pauses) == (3, [2, 5])
+
+    monkeypatch.setattr(hub.notifier, "sender", lambda _u, _m: (_ for _ in ()).throw(OSError()))
+    assert not hub.notifier.send(Message("Personal Hub", "test"))
+
+
+def test_simultaneous_collectors_do_not_lock_the_database(client: TestClient, make_token) -> None:  # type: ignore[no-untyped-def]
+    # les démons des collecteurs appellent l'API dans la même milliseconde, chaque minute pile ;
+    # la vérification du jeton écrit last_used_at et ne doit pas finir en « database is locked »
+    secrets = [make_token("collector", name=f"c{i}") for i in range(6)]
+    barrier = threading.Barrier(len(secrets))
+    statuses: list[int] = []
+
+    def tick(secret: str) -> None:
+        for _ in range(15):
+            barrier.wait(timeout=30)
+            try:
+                r = client.get("/api/collectors/bcf", headers=bearer(secret))
+                statuses.append(r.status_code)
+            except Exception:  # le client de test relance l'erreur du serveur
+                statuses.append(500)
+
+    workers = [threading.Thread(target=tick, args=(s,)) for s in secrets]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+    assert set(statuses) == {200}

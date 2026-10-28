@@ -16,6 +16,7 @@ signalés et mis en attente plutôt qu'importés deux fois.
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import re
@@ -66,8 +67,27 @@ def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", normalize(value)).strip("-")[:30] or "autre"
 
 
-def account_ref(currency: str, product: str | None, current: bool) -> str:
-    return f"revolut:{currency}" if current else f"revolut:{currency}:{_slug(product or '')}"
+def account_ref(currency: str, product: str | None, current: bool, key: str = "") -> str:
+    """`key` départage les comptes d'un même produit : chez Revolut UAB, le « produit » de chaque
+    poche est le nom du titulaire, donc trois poches CHF auraient la même référence."""
+    if current:
+        return f"revolut:{currency}"
+    suffix = f"-{hashlib.sha256(key.encode()).hexdigest()[:6]}" if key else ""
+    return f"revolut:{currency}:{_slug(product or '')}{suffix}"
+
+
+def _account_key(account: dict[str, Any]) -> str:
+    """Identifiant stable d'un compte d'un consentement à l'autre (l'uid, lui, change)."""
+    ident = account.get("account_id") or {}
+    other = ident.get("other") or {} if isinstance(ident, dict) else {}
+    for value in (
+        account.get("identification_hash"),
+        other.get("identification") if isinstance(other, dict) else None,
+        ident.get("iban") if isinstance(ident, dict) else None,
+    ):
+        if value:
+            return str(value)
+    return ""
 
 
 def is_eb(data: bytes) -> bool:
@@ -177,6 +197,7 @@ def parse_eb(data: bytes) -> ParsedFile:
             account.get("product") or account.get("name") or account.get("cash_account_type") or ""
         ),
         account.get("cash_account_type", "CACC") == "CACC",
+        _account_key(account),
     )
     date_to = _iso(doc.get("date_to")) or _iso(doc.get("fetched_at")) or "1970-01-01"
     anomalies: list[Anomaly] = []
