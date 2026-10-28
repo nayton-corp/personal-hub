@@ -170,8 +170,12 @@ def _run(b: Browser, env: Env, kind: Kind, since: str) -> Result:
     fill_form(b, since)
     b.page.wait_for_timeout(500)
 
+    # le formulaire lui-même peut contenir « pas de mouvement » (aide, compte sans activité) :
+    # seul un message apparu après le clic veut dire qu'il n'y a rien à exporter
+    before = b.text_count(b.sel.site("nothing_to_export"))
+
     def nothing_shown() -> bool:
-        return b.text_matches(b.sel.site("nothing_to_export"))
+        return b.text_count(b.sel.site("nothing_to_export")) > before
 
     data = b.download_after("export.download", DOWNLOAD_SECONDS * 1000, nothing_shown)
     if data is None:

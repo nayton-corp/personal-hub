@@ -184,6 +184,18 @@ class Browser:
                 continue
         return False
 
+    def text_count(self, pattern: str) -> int:
+        """Nombre d'occurrences de `pattern` à l'écran, tous cadres confondus ; sert à voir
+        qu'un message vient d'apparaître. Le texte n'est jamais gardé."""
+        rx = re.compile(pattern)
+        total = 0
+        for frame in self.frames():
+            try:
+                total += len(rx.findall(frame.inner_text("body", timeout=2_000)))
+            except Exception:  # noqa: S112
+                continue
+        return total
+
     def wait_for(self, checks: dict[str, Callable[[], bool]], timeout_ms: int) -> str | None:
         """Premier état atteint parmi `checks`, ou None à l'échéance."""
         end = _deadline(timeout_ms)
