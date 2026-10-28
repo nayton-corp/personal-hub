@@ -214,6 +214,21 @@ class CollectorListOut(BaseModel):
     items: list[CollectorOut]
 
 
+class ConnectorOut(BaseModel):
+    name: str
+    label: str
+    method: Literal["open_banking", "api", "public", "browser"]
+    country: str | None
+    accounts: list[str]
+    secrets: list[str]
+    schedule: str
+    formats: list[str]
+
+
+class ConnectorListOut(BaseModel):
+    items: list[ConnectorOut]
+
+
 class CollectorRunsOut(BaseModel):
     items: list[CollectorRunOut]
 

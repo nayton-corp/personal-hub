@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from hub.core import secrets
+from hub.core import connectors, secrets
 from hub.core.settings import Settings
 
 Outcome = Literal[
@@ -24,7 +24,7 @@ Outcome = Literal[
     "unknown",
 ]
 Kind = Literal["run", "check"]
-NAMES = ("bcf", "viac", "revolut", "ibkr", "market", "binance", "kucoin", "coinbase")
+NAMES = connectors.NAMES
 
 
 class Failure(Exception):
@@ -109,20 +109,17 @@ class CollectorConfig(BaseModel):
     viac_report_every_days: int = Field(default=6, ge=1)
     diag_keep_days: int = Field(default=7, ge=1)
     check_poll_seconds: int = Field(default=60, ge=10)
-    schedules: dict[str, str] = {
-        "bcf": "30 7 * * 1-5",  # jours ouvrés 07:30 (une seule validation du push)
-        "viac": "0 9 * * 0",  # dimanche 09:00
-        "revolut": "15 7,13,19 * * *",  # trois synchros, la quatrième reste pour la main
-        "ibkr": "45 6 * * 2-6",  # relevé Flex de la veille, du mardi au samedi
-        "market": "15 6 * * *",  # cours de la veille, tous les jours
-        "binance": "20 6 * * *",  # soldes des plateformes, après les cours
-        "kucoin": "22 6 * * *",
-        "coinbase": "24 6 * * *",
-    }
+    # horaires du catalogue ; `[collectors] schedules` en remplace un ou plusieurs
+    schedules: dict[str, str] = Field(default_factory=connectors.schedules)
     urls: dict[str, str] = {}  # « bcf.url » : remplace une adresse de `[site]` (faux site)
     revolut: RevolutConfig = RevolutConfig()
     market: MarketConfig = MarketConfig()
     exchanges: ExchangesConfig = ExchangesConfig()
+
+    @field_validator("schedules", mode="before")
+    @classmethod
+    def _schedules(cls, v: Any) -> Any:
+        return {**connectors.schedules(), **v} if isinstance(v, dict) else v
 
     @property
     def profiles(self) -> Path:
