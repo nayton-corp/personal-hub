@@ -70,3 +70,14 @@ def make_token(hub: HubContext):  # type: ignore[no-untyped-def]
 
 def bearer(secret: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {secret}"}
+
+
+def add_connections(hub: HubContext, *names: str) -> None:
+    """Les connexions d'avant G4 (bcf, revolut…), sans secret : leur état existe."""
+    from hub.core import connections
+
+    with hub.core.engine.begin() as conn:
+        for name in names or tuple(connections.LEGACY):
+            connector, label = connections.LEGACY[name]
+            settings = {"aspsp_name": "Revolut", "aspsp_country": "LT"} if name == "revolut" else {}
+            connections.create(conn, name, connector, "system:test", label=label, settings=settings)

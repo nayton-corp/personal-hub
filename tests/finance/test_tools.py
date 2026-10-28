@@ -16,6 +16,7 @@ from hub.core.context import HubContext
 from hub.core.settings import Auth
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.tools import FinanceTools
+from tests.conftest import add_connections
 from tests.factories.camt import IBAN
 from tests.finance.test_app_reads import (  # noqa: F401 - fixtures
     client,
@@ -139,6 +140,7 @@ def test_aggregates_never_reach_entries(
 def test_reads_for_the_local_model(
     client: TestClient, ctx: HubContext, year: FinanceDomain
 ) -> None:
+    add_connections(ctx, "bcf", "viac")
     brain = token(ctx, "brain")
     accounts = call(client, brain, "finance_list_accounts")["accounts"]
     assert accounts[0]["name"] == "Compte privé"

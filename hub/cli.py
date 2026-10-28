@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
+import yaml
 
+from hub.core import connections, connectors, profile, proposals, secrets, sessions, tokens
 from hub.core import logging as hub_logging
-from hub.core import profile, proposals, sessions, tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
@@ -28,6 +30,8 @@ proposals_app = typer.Typer(no_args_is_help=True, help="Propositions (Double Sas
 app.add_typer(proposals_app, name="proposals")
 profile_app = typer.Typer(no_args_is_help=True, help="Profil de l'instance (prénom, pays)")
 app.add_typer(profile_app, name="profile")
+connections_app = typer.Typer(no_args_is_help=True, help="Connexions des collecteurs (G4)")
+app.add_typer(connections_app, name="connections")
 
 CLI_ACTOR = "system:cli"
 
@@ -98,7 +102,7 @@ def db_status() -> None:
 
 @token_app.command("create")
 def token_create(
-    name: Annotated[str, typer.Argument(help="ex. brain-mac, collector-bcf")],
+    name: Annotated[str, typer.Argument(help="ex. brain-mac, collector-api")],
     scope: Annotated[
         list[str],
         typer.Option(
@@ -178,6 +182,176 @@ def profile_set(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from None
     typer.echo(json.dumps(p.public(), ensure_ascii=False))
+
+
+@connections_app.command("list")
+def connections_list() -> None:
+    """Connexions de l'instance, une par ligne en JSON ; jamais leurs secrets."""
+    hub = _ready()
+    with hub.core.engine.connect() as conn:
+        for c in connections.list_all(conn):
+            typer.echo(json.dumps(c.public(), ensure_ascii=False))
+
+
+@connections_app.command("catalog")
+def connections_catalog() -> None:
+    """Connecteurs disponibles : méthode, secrets et réglages attendus."""
+    for c in connectors.CATALOG:
+        typer.echo(json.dumps(c.public(), ensure_ascii=False))
+
+
+def _settings_option(raw: str | None) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        typer.echo("--settings : un objet JSON", err=True)
+        raise typer.Exit(2)
+    return value
+
+
+@connections_app.command("add")
+def connections_add(
+    connection_id: Annotated[str, typer.Argument(help="identifiant, ex. bcf ou n26")],
+    connector: Annotated[str, typer.Argument(help="entrée du catalogue, ex. enable_banking")],
+    label: Annotated[str | None, typer.Option(help="nom affiché")] = None,
+    schedule: Annotated[str | None, typer.Option(help="cron ; par défaut, le catalogue")] = None,
+    settings: Annotated[str | None, typer.Option(help="réglages, objet JSON")] = None,
+) -> None:
+    """Ajoute une connexion ; ses secrets se donnent ensuite (`hub connections secrets`)."""
+    hub = _ready()
+    try:
+        with hub.core.engine.begin() as conn:
+            c = connections.create(
+                conn,
+                connection_id,
+                connector,
+                CLI_ACTOR,
+                label=label,
+                schedule=schedule,
+                settings=_settings_option(settings),
+            )
+    except Problem as exc:
+        raise _problem_exit(exc) from None
+    typer.echo(json.dumps(c.public(), ensure_ascii=False))
+
+
+@connections_app.command("set")
+def connections_set(
+    connection_id: str,
+    label: Annotated[str | None, typer.Option()] = None,
+    schedule: Annotated[str | None, typer.Option(help="cron, fuseau HUB_TZ")] = None,
+    default_schedule: Annotated[
+        bool, typer.Option("--default-schedule", help="revient à l'horaire du catalogue")
+    ] = False,
+    settings: Annotated[str | None, typer.Option(help="réglages, objet JSON (remplace)")] = None,
+) -> None:
+    """Change le nom, l'horaire ou les réglages d'une connexion."""
+    hub = _ready()
+    try:
+        with hub.core.engine.begin() as conn:
+            c = connections.update(
+                conn,
+                connection_id,
+                CLI_ACTOR,
+                label=label,
+                schedule=schedule,
+                default_schedule=default_schedule,
+                settings=_settings_option(settings),
+            )
+    except Problem as exc:
+        raise _problem_exit(exc) from None
+    typer.echo(json.dumps(c.public(), ensure_ascii=False))
+
+
+@connections_app.command("secrets")
+def connections_secrets(
+    connection_id: str,
+    file: Annotated[
+        Path | None,
+        typer.Option(help="YAML des secrets (ex. wallets), `-` pour l'entrée standard"),
+    ] = None,
+) -> None:
+    """Remplace les secrets d'une connexion : tapés masqués (ou lus d'un YAML), chiffrés vers la
+    clé de la machine. Ils ne sont plus jamais affichés."""
+    hub = _ready()
+    try:
+        with hub.core.engine.connect() as conn:
+            current = connections.require(conn, connection_id)
+    except Problem as exc:
+        raise _problem_exit(exc) from None
+    spec = current.spec
+    if file is not None:
+        values = yaml.safe_load(sys.stdin.read() if str(file) == "-" else file.read_text())
+        if not isinstance(values, dict):
+            typer.echo("le YAML doit contenir un dictionnaire", err=True)
+            raise typer.Exit(2)
+    else:
+        fields = spec.secrets if spec else ()
+        values = {k: typer.prompt(k, hide_input=True) for k in fields}
+    recipient = secrets.recipient(hub.settings.secrets.age_key_file)
+    try:
+        with hub.core.engine.begin() as conn:
+            c = connections.set_secrets(conn, connection_id, values, recipient, CLI_ACTOR)
+    except Problem as exc:
+        raise _problem_exit(exc) from None
+    typer.echo(json.dumps(c.public(), ensure_ascii=False))
+
+
+@connections_app.command("remove")
+def connections_remove(connection_id: str) -> None:
+    """Retire une connexion et son état ; l'historique des runs reste."""
+    hub = _ready()
+    try:
+        with hub.core.engine.begin() as conn:
+            connections.delete(conn, connection_id, CLI_ACTOR)
+    except Problem as exc:
+        raise _problem_exit(exc) from None
+    typer.echo("retirée")
+
+
+def _service_files(hub: HubContext, folder: Path) -> list[str]:
+    """Un fichier de secrets par service collecteur, avec son jeton `core:collector`, s'il
+    n'existe pas encore. Le jeton n'est jamais affiché."""
+    recipient = secrets.recipient(hub.settings.secrets.age_key_file)
+    written = []
+    for runner in connectors.RUNNERS:
+        path = folder / f"collector-{runner}.enc.yaml"
+        if path.exists():
+            continue
+        with hub.core.engine.begin() as conn:
+            _info, secret = tokens.create(conn, f"collector-{runner}", ["collector"], CLI_ACTOR)
+            plain = yaml.safe_dump({f"collector-{runner}": {"token": secret}}).encode()
+            tmp = path.with_suffix(".tmp")
+            tmp.write_bytes(secrets.encrypt_for(recipient, plain))
+            os.chmod(tmp, 0o600)
+            tmp.replace(path)
+        written.append(path.name)
+    return written
+
+
+@connections_app.command("import")
+def connections_import(
+    folder: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    service_files: Annotated[
+        bool, typer.Option(help="écrit aussi collector-api/browser.enc.yaml s'ils manquent")
+    ] = True,
+) -> None:
+    """Reprise d'avant G4 : les `<nom>.enc.yaml` des anciens conteneurs deviennent les secrets
+    des connexions (une connexion qui a déjà les siens les garde), puis les fichiers des deux
+    services sont écrits avec leur jeton. Sans danger à relancer. Compteurs seuls."""
+    hub = _ready()
+    key_file = hub.settings.secrets.age_key_file
+    try:
+        with hub.core.engine.begin() as conn:
+            report = connections.import_legacy(
+                conn, folder, key_file, CLI_ACTOR, dict(hub.settings.domain("collectors"))
+            )
+    except (Problem, secrets.SecretsError) as exc:
+        typer.echo(f"reprise impossible : {exc}", err=True)
+        raise typer.Exit(1) from None
+    written = _service_files(hub, folder) if service_files else []
+    typer.echo(json.dumps({**report.public(), "service_files": written}, ensure_ascii=False))
 
 
 def _cli_principal() -> Principal:

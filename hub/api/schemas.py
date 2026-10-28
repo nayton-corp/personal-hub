@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -199,8 +199,10 @@ class CollectorRunOut(BaseModel):
 
 
 class CollectorOut(BaseModel):
-    name: str
+    name: str  # identifiant de la connexion
     label: str
+    connector: str
+    ready: bool  # secrets donnés (ou aucun exigé) : le service collecteur l'exécute
     mode: str
     consecutive_failures: int
     since: str
@@ -223,10 +225,76 @@ class ConnectorOut(BaseModel):
     secrets: list[str]
     schedule: str
     formats: list[str]
+    settings: list[str]
+    required_settings: list[str]
+    runner: Literal["api", "browser"]
 
 
 class ConnectorListOut(BaseModel):
     items: list[ConnectorOut]
+
+
+# --- connexions (G4) : l'app les règle, les services collecteurs les exécutent ---------------
+
+ConnectionId = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{1,39}$")]
+
+
+class ConnectionOut(BaseModel):
+    id: str
+    connector: str
+    label: str
+    method: str | None
+    runner: str | None
+    schedule: str | None
+    custom_schedule: bool
+    settings: dict[str, Any]
+    secret_fields: list[str]
+    has_secrets: bool
+    secrets_at: str | None
+    ready: bool
+
+
+class ConnectionListOut(BaseModel):
+    items: list[ConnectionOut]
+
+
+class ConnectionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: ConnectionId
+    connector: str = Field(max_length=40)
+    label: str | None = Field(default=None, max_length=60)
+    schedule: str | None = Field(default=None, max_length=100)
+    settings: dict[str, Any] = {}
+
+
+class ConnectionPatch(BaseModel):
+    """Champs absents : inchangés ; `default_schedule` revient à l'horaire du catalogue."""
+
+    model_config = ConfigDict(extra="forbid")
+    label: str | None = Field(default=None, max_length=60)
+    schedule: str | None = Field(default=None, max_length=100)
+    default_schedule: bool = False
+    settings: dict[str, Any] | None = None
+
+
+class ConnectionSecretsIn(BaseModel):
+    """Tous les secrets de la connexion, en clair sur la liaison TLS ; chiffrés aussitôt."""
+
+    model_config = ConfigDict(extra="forbid")
+    values: dict[str, Any]
+
+
+class RunnerConnectionOut(BaseModel):
+    id: str
+    connector: str
+    label: str
+    schedule: str | None
+    settings: dict[str, Any]
+    secrets: str | None  # fichier age en base64, déchiffré par le service collecteur seul
+
+
+class RunnerListOut(BaseModel):
+    items: list[RunnerConnectionOut]
 
 
 class CollectorRunsOut(BaseModel):

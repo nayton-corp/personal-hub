@@ -1,5 +1,6 @@
-"""Client minimal de l'API du hub, côté collecteur : état, déclaration des runs, notifications,
-liaison d'un consentement. Jeton à portée `core:collector`, réseau compose « hub » seulement."""
+"""Client minimal de l'API du hub, côté collecteur : connexions à exécuter, état, déclaration
+des runs, notifications, liaison d'un consentement. Jeton à portée `core:collector`, réseau
+compose « hub » seulement."""
 
 from __future__ import annotations
 
@@ -61,6 +62,11 @@ class HubClient:
             raise HubUnavailable(f"hub : HTTP {exc.code} sur {path}") from None
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise HubUnavailable(f"hub injoignable ({type(exc).__name__})") from None
+
+    def connections(self, runner: str) -> list[dict[str, Any]]:
+        """Connexions prêtes de ce service ; leurs secrets restent chiffrés."""
+        items: list[dict[str, Any]] = self._call("GET", f"/runner/{runner}")["items"]
+        return items
 
     def state(self, name: str) -> dict[str, Any]:
         out: dict[str, Any] = self._call("GET", f"/{name}")

@@ -339,6 +339,10 @@
             "title": "Check Requested",
             "type": "boolean"
           },
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
           "consecutive_failures": {
             "title": "Consecutive Failures",
             "type": "integer"
@@ -376,6 +380,10 @@
             "title": "Name",
             "type": "string"
           },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
           "since": {
             "title": "Since",
             "type": "string"
@@ -384,6 +392,8 @@
         "required": [
           "name",
           "label",
+          "connector",
+          "ready",
           "mode",
           "consecutive_failures",
           "since",
@@ -532,6 +542,238 @@
         "title": "CollectorRunsOut",
         "type": "object"
       },
+      "ConnectionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "connector": {
+            "maxLength": 40,
+            "title": "Connector",
+            "type": "string"
+          },
+          "id": {
+            "pattern": "^[a-z][a-z0-9-]{1,39}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Settings",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "connector"
+        ],
+        "title": "ConnectionIn",
+        "type": "object"
+      },
+      "ConnectionListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ConnectionListOut",
+        "type": "object"
+      },
+      "ConnectionOut": {
+        "properties": {
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "custom_schedule": {
+            "title": "Custom Schedule",
+            "type": "boolean"
+          },
+          "has_secrets": {
+            "title": "Has Secrets",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "runner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runner"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule"
+          },
+          "secret_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Secret Fields",
+            "type": "array"
+          },
+          "secrets_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secrets At"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "title": "Settings",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "connector",
+          "label",
+          "method",
+          "runner",
+          "schedule",
+          "custom_schedule",
+          "settings",
+          "secret_fields",
+          "has_secrets",
+          "secrets_at",
+          "ready"
+        ],
+        "title": "ConnectionOut",
+        "type": "object"
+      },
+      "ConnectionPatch": {
+        "additionalProperties": false,
+        "description": "Champs absents : inchangés ; `default_schedule` revient à l'horaire du catalogue.",
+        "properties": {
+          "default_schedule": {
+            "default": false,
+            "title": "Default Schedule",
+            "type": "boolean"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settings"
+          }
+        },
+        "title": "ConnectionPatch",
+        "type": "object"
+      },
+      "ConnectionSecretsIn": {
+        "additionalProperties": false,
+        "description": "Tous les secrets de la connexion, en clair sur la liaison TLS ; chiffrés aussitôt.",
+        "properties": {
+          "values": {
+            "additionalProperties": true,
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "title": "ConnectionSecretsIn",
+        "type": "object"
+      },
       "ConnectorListOut": {
         "properties": {
           "items": {
@@ -593,6 +835,21 @@
             "title": "Name",
             "type": "string"
           },
+          "required_settings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Settings",
+            "type": "array"
+          },
+          "runner": {
+            "enum": [
+              "api",
+              "browser"
+            ],
+            "title": "Runner",
+            "type": "string"
+          },
           "schedule": {
             "title": "Schedule",
             "type": "string"
@@ -602,6 +859,13 @@
               "type": "string"
             },
             "title": "Secrets",
+            "type": "array"
+          },
+          "settings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Settings",
             "type": "array"
           }
         },
@@ -613,7 +877,10 @@
           "accounts",
           "secrets",
           "schedule",
-          "formats"
+          "formats",
+          "settings",
+          "required_settings",
+          "runner"
         ],
         "title": "ConnectorOut",
         "type": "object"
@@ -1450,6 +1717,75 @@
         "title": "RevertIn",
         "type": "object"
       },
+      "RunnerConnectionOut": {
+        "properties": {
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule"
+          },
+          "secrets": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secrets"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "title": "Settings",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "connector",
+          "label",
+          "schedule",
+          "settings",
+          "secrets"
+        ],
+        "title": "RunnerConnectionOut",
+        "type": "object"
+      },
+      "RunnerListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RunnerConnectionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RunnerListOut",
+        "type": "object"
+      },
       "SearchOut": {
         "properties": {
           "items": {
@@ -1896,6 +2232,248 @@
           }
         },
         "summary": "Catalog",
+        "tags": [
+          "collecteurs"
+        ]
+      }
+    },
+    "/api/collectors/connections": {
+      "get": {
+        "description": "Les connexions de l'instance, sans leurs secrets (seulement s'ils sont donnés).",
+        "operationId": "list_connections_api_collectors_connections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Connections",
+        "tags": [
+          "collecteurs"
+        ]
+      },
+      "post": {
+        "operationId": "create_connection_api_collectors_connections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Connection",
+        "tags": [
+          "collecteurs"
+        ]
+      }
+    },
+    "/api/collectors/connections/{cid}": {
+      "delete": {
+        "operationId": "delete_connection_api_collectors_connections__cid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Connection",
+        "tags": [
+          "collecteurs"
+        ]
+      },
+      "patch": {
+        "operationId": "update_connection_api_collectors_connections__cid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Connection",
+        "tags": [
+          "collecteurs"
+        ]
+      }
+    },
+    "/api/collectors/connections/{cid}/secrets": {
+      "put": {
+        "description": "Remplace les secrets : chiffrés vers la clé de la machine, jamais relus par l'API.",
+        "operationId": "set_connection_secrets_api_collectors_connections__cid__secrets_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionSecretsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Connection Secrets",
+        "tags": [
+          "collecteurs"
+        ]
+      }
+    },
+    "/api/collectors/runner/{runner}": {
+      "get": {
+        "description": "Ce qu'un service collecteur exécute : connexions prêtes, secrets toujours chiffrés.",
+        "operationId": "runner_connections_api_collectors_runner__runner__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runner",
+            "required": true,
+            "schema": {
+              "title": "Runner",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Runner Connections",
         "tags": [
           "collecteurs"
         ]

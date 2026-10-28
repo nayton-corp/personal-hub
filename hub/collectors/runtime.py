@@ -1,10 +1,11 @@
-"""Exécution d'un run : contexte d'un collecteur, conversion des erreurs en types d'échec,
-déclaration au hub, et boucle planifiée du conteneur."""
+"""Exécution d'un run : contexte d'une connexion, conversion des erreurs en types d'échec,
+déclaration au hub, et boucle planifiée d'un service collecteur (G4 : `collector-api` ou
+`collector-browser`, qui demande chaque minute au hub les connexions qu'il exécute)."""
 
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -28,10 +29,34 @@ from hub.core.logging import get_logger
 log = get_logger("hub.collector")
 
 
+@dataclass(frozen=True)
+class Assigned:
+    """Une connexion confiée au service par le hub ; `secrets` reste chiffré jusqu'au run."""
+
+    id: str
+    connector: str
+    label: str
+    schedule: str | None
+    settings: dict[str, Any]
+    secrets: str | None
+
+    @classmethod
+    def parse(cls, raw: dict[str, Any]) -> Assigned:
+        return cls(
+            str(raw["id"]),
+            str(raw["connector"]),
+            str(raw.get("label") or raw["id"]),
+            raw.get("schedule"),
+            dict(raw.get("settings") or {}),
+            raw.get("secrets"),
+        )
+
+
 @dataclass
 class Env:
     """Ce qu'un flux de collecte reçoit : ses réglages, ses identifiants, sa mémoire, la boîte
-    d'entrée et, pour les notifications, le client du hub."""
+    d'entrée et, pour les notifications, le client du hub. `name` est l'identifiant de la
+    connexion (état, mémoire, profil du navigateur), `connector` le flux qui l'exécute."""
 
     name: str
     cfg: CollectorConfig
@@ -40,10 +65,12 @@ class Env:
     client: HubClient | None = None
     diagnose: bool = False
     today: date = field(default_factory=local_today)
+    connector: str = ""
     memory: Memory = field(init=False)
     inbox: Inbox = field(init=False)
 
     def __post_init__(self) -> None:
+        self.connector = self.connector or self.name
         self.memory = Memory(self.cfg.state_dir / f"{self.name}.json")
         self.inbox = Inbox(self.inbox_root, self.memory)
 
@@ -82,7 +109,7 @@ def flows() -> dict[str, Flow]:
     return {
         "bcf": bcf.run,
         "viac": viac.run,
-        "revolut": revolut.run,
+        "enable_banking": revolut.run,
         "ibkr": ibkr.run,
         "market": market.run,
         "binance": binance.run,
@@ -94,7 +121,7 @@ def flows() -> dict[str, Flow]:
 def execute(env: Env, kind: Kind, flow: Flow | None = None) -> Result:
     """Un run complet ; ne lève jamais. Le résultat est déclaré au hub quand il est joignable."""
     started = now_iso()
-    flow = flow or flows()[env.name]
+    flow = flow or flows()[env.connector]
     try:
         result = flow(env, kind)
     except Failure as f:
@@ -134,40 +161,69 @@ def due(schedule: str, at: datetime) -> bool:
 
 
 def tick(
-    make_env: Callable[[str], Env],
-    names: list[str],
-    cfg: CollectorConfig,
+    make_env: Callable[[Assigned], Env],
+    items: Sequence[Assigned],
+    client: HubClient | None,
     at: datetime,
     *,
     poll_checks: bool,
     runner: Callable[[Env, Kind], Result] = execute,
 ) -> list[tuple[str, Kind, str]]:
-    """Une minute de la boucle : runs planifiés si le collecteur est `enabled`, contrôles
-    demandés depuis l'app. Sans réponse du hub, rien ne part : un run doit pouvoir être déclaré."""
+    """Une minute de la boucle : runs planifiés si la connexion est `enabled`, contrôles
+    demandés depuis l'app. Sans réponse du hub, rien ne part : un run doit pouvoir être déclaré.
+    Les secrets d'une connexion ne sont déchiffrés que si elle tourne maintenant."""
     done: list[tuple[str, Kind, str]] = []
-    for name in names:
-        scheduled = due(cfg.schedules.get(name, ""), at) if cfg.schedules.get(name) else False
+    for item in items:
+        scheduled = bool(item.schedule) and due(str(item.schedule), at)
         if not scheduled and not poll_checks:
             continue
-        env = make_env(name)
         try:
-            state = env.client.state(name) if env.client else {"mode": "enabled"}
+            state = client.state(item.id) if client else {"mode": "enabled"}
         except HubUnavailable as exc:
-            log.warning("collector.hub_unavailable", collector=name, error=str(exc))
+            log.warning("collector.hub_unavailable", collector=item.id, error=str(exc))
             continue
+        kind: Kind
         if state.get("check_requested"):
-            done.append((name, "check", runner(env, "check").outcome))
+            kind = "check"
         elif scheduled and state.get("mode") == "enabled":
-            done.append((name, "run", runner(env, "run").outcome))
-        elif scheduled:
-            log.info("collector.skipped", collector=name, mode=state.get("mode"))
+            kind = "run"
+        else:
+            if scheduled:
+                log.info("collector.skipped", collector=item.id, mode=state.get("mode"))
+            continue
+        try:
+            env = make_env(item)
+        except Exception as exc:  # secrets illisibles, réglage invalide : déclaré, pas de run
+            done.append((item.id, kind, _refused(client, item.id, kind, exc).outcome))
+            continue
+        done.append((item.id, kind, runner(env, kind).outcome))
     return done
 
 
+def _refused(client: HubClient | None, name: str, kind: Kind, exc: Exception) -> Result:
+    result = Result("unknown", 0, f"config:{type(exc).__name__.lower()}")
+    log.warning("collector.config_refused", collector=name, error=type(exc).__name__)
+    if client is not None:
+        try:
+            client.report(name, kind, result, now_iso(), now_iso())
+        except HubUnavailable as e:
+            log.warning("collector.report_failed", collector=name, error=str(e))
+    return result
+
+
+def assigned(client: HubClient, runner: str) -> list[Assigned] | None:
+    """Les connexions du service, ou None si le hub ne répond pas (la minute est sautée)."""
+    try:
+        return [Assigned.parse(raw) for raw in client.connections(runner)]
+    except HubUnavailable as exc:
+        log.warning("collector.hub_unavailable", runner=runner, error=str(exc))
+        return None
+
+
 def run_forever(
-    make_env: Callable[[str], Env], names: list[str], cfg: CollectorConfig
+    make_env: Callable[[Assigned], Env], runner: str, cfg: CollectorConfig, client: HubClient
 ) -> None:  # pragma: no cover - boucle
-    log.info("collector.daemon_start", collectors=names)
+    log.info("collector.daemon_start", runner=runner)
     last_poll = 0
     last_purge = ""
     tz = local_tz()
@@ -179,4 +235,6 @@ def run_forever(
         poll = time.monotonic_ns() - last_poll >= cfg.check_poll_seconds * 1_000_000_000
         if poll:
             last_poll = time.monotonic_ns()
-        tick(make_env, names, cfg, at, poll_checks=poll)
+        items = assigned(client, runner)
+        if items is not None:
+            tick(make_env, items, client, at, poll_checks=poll)

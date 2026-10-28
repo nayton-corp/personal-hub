@@ -1,14 +1,19 @@
-"""Ce que tous les collecteurs partagent : résultats, échecs typés, réglages, mémoire locale."""
+"""Ce que tous les collecteurs partagent : résultats, échecs typés, réglages, mémoire locale.
+
+Depuis G4, un service collecteur (`collector-api` ou `collector-browser`) exécute les connexions
+que le hub lui donne : leurs réglages s'ajoutent à ceux de l'infrastructure (`[collectors]`),
+leurs secrets arrivent chiffrés et ne sont déchiffrés qu'au moment du run."""
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from hub.core import connectors, secrets
 from hub.core.settings import Settings
@@ -24,7 +29,8 @@ Outcome = Literal[
     "unknown",
 ]
 Kind = Literal["run", "check"]
-NAMES = connectors.NAMES
+NAMES = connectors.NAMES  # connecteurs que ce code sait exécuter
+RUNNERS = connectors.RUNNERS
 
 
 class Failure(Exception):
@@ -44,6 +50,9 @@ class Result:
 
 
 class RevolutConfig(BaseModel):
+    """Connecteur Enable Banking ; une connexion choisit sa banque (`aspsp_name`, `aspsp_country`)
+    dans ses réglages. Le nom de la section vient du premier usage, Revolut."""
+
     aspsp_name: str = "Revolut"
     aspsp_country: str = "LT"  # clients suisses : Revolut Bank UAB (Lituanie), à confirmer
     psu_type: Literal["personal", "business"] = "personal"
@@ -109,17 +118,10 @@ class CollectorConfig(BaseModel):
     viac_report_every_days: int = Field(default=6, ge=1)
     diag_keep_days: int = Field(default=7, ge=1)
     check_poll_seconds: int = Field(default=60, ge=10)
-    # horaires du catalogue ; `[collectors] schedules` en remplace un ou plusieurs
-    schedules: dict[str, str] = Field(default_factory=connectors.schedules)
     urls: dict[str, str] = {}  # « bcf.url » : remplace une adresse de `[site]` (faux site)
     revolut: RevolutConfig = RevolutConfig()
     market: MarketConfig = MarketConfig()
     exchanges: ExchangesConfig = ExchangesConfig()
-
-    @field_validator("schedules", mode="before")
-    @classmethod
-    def _schedules(cls, v: Any) -> Any:
-        return {**connectors.schedules(), **v} if isinstance(v, dict) else v
 
     @property
     def profiles(self) -> Path:
@@ -134,15 +136,45 @@ class CollectorConfig(BaseModel):
         return self.home / "state"
 
 
+# section de `[collectors]` que les réglages d'une connexion complètent, par connecteur
+SECTIONS = {"enable_banking": "revolut", "market": "market"}
+
+
 def config(settings: Settings) -> CollectorConfig:
-    return CollectorConfig.model_validate(settings.domain("collectors"))
+    raw = dict(settings.domain("collectors"))
+    raw.pop("schedules", None)  # avant G4 : les horaires vivent désormais dans les connexions
+    return CollectorConfig.model_validate(raw)
 
 
-def credentials(settings: Settings, name: str) -> dict[str, Any]:
-    """Section `collector-<nom>` du fichier de secrets monté dans ce conteneur seulement."""
-    return secrets.section(
-        settings.secrets.file, settings.secrets.age_key_file, f"collector-{name}"
+def for_connection(cfg: CollectorConfig, connector: str, values: dict[str, Any]) -> CollectorConfig:
+    """Les réglages d'une connexion par-dessus ceux du service ; un réglage invalide échoue."""
+    section = SECTIONS.get(connector)
+    if section is None or not values:
+        return cfg
+    current = getattr(cfg, section)
+    merged = type(current).model_validate({**current.model_dump(), **values})
+    return cfg.model_copy(update={section: merged})
+
+
+def service_token(settings: Settings, runner: str) -> str | None:
+    """Jeton du service (`core:collector`), section `collector-<service>` de son fichier de
+    secrets ; les secrets des connexions, eux, viennent du hub."""
+    section = secrets.section(
+        settings.secrets.file, settings.secrets.age_key_file, f"collector-{runner}"
     )
+    token = section.get("token")
+    return token if isinstance(token, str) and token else None
+
+
+def open_secrets(settings: Settings, blob: str | None) -> dict[str, Any]:
+    """Secrets d'une connexion (fichier age en base64) → dictionnaire, au moment du run."""
+    if not blob:
+        return {}
+    plain = secrets.decrypt_with(settings.secrets.age_key_file, base64.b64decode(blob))
+    data = json.loads(plain)
+    if not isinstance(data, dict):
+        raise secrets.SecretsError("secrets de connexion invalides")
+    return data
 
 
 class Memory:

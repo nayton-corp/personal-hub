@@ -1,30 +1,84 @@
-# Collecteurs (lots 5 et 6) : BCF, VIAC, Revolut, IBKR, cours et plateformes crypto
+# Collecteurs : connexions, BCF, VIAC, Enable Banking, IBKR, cours et plateformes crypto
 
-Huit conteneurs déposent les exports officiels dans `~/PersonalHub/inbox/`, où l'importeur les
-traite comme un fichier déposé à la main. Ils tournent sur le Mac comme le reste (phase 1) ; les
-mêmes images et le même `deploy/compose.yaml` serviront sur le Pi.
+Les collecteurs déposent les exports officiels dans `~/PersonalHub/inbox/`, où l'importeur les
+traite comme un fichier déposé à la main. Depuis G4 (« hub générique »), ce que l'instance
+collecte est une liste de **connexions** gardée dans `core.db` : chaque connexion est l'usage
+d'un connecteur du catalogue (`hub/core/connectors.py`), avec un identifiant (`bcf`,
+`revolut`, `n26`…), un nom, un horaire, des réglages sans secret et des secrets chiffrés.
+Deux services les exécutent :
 
-| Collecteur | Comment | Quand (fuseau de l'instance) | Ce qu'il dépose |
+| Service | Connecteurs | Ce qu'il voit |
+|---|---|---|
+| `collector-browser` | `bcf`, `viac` : navigateur sans tête | la boîte d'entrée, son volume (profils des navigateurs, mémoire), son jeton |
+| `collector-api` | `enable_banking`, `ibkr`, `market`, `binance`, `kucoin`, `coinbase` : API, sans navigateur | idem |
+
+| Connecteur | Comment | Horaire par défaut (fuseau de l'instance) | Ce qu'il dépose |
 |---|---|---|---|
-| `collector-bcf` | navigateur sans tête, connexion avec validation push dans l'app BCF | 07:30 du lundi au vendredi | export camt.053 depuis J-10, « déjà téléchargées » coché |
-| `collector-viac` | navigateur sans tête, profil gardé dans son volume | dimanche 09:00 | avis PDF nouveaux de la liste Documents, et un rapport tous les 6 jours |
-| `collector-revolut` | API Enable Banking (PSD2), sans navigateur | 07:15, 13:15, 19:15 | un `revolut-<empreinte>.json` par compte, seulement s'il a changé |
-| `collector-ibkr` | Flex Web Service d'IBKR (jeton en lecture seule), sans navigateur | 06:45 du mardi au samedi | le relevé Flex XML de la veille |
-| `collector-market` | API publiques (BCE, CoinGecko, mempool.space, nœuds Ethereum et Solana publics, Yahoo facultatif) | 06:15 | un `market.json` : change, cours, soldes des portefeuilles |
-| `collector-binance`, `-kucoin`, `-coinbase` | API officielle, clé en lecture seule | 06:20, 06:22, 06:24 | un `<plateforme>.json` : soldes de la plateforme |
+| `bcf` | connexion avec validation push dans l'app BCF | 07:30 du lundi au vendredi | export camt.053 depuis J-10, « déjà téléchargées » coché |
+| `viac` | profil gardé dans le volume | dimanche 09:00 | avis PDF nouveaux de la liste Documents, et un rapport tous les 6 jours |
+| `enable_banking` | API Enable Banking (PSD2), une banque européenne par connexion | 07:15, 13:15, 19:15 | un `revolut-<empreinte>.json` par compte, seulement s'il a changé |
+| `ibkr` | Flex Web Service d'IBKR (jeton en lecture seule) | 06:45 du mardi au samedi | le relevé Flex XML de la veille |
+| `market` | API publiques (BCE, CoinGecko, mempool.space, nœuds Ethereum et Solana publics, Yahoo facultatif) | 06:15 | un `market.json` : change, cours, soldes des portefeuilles |
+| `binance`, `kucoin`, `coinbase` | API officielle, clé en lecture seule | 06:20, 06:22, 06:24 | un `<plateforme>.json` : soldes de la plateforme |
 
-Les collecteurs, leurs méthodes, les secrets qu'ils attendent et leurs horaires par défaut sont
-déclarés une seule fois dans `hub/core/connectors.py` (l'app les lit par
-`GET /api/collectors/catalog`). Pour changer un horaire, `[collectors] schedules` dans
-`deploy/settings.toml` ne nomme que le collecteur concerné.
+Chaque minute, un service demande au hub ses connexions prêtes (`GET
+/api/collectors/runner/<service>`) : leurs secrets arrivent chiffrés et ne sont déchiffrés
+qu'au moment du run, dans le conteneur. L'API chiffre les secrets à la saisie et ne les relit
+jamais ; ni l'app ni `hub connections list` ne les affichent. Une connexion à qui il manque ses
+secrets n'est pas lancée.
 
-Ce qu'un collecteur voit : la boîte d'entrée, son propre volume (profil du navigateur, mémoire
-de ce qu'il a déjà déposé) et son propre fichier de secrets. Il ne lit jamais les bases et ne
-remonte au hub que l'issue de chaque passage (`ok`, `nothing_new`, `auth_error`…), le nombre de
-fichiers et une étape ou un nom de sélecteur, jamais un montant ni un texte de page. Un fichier
-qui n'a pas la forme attendue (camt.053 ou zip de camt.053, PDF complet, JSON `hub.revolut.v1`, relevé Flex,
-JSON `hub.market.v1`)
-part dans `inbox/quarantine/` au lieu d'être déposé.
+Ce qu'un collecteur voit : la boîte d'entrée, le volume de son service et les secrets de la
+connexion qu'il exécute. Il ne lit jamais les bases et ne remonte au hub que l'issue de chaque
+passage (`ok`, `nothing_new`, `auth_error`…), le nombre de fichiers et une étape ou un nom de
+sélecteur, jamais un montant ni un texte de page. Un fichier qui n'a pas la forme attendue
+(camt.053 ou zip de camt.053, PDF complet, JSON `hub.revolut.v1`, relevé Flex, JSON
+`hub.market.v1`) part dans `inbox/quarantine/` au lieu d'être déposé.
+
+## Gérer les connexions
+
+Les commandes supposent l'alias `hubc` de [mac.md](mac.md) et partent du clone du dépôt
+(`~/personal-hub/personal-hub`). `hub` se lance dans le conteneur `scheduler`, qui a la clé age :
+
+```
+hubc run --rm --no-deps scheduler hub connections catalog      # connecteurs, secrets et réglages attendus
+hubc run --rm --no-deps scheduler hub connections list         # connexions, sans secret
+hubc run --rm --no-deps scheduler hub connections add n26 enable_banking --label N26 \
+  --settings '{"aspsp_name": "N26", "aspsp_country": "DE"}'
+hubc run --rm -it --no-deps scheduler hub connections secrets n26   # champs demandés, masqués
+hubc run --rm --no-deps scheduler hub connections set n26 --schedule "0 8 * * *"
+hubc run --rm --no-deps scheduler hub connections set n26 --default-schedule
+hubc run --rm --no-deps scheduler hub connections remove n26
+```
+
+Des secrets structurés (les portefeuilles de `market`) se donnent en YAML par l'entrée
+standard, sans passer par un fichier en clair : `hubc run --rm -T --no-deps scheduler hub
+connections secrets market --file -`, colle le YAML puis Ctrl-D. `secrets` remplace toujours
+tous les secrets de la connexion. L'app fait la même chose par `GET|POST
+/api/collectors/connections`, `PATCH …/{id}`, `PUT …/{id}/secrets` et `DELETE …/{id}`.
+
+Les réglages d'un connecteur (`hub connections catalog`) s'ajoutent à ceux du service dans
+`deploy/settings.toml` (`[collectors]`, `[collectors.market]`) et les remplacent pour cette
+connexion seulement.
+
+## Reprise d'une installation d'avant G4
+
+Avant G4, chaque collecteur avait son conteneur, son jeton et son fichier
+`<nom>.enc.yaml` dans `HUB_COLLECTOR_SECRETS`. `make deploy` fait la reprise seul, et elle peut
+se relancer sans risque :
+
+1. la migration `0004_connections` crée une connexion par collecteur déjà connu (`revolut`
+   devient une connexion « revolut » du connecteur `enable_banking`, Revolut, Lituanie : son
+   URL de retour ne change pas) ;
+2. `hub connections import` reprend les secrets de chaque `<nom>.enc.yaml` (sans l'ancien jeton)
+   et les horaires de `[collectors] schedules`, puis écrit `collector-api.enc.yaml` et
+   `collector-browser.enc.yaml` avec un jeton neuf pour chaque service ;
+3. les anciens volumes (`hub_collector-<nom>`) sont copiés dans ceux des deux services : profils
+   des navigateurs, session Enable Banking, empreintes déjà vues.
+
+Ensuite, `hubc up -d collector-browser collector-api` remplace les huit anciens conteneurs.
+Les anciens jetons `collector-<nom>` restent valides pour permettre un retour arrière ; une fois
+la nouvelle version validée, révoque-les (`hub token list`, puis `hub token revoke <id>`) et
+efface les anciens fichiers `<nom>.enc.yaml`.
 
 ## Quand ça casse
 
@@ -46,8 +100,8 @@ téléchargement) que le conteneur lance dans la minute ; s'il réussit, « Réa
 Les alertes passent par ntfy, avec des textes génériques (« Collecte BCF : action requise »).
 Le sujet ntfy vaut un mot de passe : il vit dans `secrets.enc.yaml`, section `ntfy`.
 
-Pour comprendre un sélecteur manquant : `hubc run --rm collector-bcf hub-collector run bcf
---diagnose` garde des captures d'écran dans le volume du collecteur (purgées après 7 jours).
+Pour comprendre un sélecteur manquant : `hubc run --rm collector-browser hub-collector run bcf
+--diagnose` garde des captures d'écran dans le volume du service (purgées après 7 jours).
 Si la banque a changé sa page, seul `hub/collectors/<banque>/selectors.toml` est à adapter.
 
 ## Mise en place (une fois)
@@ -63,59 +117,51 @@ Les commandes supposent l'alias `hubc` de [mac.md](mac.md) et partent du clone d
      | age -r "$(age-keygen -y ~/.config/hub/age.key)" -o ~/.config/hub/secrets.enc.yaml.new \
      && mv ~/.config/hub/secrets.enc.yaml.new ~/.config/hub/secrets.enc.yaml
    ```
-2. **Un jeton par collecteur** (affiché une seule fois) :
-   ```
-   hubc run --rm --no-deps scheduler hub token create collector-bcf -s collector
-   hubc run --rm --no-deps scheduler hub token create collector-viac -s collector
-   hubc run --rm --no-deps scheduler hub token create collector-revolut -s collector
-   ```
-3. **Un fichier de secrets par collecteur**, dans `~/.config/hub/collectors/` (le chemin est
-   `HUB_COLLECTOR_SECRETS` dans `deploy/.env`). Chaque fichier ne contient que sa section.
-   Tape les valeurs dans un éditeur dont la sortie va directement à `age`, jamais dans un
-   fichier en clair :
+2. **Les deux services** : `hub connections import` écrit leurs fichiers de secrets
+   (`collector-api.enc.yaml`, `collector-browser.enc.yaml`, chacun avec son jeton) dans
+   `HUB_COLLECTOR_SECRETS` (`deploy/.env`, par exemple `~/.config/hub/collectors/`) :
    ```
    mkdir -p ~/.config/hub/collectors && chmod 700 ~/.config/hub/collectors
-   age -r "$(age-keygen -y ~/.config/hub/age.key)" -o ~/.config/hub/collectors/bcf.enc.yaml
+   hubc run --rm --no-deps -v ~/.config/hub/collectors:/import scheduler \
+     hub connections import /import
    ```
-   puis colle, et termine par Ctrl-D :
-   ```yaml
-   collector-bcf:
-     token: "hub_…"            # jeton de l'étape 2
-     contract: "…"             # numéro de contrat e-banking
-     password: "…"
+   Sur une installation neuve, le dossier est vide : seuls les deux fichiers sont écrits.
+   `make deploy` le relance à chaque version, sans rien remplacer.
+3. **Les connexions** (`bcf` et `viac` ici ; les autres plus bas) :
    ```
-   De même pour `viac.enc.yaml` (`collector-viac:` avec `token`, `email`, `password`) et
-   `revolut.enc.yaml` (`collector-revolut:` avec `token`, `application_id`, `private_key`, voir
-   plus bas).
-4. **Déployer** avec la nouvelle image : `make deploy TAG=v0.5.0`. Les collecteurs ne
-   démarrent pas encore.
+   hubc run --rm --no-deps scheduler hub connections add bcf bcf
+   hubc run --rm -it --no-deps scheduler hub connections secrets bcf    # contract, password
+   hubc run --rm --no-deps scheduler hub connections add viac viac
+   hubc run --rm -it --no-deps scheduler hub connections secrets viac   # email, password
+   ```
+4. **Déployer** : `make deploy TAG=vX`. Les collecteurs ne démarrent pas encore.
 5. **Premiers passages, un par un**, en regardant le téléphone :
    ```
-   hubc run --rm collector-bcf hub-collector run bcf          # valide le push BCF
-   hubc run --rm -it collector-viac hub-collector relogin viac # tape le code 2FA reçu
+   hubc run --rm collector-browser hub-collector run bcf          # valide le push BCF
+   hubc run --rm -it collector-browser hub-collector relogin viac # tape le code 2FA reçu
    ```
-   Pour Revolut, voir la section suivante.
+   Pour Enable Banking, voir la section suivante.
 6. **Laisser tourner** : décommente `COMPOSE_PROFILES=collectors` dans `deploy/.env`, puis
-   `hubc up -d`. À partir de là, `make deploy` met aussi les collecteurs à jour.
+   `hubc up -d`. À partir de là, `make deploy` met aussi les deux services à jour.
 
 **VIAC : reconnexion.** VIAC ne garde la session que le temps du navigateur : chaque passage se
 reconnecte avec l'e-mail et le mot de passe des secrets. Sans 2FA sur le compte, il n'y a rien
 d'autre à faire. Si VIAC demande un code, le passage s'arrête en `auth_error`
-(`login.otp_required`) et tu reçois une alerte. Arrête le collecteur, reconnecte-le, relance-le :
+(`login.otp_required`), la connexion est suspendue et tu reçois une alerte. Reconnecte-la
+(le service ne la relance pas tant qu'elle est suspendue) :
 ```
-hubc stop collector-viac
-hubc run --rm -it collector-viac hub-collector relogin viac
-hubc up -d collector-viac
+hubc run --rm -it collector-browser hub-collector relogin viac
 ```
 `relogin` remplit identifiant et mot de passe depuis les secrets, demande le code 2FA dans le
 terminal, puis lance un contrôle ; il reste à cliquer « Réactiver » dans l'app. (La
 spécification prévoyait un navigateur visible sur le Mac dont on copie le profil : un profil
 Chromium de macOS ne se déchiffre pas sous Linux, d'où le code tapé dans le conteneur.)
 
-## Revolut par Enable Banking
+## Une banque par Enable Banking (Revolut)
 
 Enable Banking est le seul agrégateur PSD2 ouvert aux particuliers ; son mode « production
-restreinte » est gratuit et ne lie que tes propres comptes. Chaque consentement dure au plus
+restreinte » est gratuit et ne lie que tes propres comptes. Une connexion `enable_banking` vise
+une banque (`aspsp_name`, `aspsp_country`) ; l'exemple est Revolut, la connexion « revolut ». Chaque consentement dure au plus
 180 jours. Revolut ne donne tout l'historique que dans les 5 minutes qui suivent un
 consentement (90 jours ensuite) : la liaison lance la reprise complète dans la foulée.
 
@@ -123,29 +169,33 @@ consentement (90 jours ensuite) : la liaison lance la reprise complète dans la 
 
 1. Sur <https://enablebanking.com/cp/applications>, crée une application en production
    restreinte. Laisse le panneau générer la paire de clés et télécharge la clé privée (`.pem`).
-   URL de redirection autorisée : `https://hub.<ton-tailnet>.ts.net/api/collectors/revolut/callback`
-   (la même origine que `HUB_PUBLIC_ORIGIN`). Note l'identifiant de l'application.
-2. Crée `revolut.enc.yaml` comme à l'étape 3, avec `application_id` et la clé :
+   URL de redirection autorisée : `https://hub.<ton-tailnet>.ts.net/api/collectors/<connexion>/callback`
+   (la même origine que `HUB_PUBLIC_ORIGIN`, `<connexion>` = `revolut` ici). Note
+   l'identifiant de l'application.
+2. Crée la connexion et donne-lui l'identifiant et la clé (colle le `.pem`, puis Ctrl-D) :
+   ```
+   hubc run --rm --no-deps scheduler hub connections add revolut enable_banking \
+     --label Revolut --settings '{"aspsp_name": "Revolut", "aspsp_country": "LT"}'
+   hubc run --rm -T --no-deps scheduler hub connections secrets revolut --file -
+   ```
    ```yaml
-   collector-revolut:
-     token: "hub_…"
-     application_id: "…"
-     private_key: |
-       -----BEGIN PRIVATE KEY-----
-       …
-       -----END PRIVATE KEY-----
+   application_id: "…"
+   private_key: |
+     -----BEGIN PRIVATE KEY-----
+     …
+     -----END PRIVATE KEY-----
    ```
    puis efface le `.pem` téléchargé.
-3. Vérifie que Revolut est proposé, et sous quel pays :
+3. Vérifie que la banque est proposée, et sous quel pays :
    ```
-   hubc run --rm collector-revolut hub-collector revolut aspsps --country LT
-   hubc run --rm collector-revolut hub-collector revolut aspsps --country CH
+   hubc run --rm collector-api hub-collector aspsps revolut --country LT
+   hubc run --rm collector-api hub-collector aspsps revolut --country CH
    ```
-   Si Revolut n'apparaît que sous un autre pays que la Lituanie, mets-le dans
-   `deploy/settings.toml`, `[collectors.revolut]`, `aspsp_country = "…"`.
+   Si elle n'apparaît que sous un autre pays, change `aspsp_country` avec `hub connections
+   set revolut --settings '{"aspsp_name": "Revolut", "aspsp_country": "…"}'`.
 4. Lie le compte, sur le Mac connecté au tailnet :
    ```
-   hubc run --rm -it collector-revolut hub-collector revolut link
+   hubc run --rm -it collector-api hub-collector link revolut
    ```
    Ouvre le lien affiché sur le téléphone (Tailscale actif), valide dans l'app Revolut. Le
    retour arrive sur le hub, le collecteur crée la session et dépose tout l'historique. La
@@ -159,8 +209,9 @@ consentement (90 jours ensuite) : la liaison lance la reprise complète dans la 
    `add-account` crée le compte, l'ouvre au solde déduit du fichier (solde annoncé moins les
    écritures, la veille de la première) et rejoue les imports en attente. Les autres comptes
    s'appellent `revolut:<DEVISE>:<produit>` (par exemple `revolut:EUR:savings`).
-6. `hub-collector revolut status` donne les jours de consentement restants ; 14 jours avant, une alerte ntfy
-   rappelle de relancer `revolut link`.
+6. `hub-collector consent revolut` donne les jours de consentement restants ; 14 jours avant,
+   une alerte ntfy rappelle de relancer `link revolut`. (Les anciennes commandes
+   `hub-collector revolut link|aspsps|status` marchent encore.)
 
 **Si Enable Banking ne convient pas : CSV.** Dans l'app Revolut, Relevé → Excel/CSV, puis
 dépose le fichier dans `~/PersonalHub/inbox/`. Seules les lignes `COMPLETED` comptent, frais
@@ -177,49 +228,43 @@ crypto) ne passent pas par PSD2 : ils viendront au lot 6.
    colonnes. Note le numéro de la requête (Query ID).
 2. **Le jeton.** Même page, « Flex Web Service Configuration » : active le service et génère un
    jeton (valable jusqu'à un an ; note sa date de fin). Il ne permet que de lire les relevés.
-3. **Secrets** (`ibkr.enc.yaml`, comme à l'étape 3 plus haut) :
-   ```yaml
-   collector-ibkr:
-     token: "hub_…"          # hub token create collector-ibkr -s collector
-     flex_token: "…"
-     query_id: "123456"
-   ```
-4. **Contrôle** : `hubc run --rm collector-ibkr hub-collector run ibkr --check` (demande un relevé sans
-   rien déposer), puis `hubc run --rm collector-ibkr hub-collector run ibkr`. Le compte doit
-   être déclaré (`fin ibkr add-account`, voir [finance.md](finance.md)) ; sinon le relevé
-   attend (`unknown_account`).
+3. **La connexion** : `hub connections add ibkr ibkr`, puis `hubc run --rm -it --no-deps
+   scheduler hub connections secrets ibkr` (`flex_token`, `query_id`).
+4. **Contrôle** : `hubc run --rm collector-api hub-collector run ibkr --check` (demande un
+   relevé sans rien déposer), puis `hubc run --rm collector-api hub-collector run ibkr`. Le
+   compte doit être déclaré (`fin ibkr add-account`, voir [finance.md](finance.md)) ; sinon le
+   relevé attend (`unknown_account`).
 
 Un jeton expiré ou révoqué donne `auth_error` (codes 1011 à 1016 et 1020 d'IBKR) ; un service
 occupé, `site_unavailable`, et le passage suivant réessaie.
 
 ## Cours et cryptos (lot 6)
 
-Le collecteur `market` n'a besoin d'aucun compte. Ses réglages sont dans `deploy/settings.toml`,
-section `[collectors.market]` : devises (`currencies`), cryptos suivies (`crypto`, symbole → id
+La connexion `market` (`hub connections add market market`) n'a besoin d'aucun compte. Ses
+réglages se donnent par `hub connections set market --settings '{…}'` ou, pour tout le service,
+dans `deploy/settings.toml`, section `[collectors.market]` : devises (`currencies`), cryptos suivies (`crypto`, symbole → id
 CoinGecko) et, pour un titre qui n'a pas d'autre source de cours, `quotes = { "<ISIN>" =
 "<symbole Yahoo>" }`. Le premier passage reprend un an d'historique (la limite gratuite de
 CoinGecko) ; les suivants une semaine, pour combler un jour manqué.
 
 Les adresses des portefeuilles sont publiques mais disent ce que tu possèdes : elles vont dans
-les secrets (`market.enc.yaml`) :
+les secrets de la connexion (`hub connections secrets market --file -`, voir plus haut) :
 ```yaml
-collector-market:
-  token: "hub_…"              # hub token create collector-market -s collector
-  coingecko_key: ""           # facultatif : clé « demo » gratuite, plus de marge de requêtes
-  wallets:
-    - account: "crypto:ledger"         # fin crypto add-wallet ledger
-      asset: "BTC"
-      xpub: "xpub6…"                   # clé publique du compte (Ledger Live : Modifier le compte → Avancé)
-      script: "wpkh"                   # facultatif : wpkh (bc1q), sh-wpkh (3…), pkh (1…), tr (bc1p)
-    - account: "crypto:metamask"
-      asset: "ETH"
-      addresses: ["0x…"]
-    - account: "crypto:phantom"
-      asset: "SOL"
-      addresses: ["Fz…"]
-    - account: "crypto:trust"          # plusieurs chaînes, un seul compte
-      asset: "ETH"
-      addresses: ["0x…"]
+coingecko_key: ""           # facultatif : clé « demo » gratuite, plus de marge de requêtes
+wallets:
+  - account: "crypto:ledger"         # fin crypto add-wallet ledger
+    asset: "BTC"
+    xpub: "xpub6…"                   # clé publique du compte (Ledger Live : Modifier le compte → Avancé)
+    script: "wpkh"                   # facultatif : wpkh (bc1q), sh-wpkh (3…), pkh (1…), tr (bc1p)
+  - account: "crypto:metamask"
+    asset: "ETH"
+    addresses: ["0x…"]
+  - account: "crypto:phantom"
+    asset: "SOL"
+    addresses: ["Fz…"]
+  - account: "crypto:trust"          # plusieurs chaînes, un seul compte
+    asset: "ETH"
+    addresses: ["0x…"]
 ```
 **BTC** : des adresses (`addresses`) ou la clé publique étendue d'un compte (`xpub`, `ypub`,
 `zpub`). Les adresses de réception et de monnaie en sont dérivées dans le conteneur et lues une à
@@ -250,8 +295,9 @@ est `ok` avec le détail `partial …`, et le suivant reprend la même fenêtre.
 
 ## Plateformes crypto : Binance, KuCoin, Coinbase
 
-Un collecteur par plateforme (`collector-binance`, `collector-kucoin`, `collector-coinbase`),
-chacun avec sa clé API **en lecture seule** et son propre fichier de secrets. Tous les jours
+Une connexion par plateforme (`binance`, `kucoin`, `coinbase`), chacune avec sa clé API **en
+lecture seule** dans ses secrets (`hub connections add binance binance`, puis `hub connections
+secrets binance`). Tous les jours
 après les cours (06:20, 06:22, 06:24), il dépose un `<plateforme>.json` (`hub.market.v1`, soldes
 seulement) qui devient un relevé de positions du compte `crypto:<plateforme>`, valorisé avec les
 cours CoinGecko du collecteur `market`. Une crypto sans cours garde sa quantité et attend son
@@ -263,25 +309,16 @@ cours : ajoute-la à `crypto` dans `[collectors.market]` (symbole → id CoinGec
 | KuCoin | tous les comptes (principal, trading…) et Earn | API Management → permission « General » seule, une passphrase à toi |
 | Coinbase | tous les portefeuilles, ETH en staking compris (`ETH2` compté comme ETH) | portail CDP → clé API secrète, permission « View » seule |
 
-```yaml
-collector-binance:
-  token: "hub_…"              # hub token create collector-binance -s collector
-  api_key: "…"
-  api_secret: "…"
-collector-kucoin:
-  token: "hub_…"
-  api_key: "…"
-  api_secret: "…"
-  passphrase: "…"
-collector-coinbase:
-  token: "hub_…"
-  key_name: "organizations/…/apiKeys/…"
-  private_key: "-----BEGIN EC PRIVATE KEY-----\n…"   # ou la clé Ed25519 en base64
-```
+| Plateforme | Secrets |
+|---|---|
+| Binance | `api_key`, `api_secret` |
+| KuCoin | `api_key`, `api_secret`, `passphrase` |
+| Coinbase | `key_name` (`organizations/…/apiKeys/…`), `private_key` (clé EC en PEM, ou Ed25519 en base64 ; par `--file -` pour garder les retours à la ligne) |
+
 Le compte se déclare avec `fin crypto add-wallet binance` (ou `kucoin`, `coinbase`) ; le champ
-`account` des secrets en choisit un autre. Contrôle : `hubc run --rm collector-binance
+`account` des secrets en choisit un autre. Contrôle : `hubc run --rm collector-api
 hub-collector run binance --check` lit les soldes sans rien déposer. Une clé révoquée donne
-`auth_error` et suspend ce collecteur seulement.
+`auth_error` et suspend cette connexion seulement.
 
 SwissBorg n'a pas d'API publique : l'argent qui y part se voit dans les virements BCF, ce qui
 arrive ensuite sur la Ledger est relevé par la xpub, et le solde gardé chez SwissBorg vient de

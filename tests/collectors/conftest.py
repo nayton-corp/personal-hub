@@ -89,6 +89,7 @@ def make_env(tmp_path: Path, site: str, fake_hub: FakeHub):  # type: ignore[no-u
             tmp_path / "inbox",
             fake_hub,  # type: ignore[arg-type]
             today=date(2026, 10, 27),
+            connector="enable_banking" if name == "revolut" else name,
         )
 
     return _make

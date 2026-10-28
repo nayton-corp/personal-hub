@@ -13,7 +13,12 @@ from hub.core.clock import iso, now_iso, utcnow
 from hub.core.context import HubContext
 from hub.core.errors import Problem
 from hub.core.notify import Message
-from tests.conftest import bearer
+from tests.conftest import add_connections, bearer
+
+
+@pytest.fixture(autouse=True)
+def _connections(hub: HubContext) -> None:
+    add_connections(hub)
 
 
 def _run(outcome: str, kind: str = "run", detail: str | None = None) -> collectors.Run:

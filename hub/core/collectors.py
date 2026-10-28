@@ -1,10 +1,11 @@
 """État des collecteurs dans `core.db` (lot 5, spécification section 8).
 
-Un collecteur ne fait que déposer des fichiers dans la boîte d'entrée et déclarer chaque run ici.
-Trois modes : `enabled` (il tourne selon son planning), `degraded` (il ne tourne plus seul, l'app
-invite à l'import manuel) et `disabled` (coupé par toi). Le retour à `enabled` est toujours
-manuel, et seulement si le dernier run (un contrôle, en pratique) a réussi : plusieurs échecs de
-connexion d'affilée peuvent faire bloquer l'accès e-banking.
+Un état par connexion (`connections`, G4) : le nom d'un collecteur est l'identifiant de la
+connexion qu'il exécute. Un collecteur ne fait que déposer des fichiers dans la boîte d'entrée
+et déclarer chaque run ici. Trois modes : `enabled` (il tourne selon son planning), `degraded`
+(il ne tourne plus seul, l'app invite à l'import manuel) et `disabled` (coupé par toi). Le retour
+à `enabled` est toujours manuel, et seulement si le dernier run (un contrôle, en pratique) a
+réussi : plusieurs échecs de connexion d'affilée peuvent faire bloquer l'accès e-banking.
 
 Le détail d'un run ne contient que l'étape et le nom du sélecteur, jamais de contenu.
 """
@@ -19,14 +20,13 @@ from typing import Any, Literal
 
 from sqlalchemy import Connection, text
 
-from hub.core import connectors
+from hub.core import connections
 from hub.core.clock import iso, local_tz, now_iso, parse_iso, utcnow
 from hub.core.coredb import audit
 from hub.core.errors import Problem
 from hub.core.ids import new_id
 from hub.core.notify import Message
 
-COLLECTORS: dict[str, str] = {c.name: c.label for c in connectors.CATALOG}
 Outcome = Literal[
     "ok",
     "nothing_new",
@@ -60,6 +60,8 @@ class Run:
 class State:
     name: str
     label: str
+    connector: str
+    ready: bool
     mode: str
     consecutive_failures: int
     since: str
@@ -71,6 +73,8 @@ class State:
         return {
             "name": self.name,
             "label": self.label,
+            "connector": self.connector,
+            "ready": self.ready,
             "mode": self.mode,
             "consecutive_failures": self.consecutive_failures,
             "since": self.since,
@@ -91,10 +95,8 @@ def _clean(last_run: dict[str, Any] | None) -> bool:
     return last_run is None or last_run["outcome"] in SUCCESS
 
 
-def label(name: str) -> str:
-    if name not in COLLECTORS:
-        raise Problem("collector.unknown")
-    return COLLECTORS[name]
+def label(conn: Connection, name: str) -> str:
+    return connections.require(conn, name).label
 
 
 def clean_detail(detail: str | None) -> str | None:
@@ -104,15 +106,18 @@ def clean_detail(detail: str | None) -> str | None:
     return _DETAIL.sub("?", detail.lower())[:120]
 
 
-def _ensure(conn: Connection, name: str) -> None:
-    label(name)
+def _ensure(conn: Connection, name: str) -> connections.Connection:
+    # l'écriture d'abord : une transaction qui lit puis écrit ne peut pas attendre le verrou
+    # (« database is locked » quand les deux services appellent l'API à la même seconde)
     conn.execute(
         text(
             "INSERT INTO collector_state (collector, mode, consecutive_failures, since) "
-            "VALUES (:c, 'enabled', 0, :at) ON CONFLICT (collector) DO NOTHING"
+            "SELECT id, 'enabled', 0, :at FROM connections WHERE id = :c "
+            "ON CONFLICT (collector) DO NOTHING"
         ),
         {"c": name, "at": now_iso()},
     )
+    return connections.require(conn, name)
 
 
 def _run_row(r: Any) -> dict[str, Any]:
@@ -139,7 +144,7 @@ def runs(conn: Connection, name: str, limit: int = 20) -> list[dict[str, Any]]:
 
 
 def get(conn: Connection, name: str) -> State:
-    _ensure(conn, name)
+    connection = _ensure(conn, name)
     row = conn.execute(
         text(
             "SELECT mode, consecutive_failures, since, check_requested_at FROM collector_state "
@@ -157,7 +162,9 @@ def get(conn: Connection, name: str) -> State:
     ).scalar_one()
     return State(
         name,
-        COLLECTORS[name],
+        connection.label,
+        connection.connector,
+        connection.ready,
         row.mode,
         row.consecutive_failures,
         row.since,
@@ -168,7 +175,15 @@ def get(conn: Connection, name: str) -> State:
 
 
 def list_all(conn: Connection) -> list[State]:
-    return [get(conn, name) for name in COLLECTORS]
+    conn.execute(
+        text(
+            "INSERT INTO collector_state (collector, mode, consecutive_failures, since) "
+            "SELECT id, 'enabled', 0, :at FROM connections WHERE true "
+            "ON CONFLICT (collector) DO NOTHING"
+        ),
+        {"at": now_iso()},
+    )
+    return [get(conn, c.id) for c in connections.list_all(conn)]
 
 
 def _set(conn: Connection, name: str, **values: Any) -> None:
@@ -211,17 +226,17 @@ TEXTS: dict[str, tuple[str, str]] = {
 }
 
 
-def _alert(name: str, outcome: str, detail: str | None, degraded: bool) -> Message:
+def _alert(name_label: str, outcome: str, detail: str | None, degraded: bool) -> Message:
     priority, body = TEXTS[outcome]
     body = body.format(detail=detail or "?")
     if degraded:
         body += " Collecte suspendue : import manuel en attendant, puis contrôle depuis l'app."
-    return Message(f"Collecte {COLLECTORS[name]} : action requise", body, priority)  # type: ignore[arg-type]
+    return Message(f"Collecte {name_label} : action requise", body, priority)  # type: ignore[arg-type]
 
 
 def record(conn: Connection, name: str, run: Run, by: str) -> Recorded:
     """Inscrit un run et applique la table des échecs (spécification, section 8)."""
-    _ensure(conn, name)
+    name_label = _ensure(conn, name).label
     detail = clean_detail(run.detail)
     run_id = new_id()
     conn.execute(
@@ -256,7 +271,7 @@ def record(conn: Connection, name: str, run: Run, by: str) -> Recorded:
         if degrade:
             changes.update(mode="degraded", since=now_iso())
         if before.mode != "disabled":
-            alerts.append(_alert(name, run.outcome, detail, degrade))
+            alerts.append(_alert(name_label, run.outcome, detail, degrade))
     elif before.mode != "disabled" and (
         (run.outcome == "auth_pending_timeout" and _first_today(conn, name, run.outcome, run_id))
         or (
@@ -264,7 +279,7 @@ def record(conn: Connection, name: str, run: Run, by: str) -> Recorded:
             and _streak(conn, name, run.outcome) == SITE_ALERT_AFTER
         )
     ):
-        alerts.append(_alert(name, run.outcome, detail, False))
+        alerts.append(_alert(name_label, run.outcome, detail, False))
     if changes:
         _set(conn, name, **changes)
     if changes.get("mode") == "degraded":
@@ -292,10 +307,10 @@ def request_check(conn: Connection, name: str, by: str) -> State:
     return get(conn, name)
 
 
-def auth_pending(name: str) -> Message:
+def auth_pending(name_label: str) -> Message:
     """Notification envoyée quand le bot attend ta validation sur le téléphone."""
     return Message(
-        f"Collecte {label(name)} : connexion à valider",
+        f"Collecte {name_label} : connexion à valider",
         "Valide la connexion sur ton téléphone (3 minutes).",
         "high",
     )
@@ -307,7 +322,7 @@ def auth_pending(name: str) -> Message:
 def register_link(conn: Connection, name: str, state: str) -> str:
     """Le collecteur annonce le `state` de son autorisation ; le retour du navigateur sera
     accepté pendant quelques minutes seulement."""
-    label(name)
+    connections.require(conn, name)
     if not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", state):
         raise Problem("validation.params", "state invalide")
     now = utcnow()

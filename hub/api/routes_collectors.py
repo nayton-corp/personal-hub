@@ -1,12 +1,13 @@
 """Routes des collecteurs (lot 5) : état et modes pour l'app, déclaration des runs pour les
-conteneurs collecteurs (jeton à portée `core:collector`), liaison d'un consentement Revolut."""
+conteneurs collecteurs (jeton à portée `core:collector`), liaison d'un consentement Enable
+Banking. G4 : les connexions (réglées par l'app, exécutées par les services collecteurs)."""
 
 from __future__ import annotations
 
 from html import escape
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import HTMLResponse
 
 from hub.api.schemas import (
@@ -19,10 +20,16 @@ from hub.api.schemas import (
     CollectorOut,
     CollectorRunIn,
     CollectorRunsOut,
+    ConnectionIn,
+    ConnectionListOut,
+    ConnectionOut,
+    ConnectionPatch,
+    ConnectionSecretsIn,
     ConnectorListOut,
     ConnectorOut,
+    RunnerListOut,
 )
-from hub.core import collectors, connectors
+from hub.core import collectors, connections, connectors, secrets
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal
 from hub.core.errors import Problem
 from hub.core.logging import get_logger
@@ -67,6 +74,80 @@ def catalog(_principal: AppSession) -> ConnectorListOut:
     )
 
 
+def _connection(c: connections.Connection) -> ConnectionOut:
+    return ConnectionOut.model_validate(c.public())
+
+
+@router.get("/connections", response_model=ConnectionListOut)
+def list_connections(hub_ctx: Ctx, _principal: AppSession) -> ConnectionListOut:
+    """Les connexions de l'instance, sans leurs secrets (seulement s'ils sont donnés)."""
+    with hub_ctx.core.engine.connect() as conn:
+        return ConnectionListOut(items=[_connection(c) for c in connections.list_all(conn)])
+
+
+@router.post("/connections", response_model=ConnectionOut, status_code=201)
+def create_connection(body: ConnectionIn, hub_ctx: Ctx, principal: AppSession) -> ConnectionOut:
+    with hub_ctx.core.engine.begin() as conn:
+        created = connections.create(
+            conn,
+            body.id,
+            body.connector,
+            principal.actor,
+            label=body.label,
+            schedule=body.schedule,
+            settings=body.settings,
+        )
+    return _connection(created)
+
+
+@router.patch("/connections/{cid}", response_model=ConnectionOut)
+def update_connection(
+    cid: str, body: ConnectionPatch, hub_ctx: Ctx, principal: AppSession
+) -> ConnectionOut:
+    with hub_ctx.core.engine.begin() as conn:
+        updated = connections.update(
+            conn,
+            cid,
+            principal.actor,
+            label=body.label,
+            schedule=body.schedule,
+            default_schedule=body.default_schedule,
+            settings=body.settings,
+        )
+    return _connection(updated)
+
+
+@router.put("/connections/{cid}/secrets", response_model=ConnectionOut)
+def set_connection_secrets(
+    cid: str, body: ConnectionSecretsIn, hub_ctx: Ctx, principal: AppSession
+) -> ConnectionOut:
+    """Remplace les secrets : chiffrés vers la clé de la machine, jamais relus par l'API."""
+    try:
+        recipient = secrets.recipient(hub_ctx.settings.secrets.age_key_file)
+    except (OSError, secrets.SecretsError):
+        raise Problem("internal", "clé age de la machine illisible") from None
+    with hub_ctx.core.engine.begin() as conn:
+        updated = connections.set_secrets(conn, cid, body.values, recipient, principal.actor)
+    return _connection(updated)
+
+
+@router.delete("/connections/{cid}", status_code=204)
+def delete_connection(cid: str, hub_ctx: Ctx, principal: AppSession) -> Response:
+    with hub_ctx.core.engine.begin() as conn:
+        connections.delete(conn, cid, principal.actor)
+    return Response(status_code=204)
+
+
+@router.get("/runner/{runner}", response_model=RunnerListOut)
+def runner_connections(runner: str, hub_ctx: Ctx, _principal: Collector) -> RunnerListOut:
+    """Ce qu'un service collecteur exécute : connexions prêtes, secrets toujours chiffrés."""
+    if runner not in connectors.RUNNERS:
+        raise Problem("validation.params", "service : api ou browser")
+    with hub_ctx.core.engine.connect() as conn:
+        found = connections.for_runner(conn, runner)
+    return RunnerListOut.model_validate({"items": [c.for_runner() for c in found]})
+
+
 @router.get("/{name}", response_model=CollectorOut)
 def get_collector(name: str, hub_ctx: Ctx, _principal: Viewer) -> CollectorOut:
     with hub_ctx.core.engine.begin() as conn:
@@ -80,8 +161,8 @@ def list_runs(
     _principal: Viewer,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> CollectorRunsOut:
-    collectors.label(name)
     with hub_ctx.core.engine.connect() as conn:
+        collectors.label(conn, name)
         return CollectorRunsOut.model_validate({"items": collectors.runs(conn, name, limit)})
 
 
@@ -103,11 +184,13 @@ def notify(
     name: str, body: CollectorNotifyIn, hub_ctx: Ctx, _principal: Collector
 ) -> CollectorNotifyOut:
     """Le bot attend une validation sur le téléphone, ou un consentement arrive à échéance."""
+    with hub_ctx.core.engine.connect() as conn:
+        name_label = collectors.label(conn, name)
     if body.event == "auth_pending":
-        msg = collectors.auth_pending(name)
+        msg = collectors.auth_pending(name_label)
     else:
         msg = Message(
-            f"Collecte {collectors.label(name)} : consentement à renouveler",
+            f"Collecte {name_label} : consentement à renouveler",
             "Le consentement expire bientôt : relance la liaison depuis le terminal.",
             "high",
         )
@@ -157,7 +240,8 @@ def callback(
     """Retour du navigateur après le consentement chez la banque. Sans authentification : le
     `state` est aléatoire et n'est accepté que quelques minutes, et le code ne sert à rien sans
     la clé privée du collecteur."""
-    label = collectors.label(name)
+    with hub_ctx.core.engine.connect() as conn:
+        label = collectors.label(conn, name)
     accepted = False
     if code and not error:
         with hub_ctx.core.engine.begin() as conn:
