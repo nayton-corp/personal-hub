@@ -66,10 +66,12 @@ def window(env: Env) -> date:
 # --- change ------------------------------------------------------------------------------------
 
 
-def fx_rates(env: Env, http: Http, since: date, *, latest: bool = False) -> list[dict[str, str]]:
+def fx_rates(
+    env: Env, http: Http, since: date, *, latest: bool = False, until: date | None = None
+) -> list[dict[str, str]]:
     m = env.cfg.market
     symbols = ",".join(c for c in m.currencies if c != "CHF")
-    period = "latest" if latest else f"{since.isoformat()}.."
+    period = "latest" if latest else f"{since.isoformat()}..{until.isoformat() if until else ''}"
     query = urllib.parse.urlencode({"base": "CHF", "symbols": symbols})
     doc = http.json(f"{m.fx_url}/{period}?{query}", "fx.rates")
     if not isinstance(doc, dict) or not isinstance(doc.get("rates"), dict):
@@ -142,6 +144,51 @@ def crypto_prices(env: Env, http: Http, since: date) -> list[dict[str, str]]:
     return out
 
 
+def binance_prices(
+    env: Env, http: Http, symbols: list[str], start: date, end: date
+) -> list[dict[str, str]]:
+    """Clôtures quotidiennes publiques de Binance (paire USDT, comptée en USD) : les cours d'avant
+    la limite d'un an de CoinGecko, pour l'historique des portefeuilles."""
+    day_ms = 86_400_000
+    stop = int(datetime(end.year, end.month, end.day, tzinfo=UTC).timestamp()) * 1000
+    out = []
+    for symbol in symbols:
+        cursor = int(datetime(start.year, start.month, start.day, tzinfo=UTC).timestamp()) * 1000
+        for _page in range(20):
+            query = urllib.parse.urlencode(
+                {
+                    "symbol": f"{symbol}USDT",
+                    "interval": "1d",
+                    "startTime": cursor,
+                    "endTime": stop,
+                    "limit": 1000,
+                }
+            )
+            url = f"{env.cfg.market.binance_url}/api/v3/klines?{query}"
+            rows = http.json(url, f"history.{symbol.lower()}")
+            if not isinstance(rows, list) or not rows:
+                break
+            for r in rows:
+                close = dec(r[4]) if isinstance(r, list) and len(r) > 4 else None
+                if close is None or not isinstance(r[0], int):
+                    continue
+                on = datetime.fromtimestamp(r[0] // 1000, UTC).date().isoformat()
+                out.append(
+                    {
+                        "instrument": symbol,
+                        "kind": "crypto",
+                        "on_date": on,
+                        "price": text_of(close),
+                        "currency": "USD",
+                        "source": "binance",
+                    }
+                )
+            cursor = int(rows[-1][0]) + day_ms
+            if cursor >= stop:
+                break
+    return out
+
+
 # --- titres cotés ------------------------------------------------------------------------------
 
 
@@ -193,13 +240,13 @@ RETRY_PAUSES = (10, 30, 60)
 sleep: Callable[[int], None] = time.sleep
 
 
-def _mempool(env: Env, http: Http, address: str) -> Any:
-    url = f"{env.cfg.market.mempool_url}/address/{urllib.parse.quote(address)}"
+def _mempool(env: Env, http: Http, path: str, step: str = "wallet.btc") -> Any:
+    url = f"{env.cfg.market.mempool_url}/address/{path}"
     for retry in (*RETRY_PAUSES, 0):
         if env.cfg.market.mempool_pause_seconds:
             sleep(env.cfg.market.mempool_pause_seconds)
         try:
-            return http.json(url, "wallet.btc")
+            return http.json(url, step)
         except Failure as f:
             if not retry or not f.detail.endswith(":http_429"):
                 raise
@@ -209,7 +256,7 @@ def _mempool(env: Env, http: Http, address: str) -> Any:
 
 def _btc_address(env: Env, http: Http, address: str) -> tuple[Decimal, bool]:
     """(solde confirmé, adresse déjà utilisée) d'une adresse BTC."""
-    doc = _mempool(env, http, address)
+    doc = _mempool(env, http, urllib.parse.quote(address))
     try:
         stats = doc["chain_stats"]
         sats = int(stats["funded_txo_sum"]) - int(stats["spent_txo_sum"])
@@ -246,9 +293,12 @@ def xpub_key(xpub: str, chosen: str | None) -> tuple[Any, list[str]]:
     return key, kinds
 
 
-def xpub_balance(env: Env, http: Http, xpub: str, chosen: str | None) -> Decimal:
+def xpub_balance(
+    env: Env, http: Http, xpub: str, chosen: str | None, seen_in: list[str] | None = None
+) -> Decimal:
     """Somme des adresses de réception (0/i) et de monnaie (1/i), jusqu'à `gap_limit` adresses
-    jamais utilisées de suite ; un script sans aucune réception utilisée est sauté."""
+    jamais utilisées de suite ; un script sans aucune réception utilisée est sauté. Les adresses
+    utilisées sont ajoutées à `seen_in` (pour l'historique)."""
     key, kinds = xpub_key(xpub, chosen)
     gap_limit = env.cfg.market.gap_limit
     total = Decimal(0)
@@ -260,6 +310,8 @@ def xpub_balance(env: Env, http: Http, xpub: str, chosen: str | None) -> Decimal
                 address = SCRIPTS[kind](branch.child(index).key).address()
                 amount, seen = _btc_address(env, http, address)
                 total += amount
+                if seen and seen_in is not None:
+                    seen_in.append(address)
                 gap, used = (0, used + 1) if seen else (gap + 1, used)
                 index += 1
             if chain == 0 and used == 0:
@@ -268,10 +320,71 @@ def xpub_balance(env: Env, http: Http, xpub: str, chosen: str | None) -> Decimal
 
 
 def btc_wallet(env: Env, http: Http, w: dict[str, Any]) -> dict[str, Decimal]:
-    total = sum((_btc_address(env, http, str(a))[0] for a in w["addresses"]), Decimal(0))
+    """Solde BTC ; les adresses utilisées sont gardées dans `w["used"]` pour l'historique."""
+    used = w.setdefault("used", [])
+    total = Decimal(0)
+    for a in w["addresses"]:
+        amount, seen = _btc_address(env, http, a)
+        total += amount
+        if seen:
+            used.append(a)
     for xpub in w["xpubs"]:
-        total += xpub_balance(env, http, xpub, w.get("script"))
+        total += xpub_balance(env, http, xpub, w.get("script"), used)
     return {"BTC": total}
+
+
+TXS_PER_PAGE = 25  # mempool.space : transactions confirmées par page, des plus récentes
+MAX_TX_PAGES = 40
+
+
+def _txs(env: Env, http: Http, address: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    path = f"{urllib.parse.quote(address)}/txs/chain"
+    for _page in range(MAX_TX_PAGES):
+        page = _mempool(env, http, path, "history.btc")
+        if not isinstance(page, list):
+            raise Failure("invalid_file", "history.btc")
+        out += page
+        if len(page) < TXS_PER_PAGE:
+            break
+        path = (
+            f"{urllib.parse.quote(address)}/txs/chain/{urllib.parse.quote(str(page[-1]['txid']))}"
+        )
+    return out
+
+
+def btc_history(env: Env, http: Http, addresses: list[str]) -> dict[str, Decimal]:
+    """Solde BTC en fin de chaque jour (UTC) où il a bougé, depuis la première transaction : la
+    somme, transaction par transaction, de ce qui arrive sur ces adresses moins ce qui en part.
+    Un virement entre deux adresses du portefeuille s'annule."""
+    mine = set(addresses)
+    txs: dict[str, dict[str, Any]] = {}
+    for a in addresses:
+        for tx in _txs(env, http, a):
+            txs[str(tx.get("txid"))] = tx
+    by_day: dict[str, int] = {}
+    try:
+        for tx in txs.values():
+            status = tx["status"]
+            if not status.get("confirmed"):
+                continue
+            day = datetime.fromtimestamp(int(status["block_time"]), UTC).date().isoformat()
+            received = sum(
+                int(o["value"]) for o in tx["vout"] if o.get("scriptpubkey_address") in mine
+            )
+            spent = sum(
+                int(i["prevout"]["value"])
+                for i in tx["vin"]
+                if (i.get("prevout") or {}).get("scriptpubkey_address") in mine
+            )
+            by_day[day] = by_day.get(day, 0) + received - spent
+    except (KeyError, TypeError, ValueError, AttributeError):
+        raise Failure("invalid_file", "history.btc") from None
+    balance, out = 0, {}
+    for day in sorted(by_day):
+        balance += by_day[day]
+        out[day] = Decimal(max(balance, 0)) / SATS
+    return out
 
 
 def _rpc(url: str, http: Http, step: str, method: str, params: list[Any]) -> Any:
@@ -376,13 +489,19 @@ def wallet_entries(env: Env) -> list[dict[str, Any]]:
     return out
 
 
-def balances(env: Env, http: Http) -> tuple[list[dict[str, str]], list[str]]:
-    """(soldes, portefeuilles en échec). Un compte est relevé en entier ou pas du tout : un relevé
-    partiel ferait disparaître une crypto de la valeur. Un compte vide donne un relevé à zéro."""
+def balances(env: Env, http: Http) -> tuple[list[dict[str, str]], list[str], dict[str, str]]:
+    """(soldes, portefeuilles en échec, historiques relus : compte → premier jour). Un compte est
+    relevé en entier ou pas du tout : un relevé partiel ferait disparaître une crypto de la
+    valeur. Un compte vide donne un relevé à zéro.
+
+    Au premier passage d'un compte BTC (mémoire `btc_history`), son historique est relu sur la
+    chaîne et déposé en relevés passés, un par jour où le solde a bougé."""
     by_account: dict[str, list[dict[str, Any]]] = {}
     for w in wallet_entries(env):
         by_account.setdefault(str(w["account"]), []).append(w)
     out, failed = [], []
+    histories: dict[str, str] = {}
+    done = set(env.memory.get("btc_history", []))
     for account, entries in by_account.items():
         held: dict[str, Decimal] = {}
         try:
@@ -393,7 +512,20 @@ def balances(env: Env, http: Http) -> tuple[list[dict[str, str]], list[str]]:
             failed.append(f"wallet.{account.split(':', 1)[1]}:{f.outcome}")
             continue
         out += holdings(account, env.today, held, entries[0]["asset"])
-    return out, failed
+        if account in done or any(w["asset"] != "BTC" for w in entries):
+            continue
+        used = [a for w in entries for a in w.get("used", [])]
+        try:
+            past = btc_history(env, http, used) if used else {}
+        except Failure as f:
+            failed.append(f"history.{account.split(':', 1)[1]}:{f.outcome}")
+            continue
+        today = env.today.isoformat()
+        for day, quantity in sorted(past.items()):
+            if day < today:
+                out += holdings(account, date.fromisoformat(day), {"BTC": quantity}, "BTC")
+        histories[account] = min(past, default=today)
+    return out, failed, histories
 
 
 def holdings(account: str, on: date, held: dict[str, Decimal], empty: str) -> list[dict[str, str]]:
@@ -434,10 +566,22 @@ def run(env: Env, kind: Kind, http: Http | None = None) -> Result:
             doc.setdefault("prices", []).extend(fetch())
         except Failure as f:
             failed.append(f"{name}:{f.outcome}")
-    doc["balances"], down = balances(env, http)  # des secrets illisibles : auth_error
+    doc["balances"], down, histories = balances(env, http)  # secrets illisibles : auth_error
     failed += down
+    first = min(histories.values(), default=None)
+    if first and first < since.isoformat():
+        # l'historique remonte avant la fenêtre des cours : change BCE et clôtures Binance
+        start = date.fromisoformat(first)
+        try:
+            doc["fx"] += fx_rates(env, http, start, until=since)
+            doc.setdefault("prices", []).extend(binance_prices(env, http, ["BTC"], start, since))
+        except Failure as f:
+            failed.append(f"history_prices:{f.outcome}")
+            histories = {}  # le prochain passage relit l'historique et ses cours
     data = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
     dropped = env.inbox.drop("market.json", data, is_market_json, step="market.file")
+    if histories:
+        env.memory.put("btc_history", sorted({*env.memory.get("btc_history", []), *histories}))
     if not failed:  # sinon le prochain run reprend la même fenêtre
         env.memory.put("last_run", env.today.isoformat())
     detail = "partial " + " ".join(failed) if failed else None

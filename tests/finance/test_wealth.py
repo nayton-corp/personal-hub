@@ -165,6 +165,36 @@ def test_platform_balances_value_each_crypto_and_wait_for_missing_prices(
         assert valuation.value_at(conn, "2026-10-27").by_envelope["crypto"] == 450_000
 
 
+def test_wallet_history_is_valued_with_old_usd_prices(finance: FinanceDomain) -> None:
+    add_ref(finance, "crypto:ledger", "crypto", "Ledger")
+    doc = market_doc(
+        fx=[
+            {"on_date": "2024-03-01", "base": "USD", "quote": "CHF", "rate": "0.9", "source": "ecb"}
+        ],
+        prices=[
+            {
+                "instrument": "BTC",
+                "kind": "crypto",
+                "on_date": "2024-03-01",
+                "price": "60000.5",
+                "currency": "USD",
+                "source": "binance",
+            }
+        ],
+        balances=[
+            {"account": "crypto:ledger", "instrument": "BTC", "on_date": d, "quantity": q}
+            for d, q in [("2024-03-01", "1"), ("2024-06-01", "0.5")]
+        ],
+    )
+    finance.importer.process([Incoming("market.json", doc)])
+    with finance.engine().connect() as conn:
+        assert valuation.value_at(conn, "2024-04-15").by_envelope["crypto"] == 5_400_045
+        assert (
+            valuation.value_at(conn, "2024-06-15").by_envelope["crypto"] == 2_700_022
+        )  # 27 000.225 arrondi au pair
+        assert valuation.value_at(conn, "2024-02-15").by_envelope.get("crypto", 0) == 0
+
+
 def test_market_file_refusals() -> None:
     with pytest.raises(market.MarketError):
         market.parse(
