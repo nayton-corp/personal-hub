@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from decimal import Decimal
 from xml.sax.saxutils import escape
@@ -10,7 +11,7 @@ from xml.sax.saxutils import escape
 import pytest
 
 from hub.core.db import begin_immediate
-from hub.domains.finance import catalog, insights, swissborg, valuation, xlsx
+from hub.domains.finance import catalog, insights, market, swissborg, transfers, valuation, xlsx
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import ImportRefused, Incoming
 from tests.finance.conftest import rows
@@ -248,3 +249,78 @@ def test_replay_writes_operations_of_an_earlier_import(
     assert rows(finance, "SELECT count(*) FROM entries WHERE kind = 'movement'") == [(8,)]
     with pytest.raises(ImportRefused):
         finance.importer.replay("inconnue")
+
+
+def test_ledger_transactions_pair_with_swissborg_withdrawals(finance: FinanceDomain) -> None:
+    """Une arrivée sur la Ledger de la quantité nette d'un retrait SwissBorg prend sa valeur
+    et devient un virement entre mes comptes ; un envoi sépare ses frais de réseau."""
+    with begin_immediate(finance.engine()) as conn:
+        for ref, name in [(swissborg.ACCOUNT, "SwissBorg"), ("crypto:ledger", "Ledger")]:
+            catalog.add_account(
+                conn, institution=name, name=name, kind="crypto", external_ref=ref, currency="CHF"
+            )
+    finance.importer.process([Incoming("account_statement.xlsx", statement())])
+    doc = {
+        "format": market.FORMAT,
+        "fetched_at": "2026-10-27",
+        "prices": [
+            {
+                "instrument": "BTC",
+                "kind": "crypto",
+                "on_date": "2026-10-01",
+                "price": "50000",
+                "currency": "CHF",
+                "source": "coingecko",
+            }
+        ],
+        "transactions": [
+            {
+                "account": "crypto:ledger",
+                "instrument": "BTC",
+                "on_date": "2026-10-06",
+                "txid": "aa11",
+                "quantity": "0.0098",
+                "fee": "0",
+            },
+            {
+                "account": "crypto:ledger",
+                "instrument": "BTC",
+                "on_date": "2026-10-20",
+                "txid": "bb22",
+                "quantity": "-0.005",
+                "fee": "0.0001",
+            },
+        ],
+    }
+    report = finance.importer.process([Incoming("market.json", json.dumps(doc).encode())])
+    assert {s.status for s in report.statements} == {"applied"}
+    ledger_ops = rows(
+        finance,
+        "SELECT e.bank_tx_code, e.amount_minor, vc.category_id FROM entries e "
+        "JOIN accounts a ON a.id = e.account_id "
+        "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
+        "WHERE a.external_ref = 'crypto:ledger' AND e.kind = 'movement' ORDER BY e.seq",
+    )
+    assert ledger_ops == [
+        ("CRYPTO/RECEIVE", 43_120, "transfer-own"),  # la valeur du retrait SwissBorg
+        # dernier cours connu : celui du relevé SwissBorg du 5 (55 000 USD à 0.8)
+        ("CRYPTO/SEND", -21_560, "transfer-own"),  # 0.0049 BTC
+        ("CRYPTO/FEE", -440, "frais-placement"),
+    ]
+    with begin_immediate(finance.engine()) as conn:
+        transfers.refresh(conn)
+    paired = rows(
+        finance,
+        "SELECT d.bank_tx_code, c.bank_tx_code FROM transfer_links t "
+        "JOIN entries d ON d.seq = t.debit_seq JOIN entries c ON c.seq = t.credit_seq",
+    )
+    assert ("SWISSBORG/WITHDRAWAL", "CRYPTO/RECEIVE") in paired
+    with finance.engine().connect() as conn:
+        h = insights.holdings(conn, "2026-10-27")
+    btc = {(i["account"], i["isin"]): i for i in h["items"]}[("Ledger", "CRYPTO:BTC")]
+    # 0.0048 restent : leur part du coût d'arrivée (43 120 × 0.0048 / 0.0098)
+    assert (btc["quantity"], btc["cost"]["minor"], btc["value"]["minor"]) == (
+        "0.0048",
+        21_120,
+        21_120,
+    )

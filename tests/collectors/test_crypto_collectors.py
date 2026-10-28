@@ -456,6 +456,7 @@ HISTORY = {
         {
             "txid": "t2",
             "status": {"confirmed": True, "block_time": DAY2},
+            "fee": 10_000_000,
             "vin": [{"prevout": {"scriptpubkey_address": A, "value": 100_000_000}}],
             "vout": [
                 {"scriptpubkey_address": OUT, "value": 40_000_000},
@@ -473,6 +474,7 @@ HISTORY = {
         {
             "txid": "t2",
             "status": {"confirmed": True, "block_time": DAY2},
+            "fee": 10_000_000,
             "vin": [{"prevout": {"scriptpubkey_address": A, "value": 100_000_000}}],
             "vout": [
                 {"scriptpubkey_address": OUT, "value": 40_000_000},
@@ -530,9 +532,17 @@ def test_btc_history_is_read_once_from_the_chain(make_env: Any) -> None:
         ("2024-03-02", Decimal("61000"), "USD"),
     ]
     assert env.memory.get("btc_history") == ["crypto:ledger"]
+    # chaque transaction part aussi au registre : net (frais compris) et frais payés
+    assert [(t.on_date, t.txid, t.quantity, t.fee) for t in doc.transactions] == [
+        ("2024-03-01", "t1", Decimal(1), Decimal(0)),
+        ("2024-06-01", "t2", Decimal("-0.5"), Decimal("0.1")),
+    ]
+    assert env.memory.get("btc_txs") == ["crypto:ledger"]
     later = history_api()
     market.run(env, "run", Http(later))
-    assert not [u for _m, u, _h in later.calls if "/txs/" in u or "binance" in u]
+    # ensuite : la dernière page de chaque adresse, sans historique ni cours anciens
+    assert not [u for _m, u, _h in later.calls if "/txs/chain/" in u or "binance" in u]
+    assert len(dropped(env)[-1].transactions) == 2
 
 
 def test_btc_history_pages_and_failures(make_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:

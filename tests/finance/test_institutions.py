@@ -29,6 +29,8 @@ def test_roles_keep_the_previous_lists() -> None:
         "IBKR/DEPOSIT",
         "SWISSBORG/DEPOSIT",
         "SWISSBORG/WITHDRAWAL",
+        "CRYPTO/RECEIVE",
+        "CRYPTO/SEND",
     )
     assert valuation.NOT_DEPOSITS == (
         "VIAC/INCOME",
@@ -42,6 +44,9 @@ def test_roles_keep_the_previous_lists() -> None:
         "SWISSBORG/TRADE",
         "SWISSBORG/INCOME",
         "SWISSBORG/FEE",
+        "CRYPTO/RECEIVE",
+        "CRYPTO/SEND",
+        "CRYPTO/FEE",
     )
     assert institutions.prefixes(internal=True) == (
         "VIAC/TRADE",

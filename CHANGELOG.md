@@ -2,13 +2,18 @@
 
 ## [Non publié]
 
-### Cryptos au registre — SwissBorg
+### Cryptos au registre — SwissBorg et portefeuille BTC
 
 - Chaque ligne du relevé SwissBorg devient une opération du compte `crypto:swissborg` en CHF
   (dépôt, retrait, achat, vente, rendement, frais) et un mouvement de parts : prix de revient,
   rendements et frais comme pour IBKR. Codes `SWISSBORG/…` déclarés dans `institutions`,
-  règles système par la migration `0011_swissborg_journal`. Le coût d'une crypto vient de ses
+  règles système par la migration `0011_crypto_journal`. Le coût d'une crypto vient de ses
   opérations quand il y en a, sinon de la valeur à l'arrivée.
+- Portefeuille BTC : le collecteur `market` dépose ses transactions (toutes au premier passage,
+  mémoire `btc_txs`, ensuite la dernière page de chaque adresse) ; chacune devient une
+  opération du compte (`CRYPTO/RECEIVE`, `CRYPTO/SEND`, `CRYPTO/FEE`) et un mouvement de
+  parts. Une arrivée de la quantité nette d'un retrait SwissBorg prend sa valeur et s'apparie
+  avec lui comme un virement entre mes comptes.
 - `fin imports replay <source>` : réapplique depuis l'archive les documents déjà importés d'une
   source après une évolution de l'importeur.
 

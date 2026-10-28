@@ -47,6 +47,10 @@ CODES: tuple[Code, ...] = (
     Code("SWISSBORG/TRADE", "transfer-titres", internal=True, market=True),
     Code("SWISSBORG/INCOME", "rendement", market=True),
     Code("SWISSBORG/FEE", "frais-placement", market=True),
+    # portefeuille relevé sur la chaîne : l'arrivée d'un retrait de plateforme est un virement
+    Code("CRYPTO/RECEIVE", "transfer-own", transfer=True, market=True),
+    Code("CRYPTO/SEND", "transfer-own", transfer=True, market=True),
+    Code("CRYPTO/FEE", "frais-placement", market=True),
 )
 
 

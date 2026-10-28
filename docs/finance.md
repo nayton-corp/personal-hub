@@ -266,6 +266,16 @@ place :
 adresses publiques et le cours (CoinGecko, en CHF) ; Binance, KuCoin et Coinbase ont leur
 collecteur. Une crypto détenue chez Revolut passe par le CSV de positions ci-dessous.
 
+**Transactions d'un portefeuille BTC.** Le collecteur dépose aussi chaque transaction confirmée
+(net reçu ou envoyé, frais de réseau payés) : elle devient une opération du compte en CHF et
+un mouvement de parts, qui donne le prix de revient. Une arrivée de la même quantité de la même
+crypto qu'un retrait d'une plateforme (SwissBorg) au plus 5 jours avant prend la valeur du
+retrait et s'apparie avec lui (`CRYPTO/RECEIVE`, `transfer-own`) ; sinon elle est valorisée au
+dernier cours connu. Un envoi donne `CRYPTO/SEND` et ses frais `CRYPTO/FEE`
+(`frais-placement`). Rien de cela n'est un versement au patrimoine. Pour que l'appariement
+trouve les retraits, le relevé SwissBorg doit être au registre avant le premier passage du
+collecteur qui dépose les transactions.
+
 **Performance des cryptos.** Deux mesures, dans la carte Positions de l'enveloppe crypto :
 - *globale* : investi = paiements nets de la catégorie « Crypto » (virements vers SwissBorg,
   Binance, Coinbase, KuCoin…, reconnus par les règles, moins ce qui en revient), en CHF au change
