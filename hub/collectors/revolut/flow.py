@@ -157,7 +157,9 @@ def _valid_until(env: Env, eb: EnableBanking) -> str:
     days = env.cfg.revolut.consent_days
     for a in eb.aspsps(env.cfg.revolut.aspsp_country):
         if a.get("name") == env.cfg.revolut.aspsp_name and a.get("maximum_consent_validity"):
-            days = min(days, int(a["maximum_consent_validity"]) // 86_400)
+            # un jour sous le maximum : pile au maximum, Revolut répond invalid_request une fois
+            # le consentement donné (la validité court depuis la validation, pas la demande)
+            days = min(days, int(a["maximum_consent_validity"]) // 86_400 - 1)
     return iso(datetime.now(UTC) + timedelta(days=max(days, 1)))
 
 

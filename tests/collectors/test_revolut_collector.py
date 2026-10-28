@@ -52,6 +52,7 @@ def tx(ref: str, amount: str, cdi: str, on: str, status: str = "BOOK") -> dict[s
 class FakeEB:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, dict[str, list[str]]]] = []
+        self.auth: dict[str, Any] = {}
         self.status = 200
         self.session_status = "AUTHORIZED"
         self.txs = [
@@ -77,6 +78,7 @@ class FakeEB:
             }
         elif path == "/auth":
             sent = json.loads(data or b"{}")
+            self.auth = sent
             body = {"url": f"https://bank.example.invalid/auth?state={sent['state']}"}
         elif path == "/sessions":
             body = {
@@ -159,6 +161,9 @@ def test_link_then_full_history(
     assert shown[0].startswith("https://bank.example.invalid/auth")
     auth = next(c for c in eb.calls if c[1] == "/auth")
     assert auth[0] == "POST"
+    # un jour de marge sous le maximum de la banque (90 jours dans le faux Enable Banking)
+    asked = eb.auth["access"]["valid_until"]
+    assert iso(utcnow() + timedelta(days=88)) < asked < iso(utcnow() + timedelta(days=89, hours=1))
     tx_call = next(c for c in eb.calls if c[1].endswith("/transactions"))
     assert tx_call[2]["date_from"] == [flow.HISTORY_FROM]  # tout l'historique, tout de suite
     (doc,) = inbox_docs(env.inbox_root)

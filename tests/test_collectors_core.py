@@ -219,9 +219,10 @@ def test_callback_flow(client: TestClient, make_token) -> None:  # type: ignore[
         "abc"
     )
     refused = client.get(
-        "/api/collectors/revolut/callback", params={"state": state, "error": "access_denied"}
+        "/api/collectors/revolut/callback",
+        params={"state": state, "error": "access_denied", "error_description": "Annulé"},
     )
-    assert "refusée" in refused.text
+    assert "refusée (access_denied) : Annulé" in refused.text
     assert client.get(f"/api/collectors/revolut/links/{state}", headers=token).status_code == 404
 
 
