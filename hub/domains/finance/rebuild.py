@@ -133,6 +133,8 @@ def copy_reference(src: Connection, dst: Connection) -> None:
     for rule_id in list(dst.execute(text("SELECT id FROM rules")).scalars()):
         if rule_id not in kept:
             dst.execute(text("DELETE FROM rules WHERE id = :i"), {"i": rule_id})
+    cols, rows = _rows(src, "rule_packs", "name")
+    _upsert(dst, "rule_packs", "name", cols, rows)
     version = src.execute(text("SELECT version FROM rules_meta")).scalar_one()
     dst.execute(text("UPDATE rules_meta SET version = :v"), {"v": version})
     cols, rows = _rows(src, "fx_rates", "on_date, base, quote, source")
@@ -221,7 +223,7 @@ def rebuild(
     source: FinanceDomain, target: FinanceDomain, proposals: list[Applied]
 ) -> RebuildReport:
     report = RebuildReport()
-    target.migrate()
+    target.migrate(seed=False)
     target.importer.on_applied = None  # instantanés recalculés une fois, à la fin
     with source.engine().connect() as src:
         head = src.execute(

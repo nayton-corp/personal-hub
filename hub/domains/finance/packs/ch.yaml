@@ -1,0 +1,185 @@
+# Pack de règles de départ (chantier « hub générique », G2) : voir hub/domains/finance/packs.py.
+name: ch
+version: 1
+label: Suisse
+description: Commerces, transports, caisses maladie, opérateurs et prestataires 3a suisses.
+country: CH
+categories:
+- id: epargne-3a
+  name: Pilier 3a
+  group: savings
+- id: crypto
+  name: Crypto
+  group: savings
+- id: assurances
+  name: Assurances
+  group: fixed
+- id: impots
+  name: Impôts
+  group: fixed
+- id: transports
+  name: Transports
+  group: variable
+- id: abonnements
+  name: Abonnements
+  group: fixed
+- id: alimentation
+  name: Alimentation
+  group: variable
+- id: restaurants
+  name: Restaurants et sorties
+  group: variable
+- id: loisirs
+  name: Loisirs et sport
+  group: variable
+- id: sante
+  name: Santé
+  group: variable
+- id: shopping
+  name: Shopping
+  group: variable
+- id: voyages
+  name: Vacances
+  group: variable
+- id: retraits
+  name: Retraits d'espèces
+  group: variable
+- id: twint-particuliers
+  name: TWINT entre particuliers
+  group: variable
+rules:
+- category: epargne-3a
+  direction: any
+  priority: 10
+  keywords:
+  - terzo
+  - viac
+  - frankly
+  - finpension
+- category: crypto
+  direction: any
+  priority: 14
+  keywords:
+  - swissborg
+  - relai
+  - bity
+  - pocket bitcoin
+  - bitcoin suisse
+  - mt pelerin
+- category: assurances
+  direction: debit
+  priority: 101
+  keywords:
+  - groupe mutuel
+  - assura
+  - css
+  - helsana
+  - swica
+  - sanitas
+  - visana
+  - concordia
+  - mobiliere
+  - mobilière
+  - zurich
+  - vaudoise
+  - baloise
+  - bâloise
+  - helvetia
+- category: impots
+  direction: debit
+  priority: 102
+  keywords:
+  - administration cantonale
+  - commune de
+- category: transports
+  direction: debit
+  priority: 103
+  keywords:
+  - cff
+  - sbb
+  - avia
+  - migrol
+  - socar
+  - tamoil
+  - coop pronto
+  - ofrou
+  - vignette
+  - mobility
+  - fairtiq
+  - publibike
+- category: abonnements
+  direction: debit
+  priority: 104
+  keywords:
+  - swisscom
+  - sunrise
+  - salt
+  - wingo
+  - yallo
+  - serafe
+  - billag
+- category: alimentation
+  direction: debit
+  priority: 105
+  keywords:
+  - migros
+  - coop
+  - denner
+  - manor food
+  - volg
+  - landi
+  - bahnhofkiosk
+  - kkiosk
+  - selecta
+  - 'avec '
+- category: restaurants
+  direction: debit
+  priority: 106
+  keywords:
+  - smood
+  - eat.ch
+- category: loisirs
+  direction: debit
+  priority: 107
+  keywords:
+  - ochsner
+  - ticketcorner
+- category: sante
+  direction: debit
+  priority: 108
+  keywords:
+  - amavita
+  - sun store
+  - sunstore
+  - visilab
+- category: shopping
+  direction: debit
+  priority: 109
+  keywords:
+  - digitec
+  - galaxus
+  - microspot
+  - manor
+  - interdiscount
+  - jumbo
+  - ochsner shoes
+  - dosenbach
+  - ricardo
+  - tutti
+- category: voyages
+  direction: debit
+  priority: 110
+  keywords:
+  - swiss
+  - edelweiss
+- category: retraits
+  direction: debit
+  priority: 113
+  keywords:
+  - bancomat
+  - postomat
+- category: twint-particuliers
+  direction: debit
+  priority: 200
+  keywords:
+  - débit twint

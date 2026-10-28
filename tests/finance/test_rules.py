@@ -17,7 +17,13 @@ from hub.domains.finance import catalog, legacy, rules
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
 from tests.factories.camt import IBAN, IBAN_2, Stmt, Tx, camt053
-from tests.finance.conftest import add_account, open_account, ready_account, rows
+from tests.finance.conftest import (
+    add_account,
+    open_account,
+    ready_account,
+    rows,
+    without_seed_rules,
+)
 from tests.support import legacy_bcf_aggregate as old
 
 D = date(2026, 10, 1)
@@ -263,7 +269,15 @@ def fixture_txs() -> list[Tx]:
     return out
 
 
+def legacy_seeded(finance: FinanceDomain) -> None:
+    """Les règles de l'ancien script à la place des packs, comme une base d'avant G2."""
+    without_seed_rules(finance)
+    with begin_immediate(finance.engine()) as conn:
+        legacy.import_rules(conn, old.DEFAULT_RULES, run=False)
+
+
 def test_same_categories_as_bcf_aggregate(finance: FinanceDomain, tmp_path: Path) -> None:
+    legacy_seeded(finance)
     a = add_account(finance)
     open_account(finance, a, "2026-09-30", 100_000)
     second_account(finance)
@@ -300,7 +314,7 @@ def test_same_categories_as_bcf_aggregate(finance: FinanceDomain, tmp_path: Path
 
 
 def test_convert_orders_like_the_script() -> None:
-    specs, needed = legacy.convert(legacy.DEFAULT_RULES)
+    specs, needed = legacy.convert(old.DEFAULT_RULES)
     prios = [s.priority for s in specs]
     assert prios == sorted(prios)
     assert {c.id for c in needed} >= {"epargne-3a", "abonnements", "a-qualifier", "crypto"}
@@ -316,6 +330,7 @@ def test_convert_orders_like_the_script() -> None:
 
 
 def test_import_legacy_merges_and_disables(finance: FinanceDomain) -> None:
+    legacy_seeded(finance)
     ready_account(finance)
     import_stmt(
         finance,
@@ -325,7 +340,7 @@ def test_import_legacy_merges_and_disables(finance: FinanceDomain) -> None:
         ],
     )
     assert categories(finance)["Chez Zorglub"] is None
-    data = copy.deepcopy(legacy.DEFAULT_RULES)
+    data = copy.deepcopy(old.DEFAULT_RULES)
     data["categories"]["Restaurants & sorties"].append("chez zorglub")
     data["categories"]["Alimentation"].remove("lidl")
     data["categories"]["Jardin"] = ["pépinière"]
@@ -361,7 +376,7 @@ def test_rules_cli(finance: FinanceDomain, tmp_path: Path) -> None:
     runner = CliRunner()
     listed = runner.invoke(app, ["rules", "list"]).stdout
     assert "system-transfer-own" in listed
-    data = copy.deepcopy(legacy.DEFAULT_RULES)
+    data = copy.deepcopy(old.DEFAULT_RULES)
     data["categories"]["Restaurants & sorties"].append("chez zorglub")
     path = tmp_path / "bcf_rules.json"
     path.write_text(json.dumps(data), encoding="utf-8")

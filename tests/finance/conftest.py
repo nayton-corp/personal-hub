@@ -93,6 +93,6 @@ def ledger_state(domain: FinanceDomain) -> list[tuple[object, ...]]:
 
 
 def without_seed_rules(domain: FinanceDomain) -> None:
-    """Les tests de lecture décident eux-mêmes des catégories : règles de départ coupées."""
+    """Les tests de lecture décident eux-mêmes des catégories : règles de départ et packs coupés."""
     with begin_immediate(domain.engine()) as conn:
-        conn.execute(text("UPDATE rules SET active = 0 WHERE id LIKE 'seed-%'"))
+        conn.execute(text("UPDATE rules SET active = 0 WHERE id LIKE 'seed-%' OR id LIKE 'pack-%'"))

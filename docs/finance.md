@@ -89,8 +89,29 @@ vide pour ce compte : exporte d'abord tout l'historique disponible.
 
 **Règles.** Chaque écriture importée reçoit la catégorie de la règle active qui la reconnaît,
 la plus prioritaire d'abord (priorité la plus basse, puis identifiant). Une règle ne touche
-jamais une écriture que tu as catégorisée toi-même. Les règles de `bcf_aggregate.py` sont
-déjà en base (préfixe `seed-`) ; reprends en plus ton fichier de règles, une fois :
+jamais une écriture que tu as catégorisée toi-même.
+
+**Packs de règles.** Une base neuve reçoit les règles de départ des packs livrés dans
+`hub/domains/finance/packs/` : `base` (mots génériques et services internationaux) et le pack
+du pays du profil (`ch` pour la Suisse : commerces, transports, caisses maladie, opérateurs,
+prestataires 3a). Une base créée avant les packs garde ses règles `seed-` et n'en reçoit
+aucun sans qu'on le demande.
+
+```
+fin rules packs list                       # packs livrés et version installée
+fin rules packs install ch --dry-run       # compteurs seulement
+fin rules packs install base ch            # ajoute ce qui manque, sans doublon
+fin rules export /srv/hub/inbox/perso.yaml --origin user   # tes règles, au format d'un pack
+fin rules packs install /srv/hub/inbox/perso.yaml          # sur un autre hub
+```
+
+Une règle déjà présente sous une autre origine n'est pas doublée ; une règle d'un pack que tu
+as désactivée le reste ; une nouvelle version d'un pack désactive les règles qu'elle retire. Un
+export contient tes mots-clés : il reste hors du dépôt.
+
+**Reprise de l'ancien script.** Sur une base d'avant les packs, les règles de
+`bcf_aggregate.py` sont déjà en base (préfixe `seed-`) ; reprends en plus ton fichier de
+règles, une fois :
 
 ```
 mkdir -p ~/PersonalHub/inbox/rules
@@ -310,7 +331,7 @@ fichier dans la boîte d'entrée.
 |---|---|
 | `fin accounts add|list|open` | comptes (`add` passe par une proposition `create_account`) ; `open` crée un solde d'ouverture à la main |
 | `fin categories add|list` | catégories, créées par une proposition `create_category` |
-| `fin rules list [--all]` · `fin rules run` · `fin rules import-legacy FICHIER` | règles de catégorisation |
+| `fin rules list [--all]` · `fin rules run` · `fin rules import-legacy FICHIER` · `fin rules packs list\|install` · `fin rules export FICHIER` | règles de catégorisation |
 | `fin imports list [--status …]` · `fin imports retry [ID…]` | suivi et rejeu des imports |
 | `fin watch-inbox --once` | un passage de la boîte d'entrée |
 | `fin verify-ledger` | chaîne et empreintes, code 1 au moindre écart |
