@@ -70,6 +70,7 @@ class MarketConfig(BaseModel):
     yahoo_url: str = "https://query1.finance.yahoo.com/v8/finance/chart"
     quotes: dict[str, str] = {}  # ISIN ou symbole → symbole Yahoo (par ex. « VWRL.SW »)
     mempool_url: str = "https://mempool.space/api"
+    mempool_pause_seconds: int = Field(default=1, ge=0, le=10)  # entre deux adresses BTC
     eth_rpc_url: str = "https://ethereum-rpc.publicnode.com"
     solana_rpc_url: str = "https://api.mainnet-beta.solana.com"
     # jetons lus en plus de la crypto native ; les autres (souvent du spam) sont ignorés

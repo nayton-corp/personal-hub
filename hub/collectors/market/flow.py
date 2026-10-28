@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import urllib.parse
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
@@ -186,11 +187,29 @@ def quotes(env: Env, http: Http, since: date) -> list[dict[str, str]]:
 # --- portefeuilles -----------------------------------------------------------------------------
 
 
+# mempool.space refuse (429) au-delà d'une vingtaine de requêtes rapprochées : une pause entre
+# deux adresses, et une attente croissante avant de réessayer une requête refusée
+RETRY_PAUSES = (10, 30, 60)
+sleep: Callable[[int], None] = time.sleep
+
+
+def _mempool(env: Env, http: Http, address: str) -> Any:
+    url = f"{env.cfg.market.mempool_url}/address/{urllib.parse.quote(address)}"
+    for retry in (*RETRY_PAUSES, 0):
+        if env.cfg.market.mempool_pause_seconds:
+            sleep(env.cfg.market.mempool_pause_seconds)
+        try:
+            return http.json(url, "wallet.btc")
+        except Failure as f:
+            if not retry or not f.detail.endswith(":http_429"):
+                raise
+            sleep(retry)
+    raise AssertionError  # pragma: no cover (la dernière tentative relève l'échec)
+
+
 def _btc_address(env: Env, http: Http, address: str) -> tuple[Decimal, bool]:
     """(solde confirmé, adresse déjà utilisée) d'une adresse BTC."""
-    doc = http.json(
-        f"{env.cfg.market.mempool_url}/address/{urllib.parse.quote(address)}", "wallet.btc"
-    )
+    doc = _mempool(env, http, address)
     try:
         stats = doc["chain_stats"]
         sats = int(stats["funded_txo_sum"]) - int(stats["spent_txo_sum"])

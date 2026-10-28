@@ -92,3 +92,13 @@ def make_env(tmp_path: Path, site: str, fake_hub: FakeHub):  # type: ignore[no-u
         )
 
     return _make
+
+
+@pytest.fixture(autouse=True)
+def pauses(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Les pauses du collecteur « market » (mempool.space), notées au lieu d'attendre."""
+    from hub.collectors.market import flow
+
+    seen: list[int] = []
+    monkeypatch.setattr(flow, "sleep", seen.append)
+    return seen
