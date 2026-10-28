@@ -224,7 +224,16 @@ pour un compte Native SegWit), les quatre types sont alors parcourus, sauf si `s
 Une clé privée (`xprv`…) est refusée. mempool.space refuse les requêtes trop rapprochées : le
 collecteur attend une seconde entre deux adresses (`mempool_pause_seconds`) et, sur un refus
 (429), réessaie après 10, 30 puis 60 secondes. Fixer `script` évite de parcourir trois types
-d'adresse pour rien. **ETH** : le solde natif et les jetons de `erc20_tokens`
+d'adresse pour rien.
+
+**Historique BTC.** Au premier passage d'un portefeuille BTC, ses transactions confirmées sont
+relues sur mempool.space (adresses utilisées seulement) et déposées en relevés passés : un par
+jour où le solde a bougé, depuis la première réception. Un virement entre deux adresses du
+portefeuille s'annule ; les frais d'un envoi sont déduits. Si l'historique remonte avant la
+fenêtre d'un an de CoinGecko, le même passage ajoute le change BCE depuis cette date et les
+clôtures quotidiennes publiques de Binance (BTCUSDT, comptées en USD, depuis août 2017). C'est
+fait une fois par compte (mémoire `btc_history`) ; en cas d'échec, le passage suivant reprend.
+ETH et SOL partent du jour où ils sont branchés. **ETH** : le solde natif et les jetons de `erc20_tokens`
 (USDC et USDT par défaut). **SOL** : le solde natif et les jetons de `spl_tokens` (USDC, USDT) ;
 les autres jetons, souvent du spam, sont ignorés, et le SOL en staking n'est pas lu.
 

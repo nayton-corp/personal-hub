@@ -152,6 +152,8 @@ def market_api(broken: str | None = None) -> Fake:
                 }
             }
             return 200, json.dumps(chart).encode()
+        if "/txs/chain" in url:
+            return 200, b"[]"
         if "mempool" in url:
             stats = {"funded_txo_sum": 150_000_000, "spent_txo_sum": 25_000_000}
             return 200, json.dumps({"chain_stats": stats}).encode()

@@ -83,6 +83,8 @@ def chain(
             return 200, {"rates": {}}
         if "coingecko" in url:
             return 200, {"prices": []}
+        if "/txs/chain" in url:
+            return 200, []  # pas d'historique
         if "mempool" in url:
             sats = btc.get(url.rsplit("/", 1)[1])
             stats = {
@@ -116,7 +118,7 @@ def chain(
 
 
 def mempool_calls(fake: Fake) -> list[str]:
-    return [u.rsplit("/", 1)[1] for _m, u, _h in fake.calls if "mempool" in u]
+    return [u.rsplit("/", 1)[1] for _m, u, _h in fake.calls if "mempool" in u and "/txs/" not in u]
 
 
 def test_xpub_walks_receive_and_change_until_the_gap(make_env: Any) -> None:
@@ -435,10 +437,112 @@ def test_mempool_rate_limit_is_paced_and_retried(make_env: Any, pauses: list[int
 
     env = make_env("market", creds=creds)
     assert market.run(env, "run", Http(Fake(route))).detail is None
-    assert pauses == [1, 10, 1, 30, 1]  # une seconde avant chaque requête, 10 s puis 30 s
+    # une seconde avant chaque requête, 10 s puis 30 s ; la dernière lit l'historique
+    assert pauses == [1, 10, 1, 30, 1, 1]
     assert held(dropped(env)[0]) == [("crypto:ledger", "CRYPTO:BTC", Decimal("1"))]
     pauses.clear()
     refusals.extend([429] * 4)
     again = market.run(make_env("market", creds=creds), "run", Http(Fake(route)))
     assert again.detail == "partial wallet.ledger:site_unavailable"
     assert [p for p in pauses if p > 1] == [10, 30, 60]
+
+
+# --- historique BTC ------------------------------------------------------------------------------
+
+A, B, OUT = "bc1qmienne-a", "bc1qmienne-b", "bc1qailleurs"
+DAY1, DAY2 = 1_709_294_400, 1_717_243_200  # 2024-03-01 et 2024-06-01 à 12:00 UTC
+HISTORY = {
+    A: [  # des plus récentes aux plus anciennes, comme mempool.space
+        {
+            "txid": "t2",
+            "status": {"confirmed": True, "block_time": DAY2},
+            "vin": [{"prevout": {"scriptpubkey_address": A, "value": 100_000_000}}],
+            "vout": [
+                {"scriptpubkey_address": OUT, "value": 40_000_000},
+                {"scriptpubkey_address": B, "value": 50_000_000},  # monnaie, frais 0.1
+            ],
+        },
+        {
+            "txid": "t1",
+            "status": {"confirmed": True, "block_time": DAY1},
+            "vin": [{"prevout": {"scriptpubkey_address": OUT, "value": 100_010_000}}],
+            "vout": [{"scriptpubkey_address": A, "value": 100_000_000}],
+        },
+    ],
+    B: [
+        {
+            "txid": "t2",
+            "status": {"confirmed": True, "block_time": DAY2},
+            "vin": [{"prevout": {"scriptpubkey_address": A, "value": 100_000_000}}],
+            "vout": [
+                {"scriptpubkey_address": OUT, "value": 40_000_000},
+                {"scriptpubkey_address": B, "value": 50_000_000},
+            ],
+        },
+        {"txid": "t3", "status": {"confirmed": False}, "vin": [], "vout": []},
+    ],
+}
+
+
+def history_api(broken: str | None = None) -> Fake:
+    base = chain({A: 0, B: 50_000_000})
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if broken and broken in url:
+            return 503, b""
+        if "/txs/chain" in url:
+            address = url.split("/address/", 1)[1].split("/", 1)[0]
+            return 200, HISTORY[address]
+        if "binance" in url:
+            q = query(url)
+            assert (q["symbol"], q["interval"]) == ("BTCUSDT", "1d")
+            day = 86_400_000
+            first = int(q["startTime"])
+            if first != 1_709_251_200_000:  # 2024-03-01 00:00 UTC : une seule page
+                return 200, []
+            return 200, [
+                [first, "1", "2", "0.5", "60000.5", "9"],
+                [first + day, "1", "2", "0", "61000"],
+            ]
+        return base.route(method, url, headers, data)
+
+    return Fake(route)
+
+
+def test_btc_history_is_read_once_from_the_chain(make_env: Any) -> None:
+    creds = {"wallets": [{"account": "crypto:ledger", "asset": "BTC", "addresses": [A, B]}]}
+    env = make_env("market", creds=creds)
+    fake = history_api()
+    result = market.run(env, "run", Http(fake))
+    assert (result.outcome, result.detail) == ("ok", None)
+    (doc,) = dropped(env)
+    assert [(b.on_date, b.quantity) for b in doc.balances] == [
+        ("2026-10-27", Decimal("0.5")),  # aujourd'hui
+        ("2024-03-01", Decimal("1")),  # reçu
+        ("2024-06-01", Decimal("0.5")),  # 0.4 envoyé, 0.1 de frais, la monnaie reste à soi
+    ]
+    # l'historique remonte avant la fenêtre d'un an : change BCE et clôtures Binance en USD
+    fx_urls = [u for _m, u, _h in fake.calls if "frankfurter" in u]
+    assert "/2024-03-01..2025-10-27?" in fx_urls[1]
+    binance = [p for p in doc.prices if p.source == "binance"]
+    assert [(p.on_date, p.price, p.currency) for p in binance] == [
+        ("2024-03-01", Decimal("60000.5"), "USD"),
+        ("2024-03-02", Decimal("61000"), "USD"),
+    ]
+    assert env.memory.get("btc_history") == ["crypto:ledger"]
+    later = history_api()
+    market.run(env, "run", Http(later))
+    assert not [u for _m, u, _h in later.calls if "/txs/" in u or "binance" in u]
+
+
+def test_btc_history_pages_and_failures(make_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(market, "TXS_PER_PAGE", 2)
+    creds = {"wallets": [{"account": "crypto:ledger", "asset": "BTC", "addresses": [A]}]}
+    env = make_env("market", creds=creds)
+    fake = history_api(broken="binance")
+    result = market.run(env, "run", Http(fake))
+    assert result.detail == "partial history_prices:site_unavailable"
+    assert any(u.endswith("/txs/chain/t1") for _m, u, _h in fake.calls)  # page suivante
+    assert env.memory.get("btc_history") is None  # relu au prochain passage
+    down = market.run(make_env("market", creds=creds), "run", Http(history_api(broken="/txs/")))
+    assert down.detail == "partial history.ledger:site_unavailable"
