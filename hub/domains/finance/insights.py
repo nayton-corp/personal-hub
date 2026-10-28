@@ -17,7 +17,7 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core.money import DECIMAL_CONTEXT, Money, quantize
+from hub.core.money import DECIMAL_CONTEXT, Money, base_currency, quantize
 from hub.domains.finance import institutions, transfers, valuation
 from hub.domains.finance.reads import (
     MIN_COUNT_FOR_AGGREGATES,
@@ -33,7 +33,6 @@ from hub.domains.finance.reads import (
     shift_month,
 )
 
-CCY = valuation.BASE
 STALE_DAYS = 45
 EPARGNE_3A = "epargne-3a"
 PENSION_DEPOSITS = institutions.like_any(
@@ -45,6 +44,11 @@ PILLAR_3A_CAP = {2024: 705_600, 2025: 725_800, 2026: 725_800}
 EXPENSE_GROUPS = ("fixed", "variable")
 FLOW_GROUPS = ("fixed", "variable", "savings")
 NAMES_EXTRA = {UNCATEGORIZED: "À catégoriser", OTHERS: "Autres"}
+
+
+def in_base(minor: int) -> dict[str, Any]:
+    """Montant de l'API dans la devise de base de l'instance."""
+    return money(minor, base_currency())
 
 
 class FutureMonth(ValueError):
@@ -109,7 +113,7 @@ def targets(conn: Connection, month: str) -> dict[str, int]:
             "WHERE b.currency = :ccy AND b.seq = (SELECT max(seq) FROM budgets "
             "WHERE category_id = b.category_id AND valid_from <= :m)"
         ),
-        {"m": f"{month}-01", "ccy": CCY},
+        {"m": f"{month}-01", "ccy": base_currency()},
     )
     return {r[0]: int(r[1]) for r in rows}
 
@@ -126,7 +130,7 @@ def expense_budget(conn: Connection, month: str) -> int | None:
 
 def lines_for(conn: Connection, months: list[str]) -> list[Line]:
     start, end = span(months)
-    return period_lines(conn, start, end, CCY)
+    return period_lines(conn, start, end, base_currency())
 
 
 def merge_small(items: list[dict[str, Any]], key: str = "total") -> list[dict[str, Any]]:
@@ -138,7 +142,7 @@ def merge_small(items: list[dict[str, Any]], key: str = "total") -> list[dict[st
     other: dict[str, Any] = {
         "category": OTHERS,
         "name": NAMES_EXTRA[OTHERS],
-        key: money(sum(i[key]["minor"] for i in small), CCY),
+        key: in_base(sum(i[key]["minor"] for i in small)),
         "count": sum(i["count"] for i in small),
     }
     for extra in ("group",):
@@ -146,7 +150,7 @@ def merge_small(items: list[dict[str, Any]], key: str = "total") -> list[dict[st
             other[extra] = small[0][extra] if len({i[extra] for i in small}) == 1 else "mixed"
     if "target" in small[0]:
         tg = [i["target"]["minor"] for i in small if i["target"]]
-        other["target"] = money(sum(tg), CCY) if tg else None
+        other["target"] = in_base(sum(tg)) if tg else None
         other["ratio"] = ratio(other[key]["minor"], sum(tg)) if tg else None
         other["over"] = bool(tg) and other[key]["minor"] > sum(tg)
     return [*kept, other]
@@ -154,12 +158,12 @@ def merge_small(items: list[dict[str, Any]], key: str = "total") -> list[dict[st
 
 def totals_json(t: Totals) -> dict[str, Any]:
     return {
-        "income": money(t.income, CCY),
-        "expenses": money(t.expenses, CCY),
-        "fixed": money(t.fixed, CCY),
-        "variable": money(t.variable, CCY),
-        "savings": money(t.savings, CCY),
-        "invested": money(t.invested, CCY),
+        "income": in_base(t.income),
+        "expenses": in_base(t.expenses),
+        "fixed": in_base(t.fixed),
+        "variable": in_base(t.variable),
+        "savings": in_base(t.savings),
+        "invested": in_base(t.invested),
         "rate": ratio(t.savings, t.income),
     }
 
@@ -202,7 +206,7 @@ def pillar3a_year(
     if cap is None:
         known = [y for y in PILLAR_3A_CAP if y <= year] or [min(PILLAR_3A_CAP)]
         cap = PILLAR_3A_CAP[max(known)]
-    period = {"ccy": CCY, "s": f"{year}-01-01", "e": until.isoformat()}
+    period = {"ccy": base_currency(), "s": f"{year}-01-01", "e": until.isoformat()}
     ids, params = _in("a", _budget_accounts(conn))
     from_bank = -int(
         conn.execute(
@@ -227,9 +231,9 @@ def pillar3a_year(
     paid = max(from_bank, at_viac)
     return {
         "year": year,
-        "cap": money(cap, CCY),
-        "paid": money(paid, CCY),
-        "margin": money(max(0, cap - paid), CCY),
+        "cap": in_base(cap),
+        "paid": in_base(paid),
+        "margin": in_base(max(0, cap - paid)),
         "source": "viac" if at_viac and at_viac >= from_bank else "bank",
     }
 
@@ -275,19 +279,19 @@ def holdings(conn: Connection, on_date: str) -> dict[str, Any]:
                 "price_currency": x.currency,
                 "kind": kinds.get(x.isin, "other"),
                 "price_date": x.price_date,
-                "value": money(x.value, CCY),
-                "cost": money(cost, CCY) if cost is not None else None,
-                "gain": money(x.value - cost, CCY) if cost is not None and x.price else None,
+                "value": in_base(x.value),
+                "cost": in_base(cost) if cost is not None else None,
+                "gain": in_base(x.value - cost) if cost is not None and x.price else None,
                 "weight": ratio(x.value, total),
             }
         )
     costs = [i["cost"]["minor"] for i in items if i["cost"] is not None]
     return {
         "on_date": on_date,
-        "currency": CCY,
+        "currency": base_currency(),
         "items": items,
-        "value": money(total, CCY),
-        "cost": money(sum(costs), CCY) if len(costs) == len(items) else None,
+        "value": in_base(total),
+        "cost": in_base(sum(costs)) if len(costs) == len(items) else None,
         "missing_prices": sorted({x.isin for x in lines if x.price is None}),
         "crypto": _crypto(
             conn, positions.fx, [x for x in lines if x.account_id in crypto], on_date
@@ -343,9 +347,9 @@ def _crypto(
         return None
     value = sum(x.value for x in lines)
     return {
-        "invested": money(invested, CCY),
-        "value": money(value, CCY),
-        "result": money(value - invested, CCY),
+        "invested": in_base(invested),
+        "value": in_base(value),
+        "result": in_base(value - invested),
         "missing_prices": any(x.price is None for x in lines),
     }
 
@@ -381,15 +385,20 @@ def _cost(
             ),
             {"a": account_id, "i": isin, "d": on_date},
         ).first()
-        if row is None or row[1] is None or row[2] != CCY or Decimal(row[0]) != quantity:
+        if (
+            row is None
+            or row[1] is None
+            or row[2] != base_currency()
+            or Decimal(row[0]) != quantity
+        ):
             return None
-        return Money.from_decimal(Decimal(row[0]) * Decimal(row[1]), CCY).minor
+        return Money.from_decimal(Decimal(row[0]) * Decimal(row[1]), base_currency()).minor
 
 
 def _change(now: int, then: int, since: date) -> dict[str, Any]:
     return {
         "since": since.isoformat(),
-        "amount": money(now - then, CCY),
+        "amount": in_base(now - then),
         "ratio": ratio(now - then, then),
     }
 
@@ -421,22 +430,22 @@ def kpis(
     return {
         "month": month,
         "as_of": at.isoformat(),
-        "currency": CCY,
-        "net_worth": money(now.net_worth, CCY),
-        "envelopes": {k: money(v, CCY) for k, v in now.by_envelope.items()},
+        "currency": base_currency(),
+        "net_worth": in_base(now.net_worth),
+        "envelopes": {k: in_base(v) for k, v in now.by_envelope.items()},
         "change_1m": _change(now.net_worth, m1.net_worth, start - timedelta(days=1)),
         "change_ytd": _change(now.net_worth, y0.net_worth, dec31),
-        "deposits_ytd": money(now.deposits - y0.deposits, CCY),
-        "market_ytd": money((now.net_worth - now.deposits) - (y0.net_worth - y0.deposits), CCY),
-        "income": money(t.income, CCY),
-        "expenses": money(t.expenses, CCY),
-        "savings": money(t.savings, CCY),
+        "deposits_ytd": in_base(now.deposits - y0.deposits),
+        "market_ytd": in_base((now.net_worth - now.deposits) - (y0.net_worth - y0.deposits)),
+        "income": in_base(t.income),
+        "expenses": in_base(t.expenses),
+        "savings": in_base(t.savings),
         "savings_rate": ratio(t.savings, t.income),
-        "budget": money(budget, CCY) if budget is not None else None,
+        "budget": in_base(budget) if budget is not None else None,
         "budget_used": ratio(t.expenses, budget) if budget else None,
-        "rest_to_live": money(budget - t.expenses, CCY) if budget is not None else None,
+        "rest_to_live": in_base(budget - t.expenses) if budget is not None else None,
         "days_left": days_left(month, today),
-        "liquid": money(now.liquid, CCY),
+        "liquid": in_base(now.liquid),
         "months_covered": ratio(now.liquid, avg, 1) if avg > 0 else None,
         "savings_rate_3m": ratio(q.savings, q.income),
         "stale_accounts": stale_accounts(conn, today),
@@ -459,7 +468,7 @@ def flows(conn: Connection, month: str, *, aggregates_only: bool) -> dict[str, A
             {
                 "category": x.category,
                 "name": names.get(x.category, x.category),
-                "total": money(sign * x.minor, CCY),
+                "total": in_base(sign * x.minor),
                 "count": x.count,
             }
             for x in lines
@@ -471,18 +480,18 @@ def flows(conn: Connection, month: str, *, aggregates_only: bool) -> dict[str, A
     groups = [
         {
             "group": g,
-            "total": money(-sum(x.minor for x in lines if x.group == g), CCY),
+            "total": in_base(-sum(x.minor for x in lines if x.group == g)),
             "items": items(g, -1),
         }
         for g in FLOW_GROUPS
     ]
     return {
         "month": month,
-        "currency": CCY,
-        "income": money(t.income, CCY),
+        "currency": base_currency(),
+        "income": in_base(t.income),
         "sources": items("income", 1),
         "groups": groups,
-        "remainder": money(t.income - t.expenses - t.invested, CCY),
+        "remainder": in_base(t.income - t.expenses - t.invested),
     }
 
 
@@ -511,9 +520,9 @@ def budget(
                 "category": cat,
                 "name": names.get(cat, cat),
                 "group": group,
-                "spent": money(minor, CCY),
+                "spent": in_base(minor),
                 "count": count,
-                "target": money(target, CCY) if target is not None else None,
+                "target": in_base(target) if target is not None else None,
                 "ratio": ratio(minor, target) if target else None,
                 "over": target is not None and minor > target,
             }
@@ -528,14 +537,12 @@ def budget(
         "month": month,
         "period": period,
         "months": months,
-        "currency": CCY,
+        "currency": base_currency(),
         "lines": out,
-        "income": money(t.income, CCY),
-        "expenses": money(t.expenses, CCY),
-        "budget": money(total_budget, CCY) if total_budget is not None else None,
-        "rest_to_live": (
-            money(total_budget - t.expenses, CCY) if total_budget is not None else None
-        ),
+        "income": in_base(t.income),
+        "expenses": in_base(t.expenses),
+        "budget": in_base(total_budget) if total_budget is not None else None,
+        "rest_to_live": (in_base(total_budget - t.expenses) if total_budget is not None else None),
         "days_left": days_left(month, today) if period == "m" else 0,
         "over_count": sum(1 for i in out if i.get("over")),
     }
@@ -550,9 +557,9 @@ def budget_totals(conn: Connection, month: str, period: str) -> dict[str, Any]:
         "month": month,
         "period": period,
         "months": months,
-        "currency": CCY,
+        "currency": base_currency(),
         **totals_json(t),
-        "budget": money(total_budget, CCY) if total_budget is not None else None,
+        "budget": in_base(total_budget) if total_budget is not None else None,
         "budget_used": ratio(t.expenses, total_budget) if total_budget else None,
     }
 
@@ -562,7 +569,7 @@ def budget_months(conn: Connection, month: str, count: int) -> dict[str, Any]:
     series = []
     for m in months:
         series.append({"month": m, **totals_json(Totals.of(lines_for(conn, [m])))})
-    return {"currency": CCY, "series": series}
+    return {"currency": base_currency(), "series": series}
 
 
 # --- export -----------------------------------------------------------------------------------

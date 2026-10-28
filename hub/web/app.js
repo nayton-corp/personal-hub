@@ -1,6 +1,7 @@
 // Coquille de l'app (L0-09) : connexion par passkey, puis les vues Finance (L2-03). Aucun
 // script en ligne : la CSP de Caddy n'autorise que les fichiers servis par le hub.
 import { start } from "./finance.js";
+import { setBase } from "./format.js";
 import { api, setTimeZone, store, timeZone } from "./store.js";
 import { creationOptions, credentialJSON, requestOptions } from "./webauthn.js";
 
@@ -35,11 +36,14 @@ function row(dl, label, value, ok) {
 }
 
 function renderProfile(p) {
-  if (setTimeZone(p.timezone)) store.invalidate();
+  const tz = setTimeZone(p.timezone);
+  const ccy = setBase(p.currency);
+  if (tz || ccy) store.invalidate();
+  $("mode-seg").querySelector('[data-v="chf"]').textContent = p.currency;
   $("profile-name").value = p.display_name || "";
   $("profile-country").value = p.country;
   const modules = p.modules.length ? ` · modules : ${p.modules.join(", ")}` : "";
-  $("profile-info").textContent = `Fuseau ${p.timezone} (HUB_TZ)${modules}.`;
+  $("profile-info").textContent = `Fuseau ${p.timezone} (HUB_TZ) · devise ${p.currency} (HUB_CURRENCY)${modules}.`;
 }
 
 async function renderSettings(session) {

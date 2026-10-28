@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from hub.core.clock import now_iso
 from hub.core.ids import new_id
+from hub.core.money import base_currency
 from hub.core.text import compact_iban, is_iban
 
 KINDS = ("cash", "securities", "pension", "crypto")
@@ -72,7 +73,7 @@ def add_account(
     institution: str,
     name: str,
     kind: str = "cash",
-    currency: str = "CHF",
+    currency: str | None = None,
     iban: str | None = None,
     external_ref: str | None = None,
     liquid: bool = False,
@@ -80,6 +81,7 @@ def add_account(
 ) -> Account:
     if kind not in KINDS:
         raise CatalogError(f"type de compte inconnu : {kind}")
+    currency = currency or base_currency()
     if iban is not None:
         if not is_iban(iban):
             raise CatalogError("IBAN invalide")

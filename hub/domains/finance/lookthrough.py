@@ -28,7 +28,7 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core.money import DECIMAL_CONTEXT, Money
+from hub.core.money import DECIMAL_CONTEXT, Money, base_currency
 from hub.core.text import normalize
 from hub.domains.finance import assets, valuation
 from hub.domains.finance.assets import AssetError, DocumentError, Result
@@ -474,14 +474,14 @@ def breakdown(conn: Connection, dimension: str, on_date: str) -> dict[str, Any]:
             with localcontext(DECIMAL_CONTEXT):
                 weight = str((Decimal(minor) / total).quantize(Decimal("0.0001")))
         out.append(
-            {"bucket": bucket, "value": Money(minor, valuation.BASE).to_api(), "weight": weight}
+            {"bucket": bucket, "value": Money(minor, base_currency()).to_api(), "weight": weight}
         )
     since = min(dates.values(), default=None)
     return {
         "dimension": dimension,
         "on_date": on_date,
-        "currency": valuation.BASE,
-        "total": Money(total, valuation.BASE).to_api(),
+        "currency": base_currency(),
+        "total": Money(total, base_currency()).to_api(),
         "covered": (str((Decimal(covered) / total).quantize(Decimal("0.0001"))) if total else None),
         "compositions_since": since,
         "items": out,

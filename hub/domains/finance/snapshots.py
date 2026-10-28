@@ -19,6 +19,7 @@ from hub.core import canonical
 from hub.core.clock import now_iso
 from hub.core.db import begin_immediate
 from hub.core.logging import get_logger
+from hub.core.money import base_currency
 from hub.domains.finance import valuation
 from hub.domains.finance.reads import money
 
@@ -156,7 +157,7 @@ def history(conn: Connection, date_from: str | None, date_to: str | None) -> dic
         {"f": date_from, "t": date_to},
     ).fetchall()
     state = _state(conn)
-    ccy = valuation.BASE
+    ccy = base_currency()
     return {
         "currency": ccy,
         "as_of": state[2] if state else None,

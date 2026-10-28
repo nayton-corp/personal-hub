@@ -1,7 +1,8 @@
 """Collecteur « market » (lot 6) : cours de change, cours quotidiens et soldes crypto, par des
 API publiques et sans identifiant bancaire.
 
-- change : la BCE par Frankfurter (1 devise = x CHF, l'inverse du cours publié en base CHF) ;
+- change : la BCE par Frankfurter (1 devise = x dans la devise de base `HUB_CURRENCY`,
+  l'inverse du cours publié dans cette base) ;
 - cryptos : CoinGecko, un an d'historique au premier run (limite de l'offre gratuite) ;
 - titres cotés (facultatif) : le graphique quotidien de Yahoo Finance, pour les lignes qui
   n'ont pas d'autre source de cours (titres Revolut par exemple) ;
@@ -32,6 +33,7 @@ from hub.collectors.base import Failure, Kind, Result
 from hub.collectors.dropbox import is_market_json
 from hub.collectors.http import Http
 from hub.collectors.runtime import Env
+from hub.core.money import base_currency
 
 OVERLAP_DAYS = 7
 WEI = Decimal(10) ** 18
@@ -70,9 +72,11 @@ def fx_rates(
     env: Env, http: Http, since: date, *, latest: bool = False, until: date | None = None
 ) -> list[dict[str, str]]:
     m = env.cfg.market
-    symbols = ",".join(c for c in m.currencies if c != "CHF")
+    base = base_currency()
+    # le franc reste suivi dans une autre base : un compte suisse (VIAC) est tenu en CHF
+    symbols = ",".join(dict.fromkeys(c for c in [*m.currencies, "CHF"] if c != base))
     period = "latest" if latest else f"{since.isoformat()}..{until.isoformat() if until else ''}"
-    query = urllib.parse.urlencode({"base": "CHF", "symbols": symbols})
+    query = urllib.parse.urlencode({"base": base, "symbols": symbols})
     doc = http.json(f"{m.fx_url}/{period}?{query}", "fx.rates")
     if not isinstance(doc, dict) or not isinstance(doc.get("rates"), dict):
         raise Failure("invalid_file", "fx.rates")
@@ -87,13 +91,13 @@ def fx_rates(
                 continue
             with localcontext() as ctx:
                 ctx.prec = 28
-                chf = Decimal(1) / rate
+                inverse = Decimal(1) / rate
             out.append(
                 {
                     "on_date": on_date[:10],
                     "base": ccy,
-                    "quote": "CHF",
-                    "rate": text_of(chf),
+                    "quote": base,
+                    "rate": text_of(inverse),
                     "source": "ecb",
                 }
             )
@@ -118,6 +122,7 @@ def _daily(points: Any) -> dict[str, Decimal]:
 
 def crypto_prices(env: Env, http: Http, since: date) -> list[dict[str, str]]:
     m = env.cfg.market
+    base = base_currency()
     days = max(1, min(365, (env.today - since).days + 1))
     headers = {}
     key = env.creds.get("coingecko_key")
@@ -125,7 +130,9 @@ def crypto_prices(env: Env, http: Http, since: date) -> list[dict[str, str]]:
         headers["x-cg-demo-api-key"] = key
     out = []
     for symbol, coin in sorted(m.crypto.items()):
-        query = urllib.parse.urlencode({"vs_currency": "chf", "days": days, "interval": "daily"})
+        query = urllib.parse.urlencode(
+            {"vs_currency": base.lower(), "days": days, "interval": "daily"}
+        )
         url = f"{m.coingecko_url}/coins/{urllib.parse.quote(coin)}/market_chart?{query}"
         doc = http.json(url, f"crypto.{symbol.lower()}", headers=headers)
         series = _daily(doc.get("prices") if isinstance(doc, dict) else None)
@@ -135,7 +142,7 @@ def crypto_prices(env: Env, http: Http, since: date) -> list[dict[str, str]]:
                 "kind": "crypto",
                 "on_date": on,
                 "price": text_of(p),
-                "currency": "CHF",
+                "currency": base,
                 "source": "coingecko",
             }
             for on, p in sorted(series.items())

@@ -61,7 +61,8 @@ appareil) depuis la page d'état. Partager → « Sur l'écran d'accueil » inst
 Dans **Sources → Profil**, donne le prénom qu'emploiera l'assistant et le pays de l'instance :
 la Suisse (par défaut) ouvre le module pilier 3a, un autre pays le ferme. Le fuseau vient de
 `HUB_TZ` dans `deploy/.env` (Europe/Zurich par défaut) ; il fixe le jour civil des chiffres et
-les horaires des collecteurs et des tâches. En ligne de commande :
+les horaires des collecteurs et des tâches. La devise de base vient de `HUB_CURRENCY` (CHF par
+défaut) ; elle se choisit avant le premier démarrage et ne change plus. En ligne de commande :
 `hubc run --rm --no-deps scheduler hub profile set --name Camille --country CH`.
 
 ## 4. Critères d'acceptation à cocher

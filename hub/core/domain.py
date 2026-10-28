@@ -136,7 +136,7 @@ class Event:
 @dataclass(frozen=True)
 class Health:
     ok: bool
-    db: str  # 'ok', 'missing', 'error'
+    db: str  # 'ok', 'missing', 'outdated', 'error' ou un écart propre au domaine
     schema_version: int
     detail: dict[str, Any] = field(default_factory=dict)
 

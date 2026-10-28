@@ -230,7 +230,10 @@ et Enable Banking sont traités comme pour la BCF. Mise en place : [collectors.m
 
 **Enveloppes.** Le patrimoine net se lit en quatre enveloppes : `cash`, `pilier3a`, `titres`
 (l'ancienne enveloppe « IBKR » : tous les comptes de titres, IBKR, Revolut, autres) et
-`crypto`. Tout est valorisé en CHF : un compte en devise est converti au dernier cours de
+`crypto`. Tout est valorisé dans la devise de base de l'instance (`HUB_CURRENCY`, CHF par
+défaut, fixée à la création de `finance.db` : le hub refuse de démarrer si elle change ensuite,
+car les instantanés et les cours enregistrés ne se convertissent pas). Les budgets et les chiffres
+clés sont dans cette devise. Un compte en devise est converti au dernier cours de
 change connu à la date (BCE par le collecteur « market », ou cours IBKR), une position vaut ses
 parts fois son dernier cours, converti de la devise du cours. `kpis` et
 `networth/history` signalent les cours qui manquent au lieu d'inventer une valeur.

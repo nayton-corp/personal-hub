@@ -22,7 +22,7 @@ from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.db import begin_immediate, make_engine
 from hub.core.errors import Problem
-from hub.core.money import Money
+from hub.core.money import Money, base_currency
 from hub.core.registry import Registry
 from hub.core.text import mask_iban
 from hub.domains.finance import catalog, ibkr, importer, legacy, packs, rebuild, rules
@@ -119,7 +119,7 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
         external_ref: Annotated[str | None, typer.Option(help="clé d'un compte sans IBAN")] = None,
         institution: Annotated[str, typer.Option()] = "BCF",
         kind: Annotated[str, typer.Option(help="cash, securities, pension, crypto")] = "cash",
-        currency: Annotated[str, typer.Option()] = "CHF",
+        currency: Annotated[str | None, typer.Option(help="devise de base par défaut")] = None,
         liquid: Annotated[bool, typer.Option(help="compte dans les liquidités")] = False,
         budget: Annotated[bool, typer.Option(help="compte suivi par le budget")] = False,
     ) -> None:
@@ -133,7 +133,7 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
                 "institution": institution,
                 "name": name,
                 "kind": kind,
-                "currency": currency,
+                "currency": currency or base_currency(),
                 "iban": iban,
                 "external_ref": external_ref,
                 "liquid": liquid,
@@ -489,7 +489,7 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
         _out({"id": account.id, "opened": done, "imports": len(ids)})
 
     def create_positions_account(
-        ref: str, institution: str, name: str, kind: str, currency: str = "CHF"
+        ref: str, institution: str, name: str, kind: str, currency: str | None = None
     ) -> str:
         """Compte à positions, créé par une proposition validée au terminal (idempotent)."""
         with engine.connect() as conn:
@@ -503,7 +503,7 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
                 "institution": institution,
                 "name": name,
                 "kind": kind,
-                "currency": currency,
+                "currency": currency or base_currency(),
                 "external_ref": ref,
             },
         )
@@ -513,7 +513,9 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
     def ibkr_add_account(
         number: Annotated[str, typer.Argument(help="n° de compte IBKR, ex. U1234567")],
         name: Annotated[str, typer.Option(help="ex. « IBKR »")] = "IBKR",
-        base: Annotated[str, typer.Option(help="devise de base du compte IBKR")] = "CHF",
+        base: Annotated[
+            str | None, typer.Option(help="devise de base du compte IBKR (celle du hub)")
+        ] = None,
     ) -> None:
         """Déclare un compte IBKR : son compte de titres (proposition validée au terminal). Les
         comptes de liquidités par devise se créent au premier relevé Flex qui les cite."""
@@ -522,7 +524,11 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
             typer.echo("numéro attendu : U1234567", err=True)
             raise typer.Exit(1)
         account_id = create_positions_account(
-            ibkr.titles_ref(number), "IBKR", f"{name} titres", "securities", base.upper()
+            ibkr.titles_ref(number),
+            "IBKR",
+            f"{name} titres",
+            "securities",
+            (base or base_currency()).upper(),
         )
         _out({"id": account_id, "ref": ibkr.titles_ref(number)})
 
@@ -543,8 +549,8 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
         name: Annotated[str, typer.Argument(help="nom court, ex. ledger-btc")],
         label: Annotated[str | None, typer.Option(help="nom affiché")] = None,
     ) -> None:
-        """Déclare un portefeuille crypto (compte `crypto:<nom>`, en CHF) ; ses adresses vont
-        dans les secrets du collecteur « market », jamais dans la base."""
+        """Déclare un portefeuille crypto (compte `crypto:<nom>`, dans la devise de base) ; ses
+        adresses vont dans les secrets du collecteur « market », jamais dans la base."""
         ready()
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,40}", name):
             typer.echo("nom attendu : minuscules, chiffres et tirets (ledger-btc)", err=True)

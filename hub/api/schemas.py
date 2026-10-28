@@ -291,6 +291,7 @@ class ProfileOut(BaseModel):
     display_name: str | None
     country: str
     timezone: str
+    currency: str  # devise de base, HUB_CURRENCY
     modules: list[str]
 
 
