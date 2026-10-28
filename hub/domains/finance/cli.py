@@ -609,6 +609,28 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
                     f"doublons={stats.get('duplicates', 0)} motifs={reasons}"
                 )
 
+    @imports.command("replay")
+    def imports_replay(
+        source: Annotated[str, typer.Argument(help="source des documents, ex. swissborg")],
+    ) -> None:
+        """Réapplique les documents déjà importés d'une source, depuis l'archive chiffrée
+        (après une évolution de l'importeur : opérations SwissBorg au registre, par exemple)."""
+        ready()
+        try:
+            outcomes = domain.importer.replay(source)
+        except importer.ImportRefused as exc:
+            typer.echo(exc.detail, err=True)
+            raise typer.Exit(1) from exc
+        _out(
+            {
+                "statements": len(outcomes),
+                "applied": sum(o.status == "applied" for o in outcomes),
+                "needs_review": sum(o.status == "needs_review" for o in outcomes),
+                "new": sum(o.new for o in outcomes),
+                "duplicates": sum(o.duplicates for o in outcomes),
+            }
+        )
+
     @imports.command("retry")
     def imports_retry(ids: Annotated[list[str] | None, typer.Argument()] = None) -> None:
         """Rejoue les relevés en attente depuis l'archive chiffrée."""

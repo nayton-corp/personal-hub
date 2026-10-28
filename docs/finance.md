@@ -266,6 +266,16 @@ place :
 adresses publiques et le cours (CoinGecko, en CHF) ; Binance, KuCoin et Coinbase ont leur
 collecteur. Une crypto détenue chez Revolut passe par le CSV de positions ci-dessous.
 
+**Transactions d'un portefeuille BTC.** Le collecteur dépose aussi chaque transaction confirmée
+(net reçu ou envoyé, frais de réseau payés) : elle devient une opération du compte en CHF et
+un mouvement de parts, qui donne le prix de revient. Une arrivée de la même quantité de la même
+crypto qu'un retrait d'une plateforme (SwissBorg) au plus 5 jours avant prend la valeur du
+retrait et s'apparie avec lui (`CRYPTO/RECEIVE`, `transfer-own`) ; sinon elle est valorisée au
+dernier cours connu. Un envoi donne `CRYPTO/SEND` et ses frais `CRYPTO/FEE`
+(`frais-placement`). Rien de cela n'est un versement au patrimoine. Pour que l'appariement
+trouve les retraits, le relevé SwissBorg doit être au registre avant le premier passage du
+collecteur qui dépose les transactions.
+
 **Performance des cryptos.** Deux mesures, dans la carte Positions de l'enveloppe crypto :
 - *globale* : investi = paiements nets de la catégorie « Crypto » (virements vers SwissBorg,
   Binance, Coinbase, KuCoin…, reconnus par les règles, moins ce qui en revient), en CHF au change
@@ -285,8 +295,23 @@ d'entrée ou par l'import de l'app. Déclare d'abord le compte : `fin crypto add
 chaque jour où un solde bouge devient un relevé complet des positions (cryptos, et les francs en
 attente en `SYM:CHF`), avec le cours du jour tiré du fichier (contre-valeur USD ÷ quantité) et
 le change USD/CHF de ses mouvements en francs. Achat, dépôt, rendement et remise de frais
-créditent le net ; vente, retrait et frais périodiques débitent. Un échange entre deux cryptos
-est une vente puis une arrivée : le prix de revient repart de la valeur du jour de l'échange.
+créditent le net ; vente, retrait et frais périodiques débitent.
+
+Chaque ligne est aussi une opération au registre du compte, en CHF (contre-valeur USD au change
+du jour, le franc tel quel), la quantité en communication, et un mouvement de parts (`trades`)
+qui donne le prix de revient comme pour IBKR :
+
+| Ligne | Écriture | Catégorie |
+|---|---|---|
+| Dépôt, retrait (et ses frais à part) | `SWISSBORG/DEPOSIT`, `SWISSBORG/WITHDRAWAL` | `transfer-own`, appariée au virement de la banque |
+| Achat, vente (un échange = une vente + un achat) | `SWISSBORG/TRADE/BUY`, `…/SELL` | `transfer-titres` |
+| Rendement | `SWISSBORG/INCOME/YIELD` | `rendement` |
+| Frais d'échange, de retrait, sur rendement, périodiques ; remise | `SWISSBORG/FEE/…` | `frais-placement` |
+
+Aucune n'est un versement au patrimoine : le virement de la banque est déjà catégorisé
+« Crypto ». Le prix de revient d'une crypto est la valeur de ce qui a été donné en échange (net
+des frais d'échange, comptés à part). Un relevé importé avant ces opérations se rejoue depuis
+l'archive : `fin imports replay swissborg` (les positions déjà lues sont des doublons).
 Redéposer un relevé plus récent ajoute les jours nouveaux (ceux déjà lus sont des doublons) :
 il doit toujours couvrir toute la période, sinon les soldes rejoués seraient faux (un solde
 négatif fait refuser le fichier).

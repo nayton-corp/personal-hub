@@ -425,11 +425,19 @@ def _ensure_cash(
     )
 
 
-class _Writer:
-    """Écritures d'un relevé, catégorisées par les règles système (codes IBKR/…)."""
+class Writer:
+    """Écritures d'un relevé, catégorisées par les règles système (codes IBKR/…, SWISSBORG/…)."""
 
-    def __init__(self, conn: Connection, import_id: str, account: str, result: Result) -> None:
+    def __init__(
+        self,
+        conn: Connection,
+        import_id: str,
+        account: str,
+        result: Result,
+        namespace: str = "ibkr",
+    ) -> None:
         self.conn = conn
+        self.namespace = namespace  # préfixe des clés de doublon : « ibkr », « swissborg »
         self.import_id = import_id
         self.account = account
         self.result = result
@@ -456,7 +464,7 @@ class _Writer:
         remittance: str = "",
         fx_json: str | None = None,
     ) -> None:
-        dedup_key = ledger.dedup_hash(f"ibkr|{self.account}|{key}")
+        dedup_key = ledger.dedup_hash(f"{self.namespace}|{self.account}|{key}")
         if self.conn.execute(
             text("SELECT 1 FROM entries WHERE dedup_key = :k"), {"k": dedup_key}
         ).first():
@@ -557,7 +565,7 @@ def _write(
                 conn, target.id, opening_day, _minor(amount, target.currency), target.currency
             )
 
-    w = _Writer(conn, import_id, st.account, result)
+    w = Writer(conn, import_id, st.account, result)
     for t in st.trades:
         side = "BUY" if t.quantity > 0 else "SELL"
         if t.category == "CASH":

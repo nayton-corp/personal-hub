@@ -344,10 +344,10 @@ TXS_PER_PAGE = 25  # mempool.space : transactions confirmées par page, des plus
 MAX_TX_PAGES = 40
 
 
-def _txs(env: Env, http: Http, address: str) -> list[dict[str, Any]]:
+def _txs(env: Env, http: Http, address: str, pages: int = MAX_TX_PAGES) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     path = f"{urllib.parse.quote(address)}/txs/chain"
-    for _page in range(MAX_TX_PAGES):
+    for _page in range(pages):
         page = _mempool(env, http, path, "history.btc")
         if not isinstance(page, list):
             raise Failure("invalid_file", "history.btc")
@@ -360,18 +360,21 @@ def _txs(env: Env, http: Http, address: str) -> list[dict[str, Any]]:
     return out
 
 
-def btc_history(env: Env, http: Http, addresses: list[str]) -> dict[str, Decimal]:
-    """Solde BTC en fin de chaque jour (UTC) où il a bougé, depuis la première transaction : la
-    somme, transaction par transaction, de ce qui arrive sur ces adresses moins ce qui en part.
-    Un virement entre deux adresses du portefeuille s'annule."""
+def btc_moves(
+    env: Env, http: Http, addresses: list[str], pages: int = MAX_TX_PAGES
+) -> list[tuple[str, str, int, int]]:
+    """Transactions confirmées du portefeuille : (jour UTC, txid, net en sats, frais payés).
+    Le net est ce qui arrive sur ces adresses moins ce qui en part (un virement entre deux
+    adresses du portefeuille ne laisse que les frais) ; les frais ne comptent que si le
+    portefeuille a payé (une de ses adresses en entrée)."""
     mine = set(addresses)
     txs: dict[str, dict[str, Any]] = {}
     for a in addresses:
-        for tx in _txs(env, http, a):
+        for tx in _txs(env, http, a, pages):
             txs[str(tx.get("txid"))] = tx
-    by_day: dict[str, int] = {}
+    out = []
     try:
-        for tx in txs.values():
+        for txid, tx in txs.items():
             status = tx["status"]
             if not status.get("confirmed"):
                 continue
@@ -384,14 +387,39 @@ def btc_history(env: Env, http: Http, addresses: list[str]) -> dict[str, Decimal
                 for i in tx["vin"]
                 if (i.get("prevout") or {}).get("scriptpubkey_address") in mine
             )
-            by_day[day] = by_day.get(day, 0) + received - spent
+            fee = int(tx.get("fee") or 0) if spent else 0
+            out.append((day, txid, received - spent, fee))
     except (KeyError, TypeError, ValueError, AttributeError):
         raise Failure("invalid_file", "history.btc") from None
+    return sorted(out)
+
+
+def btc_history(moves: list[tuple[str, str, int, int]]) -> dict[str, Decimal]:
+    """Solde BTC en fin de chaque jour (UTC) où il a bougé, depuis la première transaction."""
+    by_day: dict[str, int] = {}
+    for day, _txid, net, _fee in moves:
+        by_day[day] = by_day.get(day, 0) + net
     balance, out = 0, {}
     for day in sorted(by_day):
         balance += by_day[day]
         out[day] = Decimal(max(balance, 0)) / SATS
     return out
+
+
+def transactions(account: str, moves: list[tuple[str, str, int, int]]) -> list[dict[str, str]]:
+    """Lignes `transactions` d'un compte BTC : une par transaction, net et frais en BTC."""
+    return [
+        {
+            "account": account,
+            "instrument": "BTC",
+            "on_date": day,
+            "txid": txid,
+            "quantity": format((Decimal(net) / SATS).normalize(), "f"),
+            "fee": format((Decimal(fee) / SATS).normalize(), "f"),
+        }
+        for day, txid, net, fee in moves
+        if net or fee
+    ]
 
 
 def _rpc(url: str, http: Http, step: str, method: str, params: list[Any]) -> Any:
@@ -498,19 +526,24 @@ def wallet_entries(env: Env) -> list[dict[str, Any]]:
     return out
 
 
-def balances(env: Env, http: Http) -> tuple[list[dict[str, str]], list[str], dict[str, str]]:
-    """(soldes, portefeuilles en échec, historiques relus : compte → premier jour). Un compte est
-    relevé en entier ou pas du tout : un relevé partiel ferait disparaître une crypto de la
-    valeur. Un compte vide donne un relevé à zéro.
+def balances(
+    env: Env, http: Http
+) -> tuple[list[dict[str, str]], list[str], dict[str, str], list[dict[str, str]]]:
+    """(soldes, portefeuilles en échec, historiques relus : compte → premier jour, transactions).
+    Un compte est relevé en entier ou pas du tout : un relevé partiel ferait disparaître une
+    crypto de la valeur. Un compte vide donne un relevé à zéro.
 
     Au premier passage d'un compte BTC (mémoire `btc_history`), son historique est relu sur la
-    chaîne et déposé en relevés passés, un par jour où le solde a bougé."""
+    chaîne et déposé en relevés passés, un par jour où le solde a bougé. Ses transactions
+    partent dans le fichier : toutes au premier passage (mémoire `btc_txs`), ensuite la
+    dernière page de chaque adresse (le registre écarte les doublons)."""
     by_account: dict[str, list[dict[str, Any]]] = {}
     for w in wallet_entries(env):
         by_account.setdefault(str(w["account"]), []).append(w)
-    out, failed = [], []
+    out, failed, txs = [], [], []
     histories: dict[str, str] = {}
     done = set(env.memory.get("btc_history", []))
+    listed = set(env.memory.get("btc_txs", []))
     for account, entries in by_account.items():
         held: dict[str, Decimal] = {}
         try:
@@ -521,20 +554,26 @@ def balances(env: Env, http: Http) -> tuple[list[dict[str, str]], list[str], dic
             failed.append(f"wallet.{account.split(':', 1)[1]}:{f.outcome}")
             continue
         out += holdings(account, env.today, held, entries[0]["asset"])
-        if account in done or any(w["asset"] != "BTC" for w in entries):
+        if any(w["asset"] != "BTC" for w in entries):
             continue
         used = [a for w in entries for a in w.get("used", [])]
+        full = account not in done or account not in listed
         try:
-            past = btc_history(env, http, used) if used else {}
+            moves = btc_moves(env, http, used, MAX_TX_PAGES if full else 1) if used else []
         except Failure as f:
             failed.append(f"history.{account.split(':', 1)[1]}:{f.outcome}")
             continue
+        txs += transactions(account, moves)
+        if full:
+            histories[account] = min((d for d, *_x in moves), default=env.today.isoformat())
+        if account in done:
+            continue
+        past = btc_history(moves)
         today = env.today.isoformat()
         for day, quantity in sorted(past.items()):
             if day < today:
                 out += holdings(account, date.fromisoformat(day), {"BTC": quantity}, "BTC")
-        histories[account] = min(past, default=today)
-    return out, failed, histories
+    return out, failed, histories, txs
 
 
 def holdings(account: str, on: date, held: dict[str, Decimal], empty: str) -> list[dict[str, str]]:
@@ -575,7 +614,7 @@ def run(env: Env, kind: Kind, http: Http | None = None) -> Result:
             doc.setdefault("prices", []).extend(fetch())
         except Failure as f:
             failed.append(f"{name}:{f.outcome}")
-    doc["balances"], down, histories = balances(env, http)  # secrets illisibles : auth_error
+    doc["balances"], down, histories, doc["transactions"] = balances(env, http)
     failed += down
     first = min(histories.values(), default=None)
     if first and first < since.isoformat():
@@ -591,6 +630,7 @@ def run(env: Env, kind: Kind, http: Http | None = None) -> Result:
     dropped = env.inbox.drop("market.json", data, is_market_json, step="market.file")
     if histories:
         env.memory.put("btc_history", sorted({*env.memory.get("btc_history", []), *histories}))
+        env.memory.put("btc_txs", sorted({*env.memory.get("btc_txs", []), *histories}))
     if not failed:  # sinon le prochain run reprend la même fenêtre
         env.memory.put("last_run", env.today.isoformat())
     detail = "partial " + " ".join(failed) if failed else None

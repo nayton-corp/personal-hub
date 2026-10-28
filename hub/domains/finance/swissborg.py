@@ -16,14 +16,16 @@ retrait de brut nul et de net négatif, qui débite ce net.
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, replace
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation, localcontext
 
-from sqlalchemy import Connection
+from sqlalchemy import Connection, text
 
-from hub.core.money import DECIMAL_CONTEXT
-from hub.domains.finance import assets, manual, xlsx
+from hub.core import canonical
+from hub.core.ids import urn
+from hub.core.money import DECIMAL_CONTEXT, Money, base_currency
+from hub.domains.finance import assets, catalog, ibkr, ledger, manual, valuation, xlsx
 from hub.domains.finance.assets import AssetError, DocumentError, Result
 
 SOURCE = "swissborg"
@@ -59,7 +61,11 @@ class Move:
     currency: str
     gross: Decimal
     gross_usd: Decimal
+    fee: Decimal
+    fee_usd: Decimal
     net: Decimal
+    net_usd: Decimal
+    key: str = ""  # identifiant stable de la ligne : écritures sans doublon d'un relevé à l'autre
 
     @property
     def delta(self) -> Decimal:
@@ -73,6 +79,7 @@ class Move:
 class Day:
     snapshot: manual.Snapshot
     usd_chf: Decimal | None  # 1 USD en CHF selon les mouvements en francs du jour
+    moves: tuple[Move, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -120,7 +127,7 @@ def _moves(table: list[list[str]], start: int) -> list[Move]:
         row = raw + [""] * (len(HEADER) - len(raw))
         if not any(row):
             continue
-        local, utc, kind, currency, gross, gross_usd, _fee, _fee_usd, net = row[:9]
+        local, utc, kind, currency, gross, gross_usd, fee, fee_usd, net, net_usd = row[:10]
         if kind not in CREDITS | DEBITS:
             raise SwissborgError(f"ligne {n} : type de mouvement inconnu ({kind[:30]})")
         try:
@@ -137,14 +144,24 @@ def _moves(table: list[list[str]], start: int) -> list[Move]:
                 currency.upper(),
                 _dec(gross),
                 _dec(gross_usd),
+                _dec(fee or "0"),
+                _dec(fee_usd or "0"),
                 _dec(net, signed=kind in DEBITS),
+                _dec(net_usd or "0", signed=kind in DEBITS),
             )
         except AssetError as exc:
             raise SwissborgError(f"ligne {n} : {exc}") from None
         out.append(move)
     if not out:
         raise SwissborgError("relevé sans mouvement")
-    return sorted(out, key=lambda m: (m.utc, m.day))
+    out.sort(key=lambda m: (m.utc, m.day))
+    seen: dict[str, int] = defaultdict(int)
+    keyed = []
+    for m in out:
+        base = f"{m.utc}|{m.kind}|{m.currency}|{m.gross}|{m.net}"
+        seen[base] += 1  # lignes identiques à la même seconde (rééquilibrage d'un thème)
+        keyed.append(replace(m, key=f"{base}|{seen[base]}"))
+    return keyed
 
 
 def _key(currency: str) -> tuple[str, str, str]:
@@ -197,18 +214,149 @@ def parse(data: bytes) -> Statement:
             rate = (
                 qty["CHF"] / usd["CHF"] if qty.get("CHF", 0) > 0 and usd.get("CHF", 0) > 0 else None
             )
-            days.append(Day(manual.Snapshot(ACCOUNT, day, rows), rate))
+            days.append(Day(manual.Snapshot(ACCOUNT, day, rows), rate, tuple(moves)))
     return Statement(days)
+
+
+def _legs(m: Move) -> list[tuple[str, str, str, Decimal, Decimal]]:
+    """Écritures d'une ligne : (jambe, code, libellé, montant, contre-valeur USD), signés."""
+    c, out = m.currency, []
+    if m.kind == "Buy":
+        out.append(("buy", "SWISSBORG/TRADE/BUY", f"Achat {c}", m.gross, m.gross_usd))
+        out.append(("fee", "SWISSBORG/FEE/TRADE", f"Frais d'échange {c}", -m.fee, -m.fee_usd))
+    elif m.kind == "Sell":
+        out.append(("sell", "SWISSBORG/TRADE/SELL", f"Vente {c}", -m.gross, -m.gross_usd))
+    elif m.kind == "Deposit":
+        out.append(("main", "SWISSBORG/DEPOSIT", f"Dépôt {c}", m.gross, m.gross_usd))
+        out.append(("fee", "SWISSBORG/FEE/DEPOSIT", f"Frais de dépôt {c}", -m.fee, -m.fee_usd))
+    elif m.kind == "Payouts":
+        out.append(("main", "SWISSBORG/INCOME/YIELD", f"Rendement {c}", m.gross, m.gross_usd))
+        out.append(("fee", "SWISSBORG/FEE/YIELD", f"Frais sur rendement {c}", -m.fee, -m.fee_usd))
+    elif m.kind == "Fee Adjustment":
+        out.append(("main", "SWISSBORG/FEE/REFUND", f"Remise de frais {c}", m.net, m.net_usd))
+    elif m.gross > 0:  # retrait, frais pris sur le brut
+        out.append(("main", "SWISSBORG/WITHDRAWAL", f"Retrait {c}", -m.net, -m.net_usd))
+        out.append(("fee", "SWISSBORG/FEE/WITHDRAWAL", f"Frais de retrait {c}", -m.fee, -m.fee_usd))
+    else:  # frais périodique : net négatif
+        out.append(("main", "SWISSBORG/FEE/PERIODIC", f"Frais périodiques {c}", m.net, m.net_usd))
+    return out
+
+
+def _delta_usd(m: Move) -> Decimal:
+    if m.kind in CREDITS or m.gross == 0:
+        return m.net_usd
+    return -m.gross_usd
+
+
+class _Values:
+    """Montant d'une ligne en devise de base : la devise elle-même, sinon sa contre-valeur USD
+    au change du jour (celui du relevé, sinon le dernier connu)."""
+
+    def __init__(self, conn: Connection) -> None:
+        self.fx = valuation.FxTable(conn, ["USD"])
+
+    def of(self, m: Move, amount: Decimal, usd: Decimal) -> int | None:
+        if m.currency == self.fx.base:
+            return Money.from_decimal(amount, self.fx.base).minor
+        return self.fx.convert(usd, "USD", m.day)
+
+
+def _day_before(on: str) -> str:
+    return (date.fromisoformat(on) - timedelta(days=1)).isoformat()
 
 
 def apply(
     conn: Connection, import_id: str, doc: Statement, indexes: set[int] | None
 ) -> list[tuple[int, Result]]:
+    days = [(i, d) for i, d in enumerate(doc.days) if indexes is None or i in indexes]
+    if base_currency() == "CHF":
+        for _i, d in days:
+            if d.usd_chf is not None:
+                assets.add_fx(conn, d.snapshot.on_date, "USD", "CHF", d.usd_chf, SOURCE)
+    account = catalog.account_by_ref(conn, ACCOUNT)
+    if (
+        account is not None
+        and days
+        and not conn.execute(
+            text("SELECT 1 FROM entries WHERE account_id = :a LIMIT 1"), {"a": account.id}
+        ).first()
+    ):
+        from hub.domains.finance.importer import open_account  # import circulaire
+
+        open_account(
+            conn, account.id, _day_before(days[0][1].snapshot.on_date), 0, account.currency
+        )
+    values = _Values(conn)
+    writer = ibkr.Writer(conn, import_id, ACCOUNT, Result(), namespace=SOURCE)
     out = []
-    for i, d in enumerate(doc.days):
-        if indexes is not None and i not in indexes:
-            continue
-        if d.usd_chf is not None:
-            assets.add_fx(conn, d.snapshot.on_date, "USD", "CHF", d.usd_chf, SOURCE)
-        out.append((i, manual.apply_snapshot(conn, import_id, d.snapshot, SOURCE)))
+    for i, d in days:
+        result = manual.apply_snapshot(conn, import_id, d.snapshot, SOURCE)
+        if account is not None and result.status == "applied":
+            writer.result = result
+            for m in d.moves:
+                _write_move(conn, import_id, writer, account, values, m)
+        out.append((i, result))
+    for account_id, count in sorted(writer.touched.items()):
+        ledger.append_event(
+            conn,
+            "entries.appended",
+            urn("finance", "account", account_id),
+            {"import_id": import_id, "count": count},
+        )
     return out
+
+
+def _write_move(
+    conn: Connection,
+    import_id: str,
+    writer: ibkr.Writer,
+    account: catalog.Account,
+    values: _Values,
+    m: Move,
+) -> None:
+    """Les écritures de la ligne (montant en devise de base, quantité en libellé) et son
+    mouvement de parts dans `trades`, qui donne le prix de revient."""
+    legs = [
+        (leg, code, label, q, usd, values.of(m, q, usd)) for leg, code, label, q, usd in _legs(m)
+    ]
+    cost = values.of(m, m.delta, _delta_usd(m))
+    if cost is None or any(v is None for *_x, v in legs):
+        writer.result.review("missing_fx")
+        return
+    for leg, code, label, qty, usd, amount in legs:
+        if amount:
+            # quantité de la jambe (le net d'un retrait : ce qui arrive sur le portefeuille),
+            # pour l'apparier à son arrivée sur un autre compte
+            detail = {"quantity": assets.qty_text(qty), "currency": m.currency, "usd": str(usd)}
+            writer.entry(
+                account,
+                f"{m.key}|{leg}",
+                m.day,
+                amount,
+                code,
+                label,
+                counterparty="SwissBorg",
+                remittance=f"{assets.qty_text(qty)} {m.currency}",
+                fx_json=canonical.dumps(detail),
+            )
+    if m.delta == 0:
+        return
+    key, _kind, _name = _key(m.currency)
+    trade_key = ledger.dedup_hash(f"{SOURCE}|{m.key}|trade")
+    if conn.execute(text("SELECT 1 FROM trades WHERE dedup_key = :k"), {"k": trade_key}).first():
+        return
+    ledger.append(
+        conn,
+        "trades",
+        {
+            "account_id": account.id,
+            "trade_date": m.day,
+            "isin": key,
+            "quantity": assets.qty_text(m.delta),
+            "amount_minor": cost,
+            "currency": account.currency,
+            "dedup_key": trade_key,
+            "import_id": import_id,
+            "created_at": writer.created,
+        },
+    )

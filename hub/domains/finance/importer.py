@@ -616,6 +616,27 @@ class ImportService:
             only.add((import_id, index))
         return self.apply_all(staged, only)
 
+    def replay(self, source: str) -> list[StatementOutcome]:
+        """Réapplique les documents déjà lus d'une source (après une évolution de son
+        importeur) depuis l'archive chiffrée ; ce qui est déjà au registre est un doublon."""
+        if documents.handler_for(source) is None:
+            raise ImportRefused("import.not_applicable", f"source {source[:40]}")
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, archive_path FROM imports WHERE source = :s "
+                    "AND status IN ('applied', 'needs_review') ORDER BY received_at"
+                ),
+                {"s": source},
+            ).fetchall()
+        staged: dict[str, Staged] = {}
+        for import_id, archive_path in rows:
+            try:
+                staged[import_id] = self.reread(source, self.archiver.load(archive_path))
+            except (secrets.SecretsError, OSError, DocumentError) as exc:
+                raise ImportRefused("import.archive_unavailable", "archive illisible") from exc
+        return self.apply_all(staged)
+
     def reread(self, source: str, data: bytes) -> Staged:
         """Relit un fichier archivé selon sa source."""
         if documents.handler_for(source) is not None:
