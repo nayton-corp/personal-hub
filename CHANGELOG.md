@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+### Cryptos au registre — SwissBorg
+
+- Chaque ligne du relevé SwissBorg devient une opération du compte `crypto:swissborg` en CHF
+  (dépôt, retrait, achat, vente, rendement, frais) et un mouvement de parts : prix de revient,
+  rendements et frais comme pour IBKR. Codes `SWISSBORG/…` déclarés dans `institutions`,
+  règles système par la migration `0011_swissborg_journal`. Le coût d'une crypto vient de ses
+  opérations quand il y en a, sinon de la valeur à l'arrivée.
+- `fin imports replay <source>` : réapplique depuis l'archive les documents déjà importés d'une
+  source après une évolution de l'importeur.
+
 ### Hub générique — G5 : écrans Connexions et Comptes
 
 - Onglet Sources, carte **Connexions** (remplace « Collecteurs ») : ajouter une connexion du

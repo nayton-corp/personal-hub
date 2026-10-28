@@ -40,6 +40,13 @@ CODES: tuple[Code, ...] = (
     Code("IBKR/FX", "transfer-own", internal=True, market=True),
     Code("IBKR/INCOME", "rendement", market=True),
     Code("IBKR/FEE", "frais-placement", market=True),
+    # SwissBorg : le virement de la banque est catégorisé « Crypto », achat hors versements ; son
+    # arrivée sur la plateforme n'est donc pas un apport non plus
+    Code("SWISSBORG/DEPOSIT", "transfer-own", transfer=True, market=True),
+    Code("SWISSBORG/WITHDRAWAL", "transfer-own", transfer=True, market=True),
+    Code("SWISSBORG/TRADE", "transfer-titres", internal=True, market=True),
+    Code("SWISSBORG/INCOME", "rendement", market=True),
+    Code("SWISSBORG/FEE", "frais-placement", market=True),
 )
 
 

@@ -34,6 +34,7 @@ from hub.domains.finance.reads import (
 )
 
 STALE_DAYS = 45
+QTY_QUANTUM = Decimal("1e-12")  # quantités crypto des relevés, arrondies à 12 décimales
 EPARGNE_3A = "epargne-3a"
 PENSION_DEPOSITS = institutions.like_any(
     "bank_tx_code", institutions.prefixes(pension_deposit=True)
@@ -261,10 +262,10 @@ def holdings(conn: Connection, on_date: str) -> dict[str, Any]:
     total = sum(x.value for x in lines)
     items = []
     for x in lines:
-        if x.account_id in crypto:
+        cost = _cost(conn, x.account_id, x.isin, x.quantity, on_date)
+        if cost is None and x.account_id in crypto:
+            # portefeuille sans opérations au registre : coût à l'arrivée
             cost = _arrival_cost(positions, x.account_id, x.isin, x.quantity, on_date)
-        else:
-            cost = _cost(conn, x.account_id, x.isin, x.quantity, on_date)
         name, asset_class, sub_class = names.get(x.isin, (x.isin, None, None))
         items.append(
             {
@@ -375,7 +376,8 @@ def _cost(
             elif held > 0:
                 cost -= cost * (-q) / held
             held += q
-        if held == quantity:
+        # une crypto peut porter plus de décimales que son relevé (arrondi à 12)
+        if held.quantize(QTY_QUANTUM) == quantity.quantize(QTY_QUANTUM) and held:
             return int(quantize(cost, 0))
         row = conn.execute(
             text(

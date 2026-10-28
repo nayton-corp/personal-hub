@@ -285,8 +285,23 @@ d'entrée ou par l'import de l'app. Déclare d'abord le compte : `fin crypto add
 chaque jour où un solde bouge devient un relevé complet des positions (cryptos, et les francs en
 attente en `SYM:CHF`), avec le cours du jour tiré du fichier (contre-valeur USD ÷ quantité) et
 le change USD/CHF de ses mouvements en francs. Achat, dépôt, rendement et remise de frais
-créditent le net ; vente, retrait et frais périodiques débitent. Un échange entre deux cryptos
-est une vente puis une arrivée : le prix de revient repart de la valeur du jour de l'échange.
+créditent le net ; vente, retrait et frais périodiques débitent.
+
+Chaque ligne est aussi une opération au registre du compte, en CHF (contre-valeur USD au change
+du jour, le franc tel quel), la quantité en communication, et un mouvement de parts (`trades`)
+qui donne le prix de revient comme pour IBKR :
+
+| Ligne | Écriture | Catégorie |
+|---|---|---|
+| Dépôt, retrait (et ses frais à part) | `SWISSBORG/DEPOSIT`, `SWISSBORG/WITHDRAWAL` | `transfer-own`, appariée au virement de la banque |
+| Achat, vente (un échange = une vente + un achat) | `SWISSBORG/TRADE/BUY`, `…/SELL` | `transfer-titres` |
+| Rendement | `SWISSBORG/INCOME/YIELD` | `rendement` |
+| Frais d'échange, de retrait, sur rendement, périodiques ; remise | `SWISSBORG/FEE/…` | `frais-placement` |
+
+Aucune n'est un versement au patrimoine : le virement de la banque est déjà catégorisé
+« Crypto ». Le prix de revient d'une crypto est la valeur de ce qui a été donné en échange (net
+des frais d'échange, comptés à part). Un relevé importé avant ces opérations se rejoue depuis
+l'archive : `fin imports replay swissborg` (les positions déjà lues sont des doublons).
 Redéposer un relevé plus récent ajoute les jours nouveaux (ceux déjà lus sont des doublons) :
 il doit toujours couvrir toute la période, sinon les soldes rejoués seraient faux (un solde
 négatif fait refuser le fichier).

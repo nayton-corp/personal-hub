@@ -12,7 +12,7 @@ import pytest
 from hub.core.db import begin_immediate
 from hub.domains.finance import catalog, insights, swissborg, valuation, xlsx
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.importer import ImportRefused, Incoming
 from tests.finance.conftest import rows
 
 NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
@@ -64,7 +64,21 @@ def move(
     when: str, kind: str, ccy: str, gross: str, usd: str, fee: str = "0", note: str = ""
 ) -> list[object]:
     net = Decimal(gross) - Decimal(fee)
-    return [f"{when}:00", f"{when}:00", kind, ccy, gross, usd, fee, "0", str(net), usd, note]
+    fee_usd = Decimal(usd) * Decimal(fee) / Decimal(gross) if Decimal(gross) else Decimal(0)
+    net_usd = Decimal(usd) - fee_usd
+    return [
+        f"{when}:00",
+        f"{when}:00",
+        kind,
+        ccy,
+        gross,
+        usd,
+        fee,
+        str(fee_usd),
+        str(net),
+        str(net_usd),
+        note,
+    ]
 
 
 MOVES = [
@@ -170,8 +184,60 @@ def test_import_values_history_and_arrival_cost(finance: FinanceDomain) -> None:
     assert v.by_envelope["crypto"] == 20_000 + 79_600
     # 0.0096 BTC au dernier cours du fichier (55 000 USD le 5)
     assert later.by_envelope["crypto"] == 20_000 + 42_240
+    # coût des parts : 0.0199 achetés 796 CHF net de frais, 0.0001 reçus en rendement 4.80,
+    # puis la moitié retirée et 0.0004 de frais : 38.04 % du coût reste
     btc = {i["isin"]: i for i in h["items"]}["CRYPTO:BTC"]
-    assert btc["cost"] is not None
-    # le même relevé redéposé est un doublon
+    assert btc["cost"]["minor"] == 38_438
+    # les opérations sont au registre, en CHF au change du relevé, catégorisées par leur code
+    ops = rows(
+        finance,
+        "SELECT e.bank_tx_code, e.amount_minor, vc.category_id FROM entries e "
+        "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
+        "WHERE e.kind = 'movement' ORDER BY e.booking_date, e.seq",
+    )
+    assert ops == [
+        ("SWISSBORG/DEPOSIT", 100_000, "transfer-own"),
+        ("SWISSBORG/TRADE/SELL", -80_000, "transfer-titres"),
+        ("SWISSBORG/TRADE/BUY", 80_000, "transfer-titres"),
+        ("SWISSBORG/FEE/TRADE", -400, "frais-placement"),
+        ("SWISSBORG/INCOME/YIELD", 480, "rendement"),
+        ("SWISSBORG/WITHDRAWAL", -43_120, "transfer-own"),
+        ("SWISSBORG/FEE/WITHDRAWAL", -880, "frais-placement"),
+        ("SWISSBORG/FEE/PERIODIC", -1_600, "frais-placement"),
+    ]
+    assert rows(finance, "SELECT count(*) FROM trades") == [(6,)]
+    # rien de tout ça n'est un versement au patrimoine
+    assert later.deposits == 0
+    # le même relevé redéposé est un doublon ; le rejouer n'ajoute rien
     again = finance.importer.process([Incoming("copie.xlsx", statement())])
     assert [f.status for f in again.files] == ["duplicate"]
+    replayed = finance.importer.replay(swissborg.SOURCE)
+    assert {o.status for o in replayed} == {"applied"}
+    assert sum(o.new for o in replayed) == 0
+    assert rows(finance, "SELECT count(*) FROM entries") == [(9,)]
+
+
+def test_replay_writes_operations_of_an_earlier_import(
+    finance: FinanceDomain, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Un relevé importé avant les opérations au registre (positions seules) : `replay` les
+    ajoute depuis l'archive, sans doubler les positions."""
+    with begin_immediate(finance.engine()) as conn:
+        catalog.add_account(
+            conn,
+            institution="SwissBorg",
+            name="SwissBorg",
+            kind="crypto",
+            external_ref=swissborg.ACCOUNT,
+            currency="CHF",
+        )
+    with monkeypatch.context() as m:
+        m.setattr(swissborg, "_write_move", lambda *_a: None)
+        finance.importer.process([Incoming("account_statement.xlsx", statement())])
+    assert rows(finance, "SELECT count(*) FROM entries WHERE kind = 'movement'") == [(0,)]
+    replayed = finance.importer.replay(swissborg.SOURCE)
+    assert sum(o.new for o in replayed) == 8  # les écritures ; les 8 positions sont des doublons
+    assert sum(o.duplicates for o in replayed) == 8
+    assert rows(finance, "SELECT count(*) FROM entries WHERE kind = 'movement'") == [(8,)]
+    with pytest.raises(ImportRefused):
+        finance.importer.replay("inconnue")

@@ -23,7 +23,13 @@ def test_system_rules_match_the_declared_codes(fin: FinanceDomain) -> None:  # n
 
 
 def test_roles_keep_the_previous_lists() -> None:
-    assert transfers.TRANSFER_CODES == ("VIAC/DEPOSIT", "VIAC/WITHDRAWAL", "IBKR/DEPOSIT")
+    assert transfers.TRANSFER_CODES == (
+        "VIAC/DEPOSIT",
+        "VIAC/WITHDRAWAL",
+        "IBKR/DEPOSIT",
+        "SWISSBORG/DEPOSIT",
+        "SWISSBORG/WITHDRAWAL",
+    )
     assert valuation.NOT_DEPOSITS == (
         "VIAC/INCOME",
         "VIAC/FEE",
@@ -31,7 +37,17 @@ def test_roles_keep_the_previous_lists() -> None:
         "IBKR/FX",
         "IBKR/INCOME",
         "IBKR/FEE",
+        "SWISSBORG/DEPOSIT",
+        "SWISSBORG/WITHDRAWAL",
+        "SWISSBORG/TRADE",
+        "SWISSBORG/INCOME",
+        "SWISSBORG/FEE",
     )
-    assert institutions.prefixes(internal=True) == ("VIAC/TRADE", "IBKR/TRADE", "IBKR/FX")
+    assert institutions.prefixes(internal=True) == (
+        "VIAC/TRADE",
+        "IBKR/TRADE",
+        "IBKR/FX",
+        "SWISSBORG/TRADE",
+    )
     assert institutions.prefixes(pension_deposit=True) == ("VIAC/DEPOSIT",)
     assert institutions.like_any("c", ()) == "0"
