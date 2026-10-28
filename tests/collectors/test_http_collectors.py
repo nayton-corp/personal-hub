@@ -167,7 +167,7 @@ def market_api(broken: str | None = None) -> Fake:
 WALLETS = {
     "wallets": [
         {"account": "crypto:froid", "asset": "BTC", "addresses": ["bc1qfictive1", "bc1qfictive2"]},
-        {"account": "crypto:chaud", "asset": "ETH", "addresses": ["0xfictive"]},
+        {"account": "crypto:chaud", "asset": "ETH", "addresses": ["0x" + "fe" * 20]},
     ]
 }
 
@@ -182,7 +182,12 @@ def test_market_check_reads_latest_rates(make_env: Any) -> None:
 
 
 def test_market_run_drops_a_file_the_finance_domain_reads(make_env: Any) -> None:
-    env = make_env("market", creds=WALLETS, market={"quotes": {"GB00TEST0001": "TEST.L"}})
+    cfg = {
+        "quotes": {"GB00TEST0001": "TEST.L"},
+        "crypto": {"BTC": "bitcoin", "ETH": "ethereum"},
+        "erc20_tokens": {},
+    }
+    env = make_env("market", creds=WALLETS, market=cfg)
     fake = market_api()
     result = market.run(env, "run", Http(fake))
     assert (result.outcome, result.files, result.detail) == ("ok", 1, None)

@@ -160,6 +160,30 @@ services:
       - collector-market:/var/lib/hub-collector
       - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/market.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
 
+  collector-binance:                # Binance : Spot, Funding, Simple Earn, clé en lecture seule
+    <<: *collector
+    command: ["hub-collector", "daemon", "binance"]
+    volumes:
+      - ${HUB_INBOX}:/srv/hub/inbox
+      - collector-binance:/var/lib/hub-collector
+      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/binance.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
+
+  collector-kucoin:                 # KuCoin : comptes et Earn, clé « General » seulement
+    <<: *collector
+    command: ["hub-collector", "daemon", "kucoin"]
+    volumes:
+      - ${HUB_INBOX}:/srv/hub/inbox
+      - collector-kucoin:/var/lib/hub-collector
+      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/kucoin.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
+
+  collector-coinbase:               # Coinbase : portefeuilles, clé CDP « View » seulement
+    <<: *collector
+    command: ["hub-collector", "daemon", "coinbase"]
+    volumes:
+      - ${HUB_INBOX}:/srv/hub/inbox
+      - collector-coinbase:/var/lib/hub-collector
+      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/coinbase.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
+
   # --- lot 7 : IA locale, profil « brain » (COMPOSE_PROFILES=collectors,brain) ---
   # Passerelle MCP et assistant. Ne voit le hub que par l'API, avec ses propres jetons (« brain »
   # et « agrégats », dans brain.enc.yaml) ; joint Ollama, qui tourne en natif sur le Mac pour
@@ -188,6 +212,9 @@ volumes:
   collector-revolut: {}
   collector-ibkr: {}
   collector-market: {}
+  collector-binance: {}
+  collector-kucoin: {}
+  collector-coinbase: {}
   brain: {}
 
 networks:

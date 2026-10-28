@@ -2,6 +2,20 @@
 
 ## [Non publié]
 
+### Cryptos automatiques
+
+- Collecteur `market` : un portefeuille BTC peut se donner par sa clé publique étendue (`xpub`,
+  `ypub`, `zpub`) ; ses adresses de réception et de monnaie sont dérivées dans le conteneur
+  (embit), jusqu'à 20 adresses vides de suite, sur les quatre types d'adresse pour une `xpub`.
+  Une clé privée est refusée.
+- Ethereum : jetons USDC et USDT en plus de l'ETH (`erc20_tokens`). Solana : SOL et jetons USDC,
+  USDT (`spl_tokens`) par le RPC public. Plusieurs chaînes peuvent alimenter un même compte.
+- Un compte dont une adresse ne répond pas est laissé de côté en entier ce jour-là (détail
+  `partial wallet.<nom>:…`) ; un portefeuille vide donne un relevé à zéro.
+- Collecteurs `binance`, `kucoin` et `coinbase` (API officielles, clés en lecture seule, un
+  conteneur et un fichier de secrets chacun) : soldes de la plateforme vers `crypto:<plateforme>`.
+- Cours CoinGecko par défaut : SOL, USDC et USDT en plus de BTC et ETH.
+
 ### Lot 7 — IA locale
 
 - Outils de l'assistant : contrat `McpTool.call(args, caller)` (le cœur fournit les portées et

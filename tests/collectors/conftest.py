@@ -78,6 +78,9 @@ def make_env(tmp_path: Path, site: str, fake_hub: FakeHub):  # type: ignore[no-u
             "revolut": {"application_id": "app-test", "private_key": "x"},
             "ibkr": {"flex_token": "jeton-test", "query_id": "123456"},
             "market": {},
+            "binance": {"api_key": "cle-test", "api_secret": "secret-test"},
+            "kucoin": {"api_key": "cle-test", "api_secret": "secret-test", "passphrase": "phrase"},
+            "coinbase": {"key_name": "organizations/o/apiKeys/k", "private_key": "x"},
         }[name]
         return Env(
             name,

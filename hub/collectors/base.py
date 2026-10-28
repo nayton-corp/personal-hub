@@ -24,7 +24,7 @@ Outcome = Literal[
     "unknown",
 ]
 Kind = Literal["run", "check"]
-NAMES = ("bcf", "viac", "revolut", "ibkr", "market")
+NAMES = ("bcf", "viac", "revolut", "ibkr", "market", "binance", "kucoin", "coinbase")
 
 
 class Failure(Exception):
@@ -60,12 +60,40 @@ class MarketConfig(BaseModel):
     fx_url: str = "https://api.frankfurter.dev/v1"
     currencies: list[str] = ["EUR", "USD", "GBP"]
     coingecko_url: str = "https://api.coingecko.com/api/v3"
-    crypto: dict[str, str] = {"BTC": "bitcoin", "ETH": "ethereum"}  # symbole → id CoinGecko
+    crypto: dict[str, str] = {  # symbole → id CoinGecko
+        "BTC": "bitcoin",
+        "ETH": "ethereum",
+        "SOL": "solana",
+        "USDC": "usd-coin",
+        "USDT": "tether",
+    }
     yahoo_url: str = "https://query1.finance.yahoo.com/v8/finance/chart"
     quotes: dict[str, str] = {}  # ISIN ou symbole → symbole Yahoo (par ex. « VWRL.SW »)
     mempool_url: str = "https://mempool.space/api"
     eth_rpc_url: str = "https://ethereum-rpc.publicnode.com"
+    solana_rpc_url: str = "https://api.mainnet-beta.solana.com"
+    # jetons lus en plus de la crypto native ; les autres (souvent du spam) sont ignorés
+    erc20_tokens: dict[str, str] = {  # symbole → contrat Ethereum
+        "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "USDT": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    }
+    spl_tokens: dict[str, str] = {  # mint Solana → symbole
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": "USDC",
+        "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "USDT",
+    }
+    gap_limit: int = Field(
+        default=20, ge=1, le=100
+    )  # adresses vides de suite avant d'arrêter (xpub)
     backfill_days: int = Field(default=365, ge=1, le=365)
+
+
+class ExchangesConfig(BaseModel):
+    """Plateformes crypto (Binance, KuCoin, Coinbase) : API officielles, clés en lecture seule."""
+
+    binance_url: str = "https://api.binance.com"
+    kucoin_url: str = "https://api.kucoin.com"
+    coinbase_url: str = "https://api.coinbase.com"
+    aliases: dict[str, str] = {"ETH2": "ETH"}  # symbole de la plateforme → symbole suivi
 
 
 class CollectorConfig(BaseModel):
@@ -85,10 +113,14 @@ class CollectorConfig(BaseModel):
         "revolut": "15 7,13,19 * * *",  # trois synchros, la quatrième reste pour la main
         "ibkr": "45 6 * * 2-6",  # relevé Flex de la veille, du mardi au samedi
         "market": "15 6 * * *",  # cours de la veille, tous les jours
+        "binance": "20 6 * * *",  # soldes des plateformes, après les cours
+        "kucoin": "22 6 * * *",
+        "coinbase": "24 6 * * *",
     }
     urls: dict[str, str] = {}  # « bcf.url » : remplace une adresse de `[site]` (faux site)
     revolut: RevolutConfig = RevolutConfig()
     market: MarketConfig = MarketConfig()
+    exchanges: ExchangesConfig = ExchangesConfig()
 
     @property
     def profiles(self) -> Path:
