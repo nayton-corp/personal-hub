@@ -264,6 +264,26 @@
         "title": "CollectorLinkOut",
         "type": "object"
       },
+      "CollectorLinkUrlIn": {
+        "additionalProperties": false,
+        "description": "Adresse d'autorisation ouverte par le collecteur ; nulle : liaison finie.",
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "CollectorLinkUrlIn",
+        "type": "object"
+      },
       "CollectorListOut": {
         "properties": {
           "items": {
@@ -372,6 +392,21 @@
             ],
             "title": "Last Success At"
           },
+          "link_requested": {
+            "title": "Link Requested",
+            "type": "boolean"
+          },
+          "link_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Url"
+          },
           "mode": {
             "title": "Mode",
             "type": "string"
@@ -400,7 +435,9 @@
           "check_requested",
           "last_run",
           "last_success_at",
-          "can_enable"
+          "can_enable",
+          "link_requested",
+          "link_url"
         ],
         "title": "CollectorOut",
         "type": "object"
@@ -2559,6 +2596,101 @@
           }
         },
         "summary": "Request Check",
+        "tags": [
+          "collecteurs"
+        ]
+      }
+    },
+    "/api/collectors/{name}/link": {
+      "post": {
+        "description": "Nouveau consentement Enable Banking : le service collecteur ouvre l'autorisation dans la\nminute ; l'adresse à ouvrir apparaît ensuite dans `link_url`.",
+        "operationId": "request_link_api_collectors__name__link_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectorOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Link",
+        "tags": [
+          "collecteurs"
+        ]
+      }
+    },
+    "/api/collectors/{name}/link-url": {
+      "put": {
+        "operationId": "set_link_url_api_collectors__name__link_url_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectorLinkUrlIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectorOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Link Url",
         "tags": [
           "collecteurs"
         ]

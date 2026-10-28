@@ -36,6 +36,18 @@ sélecteur, jamais un montant ni un texte de page. Un fichier qui n'a pas la for
 
 ## Gérer les connexions
 
+**Depuis l'app** (onglet Sources, carte **Connexions**) : « Ajouter » choisit un connecteur du
+catalogue, un nom et un identifiant ; « Régler » change le nom, l'horaire (cron, vide pour
+celui du catalogue), les réglages, les portefeuilles, et remplace les identifiants (tapés une
+fois, chiffrés aussitôt, jamais réaffichés). Pour une banque Enable Banking, « Lier le compte »
+demande un consentement : le service `collector-api` ouvre l'autorisation dans la minute,
+l'app affiche « Ouvrir la banque pour valider », et la reprise de l'historique démarre au
+retour. La carte **Comptes** liste les comptes que des relevés attendent (Revolut par Enable
+Banking, portefeuilles, plateformes) et les crée par une proposition validée avec Face ID ;
+un compte Revolut s'ouvre au solde déduit de sa reprise, comme `fin revolut add-account`.
+
+**Depuis le terminal**, pour le dépannage :
+
 Les commandes supposent l'alias `hubc` de [mac.md](mac.md) et partent du clone du dépôt
 (`~/personal-hub/personal-hub`). `hub` se lance dans le conteneur `scheduler`, qui a la clé age :
 
@@ -50,9 +62,10 @@ hubc run --rm --no-deps scheduler hub connections set n26 --default-schedule
 hubc run --rm --no-deps scheduler hub connections remove n26
 ```
 
-Des secrets structurés (les portefeuilles de `market`) se donnent en YAML par l'entrée
+Des secrets sur plusieurs lignes (une clé privée PEM) se donnent en YAML par l'entrée
 standard, sans passer par un fichier en clair : `hubc run --rm -T --no-deps scheduler hub
-connections secrets market --file -`, colle le YAML puis Ctrl-D. `secrets` remplace toujours
+connections secrets revolut --file -`, colle le YAML puis Ctrl-D. `set --settings` remplace
+tous les réglages de la connexion. `secrets` remplace toujours
 tous les secrets de la connexion. L'app fait la même chose par `GET|POST
 /api/collectors/connections`, `PATCH …/{id}`, `PUT …/{id}/secrets` et `DELETE …/{id}`.
 
@@ -107,7 +120,8 @@ Si la banque a changé sa page, seul `hub/collectors/<banque>/selectors.toml` es
 ## Mise en place (une fois)
 
 Les commandes supposent l'alias `hubc` de [mac.md](mac.md) et partent du clone du dépôt
-(`~/personal-hub/personal-hub`).
+(`~/personal-hub/personal-hub`). Les étapes 3 et suivantes se font aussi dans l'app (carte
+Connexions), sauf les premiers passages qui demandent un code tapé au terminal.
 
 1. **Sujet ntfy.** Installe ntfy sur le téléphone, choisis un sujet long et aléatoire
    (`openssl rand -hex 16`), abonne-toi, puis ajoute-le au fichier de secrets principal :
@@ -193,7 +207,8 @@ consentement (90 jours ensuite) : la liaison lance la reprise complète dans la 
    ```
    Si elle n'apparaît que sous un autre pays, change `aspsp_country` avec `hub connections
    set revolut --settings '{"aspsp_name": "Revolut", "aspsp_country": "…"}'`.
-4. Lie le compte, sur le Mac connecté au tailnet :
+4. Lie le compte : dans l'app, « Régler » puis « Lier le compte » ; ou sur le Mac connecté au
+   tailnet :
    ```
    hubc run --rm -it collector-api hub-collector link revolut
    ```
@@ -247,10 +262,13 @@ CoinGecko) et, pour un titre qui n'a pas d'autre source de cours, `quotes = { "<
 "<symbole Yahoo>" }`. Le premier passage reprend un an d'historique (la limite gratuite de
 CoinGecko) ; les suivants une semaine, pour combler un jour manqué.
 
-Les adresses des portefeuilles sont publiques mais disent ce que tu possèdes : elles vont dans
-les secrets de la connexion (`hub connections secrets market --file -`, voir plus haut) :
+Les portefeuilles se règlent dans l'app (« Régler » sur « Cours et cryptos ») : un compte
+`crypto:<nom>`, la crypto, et les adresses ou la clé publique étendue, une par ligne. Ce sont des
+réglages de la connexion, visibles dans l'app : des adresses publiques et des clés publiques,
+jamais une clé privée (refusée). Avant G5 ils vivaient dans les secrets ; `make deploy` les en
+sort une fois. Seule la clé CoinGecko facultative (`coingecko_key`) reste un secret. Au
+terminal, la forme est la même, dans `--settings` :
 ```yaml
-coingecko_key: ""           # facultatif : clé « demo » gratuite, plus de marge de requêtes
 wallets:
   - account: "crypto:ledger"         # fin crypto add-wallet ledger
     asset: "BTC"

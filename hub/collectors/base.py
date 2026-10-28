@@ -78,6 +78,8 @@ class MarketConfig(BaseModel):
     }
     yahoo_url: str = "https://query1.finance.yahoo.com/v8/finance/chart"
     quotes: dict[str, str] = {}  # ISIN ou symbole → symbole Yahoo (par ex. « VWRL.SW »)
+    # portefeuilles réglés dans l'app (G5) ; ceux des secrets d'avant G5 s'y ajoutent
+    wallets: list[dict[str, Any]] = []
     mempool_url: str = "https://mempool.space/api"
     binance_url: str = "https://api.binance.com"  # clôtures publiques, pour l'historique
     mempool_pause_seconds: int = Field(default=1, ge=0, le=10)  # entre deux adresses BTC

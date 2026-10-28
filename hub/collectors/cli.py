@@ -25,7 +25,7 @@ import typer
 from hub.collectors import base
 from hub.collectors.base import Failure
 from hub.collectors.client import HubClient
-from hub.collectors.runtime import Assigned, Env, execute, run_forever
+from hub.collectors.runtime import Assigned, Env, execute, run_forever, start_link
 from hub.core import logging as hub_logging
 from hub.core.clock import now_iso
 from hub.core.settings import get_settings
@@ -91,12 +91,18 @@ def daemon(
     runner: Annotated[str | None, typer.Argument(help="api ou browser")] = None,
 ) -> None:
     """Boucle du service : il demande chaque minute ses connexions au hub, lance les runs
-    planifiés des connexions actives et les contrôles demandés depuis l'app."""
+    planifiés des connexions actives, les contrôles et les consentements demandés depuis
+    l'app."""
     settings = get_settings()
     hub_logging.configure(settings.log_level)
     name = _runner(runner)
     client = _client(name)
-    run_forever(lambda item: env_for(item, client), name, base.config(settings), client)
+    origin = settings.server.public_origin
+
+    def linker(env: Env) -> object:
+        return start_link(env, f"{origin}/api/collectors/{env.name}/callback")
+
+    run_forever(lambda item: env_for(item, client), name, base.config(settings), client, linker)
 
 
 @app.command()

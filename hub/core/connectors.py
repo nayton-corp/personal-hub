@@ -111,7 +111,7 @@ CATALOG: tuple[Connector, ...] = (
         (),  # portefeuilles publics et clé CoinGecko facultatifs
         "15 6 * * *",  # cours de la veille, tous les jours
         ("market",),
-        ("currencies", "crypto", "quotes"),
+        ("currencies", "crypto", "quotes", "wallets"),
     ),
     Connector(
         "binance",

@@ -2,6 +2,28 @@
 
 ## [Non publié]
 
+### Hub générique — G5 : écrans Connexions et Comptes
+
+- Onglet Sources, carte **Connexions** (remplace « Collecteurs ») : ajouter une connexion du
+  catalogue, régler son nom, son horaire, ses réglages et ses portefeuilles, remplacer ses
+  identifiants (chiffrés à la saisie, jamais réaffichés), la retirer. Désactiver, Réactiver et
+  Contrôler restent.
+- Consentement Enable Banking depuis l'app : `POST /api/collectors/{id}/link` ; le service
+  `collector-api` ouvre l'autorisation dans la minute, dans un fil à part, et remonte l'adresse
+  (`PUT /api/collectors/{id}/link-url`, portée `collector`) que l'app affiche ; la liaison est
+  déclarée comme un contrôle. Migration core `0005_collector_link`.
+- Portefeuilles crypto : réglage `wallets` de la connexion `market` (adresses et clés
+  publiques, vérifiées, clé privée refusée) au lieu des secrets ; `hub connections import`
+  (donc `make deploy`) les sort des secrets une fois. La clé CoinGecko reste un secret.
+- Carte **Comptes** : comptes attendus par des relevés (`GET /api/finance/accounts/pending`,
+  sans montant), portefeuilles et plateformes sans compte, créés par une proposition
+  `create_account` validée avec Face ID. Un compte Revolut s'ouvre au solde déduit de sa
+  reprise. `/api/finance/accounts` donne `external_ref`.
+- Les fichiers de l'app sont servis en `Cache-Control: no-cache` et le service worker recharge
+  sa copie depuis le serveur : après un déploiement, Safari ne mélange plus un ancien module et
+  un nouveau (l'app restait sur « Chargement… »).
+- Notifications et page de retour renvoient vers l'app au lieu du terminal.
+
 ### Hub générique — G4 : connexions en base, deux services collecteurs
 
 - Ce que l'instance collecte est une liste de connexions dans `core.db` (migration

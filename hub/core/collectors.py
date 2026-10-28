@@ -68,6 +68,18 @@ class State:
     check_requested_at: str | None
     last_run: dict[str, Any] | None = None
     last_success_at: str | None = None
+    link_requested_at: str | None = None
+    link_url: str | None = None
+    link_url_at: str | None = None
+
+    @property
+    def open_link(self) -> str | None:
+        """L'adresse d'autorisation, tant que le retour peut encore être accepté."""
+        if not self.link_url or not self.link_url_at:
+            return None
+        if utcnow() - parse_iso(self.link_url_at) > timedelta(minutes=LINK_MINUTES):
+            return None
+        return self.link_url
 
     def public(self) -> dict[str, Any]:
         return {
@@ -82,6 +94,8 @@ class State:
             "last_run": self.last_run,
             "last_success_at": self.last_success_at,
             "can_enable": self.mode != "enabled" and _clean(self.last_run),
+            "link_requested": self.link_requested_at is not None,
+            "link_url": self.open_link,
         }
 
 
@@ -147,8 +161,8 @@ def get(conn: Connection, name: str) -> State:
     connection = _ensure(conn, name)
     row = conn.execute(
         text(
-            "SELECT mode, consecutive_failures, since, check_requested_at FROM collector_state "
-            "WHERE collector = :c"
+            "SELECT mode, consecutive_failures, since, check_requested_at, link_requested_at, "
+            "link_url, link_url_at FROM collector_state WHERE collector = :c"
         ),
         {"c": name},
     ).one()
@@ -171,6 +185,9 @@ def get(conn: Connection, name: str) -> State:
         row.check_requested_at,
         recent[0] if recent else None,
         success,
+        row.link_requested_at,
+        row.link_url,
+        row.link_url_at,
     )
 
 
@@ -304,6 +321,34 @@ def request_check(conn: Connection, name: str, by: str) -> State:
     _ensure(conn, name)
     _set(conn, name, check_requested_at=now_iso())
     audit(conn, by, "collector.check_requested", f"collector:{name}", "ok")
+    return get(conn, name)
+
+
+def request_link(conn: Connection, name: str, by: str) -> State:
+    """Nouveau consentement demandé depuis l'app : le service qui exécute la connexion ouvre
+    l'autorisation dans la minute et remonte l'adresse à ouvrir."""
+    connection = _ensure(conn, name)
+    if connection.connector != "enable_banking":
+        raise Problem("validation.params", "seule une connexion Enable Banking se lie ainsi")
+    if not connection.ready:
+        raise Problem("validation.params", "secrets de la connexion à donner d'abord")
+    _set(conn, name, link_requested_at=now_iso(), link_url=None, link_url_at=None)
+    audit(conn, by, "collector.link_requested", f"collector:{name}", "ok")
+    return get(conn, name)
+
+
+def set_link_url(conn: Connection, name: str, url: str | None) -> State:
+    """Le collecteur a pris la demande : l'adresse à ouvrir, ou rien (liaison finie)."""
+    _ensure(conn, name)
+    if url is not None and (not url.startswith("https://") or len(url) > 4000):
+        raise Problem("validation.params", "adresse d'autorisation invalide")
+    _set(
+        conn,
+        name,
+        link_requested_at=None,
+        link_url=url,
+        link_url_at=now_iso() if url else None,
+    )
     return get(conn, name)
 
 

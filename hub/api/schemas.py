@@ -210,6 +210,8 @@ class CollectorOut(BaseModel):
     last_run: CollectorRunOut | None
     last_success_at: str | None
     can_enable: bool
+    link_requested: bool  # consentement demandé depuis l'app, pas encore pris
+    link_url: str | None  # adresse d'autorisation à ouvrir, quelques minutes
 
 
 class CollectorListOut(BaseModel):
@@ -337,6 +339,13 @@ class CollectorNotifyOut(BaseModel):
 class CollectorLinkIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     state: str = Field(min_length=16, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class CollectorLinkUrlIn(BaseModel):
+    """Adresse d'autorisation ouverte par le collecteur ; nulle : liaison finie."""
+
+    model_config = ConfigDict(extra="forbid")
+    url: str | None = Field(default=None, max_length=4000)
 
 
 class CollectorLinkOut(BaseModel):

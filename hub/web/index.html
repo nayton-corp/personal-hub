@@ -183,10 +183,19 @@
     <!-- ================= SOURCES ET RÉGLAGES ================= -->
     <section id="sources" class="stack" data-tab hidden>
       <div class="card">
-        <div class="head"><h2>Collecteurs</h2><span class="note">téléchargent les exports officiels</span></div>
+        <div class="head"><h2>Connexions</h2><button class="link" id="conn-add" type="button">Ajouter</button></div>
+        <p class="note">Banques, plateformes et cours que le hub collecte. Les identifiants sont chiffrés à la saisie et ne s'affichent plus jamais.</p>
         <div id="coll-list"></div>
         <p id="coll-msg" class="note" role="status"></p>
       </div>
+      <div class="card form" id="conn-editor" hidden></div>
+      <div class="card">
+        <div class="head"><h2>Comptes</h2><button class="link" id="acct-add" type="button">Ajouter</button></div>
+        <p class="note">Les relevés d'un compte inconnu attendent sa création, validée avec Face ID.</p>
+        <div id="acct-pending"></div>
+        <p id="acct-msg" class="note" role="status"></p>
+      </div>
+      <div class="card form" id="acct-editor" hidden></div>
       <div class="card">
         <div class="head"><h2>Fraîcheur des comptes</h2><span class="note">au-delà de 45 jours : à rafraîchir</span></div>
         <div id="fresh-list"></div>

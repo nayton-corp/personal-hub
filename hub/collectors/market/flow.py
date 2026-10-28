@@ -459,10 +459,12 @@ _ACCOUNT = re.compile(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$")
 
 
 def wallet_entries(env: Env) -> list[dict[str, Any]]:
-    """Portefeuilles des secrets, vérifiés avant tout appel : une erreur ici est `auth_error`."""
-    wallets = env.creds.get("wallets") or []
-    if not isinstance(wallets, list):
+    """Portefeuilles de la connexion (réglages, et secrets d'avant G5), vérifiés avant tout
+    appel : une erreur ici est `auth_error`."""
+    legacy = env.creds.get("wallets") or []
+    if not isinstance(legacy, list):
         raise Failure("auth_error", "secret:wallets")
+    wallets = [*env.cfg.market.wallets, *legacy]
     out = []
     for w in wallets:
         if not isinstance(w, dict):

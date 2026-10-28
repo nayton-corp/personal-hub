@@ -64,7 +64,7 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
     rows = conn.execute(
         text(
             "SELECT a.id, a.institution, a.name, a.kind, a.currency, a.iban, a.liquid, "
-            "a.budget_account, coalesce(b.balance_minor, 0), b.last_booking "
+            "a.budget_account, coalesce(b.balance_minor, 0), b.last_booking, a.external_ref "
             "FROM accounts a LEFT JOIN v_balances b ON b.account_id = a.id "
             "ORDER BY a.institution, a.name"
         )
@@ -80,6 +80,7 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
                 "name": r[2],
                 "kind": r[3],
                 "iban": mask_iban(r[5]),
+                "external_ref": r[10],
                 "liquid": bool(r[6]),
                 "budget_account": bool(r[7]),
                 "balance": money(r[8], r[4]),

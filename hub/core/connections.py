@@ -28,6 +28,9 @@ ID = re.compile(r"^[a-z][a-z0-9-]{1,39}$")
 RESERVED = frozenset({"catalog", "connections", "runner"})  # segments de route
 MAX_SETTINGS = 16_384
 MAX_SECRETS = 65_536
+MAX_WALLETS = 50
+WALLET_ASSETS = ("BTC", "ETH", "SOL")
+WALLET_ACCOUNT = re.compile(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$")
 _COLUMNS = "id, connector, label, schedule, settings, secrets, secrets_at, created_at, updated_at"
 
 
@@ -159,7 +162,38 @@ def clean_settings(spec: connectors.Connector, value: dict[str, Any]) -> dict[st
         raise Problem("validation.params", f"réglages inconnus : {', '.join(unknown)}")
     if len(json.dumps(value)) > MAX_SETTINGS:
         raise Problem("validation.params", "réglages trop longs")
+    if "wallets" in value:
+        value = {**value, "wallets": clean_wallets(value["wallets"])}
     return value
+
+
+def clean_wallets(value: Any) -> list[dict[str, Any]]:
+    """Portefeuilles suivis par le connecteur `market` : des adresses publiques ou la clé
+    publique étendue d'un compte BTC, jamais une clé privée. Le collecteur revérifie tout."""
+    if not isinstance(value, list) or len(value) > MAX_WALLETS:
+        raise Problem("validation.params", f"portefeuilles : une liste, {MAX_WALLETS} au plus")
+    out = []
+    for w in value:
+        if not isinstance(w, dict):
+            raise Problem("validation.params", "portefeuille : un objet")
+        account = str(w.get("account") or "")
+        asset = str(w.get("asset") or "").upper()
+        addresses = w.get("addresses") or []
+        xpubs = w.get("xpubs") or ([w["xpub"]] if w.get("xpub") else [])
+        if not WALLET_ACCOUNT.match(account):
+            raise Problem("validation.params", "portefeuille : compte crypto:<nom>")
+        if asset not in WALLET_ASSETS:
+            raise Problem("validation.params", "portefeuille : BTC, ETH ou SOL")
+        if not isinstance(addresses, list) or not all(isinstance(a, str) for a in addresses):
+            raise Problem("validation.params", "portefeuille : adresses en liste de textes")
+        if not isinstance(xpubs, list) or not all(isinstance(x, str) for x in xpubs):
+            raise Problem("validation.params", "portefeuille : clé publique en texte")
+        if not (addresses or xpubs) or (xpubs and asset != "BTC"):
+            raise Problem("validation.params", "portefeuille : adresses, ou xpub pour BTC")
+        if any(x[1:4] == "prv" for x in xpubs):
+            raise Problem("validation.params", "portefeuille : clé privée refusée")
+        out.append({**w, "account": account, "asset": asset})
+    return out
 
 
 def _required(spec: connectors.Connector, value: dict[str, Any]) -> dict[str, Any]:
@@ -277,6 +311,19 @@ def set_secrets(
     return require(conn, connection_id)
 
 
+def clear_secrets(conn: Db, connection_id: str, by: str) -> Connection:
+    require(conn, connection_id)
+    conn.execute(
+        text(
+            "UPDATE connections SET secrets = NULL, secrets_at = NULL, updated_at = :at "
+            "WHERE id = :i"
+        ),
+        {"i": connection_id, "at": now_iso()},
+    )
+    audit(conn, by, "connection.secrets_cleared", f"connection:{connection_id}", "ok")
+    return require(conn, connection_id)
+
+
 def delete(conn: Db, connection_id: str, by: str) -> None:
     """Retire la connexion et son état ; l'historique des runs reste."""
     require(conn, connection_id)
@@ -354,6 +401,7 @@ def import_legacy(
             )
         if current.secrets is not None:
             report.kept.append(name)
+            _move_wallets(conn, current, key_file, recipient, by)
             continue
         try:
             set_secrets(conn, name, values, recipient, by)
@@ -361,7 +409,27 @@ def import_legacy(
             report.incomplete.append(name)
             continue
         report.imported.append(name)
+        _move_wallets(conn, require(conn, name), key_file, recipient, by)
     return report
+
+
+def _move_wallets(conn: Db, current: Connection, key_file: Path, recipient: str, by: str) -> None:
+    """G5 : les portefeuilles passent des secrets aux réglages, où l'app les montre et les
+    modifie (des adresses publiques et des clés publiques, pas des secrets d'accès)."""
+    if current.connector != "market" or current.secrets is None or "wallets" in current.settings:
+        return
+    values = json.loads(secrets.decrypt_with(key_file, current.secrets))
+    wallets = values.pop("wallets", None) if isinstance(values, dict) else None
+    if not wallets:
+        return
+    try:
+        update(conn, current.id, by, settings={**current.settings, "wallets": wallets})
+    except Problem:  # un portefeuille que l'app refuserait : il reste dans les secrets
+        return
+    if values:
+        set_secrets(conn, current.id, values, recipient, by)
+    else:
+        clear_secrets(conn, current.id, by)
 
 
 def _legacy_settings(connector: str, raw: dict[str, Any]) -> dict[str, Any]:

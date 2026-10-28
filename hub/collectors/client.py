@@ -92,6 +92,10 @@ class HubClient:
         except HubUnavailable:
             return False
 
+    def set_link_url(self, name: str, url: str | None) -> None:
+        """Adresse d'autorisation à afficher dans l'app ; `None` quand la liaison est finie."""
+        self._call("PUT", f"/{name}/link-url", {"url": url})
+
     def register_link(self, name: str, state: str) -> str:
         return str(self._call("POST", f"/{name}/links", {"state": state})["expires_at"])
 

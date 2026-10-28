@@ -287,3 +287,60 @@ def test_hub_client(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     with pytest.raises(HubUnavailable):
         c.state("bcf")
+
+
+# --- consentement demandé depuis l'app (G5) --------------------------------------------------
+
+EB = Assigned("revolut", "enable_banking", "Revolut", _schedule("enable_banking"), {}, None)
+
+
+def test_tick_hands_a_requested_link_to_the_linker(tmp_path: Path) -> None:
+    hub = FakeHub(link_requested=True)
+    started: list[str] = []
+    log: list[tuple[str, Kind]] = []
+    done = tick(
+        lambda item: _env(tmp_path, hub, item.id),
+        [EB, BCF],
+        hub,  # type: ignore[arg-type]
+        MONDAY_0730 + timedelta(minutes=1),
+        poll_checks=True,
+        runner=_runner(log),
+        linker=lambda env: started.append(env.name),
+    )
+    assert started == ["revolut"]  # BCF ne se lie pas : rien ne part pour elle
+    assert done == [("revolut", "link", "started")]
+    assert log == []
+
+
+def test_link_now_posts_the_url_then_clears_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from hub.collectors import runtime
+    from hub.collectors.revolut import flow
+
+    hub = FakeHub()
+    seen: list[str] = []
+
+    def fake_link(env: Env, redirect: str, show: Any, **_kw: Any) -> Result:
+        seen.append(redirect)
+        show("https://bank.example.invalid/auth")
+        return Result("ok", 2)
+
+    monkeypatch.setattr(flow, "link", fake_link)
+    env = _env(tmp_path, hub, "revolut")
+    assert runtime.link_now(env, "https://hub.example/cb").outcome == "ok"
+    assert seen == ["https://hub.example/cb"]
+    assert hub.link_urls == ["https://bank.example.invalid/auth", None]
+    assert hub.runs == [("revolut", "check", "ok")]
+
+    def refused(*_a: Any, **_kw: Any) -> Result:
+        raise Failure("auth_pending_timeout", "link.callback")
+
+    monkeypatch.setattr(flow, "link", refused)
+    thread = runtime.start_link(env, "https://hub.example/cb")
+    assert thread is not None
+    assert runtime.start_link(env, "https://hub.example/cb") is None or not thread.is_alive()
+    thread.join(5)
+    assert "revolut" not in runtime.LINKING
+    assert hub.runs[-1] == ("revolut", "check", "auth_pending_timeout")
+    assert hub.link_urls[-1] is None

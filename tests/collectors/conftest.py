@@ -23,9 +23,19 @@ class FakeHub:
     notified: list[str] = field(default_factory=list)
     links: dict[str, str | None] = field(default_factory=dict)
     code: str = "code-retour"
+    link_requested: bool = False
+    link_urls: list[str | None] = field(default_factory=list)
 
     def state(self, name: str) -> dict[str, Any]:
-        return {"name": name, "mode": self.mode, "check_requested": self.check_requested}
+        return {
+            "name": name,
+            "mode": self.mode,
+            "check_requested": self.check_requested,
+            "link_requested": self.link_requested,
+        }
+
+    def set_link_url(self, name: str, url: str | None) -> None:
+        self.link_urls.append(url)
 
     def report(self, name: str, kind: Kind, result: Result, started: str, ended: str) -> None:
         self.runs.append((name, kind, result.outcome))

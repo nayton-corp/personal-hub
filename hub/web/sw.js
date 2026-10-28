@@ -1,11 +1,13 @@
 // Service worker minimal : met en cache la coquille de l'app, jamais les réponses de l'API.
-const CACHE = "hub-shell-v8";
-const SHELL = ["/", "/index.html", "/app.js", "/store.js", "/finance.js", "/proposals.js", "/charts.js",
+const CACHE = "hub-shell-v9";
+const SHELL = ["/", "/index.html", "/app.js", "/store.js", "/finance.js", "/proposals.js", "/connections.js", "/charts.js",
   "/format.js", "/webauthn.js", "/styles.css", "/vendor/d3.v7.9.0.min.js",
   "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // « reload » : la copie hors ligne vient du serveur, jamais du cache HTTP du navigateur
+  const fresh = SHELL.map((u) => new Request(u, { cache: "reload" }));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(fresh)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {
