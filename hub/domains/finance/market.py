@@ -3,7 +3,7 @@ par le collecteur « market ».
 
 Le fichier porte trois listes, chacune facultative :
 
-- `fx` : cours de change de la BCE (1 devise = rate CHF), vers `fx_rates` ;
+- `fx` : cours de change de la BCE (1 devise = rate dans la devise de base), vers `fx_rates` ;
 - `prices` : cours quotidiens (cryptos, titres cotés), vers `prices` ;
 - `balances` : solde d'un portefeuille crypto relevé sur la chaîne (adresses publiques), qui
   devient un relevé de positions du compte `crypto:<nom>` à cette date.
@@ -25,7 +25,7 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.core.ids import urn
-from hub.core.money import DECIMAL_CONTEXT
+from hub.core.money import DECIMAL_CONTEXT, base_currency
 from hub.domains.finance import assets, catalog, ledger
 from hub.domains.finance.assets import AssetError, DocumentError, Result
 
@@ -223,11 +223,11 @@ def apply_balance(conn: Connection, import_id: str, b: Balance) -> Result:
     if account is None:
         return result.review("unknown_account")
     result.account_id = account.id
-    if account.kind != "crypto" or account.currency != "CHF":
+    if account.kind != "crypto" or account.currency != base_currency():
         return result.review("currency_mismatch")
     known = price_at(conn, b.key, b.on_date)
     with localcontext(DECIMAL_CONTEXT):
-        value, ccy = (b.quantity * known[0], known[1]) if known else (Decimal(0), "CHF")
+        value, ccy = (b.quantity * known[0], known[1]) if known else (Decimal(0), account.currency)
     if known is None:
         result.reasons.add("missing_price")  # observation : la valeur suivra le premier cours
     assets.upsert_instrument(conn, b.key, None, kind="crypto", symbol=assets.symbol_of(b.key))

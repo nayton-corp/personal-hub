@@ -37,7 +37,7 @@ from sqlalchemy import Connection, text
 from hub.core import canonical
 from hub.core.clock import now_iso
 from hub.core.ids import urn
-from hub.core.money import DECIMAL_CONTEXT, Money
+from hub.core.money import DECIMAL_CONTEXT, Money, base_currency
 from hub.domains.finance import assets, catalog, ledger, rules
 from hub.domains.finance.assets import AssetError, DocumentError, Result
 
@@ -685,7 +685,7 @@ def _write(
         result.new += held
 
     for r in st.rates:
-        if r.quote == "CHF" and assets.known_currency(r.base):
+        if r.quote == base_currency() and assets.known_currency(r.base):
             assets.add_fx(conn, r.on_date, r.base, r.quote, r.rate, "ibkr")
 
     # soldes de fin : points de contrôle et comparaison au registre (observation)

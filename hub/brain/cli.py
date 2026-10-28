@@ -148,7 +148,9 @@ def check() -> None:
     typer.echo(f"modèle : ok ({cfg.model})")
     summary = box.call("finance_month_summary", {})
     expected = None
+    currency = "CHF"
     if not summary.is_error:
+        currency = str(summary.data.get("currency") or currency)
         for c in summary.data["by_category"]:
             if c["category"] == CHECK_CATEGORY:
                 expected = c["amount"]
@@ -158,9 +160,9 @@ def check() -> None:
     if expected is None:
         typer.echo("contrôle : aucune dépense « restaurants » ce mois, rien à comparer")
     elif expected in answer.text or expected.replace(".", ",") in answer.text:
-        typer.echo(f"contrôle : ok, la réponse contient {expected} CHF")
+        typer.echo(f"contrôle : ok, la réponse contient {expected} {currency}")
     else:
-        typer.echo(f"contrôle : écart, l'outil donne {expected} CHF")
+        typer.echo(f"contrôle : écart, l'outil donne {expected} {currency}")
         ok = False
     if not ok:
         raise typer.Exit(1)

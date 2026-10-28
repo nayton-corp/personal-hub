@@ -1,5 +1,14 @@
 // Mise en forme suisse : 12'345 CHF, 12,3 %. Les montants arrivent en {minor, currency, display}.
 
+// Devise de base de l'instance, donnée par le profil (HUB_CURRENCY) ; CHF jusqu'à sa réponse.
+let baseCcy = "CHF";
+export const base = () => baseCcy;
+export function setBase(code) {
+  const changed = Boolean(code) && code !== baseCcy;
+  if (changed) baseCcy = code;
+  return changed;
+}
+
 const group = (s) => s.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
 
 export const units = (m) => (m == null ? null : m.minor / 100);

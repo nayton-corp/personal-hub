@@ -1,7 +1,7 @@
 // Graphiques d3 repris du prototype (L2-03). d3 v7 est servi par le hub (vendor/), jamais par
 // un CDN : la CSP n'autorise que script-src 'self'. Les couleurs passent par style() (CSSOM),
 // qu'autorise style-src 'self', et jamais par un attribut style.
-import { MOIS, MOIS_L, chf, date, el, pct } from "./format.js";
+import { MOIS, MOIS_L, base, chf, date, el, pct } from "./format.js";
 
 const d3 = () => window.d3;
 
@@ -157,7 +157,7 @@ export function months(box, series) {
     .attr("height", (d) => Math.max(0, y(d.p[0]) - y(d.p[1]))).attr("width", x.bandwidth()).attr("rx", 4)
     .on("mousemove", (ev, d) => {
       const [px, py] = D.pointer(ev, box);
-      tipAt(box, tip, px, py, [MOIS_L[Number(d.p.data.month.slice(5, 7)) - 1], `${label[d.key]} ${chf(d.p[1] - d.p[0])} CHF`]);
+      tipAt(box, tip, px, py, [MOIS_L[Number(d.p.data.month.slice(5, 7)) - 1], `${label[d.key]} ${chf(d.p[1] - d.p[0])} ${base()}`]);
     })
     .on("mouseleave", () => { tip.style.display = "none"; });
 }
@@ -218,7 +218,7 @@ export function sankey(box, flows) {
       .attr("fill-opacity", 0.25).style("fill", c)
       .on("mousemove", (ev) => {
         const [px, py] = D.pointer(ev, box);
-        tipAt(box, tip, px, py, [label, `${chf(v)} CHF · ${pct(v / total)}`]);
+        tipAt(box, tip, px, py, [label, `${chf(v)} ${base()} · ${pct(v / total)}`]);
       })
       .on("mouseleave", () => { tip.style.display = "none"; });
   };

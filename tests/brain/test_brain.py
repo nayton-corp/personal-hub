@@ -297,7 +297,7 @@ def test_suggest_stops_cleanly(
 
     ctx.settings = ctx.settings.model_copy(update={"auth": Auth(token_proposals_per_hour=1)})
     box = box_for(client, ctx, "brain")
-    box.call("finance_propose_budget", {"category": "divers", "amount_chf": "1"})
+    box.call("finance_propose_budget", {"category": "divers", "amount": "1"})
     report = suggest(
         box, Scripted(lambda _m: Reply('{"category": "divers", "reason": "x"}')), Memory(tmp_path)
     )

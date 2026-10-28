@@ -23,7 +23,7 @@ from decimal import Decimal, localcontext
 from sqlalchemy import Connection
 
 from hub.core.ids import urn
-from hub.core.money import DECIMAL_CONTEXT
+from hub.core.money import DECIMAL_CONTEXT, base_currency
 from hub.domains.finance import assets, catalog, ledger
 from hub.domains.finance.assets import AssetError, DocumentError, Result
 
@@ -121,7 +121,7 @@ def apply_snapshot(conn: Connection, import_id: str, s: Snapshot, source: str = 
     if account is None:
         return result.review("unknown_account")
     result.account_id = account.id
-    if account.kind not in ("securities", "crypto") or account.currency != "CHF":
+    if account.kind not in ("securities", "crypto") or account.currency != base_currency():
         return result.review("currency_mismatch")
     for r in s.rows:
         assets.upsert_instrument(

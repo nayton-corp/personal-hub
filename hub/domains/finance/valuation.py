@@ -1,11 +1,13 @@
-"""Valeur du patrimoine à une date, par enveloppe, en CHF (tickets L2-01, L2-02, L4-06 et lot 6).
+"""Valeur du patrimoine à une date, par enveloppe, dans la devise de base (HUB_CURRENCY, CHF par
+défaut ; tickets L2-01, L2-02, L4-06 et lot 6).
 
 La valeur d'un compte est son solde au registre (écritures, ouverture comprise), sauf pour un
 compte qui porte des positions (VIAC, IBKR, portefeuille crypto, placements saisis à la main) :
-ses parts à la date, fois le dernier cours connu, converti en CHF au cours de change de la date.
+ses parts à la date, fois le dernier cours connu, converti dans la devise de base au cours de
+change de la date.
 Les parts sont celles du dernier relevé de positions, plus les achats et ventes postérieurs ;
 sans aucun cours, le compte garde son solde au registre et est signalé dans `missing_prices`.
-Un compte à positions est tenu en CHF : sa valeur est toujours en CHF.
+Un compte à positions est tenu dans la devise de base : sa valeur y est toujours exprimée.
 
 Les versements cumulés sont toutes les écritures, sauf le rendement, les frais et les
 mouvements internes d'un courtier (codes VIAC/INCOME, VIAC/FEE, IBKR/TRADE, IBKR/FX,
@@ -27,10 +29,9 @@ from decimal import Decimal, localcontext
 
 from sqlalchemy import Connection, text
 
-from hub.core.money import DECIMAL_CONTEXT, Money
+from hub.core.money import DECIMAL_CONTEXT, Money, base_currency
 from hub.domains.finance import institutions
 
-BASE = "CHF"
 # enveloppes de by_envelope_json (spécification, section 2), tirées du type de compte
 ENVELOPES = {"cash": "cash", "pension": "pilier3a", "securities": "titres", "crypto": "crypto"}
 ENVELOPE_ORDER = ("cash", "pilier3a", "titres", "crypto")
@@ -79,45 +80,46 @@ class Line:
     quantity: Decimal
     price: Decimal | None  # dans `currency` ; None sans cours ou sans change
     price_date: str | None
-    value: int  # centimes CHF ; 0 sans cours
-    currency: str = BASE  # devise du cours
+    value: int  # centimes de la devise de base ; 0 sans cours
+    currency: str = field(default_factory=base_currency)  # devise du cours
 
 
 class FxTable:
-    """Cours vers CHF par devise, triés par date ; lus une fois par calcul."""
+    """Cours vers la devise de base, par devise, triés par date ; lus une fois par calcul."""
 
     def __init__(self, conn: Connection, currencies: Sequence[str] | None = None) -> None:
         if currencies is None:
             currencies = list(conn.execute(text("SELECT code FROM currencies")).scalars())
+        self.base = base_currency()
         self._rates: dict[str, list[tuple[str, Decimal]]] = {}
         self._dates: dict[str, list[str]] = {}
-        for ccy in sorted(set(currencies) - {BASE}):
+        for ccy in sorted(set(currencies) - {self.base}):
             rows = conn.execute(
                 text(
                     "SELECT on_date, rate FROM fx_rates WHERE base = :b AND quote = :q "
                     "ORDER BY on_date, source"
                 ),
-                {"b": ccy, "q": BASE},
+                {"b": ccy, "q": self.base},
             ).fetchall()
             self._rates[ccy] = [(r[0], Decimal(r[1])) for r in rows]
             self._dates[ccy] = [r[0] for r in rows]
 
     def rate(self, currency: str, on_date: str) -> Decimal | None:
-        if currency == BASE:
+        if currency == self.base:
             return Decimal(1)
         k = bisect.bisect_right(self._dates.get(currency, []), on_date)
         return self._rates[currency][k - 1][1] if k else None
 
     def convert(self, amount: Decimal, currency: str, on_date: str) -> int | None:
-        """Montant décimal dans `currency` → centimes CHF, ou None sans cours."""
+        """Montant décimal dans `currency` → centimes de la devise de base, ou None sans cours."""
         rate = self.rate(currency, on_date)
         if rate is None:
             return None
         with localcontext(DECIMAL_CONTEXT):
-            return Money.from_decimal(amount * rate, BASE).minor
+            return Money.from_decimal(amount * rate, self.base).minor
 
     def to_base(self, minor: int, currency: str, on_date: str) -> int | None:
-        if currency == BASE:
+        if currency == self.base:
             return minor
         return self.convert(Money(minor, currency).to_decimal(), currency, on_date)
 
@@ -214,22 +216,23 @@ def accounts(conn: Connection) -> list[Account]:
 def held(
     positions: Positions, account_id: str, currency: str, balance: int, on_date: str
 ) -> tuple[int, str, list[str]]:
-    """(valeur, sa devise, instruments sans cours) : les positions en CHF, sinon le solde au
-    registre dans la devise du compte."""
+    """(valeur, sa devise, instruments sans cours) : les positions dans la devise de base,
+    sinon le solde au registre dans la devise du compte."""
     if account_id not in positions.accounts:
         return balance, currency, []
     lines = positions.lines(account_id, on_date)
     missing = [x.isin for x in lines if x.price is None]
     if not lines or len(missing) == len(lines):
         return balance, currency, missing
-    return sum(x.value for x in lines), BASE, missing
+    return sum(x.value for x in lines), positions.fx.base, missing
 
 
 def account_value(
     positions: Positions, account_id: str, balance: int, on_date: str
 ) -> tuple[int, list[str]]:
-    """(valeur, instruments sans cours) d'un compte tenu en CHF s'il a des positions."""
-    value, _ccy, missing = held(positions, account_id, BASE, balance, on_date)
+    """(valeur, instruments sans cours) d'un compte, dans la devise de base s'il a des
+    positions."""
+    value, _ccy, missing = held(positions, account_id, positions.fx.base, balance, on_date)
     return value, missing
 
 

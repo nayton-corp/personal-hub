@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from decimal import ROUND_HALF_EVEN, Context, Decimal, InvalidOperation, localcontext
@@ -25,6 +26,8 @@ CURRENCY_EXPONENTS: dict[str, int] = {
     "SGD": 2,
 }
 
+DEFAULT_BASE = "CHF"
+
 DECIMAL_CONTEXT = Context(prec=28, rounding=ROUND_HALF_EVEN)
 
 _CODE = re.compile(r"^[A-Z]{3}$")
@@ -32,6 +35,15 @@ _CODE = re.compile(r"^[A-Z]{3}$")
 
 class CurrencyError(ValueError):
     pass
+
+
+def base_currency() -> str:
+    """Devise de base de l'instance (`HUB_CURRENCY`, CHF par défaut), posée par compose comme
+    le fuseau : patrimoine, budgets et chiffres clés y sont exprimés. Une devise inconnue échoue.
+    Elle est fixée à la création de `finance.db`, qui la garde (`base_currency`)."""
+    code = (os.environ.get("HUB_CURRENCY") or DEFAULT_BASE).strip().upper()
+    exponent(code)
+    return code
 
 
 def exponent(currency: str) -> int:

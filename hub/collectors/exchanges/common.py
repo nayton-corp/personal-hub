@@ -2,8 +2,9 @@
 officielle (clé en lecture seule) et dépose un `hub.market.v1` avec ces soldes seulement.
 
 Les soldes deviennent un relevé de positions du compte `crypto:<plateforme>` (à déclarer avec
-`fin crypto add-wallet <plateforme>`, ou le champ `account` des secrets). La valeur en CHF vient
-des cours CoinGecko du collecteur « market » ; une crypto sans cours y attend son premier cours.
+`fin crypto add-wallet <plateforme>`, ou le champ `account` des secrets). La valeur, dans la
+devise de base, vient des cours CoinGecko du collecteur « market » ; une crypto sans cours y
+attend son premier cours.
 """
 
 from __future__ import annotations

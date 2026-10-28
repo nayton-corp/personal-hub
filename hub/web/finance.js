@@ -3,7 +3,7 @@
 // /api/finance, en centimes ; l'app ne fait que la mise en forme et les graphiques.
 import * as charts from "./charts.js";
 import {
-  chf, chf2, date, dayName, daysSince, el, initials, monthName, pct, ratio, signed, spct, units,
+  base, chf, chf2, date, dayName, daysSince, el, initials, monthName, pct, ratio, signed, spct, units,
 } from "./format.js";
 import { pendingCard, pendingPath, reviewCard } from "./proposals.js";
 import { api, shiftMonth, store } from "./store.js";
@@ -151,7 +151,7 @@ function home() {
     if (P.mode === "chf") {
       charts.area(box, rows, {
         h: 190, year: P.range === "all", fmt: (v) => `${chf(v / 1000)} k`,
-        tip: (r) => [`Patrimoine ${chf(r.v)} CHF`, `Versements ${chf(r.ref)} CHF`],
+        tip: (r) => [`Patrimoine ${chf(r.v)} ${base()}`, `Versements ${chf(r.ref)} ${base()}`],
       });
     } else {
       charts.area(box, rows.map((r) => ({ ...r, v: first.v ? r.v / first.v - 1 : 0, ref: null })), {
@@ -197,7 +197,7 @@ function home() {
   if (k.unmatched_transfers > 0) items.push([`${k.unmatched_transfers} virement${k.unmatched_transfers > 1 ? "s" : ""} sans autre côté`, "un relevé manque peut-être sur l'autre compte", "sources", "⇄"]);
   if (k.to_categorize > 0) items.push([`${k.to_categorize} écriture${k.to_categorize > 1 ? "s" : ""} à catégoriser`, "par contrepartie, en un Face ID", "journal", String(k.to_categorize)]);
   const p3 = k.pillar3a;
-  if (p3 && p3.margin.minor > 0) items.push([`Marge 3a ${p3.year} : ${chf(units(p3.margin))} CHF`, `versé ${chf(units(p3.paid))} sur ${chf(units(p3.cap))}`, "patrimoine", "3a"]);
+  if (p3 && p3.margin.minor > 0) items.push([`Marge 3a ${p3.year} : ${chf(units(p3.margin))} ${base()}`, `versé ${chf(units(p3.paid))} sur ${chf(units(p3.cap))}`, "patrimoine", "3a"]);
   // sentinelles de nuit (lot 7) : budget, abonnements ; la marge 3a est déjà ci-dessus
   const alerts = store.data(path.alerts());
   for (const a of alerts ? alerts.items : []) {
@@ -205,7 +205,7 @@ function home() {
     const d = a.detail;
     const sub = a.kind === "recurring_up"
       ? `${chf2(Math.abs(units(d.usual)))} → ${chf2(Math.abs(units(d.last)))} ${d.last.currency}`
-      : `${chf(units(d.spent))} sur ${chf(units(d.target))} CHF` + (a.kind === "budget_likely" ? ` · ${chf(units(d.projected))} projetés` : "");
+      : `${chf(units(d.spent))} sur ${chf(units(d.target))} ${base()}` + (a.kind === "budget_likely" ? ` · ${chf(units(d.projected))} projetés` : "");
     items.push([a.title, `${sub} · le ${date(a.on_date)}`, "budget", "!"]);
   }
   if (!items.length) todo.append(el("div", "empty", "Rien à traiter."));
@@ -234,7 +234,7 @@ function patrimoine() {
     text("pat-val", chf(cur));
     const dec = rows.find((r) => r.iso === k.change_ytd.since) || rows[0];
     setDelta($("pat-delta"), dec ? cur - dec.v : 0, "", "depuis janvier");
-    charts.area($("ch-pat"), rows, { h: 160, fmt: (v) => `${chf(v / 1000)} k`, tip: (r) => [`${ENV_LABEL[P.env]} ${chf(r.v)} CHF`] });
+    charts.area($("ch-pat"), rows, { h: 160, fmt: (v) => `${chf(v / 1000)} k`, tip: (r) => [`${ENV_LABEL[P.env]} ${chf(r.v)} ${base()}`] });
     text("p-deposits", signed(units(k.deposits_ytd)));
     text("p-market", signed(units(k.market_ytd)));
     text("p-total", signed(units(k.change_ytd.amount)));
@@ -265,8 +265,8 @@ function patrimoine() {
     if (!rs.length) continue;
     if (P.env === "all") {
       const g = el("div", "grp");
-      // en CHF : l'enveloppe des chiffres clés (un compte en devise y est converti)
-      const sum = k ? units(k.envelopes[KIND_ENV[kind]]) : rs.reduce((s, a) => s + (a.value.currency === "CHF" ? units(a.value) : 0), 0);
+      // dans la devise de base : l'enveloppe des chiffres clés (un compte en devise y est converti)
+      const sum = k ? units(k.envelopes[KIND_ENV[kind]]) : rs.reduce((s, a) => s + (a.value.currency === base() ? units(a.value) : 0), 0);
       g.append(el("span", "", KIND_LABEL[kind]), el("span", "amt", chf(sum)));
       list.append(g);
     }
@@ -276,7 +276,7 @@ function patrimoine() {
       const stale = a.kind === "cash" && (age == null || age > STALE_DAYS);
       const gap = a.last_clbd && a.last_clbd.gap.minor !== 0;
       const sub = (clbd ? `relevé du ${date(clbd)}` : "aucun relevé") + (stale ? " · à rafraîchir" : "") + (gap ? " · écart au relevé" : "");
-      const val = chf(units(a.value)) + (a.value.currency === "CHF" ? "" : ` ${a.value.currency}`);
+      const val = chf(units(a.value)) + (a.value.currency === base() ? "" : ` ${a.value.currency}`);
       const r = row(initials(a.institution), a.name, sub, val, a.iban || null, "", true);
       if (stale || gap) r.querySelector(".n span").className = "warn";
       list.append(r);
@@ -299,11 +299,11 @@ function positions() {
   const value = items.reduce((s, p) => s + units(p.value), 0);
   const gains = items.map((p) => (p.gain ? units(p.gain) : null));
   const gain = gains.every((g) => g != null) ? gains.reduce((s, g) => s + g, 0) : null;
-  text("positions-note", gain == null ? `${chf(value)} CHF` : `plus-value ${signed(gain)} CHF`);
+  text("positions-note", gain == null ? `${chf(value)} ${base()}` : `plus-value ${signed(gain)} ${base()}`);
   // cryptos : investi = virements de la catégorie « Crypto » ; le gain par ligne compte depuis
   // l'arrivée sur le portefeuille, le résultat global depuis le virement (frais compris)
   const c = h.crypto;
-  if (P.env === "crypto" && c) text("positions-note", `investi ${chf(units(c.invested))} · résultat ${signed(units(c.result))} CHF`);
+  if (P.env === "crypto" && c) text("positions-note", `investi ${chf(units(c.invested))} · résultat ${signed(units(c.result))} ${base()}`);
   for (const p of items) {
     const unit = p.kind === "crypto" ? "" : " parts";
     const share = value ? pct(units(p.value) / value, 1) : "—";
@@ -428,7 +428,7 @@ function subscriptions() {
   for (const s of r.items.filter((x) => x.active)) {
     const sub = `${CADENCE[s.cadence] || s.cadence} · prochain le ${date(s.next_date)}` + (s.category_name ? ` · ${s.category_name}` : "");
     const v = Math.abs(units(s.last_amount));
-    list.append(row(initials(s.label), s.label, sub, chf2(v), s.amount.currency === "CHF" ? null : s.amount.currency, "muted", false));
+    list.append(row(initials(s.label), s.label, sub, chf2(v), s.amount.currency === base() ? null : s.amount.currency, "muted", false));
   }
 }
 

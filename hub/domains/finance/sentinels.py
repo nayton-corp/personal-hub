@@ -26,7 +26,6 @@ from hub.core.ids import urn
 from hub.domains.finance import insights, ledger
 from hub.domains.finance.reads import money
 
-CCY = insights.CCY
 MIN_DAY_FOR_PROJECTION = 7  # avant le 7, une projection linéaire ne dit rien
 LIKELY_MARGIN_PCT = 10  # « va dépasser » : projection au-delà de la cible + 10 %
 RECURRING_UP_PCT = 5  # hausse d'abonnement : au moins 5 % …
@@ -91,9 +90,9 @@ def _budget(conn: Connection, today: date) -> list[Alert]:
         detail = {
             "category": p.category,
             "month": month,
-            "spent": money(p.spent, CCY),
-            "target": money(p.target, CCY),
-            "projected": money(p.projected, CCY),
+            "spent": insights.in_base(p.spent),
+            "target": insights.in_base(p.target),
+            "projected": insights.in_base(p.projected),
         }
         if p.over:
             out.append(

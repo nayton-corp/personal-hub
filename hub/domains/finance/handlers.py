@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from datetime import timedelta
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import Connection, text
 
 from hub.core import canonical
@@ -20,7 +20,7 @@ from hub.core.clock import now_iso
 from hub.core.domain import Preview, ProposalKind
 from hub.core.errors import Problem
 from hub.core.ids import new_id
-from hub.core.money import Money
+from hub.core.money import Money, base_currency
 from hub.core.text import mask_iban, normalize
 from hub.domains.finance import catalog, importer, ledger, rules
 
@@ -315,8 +315,15 @@ class DisableRuleHandler:
 class SetBudget(_Params):
     category_id: Slug
     monthly_minor: int = Field(ge=0, le=100_000_000)
-    currency: Literal["CHF"] = "CHF"
+    currency: str = Field(default_factory=base_currency)
     valid_from: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-01$")
+
+    @field_validator("currency")
+    @classmethod
+    def _base(cls, value: str) -> str:
+        if value != base_currency():
+            raise ValueError("un budget est dans la devise de base de l'instance")
+        return value
 
 
 def _budget_row(conn: Connection, category_id: str) -> Any:
@@ -383,7 +390,7 @@ def _budget_inverse(params: dict[str, Any], result: dict[str, Any]) -> tuple[str
     return "set_budget", {
         "category_id": params["category_id"],
         "monthly_minor": 0 if previous is None else previous,
-        "currency": params.get("currency", "CHF"),
+        "currency": params.get("currency") or base_currency(),
         "valid_from": result.get("valid_from"),
     }
 
@@ -500,7 +507,7 @@ class CreateAccount(_Params):
     institution: str = Field(min_length=2, max_length=40)
     name: str = Field(min_length=1, max_length=80)
     kind: Literal["cash", "securities", "pension", "crypto"] = "cash"
-    currency: str = Field(default="CHF", pattern=r"^[A-Z]{3}$")
+    currency: str = Field(default_factory=base_currency, pattern=r"^[A-Z]{3}$")
     iban: str | None = Field(default=None, max_length=40)
     external_ref: str | None = Field(default=None, max_length=80)
     liquid: bool = False

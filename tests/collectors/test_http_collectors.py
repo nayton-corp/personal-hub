@@ -219,6 +219,20 @@ def test_market_run_drops_a_file_the_finance_domain_reads(make_env: Any) -> None
     assert "days=8" in next(u for _m, u in later.calls if "coingecko" in u)
 
 
+def test_market_follows_the_base_currency(make_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Un hub en euros : cours de change vers l'euro (le franc compris), cryptos en euros."""
+    monkeypatch.setenv("HUB_CURRENCY", "EUR")
+    env = make_env("market", market={"crypto": {"BTC": "bitcoin"}, "erc20_tokens": {}})
+    fake = market_api()
+    assert market.run(env, "run", Http(fake)).outcome == "ok"
+    fx_url = next(u for _m, u in fake.calls if "frankfurter" in u)
+    assert parse_qs(urlsplit(fx_url).query) == {"base": ["EUR"], "symbols": ["USD,GBP,CHF"]}
+    assert "vs_currency=eur" in next(u for _m, u in fake.calls if "coingecko" in u)
+    doc = finance_market.parse(inbox_files(env)[0])
+    assert {x.quote for x in doc.fx} == {"EUR"}
+    assert {p.currency for p in doc.prices} == {"EUR"}
+
+
 def test_market_optional_source_down_keeps_the_rest(make_env: Any) -> None:
     env = make_env("market")
     result = market.run(env, "run", Http(market_api(broken="coingecko")))

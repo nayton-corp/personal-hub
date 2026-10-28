@@ -66,6 +66,7 @@ def test_api_read_by_app_and_tokens_write_by_app_only(
         "display_name": None,
         "country": "CH",
         "timezone": "Europe/Zurich",
+        "currency": "CHF",
         "modules": ["pillar3a"],
     }
     assert client.post("/api/profile", json={"country": "FR"}, headers=reader).status_code == 403
@@ -113,6 +114,10 @@ def test_system_prompt_uses_the_profile() -> None:
     anonymous = agent.system_prompt(today, {"country": "XX"})
     assert "de la personne qui utilise ce hub. Nous sommes" in anonymous
     assert "Nathan" not in named + anonymous + agent.system_prompt(today)
+    assert "montants en CHF" in named
+    euro = agent.system_prompt(today, {"country": "FR", "currency": "EUR"})
+    assert "en France" in euro
+    assert "(ex. 412.30 EUR)" in euro
 
 
 def test_no_owner_name_left_in_code() -> None:

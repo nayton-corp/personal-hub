@@ -2,7 +2,7 @@
 
 Règles communes (plan, « IA locale ») :
 - `category` est une liste fermée dans le schéma : le modèle ne peut pas inventer de catégorie ;
-- les montants sortent en CHF, en texte à deux décimales, depuis les centimes ;
+- les montants sortent dans la devise de base de l'instance, en texte, depuis les centimes ;
 - aucun IBAN n'est renvoyé, même masqué ;
 - chaque réponse porte `data_as_of`, la date de la dernière écriture connue ;
 - les libellés bancaires sont du texte écrit par des tiers : les réponses qui en contiennent
@@ -17,12 +17,12 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import TYPE_CHECKING, Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import Connection, text
 
 from hub.core.domain import McpTool, ToolCaller
 from hub.core.errors import Problem
-from hub.core.money import Money
+from hub.core.money import Money, base_currency
 from hub.core.text import normalize
 from hub.domains.finance import insights, ledger, reads, recurring, sentinels
 from hub.domains.finance.reads import MIN_COUNT_FOR_AGGREGATES
@@ -30,7 +30,6 @@ from hub.domains.finance.reads import MIN_COUNT_FOR_AGGREGATES
 if TYPE_CHECKING:
     from hub.domains.finance.domain import FinanceDomain
 
-CCY = "CHF"
 READ = "finance:read"
 PROPOSE = "finance:propose"
 AGGREGATES = "finance:aggregates"
@@ -47,15 +46,15 @@ Reason = Annotated[str | None, Field(default=None, max_length=200)]
 EntryId = Annotated[str, Field(min_length=2, max_length=40, pattern=r"^e[0-9a-f]+$")]
 
 
-def chf(minor: int) -> str:
-    return Money(int(minor), CCY).display()
+def base_text(minor: int) -> str:
+    return Money(int(minor), base_currency()).display()
 
 
 def amount(m: dict[str, Any]) -> str:
     """`{"minor", "currency", "display"}` de l'API → texte ; la devise reste explicite si
-    elle n'est pas le franc."""
+    elle n'est pas la devise de base."""
     shown = str(m["display"])
-    return shown if m["currency"] == CCY else f"{shown} {m['currency']}"
+    return shown if m["currency"] == base_currency() else f"{shown} {m['currency']}"
 
 
 class _Args(BaseModel):
@@ -98,7 +97,14 @@ class ProposeRuleArgs(_Args):
 
 class ProposeBudgetArgs(_Args):
     category: str
-    amount_chf: Decimal = Field(ge=0, le=1_000_000, max_digits=9, decimal_places=2)
+    # `amount_chf` : ancien nom, accepté tant que des prompts l'emploient
+    amount: Decimal = Field(
+        ge=0,
+        le=1_000_000,
+        max_digits=9,
+        decimal_places=2,
+        validation_alias=AliasChoices("amount", "amount_chf"),
+    )
     reason: Reason = None
 
 
@@ -163,7 +169,7 @@ class FinanceTools:
         raise Problem("validation.params", f"catégorie inconnue : {value}")
 
     def _wrap(self, conn: Connection, body: dict[str, Any]) -> dict[str, Any]:
-        return {"data_as_of": self._data_as_of(conn), "currency": CCY, **body}
+        return {"data_as_of": self._data_as_of(conn), "currency": base_currency(), **body}
 
     @staticmethod
     def _aggregates_only(caller: ToolCaller) -> bool:
@@ -219,7 +225,7 @@ class FinanceTools:
                     "name": names.get(x["category"], x["category"]),
                     "group": x["group"],
                     # dépense en positif, revenu en positif : ce qu'on répond à « combien »
-                    "amount": chf(abs(int(x["total"]["minor"]))),
+                    "amount": base_text(abs(int(x["total"]["minor"]))),
                     "direction": "credit" if x["total"]["minor"] > 0 else "debit",
                     "count": x["count"],
                 }
@@ -233,7 +239,7 @@ class FinanceTools:
                     "complete": insights.month_end(month) < self.domain.today(),
                     "income": amount(s["income"]),
                     "expenses": amount(s["expenses"]),
-                    "savings": chf(int(s["income"]["minor"]) - int(s["expenses"]["minor"])),
+                    "savings": base_text(int(s["income"]["minor"]) - int(s["expenses"]["minor"])),
                     "uncategorized": amount(s["uncategorized"]),
                     "by_category": by_category,
                 },
@@ -258,7 +264,7 @@ class FinanceTools:
                 }
                 p = projected.get(x["category"])
                 if p is not None:
-                    line["projected"] = chf(p.projected)
+                    line["projected"] = base_text(p.projected)
                     line["likely_over"] = p.likely_over
                 lines.append(line)
             return self._wrap(
@@ -287,7 +293,7 @@ class FinanceTools:
                     {
                         "month": x["month"],
                         # montant positif ; un mois de 1 ou 2 écritures reste masqué en agrégats
-                        "amount": None if hidden else chf(abs(int(x["total"]["minor"]))),
+                        "amount": None if hidden else base_text(abs(int(x["total"]["minor"]))),
                         "count": count,
                     }
                 )
@@ -331,8 +337,8 @@ class FinanceTools:
                     "counterparty": i["label"],
                     "category": i["category"],
                     "cadence": i["cadence"],
-                    "amount": chf(abs(int(i["amount"]["minor"])))
-                    if i["amount"]["currency"] == CCY
+                    "amount": base_text(abs(int(i["amount"]["minor"])))
+                    if i["amount"]["currency"] == base_currency()
                     else amount(i["amount"]),
                     "monthly": amount(i["monthly"]),
                     "next_date": i["next_date"],
@@ -440,7 +446,7 @@ class FinanceTools:
             cat = self._category(conn, a.category)
         if cat["group"] not in insights.EXPENSE_GROUPS:
             raise Problem("validation.params", "budget : catégorie de dépense seulement")
-        minor = Money.from_decimal(a.amount_chf, CCY).minor
+        minor = Money.from_decimal(a.amount, base_currency()).minor
         return caller.propose(
             "set_budget", {"category_id": a.category, "monthly_minor": minor}, a.reason
         )
@@ -545,8 +551,8 @@ class FinanceTools:
             ),
             tool(
                 "finance_networth",
-                "Patrimoine net en CHF, répartition par enveloppe, variations sur un mois et "
-                "depuis janvier, marge 3a de l'année.",
+                "Patrimoine net dans la devise de base, répartition par enveloppe, variations "
+                "sur un mois et depuis janvier, marge 3a de l'année.",
                 none,
                 AGGREGATES,
                 NoArgs,
@@ -610,15 +616,15 @@ class FinanceTools:
             ),
             tool(
                 "finance_propose_budget",
-                "Propose une cible mensuelle en CHF pour une catégorie de dépense ; rien n'est "
-                "appliqué.",
+                "Propose une cible mensuelle, dans la devise de base, pour une catégorie de "
+                "dépense ; rien n'est appliqué.",
                 _obj(
                     {
                         "category": category,
-                        "amount_chf": {"type": "string", "pattern": r"^\d{1,7}(\.\d{1,2})?$"},
+                        "amount": {"type": "string", "pattern": r"^\d{1,7}(\.\d{1,2})?$"},
                         "reason": REASON_PROP,
                     },
-                    ["category", "amount_chf"],
+                    ["category", "amount"],
                 ),
                 PROPOSE,
                 ProposeBudgetArgs,

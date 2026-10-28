@@ -186,15 +186,13 @@ def test_proposals_need_a_card(client: TestClient, ctx: HubContext, year: Financ
     assert p.reason == "Un kiosque vend des journaux."
     status = call(client, brain, "finance_proposal_status", proposal_id=out["proposal_id"])
     assert status["status"] == "pending"
-    budget = call(
-        client, brain, "finance_propose_budget", category="restaurants", amount_chf="120.5"
-    )
+    budget = call(client, brain, "finance_propose_budget", category="restaurants", amount="120.5")
     with ctx.core.engine.connect() as conn:
         assert proposals.get(conn, budget["proposal_id"]).params["monthly_minor"] == 12050
     r = client.post(
         "/api/tools/finance/finance_propose_budget",
         headers=brain,
-        json={"category": "salaire", "amount_chf": "10"},
+        json={"category": "salaire", "amount": "10"},
     )
     assert r.status_code == 422
     rule = call(client, brain, "finance_propose_rule", keyword="Kiosque", category="loisirs")
@@ -216,11 +214,11 @@ def test_proposals_are_rate_limited(
     ctx.settings = ctx.settings.model_copy(update={"auth": Auth(token_proposals_per_hour=2)})
     brain = token(ctx, "brain")
     for category in ("loisirs", "divers"):
-        call(client, brain, "finance_propose_budget", category=category, amount_chf="10")
+        call(client, brain, "finance_propose_budget", category=category, amount="10")
     r = client.post(
         "/api/tools/finance/finance_propose_budget",
         headers=brain,
-        json={"category": "shopping", "amount_chf": "10"},
+        json={"category": "shopping", "amount": "10"},
     )
     assert r.status_code == 429
     assert r.json()["type"] == "rate_limited"
@@ -233,7 +231,17 @@ def test_budget_amounts_without_float(
     client: TestClient, ctx: HubContext, year: FinanceDomain, value: object, expected: int
 ) -> None:
     out = call(
-        client, token(ctx, "brain"), "finance_propose_budget", category="loisirs", amount_chf=value
+        client, token(ctx, "brain"), "finance_propose_budget", category="loisirs", amount=value
     )
     with ctx.core.engine.connect() as conn:
         assert proposals.get(conn, out["proposal_id"]).params["monthly_minor"] == expected
+
+
+def test_budget_accepts_the_former_amount_name(
+    client: TestClient, ctx: HubContext, year: FinanceDomain
+) -> None:
+    out = call(
+        client, token(ctx, "brain"), "finance_propose_budget", category="loisirs", amount_chf="7"
+    )
+    with ctx.core.engine.connect() as conn:
+        assert proposals.get(conn, out["proposal_id"]).params["monthly_minor"] == 700

@@ -21,6 +21,7 @@ from hub.core.domain import Event, Health, Hit, McpTool, ProposalKind, Ref
 from hub.core.ids import Urn, urn
 from hub.core.logging import get_logger
 from hub.core.migrations import runner
+from hub.core.money import base_currency
 from hub.core.settings import Settings
 from hub.domains.finance import (
     importer,
@@ -36,8 +37,12 @@ from hub.domains.finance.handlers import build_kinds
 from hub.domains.finance.importer import Archiver, ImportService, recipient_from_key
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 9  # 0009_rule_packs
+SCHEMA_VERSION = 10  # 0010_base_currency
 log = get_logger("hub.finance")
+
+
+class CurrencyMismatch(RuntimeError):
+    pass
 
 
 class FinanceDomain:
@@ -83,10 +88,24 @@ class FinanceDomain:
         (`seed=False` pour une reconstruction, qui recopie les règles de la base d'origine)."""
         fresh = runner.current(MIGRATIONS, self.path) is None
         runner.upgrade(MIGRATIONS, self.path)
+        self.check_currency()
         if fresh and seed:
             with begin_immediate(self._engine) as conn:
                 for pack in packs.defaults_for(profile.load(self.settings).country):
                     packs.install(conn, pack, run=False)
+
+    def recorded_currency(self) -> str:
+        with self._engine.connect() as conn:
+            return str(conn.execute(text("SELECT code FROM base_currency")).scalar_one())
+
+    def check_currency(self) -> None:
+        """La devise de base est fixée à la création de la base : `HUB_CURRENCY` doit la suivre."""
+        recorded, wanted = self.recorded_currency(), base_currency()
+        if recorded != wanted:
+            raise CurrencyMismatch(
+                f"finance.db est tenue en {recorded}, HUB_CURRENCY demande {wanted} : "
+                f"remettre HUB_CURRENCY={recorded} dans deploy/.env"
+            )
 
     def is_current(self) -> bool:
         return runner.current(MIGRATIONS, self.path) == runner.head(MIGRATIONS)
@@ -242,6 +261,10 @@ class FinanceDomain:
             return Health(ok=False, db="missing", schema_version=self.schema_version)
         try:
             current = self.is_current()
+            if current:
+                self.check_currency()
+        except CurrencyMismatch:
+            return Health(ok=False, db="currency_mismatch", schema_version=self.schema_version)
         except Exception:
             return Health(ok=False, db="error", schema_version=self.schema_version)
         return Health(

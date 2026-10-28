@@ -2,6 +2,18 @@
 
 ## [Non publié]
 
+### Hub générique — G1b : devise de base
+
+- La devise de base vient de `HUB_CURRENCY` (CHF par défaut), posée par compose comme `HUB_TZ`
+  et lue par `hub.core.money.base_currency()`. Valorisation, instantanés, chiffres clés,
+  budgets, outils de l'assistant, cours du collecteur « market » (BCE et CoinGecko dans cette
+  base, le franc compris) et app l'emploient au lieu du CHF codé en dur.
+- Migration `0010_base_currency` : la devise est fixée dans `finance.db` à sa création ; une base
+  qui a déjà des écritures reste en CHF. Si `HUB_CURRENCY` ne la suit plus, la migration échoue
+  avec un message clair et `/api/health` signale `currency_mismatch`.
+- Le profil (`/api/profile`) donne `currency` ; l'assistant écrit ses montants dans cette devise.
+- L'outil `finance_propose_budget` prend `amount` ; l'ancien `amount_chf` reste accepté.
+
 ### Hub générique — G2 : packs de règles
 
 - Les règles de départ ne viennent plus des migrations mais de packs YAML versionnés

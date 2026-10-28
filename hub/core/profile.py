@@ -1,8 +1,9 @@
 """Profil de l'instance : un hub par personne (chantier « hub générique », G1).
 
-Le profil vit dans `core.db` et se modifie depuis l'app ou par `hub profile set`. Le fuseau ne
-s'y trouve pas : il sert aussi aux conteneurs qui n'ouvrent pas `core.db` (collecteurs,
-planificateur) et vient donc de `HUB_TZ`, posé par compose.
+Le profil vit dans `core.db` et se modifie depuis l'app ou par `hub profile set`. Le fuseau et
+la devise de base ne s'y trouvent pas : ils servent aussi aux conteneurs qui n'ouvrent pas
+`core.db` (collecteurs, planificateur) et viennent donc de `HUB_TZ` et `HUB_CURRENCY`, posés
+par compose.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from sqlalchemy.exc import OperationalError
 from hub.core.clock import local_tz, now_iso
 from hub.core.coredb import audit
 from hub.core.db import make_engine
+from hub.core.money import base_currency
 from hub.core.settings import Settings
 
 _COUNTRY = re.compile(r"^[A-Z]{2}$")
@@ -48,6 +50,7 @@ class Profile:
             "display_name": self.display_name,
             "country": self.country,
             "timezone": self.timezone,
+            "currency": base_currency(),
             "modules": sorted(self.modules),
         }
 

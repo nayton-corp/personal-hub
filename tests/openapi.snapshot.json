@@ -1097,6 +1097,10 @@
             "title": "Country",
             "type": "string"
           },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
           "display_name": {
             "anyOf": [
               {
@@ -1124,6 +1128,7 @@
           "display_name",
           "country",
           "timezone",
+          "currency",
           "modules"
         ],
         "title": "ProfileOut",

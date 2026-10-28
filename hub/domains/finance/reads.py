@@ -14,7 +14,7 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core.money import Money
+from hub.core.money import Money, base_currency
 from hub.core.text import mask_iban, normalize
 from hub.domains.finance import ledger, valuation
 
@@ -311,8 +311,10 @@ _LINES = (
 )
 
 
-def period_lines(conn: Connection, start: str, end: str, currency: str = "CHF") -> list[Line]:
-    """Totaux par catégorie des comptes de budget, entre `start` inclus et `end` exclu."""
+def period_lines(conn: Connection, start: str, end: str, currency: str | None = None) -> list[Line]:
+    """Totaux par catégorie des comptes de budget, entre `start` inclus et `end` exclu, dans
+    `currency` (la devise de base par défaut)."""
+    currency = currency or base_currency()
     ids, params = _in("a", _budget_accounts(conn))
     rows = conn.execute(
         text(_LINES.format(ids=ids)),
@@ -355,8 +357,9 @@ class Totals:
 
 
 def summary(
-    conn: Connection, month: str, *, aggregates_only: bool, currency: str = "CHF"
+    conn: Connection, month: str, *, aggregates_only: bool, currency: str | None = None
 ) -> dict[str, Any]:
+    currency = currency or base_currency()
     start, end = month_bounds(month)
     lines = period_lines(conn, start, end, currency)
     by_category = [
@@ -388,8 +391,9 @@ def summary(
 
 
 def trend(
-    conn: Connection, category: str | None, months: int, until: str, currency: str = "CHF"
+    conn: Connection, category: str | None, months: int, until: str, currency: str | None = None
 ) -> list[dict[str, Any]]:
+    currency = currency or base_currency()
     first = shift_month(until, -(months - 1))
     start, _ = month_bounds(first)
     _, end = month_bounds(until)
