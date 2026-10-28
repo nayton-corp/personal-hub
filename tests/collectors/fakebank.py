@@ -44,6 +44,7 @@ BCF_STATEMENT = """
   <label><input type=checkbox name=alreadyFetchedBookings>déjà exportés</label>
   <input id=findatepick_0_text type=text>
   <button type=button class=primary id=dl>Télécharger</button>
+  {hint}
   <p id=out></p>
 </form>
 <script>
@@ -116,6 +117,7 @@ class Bank:
     login: str = "push"  # push | refused | never
     push_ms: int = 300
     export: str = "file"  # file | nothing | bad
+    form_hint: bool = False  # le formulaire affiche déjà « pas de mouvement » (vrai site BCF)
     viac_session: bool = True
     otp: str = "123456"
     viac_2fa: bool = True  # False : connexion sans code, arrivée sur l'accueil
@@ -180,7 +182,8 @@ def _handler(bank: Bank) -> type[BaseHTTPRequestHandler]:
             elif path == "/frame":
                 self._page("cadre", BCF_FRAME)
             elif path == "/statement":
-                self._page("Mouvements", BCF_STATEMENT.format())
+                hint = "<p>Épargne : pas de mouvement sur la période.</p>" if bank.form_hint else ""
+                self._page("Mouvements", BCF_STATEMENT.format(hint=hint))
             elif path == "/api/export":
                 bank.exports.append(q)
                 self._send(b"nothing" if bank.export == "nothing" else b"file", "text/plain")

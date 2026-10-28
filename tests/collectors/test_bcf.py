@@ -46,6 +46,14 @@ def test_nothing_to_export(make_env, bank: Bank) -> None:  # type: ignore[no-unt
     assert execute(make_env("bcf"), "run").outcome == "nothing_new"
 
 
+def test_form_text_is_not_mistaken_for_nothing_to_export(make_env, bank: Bank) -> None:  # type: ignore[no-untyped-def]
+    # sur le vrai site, le formulaire contient déjà « pas de mouvement » avant le clic
+    bank.form_hint = True
+    assert execute(make_env("bcf"), "run").outcome == "ok"
+    bank.export = "nothing"
+    assert execute(make_env("bcf"), "run").outcome == "nothing_new"
+
+
 def test_invalid_file_goes_to_quarantine(make_env, bank: Bank) -> None:  # type: ignore[no-untyped-def]
     bank.export = "bad"
     env = make_env("bcf")
