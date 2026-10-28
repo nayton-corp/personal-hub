@@ -1,6 +1,6 @@
 """Documents du lot 6 que reçoit l'importeur, à côté des relevés camt.053, Revolut et VIAC :
 relevés IBKR (Flex Query), cours du marché et soldes crypto, positions saisies à la main,
-compositions de fonds.
+relevés SwissBorg, compositions de fonds.
 
 Chacun se reconnaît à son contenu (et, pour une liste de lignes d'émetteur, à l'ISIN du nom de
 fichier, gardé dans la source de l'import), se relit depuis l'archive par sa source, et
@@ -15,7 +15,7 @@ from typing import Any
 
 from sqlalchemy import Connection
 
-from hub.domains.finance import ibkr, lookthrough, manual, market
+from hub.domains.finance import ibkr, lookthrough, manual, market, swissborg
 from hub.domains.finance.assets import DocumentError, Result
 
 Rows = list[tuple[int, str | None, str | None]]
@@ -58,6 +58,9 @@ HANDLERS: tuple[Handler, ...] = (
         lambda _n, d: manual.SOURCE if manual.is_positions(d) else None,
         lambda _s, d: manual.parse(d),
         manual.apply,
+    ),
+    Handler(
+        swissborg.SOURCE, 2, swissborg.detect, lambda _s, d: swissborg.parse(d), swissborg.apply
     ),
     Handler(
         ibkr.SOURCE,

@@ -49,7 +49,7 @@ VIAC_NOTICE = "viac_notice"
 VIAC_REPORT = "viac_report"
 VIAC_OTHER = "viac_other"  # attestation, relevé récapitulatif ou PDF refusé
 VIAC_SOURCES = frozenset({VIAC_NOTICE, VIAC_REPORT, VIAC_OTHER})
-INBOX_SUFFIXES = frozenset({".xml", ".zip", ".pdf", ".json", ".csv"})
+INBOX_SUFFIXES = frozenset({".xml", ".zip", ".pdf", ".json", ".csv", ".xlsx"})
 APPLY_IMPORT = "apply_import"
 # anomalies qu'une validation `apply_import` peut accepter ; les autres demandent d'abord un
 # compte, une ouverture ou un relevé conforme
