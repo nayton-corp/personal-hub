@@ -25,6 +25,11 @@ def _col(j: int) -> str:
     return chr(65 + j)
 
 
+def _put(z: zipfile.ZipFile, name: str, text: str) -> None:
+    """Membre à date fixe : le même classeur donne les mêmes octets (doublon reconnu)."""
+    z.writestr(zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0)), text)
+
+
 def workbook(table: list[tuple[int, list[object]]], shared: bool = False) -> bytes:
     """Classeur minimal : (n° de ligne Excel, cellules) ; texte en ligne ou partagé."""
     strings: list[str] = []
@@ -44,20 +49,22 @@ def workbook(table: list[tuple[int, list[object]]], shared: bool = False) -> byt
     sheet = f"<worksheet {NS}><sheetData>{''.join(out)}</sheetData></worksheet>"
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
-        z.writestr(
+        _put(
+            z,
             "xl/workbook.xml",
             f'<workbook {NS} {RNS}><sheets><sheet name="Transactions" r:id="rId3" sheetId="1"/>'
             "</sheets></workbook>",
         )
-        z.writestr(
+        _put(
+            z,
             "xl/_rels/workbook.xml.rels",
             f'<Relationships {PKG}><Relationship Id="rId3" Target="worksheets/sheet1.xml" '
             'Type="worksheet"/></Relationships>',
         )
-        z.writestr("xl/worksheets/sheet1.xml", sheet)
+        _put(z, "xl/worksheets/sheet1.xml", sheet)
         if shared:
             sst = "".join(f"<si><t>{escape(s)}</t></si>" for s in strings)
-            z.writestr("xl/sharedStrings.xml", f"<sst {NS}>{sst}</sst>")
+            _put(z, "xl/sharedStrings.xml", f"<sst {NS}>{sst}</sst>")
     return buf.getvalue()
 
 
