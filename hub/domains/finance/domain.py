@@ -25,6 +25,7 @@ from hub.core.settings import Settings
 from hub.domains.finance import (
     importer,
     ledger,
+    packs,
     reads,
     recurring,
     sentinels,
@@ -35,7 +36,7 @@ from hub.domains.finance.handlers import build_kinds
 from hub.domains.finance.importer import Archiver, ImportService, recipient_from_key
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 8  # 0008_crypto_cost
+SCHEMA_VERSION = 9  # 0009_rule_packs
 log = get_logger("hub.finance")
 
 
@@ -77,8 +78,15 @@ class FinanceDomain:
     def engine(self) -> Engine:
         return self._engine
 
-    def migrate(self) -> None:
+    def migrate(self, *, seed: bool = True) -> None:
+        """Migre ; une base neuve reçoit les packs de règles `base` et celui du pays du profil
+        (`seed=False` pour une reconstruction, qui recopie les règles de la base d'origine)."""
+        fresh = runner.current(MIGRATIONS, self.path) is None
         runner.upgrade(MIGRATIONS, self.path)
+        if fresh and seed:
+            with begin_immediate(self._engine) as conn:
+                for pack in packs.defaults_for(profile.load(self.settings).country):
+                    packs.install(conn, pack, run=False)
 
     def is_current(self) -> bool:
         return runner.current(MIGRATIONS, self.path) == runner.head(MIGRATIONS)

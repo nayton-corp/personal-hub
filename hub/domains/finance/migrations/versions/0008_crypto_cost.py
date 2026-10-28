@@ -2,65 +2,24 @@
 
 Les paiements de la catégorie « Crypto » (virements vers SwissBorg, Binance, Coinbase…) achètent
 des cryptos tenues hors registre : comme « Achats et ventes de titres », ils ne sortent plus du
-patrimoine (calcul dans `valuation`, sans changement de schéma). Cette révision ajoute seulement
-les règles de départ ajoutées à la catégorie (KuCoin et d'autres plateformes courantes en Suisse
-et en Europe), sans recréer une règle supprimée.
+patrimoine (calcul dans `valuation`, sans changement de schéma). Cette révision ajoutait les
+règles de départ de la catégorie (KuCoin et d'autres plateformes courantes) aux bases qui avaient
+les règles « seed- » ; depuis le chantier « hub générique » (G2), elles sont dans les packs et
+une base neuve n'a plus rien à recevoir ici.
 
 Revision ID: 0008_crypto_cost
 Revises: 0007_alerts
 Create Date: 2026-10-28
 """
 
-from alembic import op
-from sqlalchemy import text
-
-from hub.domains.finance import legacy
-
 revision = "0008_crypto_cost"
 down_revision = "0007_alerts"
 branch_labels = None
 depends_on = None
 
-CREATED_AT = "2026-10-28T00:00:00.000Z"
-ADDED = frozenset(
-    {
-        "kucoin",
-        "bitpanda",
-        "bitstamp",
-        "crypto.com",
-        "bitvavo",
-        "bybit",
-        "pocket bitcoin",
-        "bitcoin suisse",
-        "mt pelerin",
-    }
-)
-
 
 def upgrade() -> None:
-    conn = op.get_bind()
-    if conn.execute(text("SELECT 1 FROM categories WHERE id = 'crypto'")).first() is None:
-        return
-    specs, _needed = legacy.convert(legacy.DEFAULT_RULES)
-    for s in specs:
-        if s.category_id != "crypto" or s.pattern not in ADDED:
-            continue
-        conn.execute(
-            text(
-                "INSERT OR IGNORE INTO rules (id, field, pattern, direction, category_id, "
-                "priority, created_at) VALUES (:id, :f, :p, :d, :c, :prio, :at)"
-            ),
-            {
-                "id": s.id("seed"),
-                "f": s.field,
-                "p": s.pattern,
-                "d": s.direction,
-                "c": s.category_id,
-                "prio": s.priority,
-                "at": CREATED_AT,
-            },
-        )
-    conn.execute(text("UPDATE rules_meta SET version = version + 1"))
+    """Rien pour une base créée après G2 ; une base plus ancienne l'a déjà appliquée."""
 
 
 def downgrade() -> None:

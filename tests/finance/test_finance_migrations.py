@@ -63,16 +63,26 @@ def test_seed_data(finance: FinanceDomain) -> None:
         assert conn.execute(
             text("SELECT grp FROM categories WHERE id='transfer-own'")
         ).scalar() == ("transfer")
-        # 0004_rules : règles de départ de bcf_aggregate.py ; 0005_viac : règles VIAC ;
-        # 0006_wealth : règles IBKR ; 0008_crypto_cost : plateformes crypto
-        assert conn.execute(text("SELECT version FROM rules_meta")).scalar() == 5
+        # base neuve : packs « base » et « ch » (pays par défaut), plus de règles « seed- »
+        assert dict(conn.execute(text("SELECT name, version FROM rule_packs")).fetchall()) == {
+            "base": 1,
+            "ch": 1,
+        }
         crypto = {
             r[0] for r in conn.execute(text("SELECT pattern FROM rules WHERE category_id='crypto'"))
         }
         assert {"swissborg", "kucoin", "bitpanda", "crypto.com", "pocket bitcoin"} <= crypto
-        seeds = conn.execute(text("SELECT count(*) FROM rules WHERE id LIKE 'seed-%'")).scalar()
-        assert seeds is not None
-        assert seeds > 250
+        assert conn.execute(text("SELECT count(*) FROM rules WHERE id LIKE 'seed-%'")).scalar() == 0
+        packed = conn.execute(text("SELECT count(*) FROM rules WHERE id LIKE 'pack-%'")).scalar()
+        assert packed is not None
+        assert packed > 200
+        personal = conn.execute(
+            text(
+                "SELECT count(*) FROM categories "
+                "WHERE id IN ('transfer-revolut', 'transfer-raiffeisen')"
+            )
+        ).scalar()
+        assert personal == 0
         assert conn.execute(text("SELECT name FROM categories WHERE id='voyages'")).scalar() == (
             "Vacances"
         )

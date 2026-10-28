@@ -25,7 +25,7 @@ from hub.core.errors import Problem
 from hub.core.money import Money
 from hub.core.registry import Registry
 from hub.core.text import mask_iban
-from hub.domains.finance import catalog, ibkr, importer, legacy, rebuild, rules
+from hub.domains.finance import catalog, ibkr, importer, legacy, packs, rebuild, rules
 from hub.domains.finance import viac as viac_patterns
 from hub.domains.finance.viac import apply as viac_apply
 
@@ -71,6 +71,8 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
     categories = typer.Typer(no_args_is_help=True, help="Catégories")
     imports = typer.Typer(no_args_is_help=True, help="Imports")
     rules_app = typer.Typer(no_args_is_help=True, help="Règles de catégorisation")
+    packs_app = typer.Typer(no_args_is_help=True, help="Packs de règles de départ")
+    rules_app.add_typer(packs_app, name="packs")
     app.add_typer(rules_app, name="rules")
     app.add_typer(accounts, name="accounts")
     app.add_typer(categories, name="categories")
@@ -223,6 +225,65 @@ def build_cli(domain: FinanceDomain) -> typer.Typer:
             typer.echo(f"fichier refusé : {exc}", err=True)
             raise typer.Exit(1) from exc
         _out(report.public())
+
+    @packs_app.command("list")
+    def packs_list() -> None:
+        """Packs livrés avec le hub, et version installée de chacun."""
+        ready()
+        with engine.connect() as conn:
+            done = packs.installed(conn)
+        for p in packs.available().values():
+            have = done.get(p.name)
+            state = f"installé v{have}" if have else "non installé"
+            typer.echo(f"{p.name:<8} v{p.version}  {state:<16} {p.label} : {p.description}")
+
+    @packs_app.command("install")
+    def packs_install(
+        names: Annotated[list[str], typer.Argument(help="ex. base ch, ou un fichier .yaml")],
+        dry_run: Annotated[
+            bool, typer.Option("--dry-run", help="compter sans rien changer")
+        ] = False,
+    ) -> None:
+        """Installe ou met à jour des packs ; une règle de même forme déjà présente n'est pas
+        doublée, une règle du pack désactivée par toi le reste."""
+        ready()
+        found = packs.available()
+        try:
+            chosen = [
+                packs.parse(Path(n).read_text(encoding="utf-8"))
+                if n.endswith(".yaml")
+                else found[n]
+                for n in names
+            ]
+        except KeyError as exc:
+            typer.echo(f"pack inconnu : {exc.args[0]} ({', '.join(found)})", err=True)
+            raise typer.Exit(2) from None
+        except (OSError, packs.PackError) as exc:
+            typer.echo(f"pack refusé : {exc}", err=True)
+            raise typer.Exit(1) from None
+        with begin_immediate(engine) as conn:
+            reports = [packs.install(conn, p, dry_run=dry_run).public() for p in chosen]
+        _out({"packs": reports})
+
+    @rules_app.command("export")
+    def rules_export(
+        path: Annotated[Path, typer.Argument(dir_okay=False, help="fichier .yaml à écrire")],
+        name: Annotated[str, typer.Option(help="nom du pack exporté")] = "perso",
+        origin: Annotated[
+            list[str] | None, typer.Option(help="seed, legacy, user, pack-ch… (toutes sinon)")
+        ] = None,
+    ) -> None:
+        """Écrit les règles actives (hors système) au format d'un pack, à réinstaller ailleurs
+        avec `rules packs install fichier.yaml`. Contient tes mots-clés : à garder hors du dépôt."""
+        ready()
+        try:
+            with engine.connect() as conn:
+                pack = packs.export(conn, name, origins=origin or ())
+        except packs.PackError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(2) from None
+        path.write_text(packs.dump(pack), encoding="utf-8")
+        _out({"rules": len(pack.specs()), "categories": len(pack.categories)})
 
     @rules_app.command("run")
     def rules_run() -> None:

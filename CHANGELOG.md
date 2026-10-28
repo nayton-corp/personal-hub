@@ -2,6 +2,22 @@
 
 ## [Non publié]
 
+### Hub générique — G2 : packs de règles
+
+- Les règles de départ ne viennent plus des migrations mais de packs YAML versionnés
+  (`hub/domains/finance/packs/`) : `base` (mots génériques, services internationaux) et `ch`
+  (commerces et prestataires suisses), découpés du fichier de départ de l'ancien script sans
+  ses lieux personnels (bars et administrations de Fribourg, comptes Revolut et Raiffeisen).
+- Une base neuve reçoit `base` et le pack du pays du profil ; `0004_rules` n'y installe plus
+  que les catégories et `0008_crypto_cost` n'a plus rien à faire. Une base existante garde ses
+  règles `seed-` et n'a aucun pack installé. Migration `0009_rule_packs` (version installée de
+  chaque pack), recopiée par la reconstruction.
+- `fin rules packs list|install [--dry-run]` (nom de pack ou fichier `.yaml`) et
+  `fin rules export FICHIER [--origin user…]` : les règles personnelles se sortent au format
+  d'un pack et se réinstallent ailleurs. Une règle de même forme n'est jamais doublée, une
+  règle de pack désactivée le reste, une nouvelle version désactive ce qu'elle retire.
+- `legacy.DEFAULT_RULES` quitte le code ; `import-legacy` reprend toujours un `bcf_rules.json`.
+
 ### Hub générique — G3 : catalogue de connecteurs
 
 - `hub/core/connectors.py` déclare une fois chaque connecteur : méthode (`open_banking`, `api`,
