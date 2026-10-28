@@ -136,6 +136,35 @@ def test_market_file_fx_prices_and_wallet(finance: FinanceDomain) -> None:
         )
 
 
+def test_platform_balances_value_each_crypto_and_wait_for_missing_prices(
+    finance: FinanceDomain,
+) -> None:
+    add_ref(finance, "crypto:binance", "crypto", "Binance")
+    price = {"kind": "crypto", "on_date": "2026-10-27", "currency": "CHF", "source": "coingecko"}
+    finance.importer.process(
+        [Incoming("m.json", market_doc(prices=[{**price, "instrument": "ETH", "price": "3000"}]))]
+    )
+    held = [("ETH", "1.5"), ("PEPE", "1000000")]
+    doc = market_doc(
+        balances=[
+            {"account": "crypto:binance", "instrument": i, "on_date": "2026-10-27", "quantity": q}
+            for i, q in held
+        ]
+    )
+    report = finance.importer.process([Incoming("binance.json", doc)])
+    assert {(s.index, s.status) for s in report.statements} == {
+        (0, "applied"),
+        (1, "applied"),
+        (2, "applied"),
+    }
+    assert rows(finance, "SELECT isin, quantity, value_minor FROM holdings ORDER BY isin") == [
+        ("CRYPTO:ETH", "1.5", 450_000),
+        ("CRYPTO:PEPE", "1000000", 0),
+    ]
+    with finance.engine().connect() as conn:
+        assert valuation.value_at(conn, "2026-10-27").by_envelope["crypto"] == 450_000
+
+
 def test_market_file_refusals() -> None:
     with pytest.raises(market.MarketError):
         market.parse(

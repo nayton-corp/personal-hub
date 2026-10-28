@@ -1,6 +1,6 @@
-# Collecteurs (lots 5 et 6) : BCF, VIAC, Revolut, IBKR et cours
+# Collecteurs (lots 5 et 6) : BCF, VIAC, Revolut, IBKR, cours et plateformes crypto
 
-Cinq conteneurs déposent les exports officiels dans `~/PersonalHub/inbox/`, où l'importeur les
+Huit conteneurs déposent les exports officiels dans `~/PersonalHub/inbox/`, où l'importeur les
 traite comme un fichier déposé à la main. Ils tournent sur le Mac comme le reste (phase 1) ; les
 mêmes images et le même `deploy/compose.yaml` serviront sur le Pi.
 
@@ -10,7 +10,8 @@ mêmes images et le même `deploy/compose.yaml` serviront sur le Pi.
 | `collector-viac` | navigateur sans tête, profil gardé dans son volume | dimanche 09:00 | avis PDF nouveaux de la liste Documents, et un rapport tous les 6 jours |
 | `collector-revolut` | API Enable Banking (PSD2), sans navigateur | 07:15, 13:15, 19:15 | un `revolut-<empreinte>.json` par compte, seulement s'il a changé |
 | `collector-ibkr` | Flex Web Service d'IBKR (jeton en lecture seule), sans navigateur | 06:45 du mardi au samedi | le relevé Flex XML de la veille |
-| `collector-market` | API publiques (BCE, CoinGecko, mempool.space, nœud Ethereum public, Yahoo facultatif) | 06:15 | un `market.json` : change, cours, soldes des portefeuilles |
+| `collector-market` | API publiques (BCE, CoinGecko, mempool.space, nœuds Ethereum et Solana publics, Yahoo facultatif) | 06:15 | un `market.json` : change, cours, soldes des portefeuilles |
+| `collector-binance`, `-kucoin`, `-coinbase` | API officielle, clé en lecture seule | 06:20, 06:22, 06:24 | un `<plateforme>.json` : soldes de la plateforme |
 
 Ce qu'un collecteur voit : la boîte d'entrée, son propre volume (profil du navigateur, mémoire
 de ce qu'il a déjà déposé) et son propre fichier de secrets. Il ne lit jamais les bases et ne
@@ -201,13 +202,69 @@ collector-market:
   token: "hub_…"              # hub token create collector-market -s collector
   coingecko_key: ""           # facultatif : clé « demo » gratuite, plus de marge de requêtes
   wallets:
-    - account: "crypto:ledger-btc"     # fin crypto add-wallet ledger-btc
+    - account: "crypto:ledger"         # fin crypto add-wallet ledger
       asset: "BTC"
-      addresses: ["bc1q…", "bc1q…"]    # adresses de réception (pas de xpub)
+      xpub: "xpub6…"                   # clé publique du compte (Ledger Live : Modifier le compte → Avancé)
+      script: "wpkh"                   # facultatif : wpkh (bc1q), sh-wpkh (3…), pkh (1…), tr (bc1p)
     - account: "crypto:metamask"
       asset: "ETH"
       addresses: ["0x…"]
+    - account: "crypto:phantom"
+      asset: "SOL"
+      addresses: ["Fz…"]
+    - account: "crypto:trust"          # plusieurs chaînes, un seul compte
+      asset: "ETH"
+      addresses: ["0x…"]
 ```
-Seuls BTC et ETH sont lus sur la chaîne ; une autre crypto passe par le CSV de positions. Une
+**BTC** : des adresses (`addresses`) ou la clé publique étendue d'un compte (`xpub`, `ypub`,
+`zpub`). Les adresses de réception et de monnaie en sont dérivées dans le conteneur et lues une à
+une sur mempool.space, jusqu'à 20 adresses jamais utilisées de suite (`gap_limit`). Une `zpub`
+est Native SegWit, une `ypub` SegWit ; une `xpub` ne le dit pas (Ledger Live en donne une même
+pour un compte Native SegWit), les quatre types sont alors parcourus, sauf si `script` le fixe.
+Une clé privée (`xprv`…) est refusée. **ETH** : le solde natif et les jetons de `erc20_tokens`
+(USDC et USDT par défaut). **SOL** : le solde natif et les jetons de `spl_tokens` (USDC, USDT) ;
+les autres jetons, souvent du spam, sont ignorés, et le SOL en staking n'est pas lu.
+
+Un compte est relevé en entier ou pas du tout : si une de ses adresses ne répond pas, il est
+laissé de côté ce jour-là (détail `partial wallet.<nom>:…`) plutôt que de perdre une crypto. Un
+portefeuille vide donne un relevé à zéro. Une autre crypto passe par le CSV de positions. Une
 source facultative en panne (CoinGecko, Yahoo) n'empêche pas le dépôt du reste : le passage
 est `ok` avec le détail `partial …`, et le suivant reprend la même fenêtre.
+
+## Plateformes crypto : Binance, KuCoin, Coinbase
+
+Un collecteur par plateforme (`collector-binance`, `collector-kucoin`, `collector-coinbase`),
+chacun avec sa clé API **en lecture seule** et son propre fichier de secrets. Tous les jours
+après les cours (06:20, 06:22, 06:24), il dépose un `<plateforme>.json` (`hub.market.v1`, soldes
+seulement) qui devient un relevé de positions du compte `crypto:<plateforme>`, valorisé avec les
+cours CoinGecko du collecteur `market`. Une crypto sans cours garde sa quantité et attend son
+cours : ajoute-la à `crypto` dans `[collectors.market]` (symbole → id CoinGecko).
+
+| Plateforme | Ce qui est lu | Clé à créer |
+|---|---|---|
+| Binance | Spot, Funding, Simple Earn flexible et bloqué | Gestion des API → clé générée par le système, « Enable Reading » seul coché |
+| KuCoin | tous les comptes (principal, trading…) et Earn | API Management → permission « General » seule, une passphrase à toi |
+| Coinbase | tous les portefeuilles, ETH en staking compris (`ETH2` compté comme ETH) | portail CDP → clé API secrète, permission « View » seule |
+
+```yaml
+collector-binance:
+  token: "hub_…"              # hub token create collector-binance -s collector
+  api_key: "…"
+  api_secret: "…"
+collector-kucoin:
+  token: "hub_…"
+  api_key: "…"
+  api_secret: "…"
+  passphrase: "…"
+collector-coinbase:
+  token: "hub_…"
+  key_name: "organizations/…/apiKeys/…"
+  private_key: "-----BEGIN EC PRIVATE KEY-----\n…"   # ou la clé Ed25519 en base64
+```
+Le compte se déclare avec `fin crypto add-wallet binance` (ou `kucoin`, `coinbase`) ; le champ
+`account` des secrets en choisit un autre. Contrôle : `hubc run --rm collector-binance
+hub-collector run binance --check` lit les soldes sans rien déposer. Une clé révoquée donne
+`auth_error` et suspend ce collecteur seulement.
+
+SwissBorg n'a pas d'API publique : l'argent qui y part se voit dans les virements BCF, et ce qui
+arrive ensuite sur la Ledger est relevé par la xpub.

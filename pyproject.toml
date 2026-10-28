@@ -25,6 +25,7 @@ dependencies = [
 # conteneurs collecteurs seulement (image Playwright) ; l'image du hub n'en a pas besoin
 collectors = [
     "cryptography==50.0.2",
+    "embit==0.8.0",
     "playwright==1.63.0",
 ]
 
@@ -40,6 +41,7 @@ finance = "hub.domains.finance:create"
 dev = [
     "cbor2==6.1.5",
     "cryptography==50.0.2",
+    "embit==0.8.0",
     "httpx==0.28.1",
     "hypothesis==6.170.12",
     "import-linter==2.15",
@@ -91,7 +93,7 @@ plugins = ["pydantic.mypy"]
 packages = ["hub"]
 
 [[tool.mypy.overrides]]
-module = ["pyrage.*"]
+module = ["pyrage.*", "embit.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

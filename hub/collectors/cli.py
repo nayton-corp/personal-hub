@@ -57,7 +57,10 @@ def _out(result: base.Result) -> None:
 
 @app.command()
 def daemon(
-    names: Annotated[list[str], typer.Argument(help="bcf, viac, revolut, ibkr, market")],
+    names: Annotated[
+        list[str],
+        typer.Argument(help="bcf, viac, revolut, ibkr, market, binance, kucoin, coinbase"),
+    ],
 ) -> None:
     """Boucle du conteneur : runs planifiés si le collecteur est actif, contrôles demandés."""
     hub_logging.configure(get_settings().log_level)

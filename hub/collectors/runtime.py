@@ -75,6 +75,7 @@ Flow = Callable[[Env, Kind], Result]
 
 def flows() -> dict[str, Flow]:
     from hub.collectors.bcf import flow as bcf
+    from hub.collectors.exchanges import binance, coinbase, kucoin
     from hub.collectors.ibkr import flow as ibkr
     from hub.collectors.market import flow as market
     from hub.collectors.revolut import flow as revolut
@@ -86,6 +87,9 @@ def flows() -> dict[str, Flow]:
         "revolut": revolut.run,
         "ibkr": ibkr.run,
         "market": market.run,
+        "binance": binance.run,
+        "kucoin": kucoin.run,
+        "coinbase": coinbase.run,
     }
 
 

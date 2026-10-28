@@ -32,6 +32,9 @@ COLLECTORS: dict[str, str] = {
     "revolut": "Revolut",
     "ibkr": "IBKR",
     "market": "Cours et cryptos",
+    "binance": "Binance",
+    "kucoin": "KuCoin",
+    "coinbase": "Coinbase",
 }
 Outcome = Literal[
     "ok",
