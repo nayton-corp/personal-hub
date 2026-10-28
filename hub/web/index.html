@@ -51,11 +51,11 @@
 
     <!-- ================= ACCUEIL ================= -->
     <section id="accueil" class="stack" data-tab hidden>
-      <div id="empty-home" class="card" hidden>
-        <h2>Pas encore de données</h2>
-        <p class="note">Le registre est vide. Sur le Mac : <code>hub finance accounts add</code> pour
-          créer le compte BCF, puis dépose un export camt.053 dans <code>inbox/</code> ou lance
-          <code>hub finance import-history</code>.</p>
+      <div class="card" id="c-welcome" hidden>
+        <div class="head"><h2>Premiers pas</h2><button class="link" id="welcome-hide" type="button">Masquer</button></div>
+        <p class="note" id="welcome-sub"></p>
+        <div id="welcome-list"></div>
+        <p class="message" id="welcome-msg" role="status"></p>
       </div>
       <div id="stale-banner" class="banner" hidden></div>
 

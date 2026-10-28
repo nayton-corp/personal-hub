@@ -6,6 +6,7 @@ import {
   base, chf, chf2, date, dayName, daysSince, el, initials, monthName, pct, ratio, signed, spct, units,
 } from "./format.js";
 import { accountsCard, connectionsCard, initConnections } from "./connections.js";
+import { initWelcome, welcomeCard } from "./welcome.js";
 import { pendingCard, pendingPath, reviewCard } from "./proposals.js";
 import { api, shiftMonth, store } from "./store.js";
 
@@ -123,9 +124,8 @@ const RANGE_LABEL = { 1: "1 mois", 3: "3 mois", ytd: "depuis janvier", 12: "1 an
 function home() {
   const ke = store.use(path.kpis());
   const k = ke.data;
-  const accounts = store.data(path.accounts());
   header(k);
-  $("empty-home").hidden = !(accounts && accounts.items.length === 0);
+  welcomeCard();
   pressed("range-seg", P.range);
   pressed("mode-seg", P.mode);
   monthStepper("month-home");
@@ -580,6 +580,7 @@ export function start() {
   });
   $("tx-more").addEventListener("click", () => loadTx(true));
   initConnections();
+  initWelcome();
   let typing;
   $("tx-search").addEventListener("input", (e) => {
     clearTimeout(typing);

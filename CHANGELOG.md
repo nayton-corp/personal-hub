@@ -2,6 +2,21 @@
 
 ## [Non publié]
 
+### Hub générique, G6 — première installation
+
+- `make init` (`hub init` dans un conteneur jetable, seul Docker requis) : clé age en 0400,
+  `secrets.enc.yaml` avec un mot de passe restic tiré au hasard et jamais affiché, dossiers
+  montés, `deploy/.env` écrit depuis `.env.example`. Ne remplace rien de ce qui existe.
+- `HUB_COUNTRY` : pays d'une instance sans profil, qui choisit le pack de règles d'une base
+  neuve (CH par défaut, rien ne change pour une instance existante).
+- Le premier `make deploy` affiche le code d'inscription de la première passkey.
+- App : carte « Premiers pas » sur l'accueil (passkey de secours, profil, règles, première
+  connexion, premier compte), qui remplace le texte « Pas encore de données ». Les packs de
+  règles du pays s'installent par une proposition `install_pack` validée avec Face ID ;
+  `GET /api/finance/rules/packs` les liste.
+- Guide générique [docs/installation.md](docs/installation.md) ; `docs/mac.md` reste pour ce
+  qui est propre au Mac.
+
 ### Cryptos au registre — SwissBorg et portefeuille BTC
 
 - Chaque ligne du relevé SwissBorg devient une opération du compte `crypto:swissborg` en CHF

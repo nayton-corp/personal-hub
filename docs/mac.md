@@ -1,5 +1,9 @@
 # Phase 1 : le hub sur le Mac, en conteneurs (L0-07, L0-08)
 
+Une première installation suit [installation.md](installation.md) : `make init` fait les
+étapes 4 à 7 et 9 ci-dessous en une fois. Cette page garde ce qui est propre au Mac et les
+critères d'acceptation.
+
 Jusqu'au lot de migration, tout tourne sur le Mac M1 Max dans des conteneurs Linux arm64.
 Les mêmes images et le même `deploy/compose.yaml` serviront sur le Pi 5.
 

@@ -29,7 +29,7 @@ hub/web/            coquille de l'app (PWA), servie par Caddy
 hub/brain/          IA locale : passerelle MCP, assistant et suggestions (`hub-brain`), sur le Mac
 hub/cli.py          commande `hub`
 deploy/             compose, Caddy, Tailscale, Litestream, crontab, deploy.sh
-docs/               mise en route sur le Mac, domaine Finance, kit de secours
+docs/               installation, mise en route sur le Mac, domaine Finance, kit de secours
 tests/              pytest, Hypothesis ; domaine factice et authentificateur WebAuthn logiciel
 ```
 
@@ -51,6 +51,7 @@ Un changement voulu du contrat d'API se valide avec `make openapi`, puis relectu
 
 | Commande | Rôle |
 |---|---|
+| `hub init --config DIR --home DIR` | première installation : clé age, secrets, dossiers, `deploy/.env` (`make init`) |
 | `hub db upgrade` · `hub db status` | migrations de `core.db` puis des domaines |
 | `hub token create NOM -s brain` · `list` · `revoke ID` | jetons à portée, montrés une seule fois |
 | `hub auth bootstrap-code` | code à usage unique pour inscrire la première passkey |
@@ -68,5 +69,7 @@ n'existe que par une session passkey.
 
 ## Exploitation
 
-Phase 1 : tout tourne sur le Mac en conteneurs, voir [docs/mac.md](docs/mac.md). Le Pi
-arrivera avec les mêmes images et le même `deploy/compose.yaml`.
+Installer son propre hub (un hub par personne) : [docs/installation.md](docs/installation.md),
+`make init` puis `make deploy`. Phase 1 : tout tourne sur le Mac en conteneurs, voir
+[docs/mac.md](docs/mac.md). Le Pi arrivera avec les mêmes images et le même
+`deploy/compose.yaml`.

@@ -8,6 +8,7 @@ par compose.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -55,8 +56,14 @@ class Profile:
         }
 
 
+def default_country() -> str:
+    """Pays d'une instance sans profil enregistré : `HUB_COUNTRY` (posé par `hub init` dans
+    `deploy/.env`), CH sinon. Il choisit aussi le pack de règles d'une base finance neuve."""
+    return clean_country(os.environ.get("HUB_COUNTRY") or DEFAULT_COUNTRY)
+
+
 def default() -> Profile:
-    return Profile(display_name=None, country=DEFAULT_COUNTRY, timezone=local_tz().key)
+    return Profile(display_name=None, country=default_country(), timezone=local_tz().key)
 
 
 def get(conn: Connection) -> Profile:
