@@ -11,6 +11,8 @@
 - Pause entre deux pages d'historique et entre deux cours CoinGecko sans clé ; un refus (429,
   « rate limit ») est réessayé après 10, 30 puis 60 secondes.
 - Coinbase : la conversion ETH2 → ETH (`retail_eth2_deprecation`) est interne.
+- Réseau BNB Smart Chain (`bsc` : BNB, USDC, USDT, ETH) ; un réseau refusé par l'offre gratuite
+  d'Etherscan est signalé (`unsupported`) sans bloquer les autres.
 
 ### Collectes en parallèle
 

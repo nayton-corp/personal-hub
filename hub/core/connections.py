@@ -30,7 +30,13 @@ MAX_SETTINGS = 16_384
 MAX_SECRETS = 65_536
 MAX_WALLETS = 50
 WALLET_ASSETS = ("BTC", "ETH", "SOL")
-WALLET_NETWORKS = ("ethereum", "arbitrum", "base", "polygon")  # réseaux d'un portefeuille ETH
+WALLET_NETWORKS = (
+    "ethereum",
+    "arbitrum",
+    "base",
+    "bsc",
+    "polygon",
+)  # réseaux d'un portefeuille ETH
 WALLET_ACCOUNT = re.compile(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$")
 _COLUMNS = "id, connector, label, schedule, settings, secrets, secrets_at, created_at, updated_at"
 

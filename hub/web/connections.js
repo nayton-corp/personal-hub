@@ -486,6 +486,8 @@ async function run(btn, msg, fn) {
 
 // --- portefeuilles (connecteur market) ------------------------------------------------------
 
+const NETWORK_LABEL = { ethereum: "Ethereum", arbitrum: "Arbitrum", base: "Base", bsc: "BNB Smart Chain", polygon: "Polygon" };
+
 function walletsEditor(box, initial, newWallet = false) {
   box.append(el("h3", "", "Portefeuilles"));
   box.append(el("p", "hint", "Adresses publiques, ou clé publique étendue (xpub, ypub, zpub) d'un compte BTC. Jamais de clé privée ni de phrase de récupération."));
@@ -515,13 +517,13 @@ function walletsEditor(box, initial, newWallet = false) {
     const nets = el("div", "networks");
     const chosen = new Set(w.networks || ["ethereum"]);
     const boxes = {};
-    for (const n of ["ethereum", "arbitrum", "base", "polygon"]) {
+    for (const n of ["ethereum", "arbitrum", "base", "bsc", "polygon"]) {
       const lab = el("label", "check");
       const cb = el("input");
       cb.type = "checkbox";
       cb.checked = chosen.has(n);
       boxes[n] = cb;
-      lab.append(cb, document.createTextNode(` ${n[0].toUpperCase()}${n.slice(1)}`));
+      lab.append(cb, document.createTextNode(` ${NETWORK_LABEL[n]}`));
       nets.append(lab);
     }
     const netLabel = el("label", "", "Réseaux");

@@ -86,6 +86,7 @@ class MarketConfig(BaseModel):
         "USDC": "usd-coin",
         "USDT": "tether",
         "POL": "polygon-ecosystem-token",
+        "BNB": "binancecoin",
     }
     yahoo_url: str = "https://query1.finance.yahoo.com/v8/finance/chart"
     quotes: dict[str, str] = {}  # ISIN ou symbole → symbole Yahoo (par ex. « VWRL.SW »)
@@ -126,6 +127,16 @@ class MarketConfig(BaseModel):
             tokens={
                 "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": "USDC",
                 "0x4200000000000000000000000000000000000006": "ETH",
+            },
+        ),
+        "bsc": EvmNetwork(  # BNB Smart Chain (Trust Wallet, Binance)
+            rpc_url="https://bsc-rpc.publicnode.com",
+            chain_id=56,
+            native="BNB",
+            tokens={
+                "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d": "USDC",
+                "0x55d398326f99059fF775485246999027B3197955": "USDT",
+                "0x2170Ed0880ac9A755fd29B2688956BD959F933F8": "ETH",
             },
         ),
         "polygon": EvmNetwork(

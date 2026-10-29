@@ -609,33 +609,40 @@ def eth_moves(
             tokens = {c.lower(): s for c, s in tokens.items()}
             native = network.native
             seen = len(days)
-            for address in addresses:
-                for action in ("txlist", "txlistinternal", "tokentx"):
-                    for page in range(1, (CHAIN_PAGES if full else 1) + 1):
-                        rows = _scan(env, http, network, action, address, page)
-                        for r in rows:
-                            txid = str(r["hash"])
-                            sender = str(r.get("from", "")).lower()
-                            to = str(r.get("to", "")).lower()
-                            if action == "tokentx":
-                                symbol = tokens.get(str(r.get("contractAddress", "")).lower())
-                                if symbol is None:
-                                    continue  # jeton inconnu, souvent du spam
-                                value = _scaled(r["value"], int(r["tokenDecimal"]))
-                            else:
-                                symbol = native
-                                ok = str(r.get("isError", "0")) == "0"
-                                value = Decimal(int(r["value"])) / WEI if ok else Decimal(0)
-                                if action == "txlist" and sender in mine:
-                                    gas = Decimal(int(r["gasUsed"]) * int(r["gasPrice"])) / WEI
-                                    fees[txid] = (native, gas)
-                                    add(txid, native, -gas, r["timeStamp"])
-                            if to in mine:
-                                add(txid, symbol, value, r["timeStamp"])
-                            if sender in mine:
-                                add(txid, symbol, -value, r["timeStamp"])
-                        if len(rows) < 100:
-                            break
+            try:
+                for address in addresses:
+                    for action in ("txlist", "txlistinternal", "tokentx"):
+                        for page in range(1, (CHAIN_PAGES if full else 1) + 1):
+                            rows = _scan(env, http, network, action, address, page)
+                            for r in rows:
+                                txid = str(r["hash"])
+                                sender = str(r.get("from", "")).lower()
+                                to = str(r.get("to", "")).lower()
+                                if action == "tokentx":
+                                    symbol = tokens.get(str(r.get("contractAddress", "")).lower())
+                                    if symbol is None:
+                                        continue  # jeton inconnu, souvent du spam
+                                    value = _scaled(r["value"], int(r["tokenDecimal"]))
+                                else:
+                                    symbol = native
+                                    ok = str(r.get("isError", "0")) == "0"
+                                    value = Decimal(int(r["value"])) / WEI if ok else Decimal(0)
+                                    if action == "txlist" and sender in mine:
+                                        gas = Decimal(int(r["gasUsed"]) * int(r["gasPrice"])) / WEI
+                                        fees[txid] = (native, gas)
+                                        add(txid, native, -gas, r["timeStamp"])
+                                if to in mine:
+                                    add(txid, symbol, value, r["timeStamp"])
+                                if sender in mine:
+                                    add(txid, symbol, -value, r["timeStamp"])
+                            if len(rows) < 100:
+                                break
+            except Failure as f:
+                if not f.detail.endswith(":unsupported"):
+                    raise
+                # réseau hors de l'offre gratuite d'Etherscan : signalé, les autres continuent
+                notes.append(f"history.{account.split(':', 1)[1]}.{network.name}:unsupported")
+                continue
             if full:
                 found = list(days.values())[seen:]
                 first[label] = min(found, default=env.today.isoformat())

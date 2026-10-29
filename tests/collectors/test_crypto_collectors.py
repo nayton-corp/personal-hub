@@ -1316,7 +1316,7 @@ def history_api(broken: str | None = None) -> Fake:
         if "/txs/chain" in url:
             address = url.split("/address/", 1)[1].split("/", 1)[0]
             return 200, HISTORY[address]
-        if "binance" in url:
+        if "api.binance.com" in url:
             q = query(url)
             assert (q["symbol"], q["interval"]) == ("BTCUSDT", "1d")
             day = 86_400_000
@@ -1362,7 +1362,7 @@ def test_btc_history_is_read_once_from_the_chain(make_env: Any) -> None:
     later = history_api()
     market.run(env, "run", Http(later))
     # ensuite : la dernière page de chaque adresse, sans historique ni cours anciens
-    assert not [u for _m, u, _h in later.calls if "/txs/chain/" in u or "binance" in u]
+    assert not [u for _m, u, _h in later.calls if "/txs/chain/" in u or "api.binance.com" in u]
     assert len(dropped(env)[-1].transactions) == 2
 
 
@@ -1370,7 +1370,7 @@ def test_btc_history_pages_and_failures(make_env: Any, monkeypatch: pytest.Monke
     monkeypatch.setattr(market, "TXS_PER_PAGE", 2)
     creds = {"wallets": [{"account": "crypto:ledger", "asset": "BTC", "addresses": [A]}]}
     env = make_env("market", creds=creds)
-    fake = history_api(broken="binance")
+    fake = history_api(broken="api.binance.com")
     result = market.run(env, "run", Http(fake))
     assert result.detail == "partial history_prices:site_unavailable"
     assert any(u.endswith("/txs/chain/t1") for _m, u, _h in fake.calls)  # page suivante
@@ -1412,3 +1412,27 @@ def test_an_etherscan_rate_limit_is_retried(make_env: Any, pauses: list[int]) ->
     env = make_env("market", creds={"wallets": [wallet]}, market={"coingecko_pause_seconds": 0})
     assert market.run(env, "run", Http(Fake(route))).detail is None
     assert 10 in pauses
+
+
+def test_a_network_outside_the_free_plan_is_flagged(make_env: Any) -> None:
+    inner = chain()
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if "chainid=56" in url:
+            refused = "Free API access is not supported for this chain"
+            return 200, {"status": "0", "message": "NOTOK", "result": refused}
+        return inner.route(method, url, headers, data)
+
+    wallet = {
+        "account": "crypto:trust-wallet",
+        "asset": "ETH",
+        "addresses": [ETH_ME],
+        "networks": ["ethereum", "bsc"],
+    }
+    creds = {"wallets": [wallet], "etherscan_key": "cle-gratuite"}
+    env = make_env("market", creds=creds, market={"coingecko_pause_seconds": 0})
+    result = market.run(env, "run", Http(Fake(route)))
+    # le solde BNB Smart Chain est lu, son historique signalé ; Ethereum continue
+    assert result.detail == "partial history.trust-wallet.bsc:unsupported"
+    assert ("crypto:trust-wallet", "CRYPTO:BNB", Decimal("0.5")) in held(dropped(env)[0])
+    assert env.memory.get("chain_txs") == ["crypto:trust-wallet"]

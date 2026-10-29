@@ -339,8 +339,8 @@ frais payés), pour le registre : toutes au premier passage (mémoire `btc_txs`)
 dernière page de chaque adresse utilisée, une requête par adresse et par jour.
 **ETH** : le solde natif et les jetons de `erc20_tokens` (USDC et USDT par défaut). Un
 portefeuille qui nomme d'autres réseaux (`networks`, cases « Réseaux » dans l'app) est lu aussi
-sur Arbitrum, Base et Polygon (`evm_networks` : nœud public, `chain_id`, jetons) : leur ETH, leur
-USDC/USDT, le WETH compté comme ETH, et le POL sur Polygon. Les jetons de staking de
+sur Arbitrum, Base, BNB Smart Chain et Polygon (`evm_networks` : nœud public, `chain_id`, jetons) : leur ETH, leur
+USDC/USDT, le WETH compté comme ETH, le POL sur Polygon et le BNB sur BNB Smart Chain. Les jetons de staking de
 `staking_tokens` (par défaut Kiln Native20, le « cbwsETH » de Coinbase Wallet) comptent comme
 de l'ETH, à leur valeur sous-jacente (`balanceOfUnderlying` : la mise et ses récompenses). **SOL** : le
 solde natif et les jetons de `spl_tokens` (USDC, USDT) ; les autres jetons, souvent du spam, sont
@@ -353,11 +353,11 @@ gaz payés par mes adresses — et SOL par le RPC (`getSignaturesForAddress` pui
 `CHAIN_PAGES` pages par adresse, mémoire `chain_txs`), ensuite la dernière page. Un jeton et
 le gaz d'une même transaction donnent deux écritures. Le solde passé, lui, n'est pas
 reconstitué : la courbe de patrimoine de ces portefeuilles part du jour où ils sont branchés.
-Arbitrum, Base et Polygon passent par l'API Etherscan V2 (`etherscan_url`, `chainid`), qui
+Arbitrum, Base, BNB Smart Chain et Polygon passent par l'API Etherscan V2 (`etherscan_url`, `chainid`), qui
 demande une clé gratuite (etherscan.io → API Keys), une seule pour tous les réseaux : le secret
 `etherscan_key` de « Cours et cryptos » (champ « Clé Etherscan » dans l'app). Sans elle, leur
 solde est lu mais pas leur historique (détail `partial history.<nom>.<réseau>:needs_key`) ; il
-est relu en entier dès que la clé arrive (mémoire `chain_txs` : `<compte>@<réseau>`). Blockscout,
+est relu en entier dès que la clé arrive (mémoire `chain_txs` : `<compte>@<réseau>`). Un réseau hors de l'offre gratuite d'Etherscan est signalé (`:unsupported`) sans bloquer les autres. Blockscout,
 essayé d'abord, coupe après dix appels sans clé et protège ses couches 2 derrière Cloudflare.
 Les sources publiques limitent le débit : une pause avant chaque page d'historique
 (`chain_pause_seconds`) et chaque cours CoinGecko sans clé (`coingecko_pause_seconds`), et sur
