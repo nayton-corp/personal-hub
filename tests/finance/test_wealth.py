@@ -620,6 +620,37 @@ def test_pocket_transfer_beats_catch_all_rule(finance: FinanceDomain) -> None:
     assert shown(into) == ("remboursements", "remboursements")
 
 
+def test_pocket_transfer_after_a_top_up_of_the_same_amount(finance: FinanceDomain) -> None:
+    """BCF → compte Revolut → poche, le même montant le même jour : le débit de la BCF ne rend
+    pas le virement compte → poche ambigu. Deux poches créditées du même montant, si."""
+    without_seed_rules(finance)
+    bcf = add_account(finance)
+    rev = add_ref(finance, "revolut:CHF", "cash", "Revolut")
+    car = add_ref(finance, "revolut:CHF:poche-1", "cash", "Voiture")
+    trip = add_ref(finance, "revolut:CHF:poche-3", "cash", "Vacances")
+    with begin_immediate(finance.engine()) as conn:
+        top_up = _entry(conn, bcf, "2026-10-05", -80_000, iban=REVOLUT_IBAN, counterparty="Revolut")
+        landed = _entry(conn, rev, "2026-10-05", 80_000, label="Top-up")
+        out = _entry(conn, rev, "2026-10-05", -80_000, label="To pocket")
+        into = _entry(conn, car, "2026-10-05", 80_000, label="From CHF")
+        # le même montant vers deux poches le même jour : on ne devine pas
+        _entry(conn, rev, "2026-10-20", -10_000, label="To pocket")
+        _entry(conn, car, "2026-10-20", 10_000, label="From CHF")
+        _entry(conn, trip, "2026-10-20", 10_000, label="From CHF")
+        rules.categorize(
+            conn,
+            top_up,
+            rules.Rule("system-transfer-own", "search_text", "revolut", "any", "transfer-own", 1),
+            proposal_id=None,
+            created_at="2026-10-05T00:00:00.000Z",
+        )
+    finance.refresh_derived()
+    links = set(rows(finance, "SELECT debit_seq, credit_seq FROM transfer_links"))
+    assert (out, into) in links
+    assert (top_up, landed) in links
+    assert len(links) == 2
+
+
 RAIFFEISEN_IBAN = "CH3880808001234567890"  # clearing Raiffeisen, numéro fictif
 
 
