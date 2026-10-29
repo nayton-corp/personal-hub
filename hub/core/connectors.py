@@ -1,28 +1,34 @@
-"""Catalogue des connecteurs (chantier « hub générique », G3).
+"""Connecteurs : la forme d'une source que le hub sait collecter (chantier « hub générique », G3).
 
-Chaque source de données que le hub sait collecter est déclarée ici, une fois : son nom, sa
-méthode, son pays, les types de comptes qu'elle alimente, les champs de secrets qu'elle attend,
-les réglages qu'elle accepte et son horaire par défaut. Une *connexion* (G4, `connections` dans
-`core.db`) est l'usage d'un connecteur par l'instance : un identifiant (« revolut »), ses
+Le cœur ne connaît aucune source : chaque domaine déclare les siennes au point d'entrée
+`hub.connectors` (la finance : `hub.domains.finance.connectors:CATALOG`). Un connecteur donne son
+nom, sa méthode, son pays, les types de comptes qu'il alimente, les champs de secrets qu'il
+attend, les réglages qu'il accepte et son horaire par défaut. Une *connexion* (G4,
+`connections` dans `core.db`) est l'usage d'un connecteur par l'instance : un identifiant, ses
 secrets chiffrés, son horaire et ses réglages. Un même connecteur peut servir plusieurs
-connexions, par exemple Enable Banking pour deux banques.
+connexions.
 
-Méthodes, par ordre de préférence : `open_banking` (Enable Banking, banques de l'UE), `api`
-(API officielle du fournisseur, clé en lecture seule), `public` (données publiques, sans
-compte), `browser` (robot qui télécharge l'export officiel, seulement sans autre accès).
-Le dépôt manuel d'un fichier (camt.053, CSV, PDF) reste toujours possible, sans connecteur.
+Méthodes, par ordre de préférence : `open_banking` (agrégateur réglementé, consentement par
+lien), `api` (API officielle du fournisseur, clé en lecture seule), `public` (données publiques,
+sans compte), `browser` (robot qui télécharge l'export officiel, seulement sans autre accès).
+Le dépôt manuel d'un fichier reste toujours possible, sans connecteur.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cache
 from typing import Any, Literal
+
+from hub.core.registry import contributions
 
 Method = Literal["open_banking", "api", "public", "browser"]
 METHODS: tuple[Method, ...] = ("open_banking", "api", "public", "browser")
 Runner = Literal["api", "browser"]
 RUNNERS: tuple[Runner, ...] = ("api", "browser")
-ENABLE_BANKING = ("aspsp_name", "aspsp_country", "psu_type", "consent_days", "max_syncs_per_day")
+ENTRY_POINT_GROUP = "hub.connectors"
+Clean = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -31,18 +37,24 @@ class Connector:
     label: str
     method: Method
     country: str | None  # ISO 3166-1, ou None pour un service international
-    accounts: tuple[str, ...]  # types de comptes alimentés (cash, pension, securities, crypto)
+    accounts: tuple[str, ...]  # types de comptes alimentés, au sens du domaine
     secrets: tuple[str, ...]  # champs obligatoires de la section `collector-<nom>`
     schedule: str  # horaire par défaut, fuseau de l'instance
     formats: tuple[str, ...]  # sources d'import des fichiers qu'il dépose (`imports.source`)
     settings: tuple[str, ...] = ()  # réglages sans secret qu'une connexion peut donner
     required: tuple[str, ...] = ()  # réglages qu'une nouvelle connexion doit donner
     single: bool = False  # une seule connexion possible (ses réglages portent tout)
+    clean: Clean | None = None  # contrôle propre au connecteur, après celui des réglages connus
 
     @property
     def runner(self) -> Runner:
         """Service collecteur qui l'exécute : les robots ont Chromium, les autres non."""
         return "browser" if self.method == "browser" else "api"
+
+    @property
+    def link(self) -> bool:
+        """Accès donné par un consentement, ouvert par un lien (open banking)."""
+        return self.method == "open_banking"
 
     def public(self) -> dict[str, Any]:
         return {
@@ -61,95 +73,19 @@ class Connector:
         }
 
 
-CATALOG: tuple[Connector, ...] = (
-    Connector(
-        "bcf",
-        "BCF",
-        "browser",
-        "CH",
-        ("cash",),
-        ("contract", "password"),
-        "30 7 * * 1-5",  # jours ouvrés 07:30 (une seule validation du push)
-        ("camt053",),
-    ),
-    Connector(
-        "viac",
-        "VIAC",
-        "browser",
-        "CH",
-        ("pension",),
-        ("email", "password"),
-        "0 9 * * 0",  # dimanche 09:00
-        ("viac_notice", "viac_report"),
-    ),
-    Connector(
-        "enable_banking",
-        "Banque européenne (Enable Banking)",
-        "open_banking",
-        None,
-        ("cash",),
-        ("application_id", "private_key"),
-        "15 7,13,19 * * *",  # trois synchros, la quatrième reste pour la main (Revolut)
-        ("revolut_eb",),
-        ENABLE_BANKING,
-        ("aspsp_name", "aspsp_country"),  # la banque, telle qu'Enable Banking la nomme
-    ),
-    Connector(
-        "ibkr",
-        "IBKR",
-        "api",
-        None,
-        ("securities",),
-        ("flex_token", "query_id"),
-        "45 6 * * 2-6",  # relevé Flex de la veille, du mardi au samedi
-        ("ibkr_flex",),
-    ),
-    Connector(
-        "market",
-        "Cours et cryptos",
-        "public",
-        None,
-        ("crypto",),
-        (),  # portefeuilles publics et clé CoinGecko facultatifs
-        "15 6-22/4 * * *",  # cours et portefeuilles toutes les 4 h, de 06:15 à 22:15
-        ("market",),
-        ("currencies", "crypto", "quotes", "wallets"),
-        single=True,  # tous les portefeuilles crypto dans la même connexion
-    ),
-    Connector(
-        "binance",
-        "Binance",
-        "api",
-        None,
-        ("crypto",),
-        ("api_key", "api_secret"),
-        "20 6-22/4 * * *",  # soldes et opérations des plateformes, après les cours
-        ("market",),
-    ),
-    Connector(
-        "kucoin",
-        "KuCoin",
-        "api",
-        None,
-        ("crypto",),
-        ("api_key", "api_secret", "passphrase"),
-        "22 6-22/4 * * *",
-        ("market",),
-    ),
-    Connector(
-        "coinbase",
-        "Coinbase",
-        "api",
-        None,
-        ("crypto",),
-        ("key_name", "private_key"),
-        "24 6-22/4 * * *",
-        ("market",),
-    ),
-)
-NAMES: tuple[str, ...] = tuple(c.name for c in CATALOG)
-_BY_NAME = {c.name: c for c in CATALOG}
+@cache
+def catalog() -> tuple[Connector, ...]:
+    """Les connecteurs de tous les domaines installés, dans l'ordre des domaines puis du leur."""
+    found = tuple(c for group in contributions(ENTRY_POINT_GROUP) for c in group)
+    names = [c.name for c in found]
+    if len(set(names)) != len(names):
+        raise ValueError("deux connecteurs portent le même nom")
+    return found
+
+
+def names() -> tuple[str, ...]:
+    return tuple(c.name for c in catalog())
 
 
 def get(name: str) -> Connector | None:
-    return _BY_NAME.get(name)
+    return next((c for c in catalog() if c.name == name), None)

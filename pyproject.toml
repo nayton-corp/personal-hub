@@ -37,6 +37,16 @@ hub-brain = "hub.brain.cli:main"
 [project.entry-points."hub.domains"]
 finance = "hub.domains.finance:create"
 
+# ce que la finance apporte au cœur sans qu'il l'importe (chantier S1)
+[project.entry-points."hub.connectors"]
+finance = "hub.domains.finance.connectors:CATALOG"
+
+[project.entry-points."hub.country_modules"]
+finance = "hub.domains.finance.connectors:COUNTRY_MODULES"
+
+[project.entry-points."hub.connection_imports"]
+finance = "hub.domains.finance.legacy_connections:import_legacy"
+
 [dependency-groups]
 dev = [
     "cbor2==6.1.5",

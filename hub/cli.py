@@ -15,7 +15,7 @@ from hub.core import connections, connectors, profile, proposals, sessions, toke
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
-from hub.core.registry import Registry
+from hub.core.registry import Registry, contributions
 from hub.platform import logging as hub_logging
 from hub.platform import secrets
 from hub.platform.settings import get_settings
@@ -194,7 +194,7 @@ def connections_list() -> None:
 @connections_app.command("catalog")
 def connections_catalog() -> None:
     """Connecteurs disponibles : méthode, secrets et réglages attendus."""
-    for c in connectors.CATALOG:
+    for c in connectors.catalog():
         typer.echo(json.dumps(c.public(), ensure_ascii=False))
 
 
@@ -335,21 +335,21 @@ def connections_import(
         bool, typer.Option(help="écrit aussi collector-api/browser.enc.yaml s'ils manquent")
     ] = True,
 ) -> None:
-    """Reprise d'avant G4 : les `<nom>.enc.yaml` des anciens conteneurs deviennent les secrets
-    des connexions (une connexion qui a déjà les siens les garde), puis les fichiers des deux
-    services sont écrits avec leur jeton. Sans danger à relancer. Compteurs seuls."""
+    """Reprise d'avant G4 : chaque domaine reprend les secrets de ses anciens conteneurs (sans
+    écraser ceux d'une connexion), puis les fichiers des deux services. Relançable, compteurs."""
     hub = _ready()
-    key_file = hub.settings.secrets.age_key_file
-    try:
-        with hub.core.engine.begin() as conn:
-            report = connections.import_legacy(
-                conn, folder, key_file, CLI_ACTOR, dict(hub.settings.domain("collectors"))
-            )
+    extra = dict(hub.settings.domain("collectors"))
+    report: dict[str, list[str]] = {}
+    try:  # chaque domaine reprend ses anciennes connexions (`hub.connection_imports`)
+        for reprise in contributions("hub.connection_imports"):
+            with hub.core.engine.begin() as conn:
+                found = reprise(conn, folder, hub.settings.secrets.age_key_file, CLI_ACTOR, extra)
+            report.update({k: report.get(k, []) + v for k, v in found.items()})
     except (Problem, secrets.SecretsError) as exc:
         typer.echo(f"reprise impossible : {exc}", err=True)
         raise typer.Exit(1) from None
     written = _service_files(hub, folder) if service_files else []
-    typer.echo(json.dumps({**report.public(), "service_files": written}, ensure_ascii=False))
+    typer.echo(json.dumps({**report, "service_files": written}, ensure_ascii=False))
 
 
 def _cli_principal() -> Principal:

@@ -11,12 +11,14 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
+from functools import cache
 from typing import Any
 
 from sqlalchemy import Connection, text
 from sqlalchemy.exc import OperationalError
 
 from hub.core.coredb import audit
+from hub.core.registry import contributions
 from hub.kernel.clock import local_tz, now_iso
 from hub.kernel.money import base_currency
 from hub.platform.db import make_engine
@@ -25,8 +27,16 @@ from hub.platform.settings import Settings
 _COUNTRY = re.compile(r"^[A-Z]{2}$")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 DEFAULT_COUNTRY = "CH"
-# modules ouverts par le pays de l'instance
-COUNTRY_MODULES: dict[str, frozenset[str]] = {"CH": frozenset({"pillar3a"})}
+
+
+@cache
+def country_modules() -> dict[str, frozenset[str]]:
+    """Pays → modules qu'il ouvre, déclarés par les domaines (`hub.country_modules`)."""
+    out: dict[str, frozenset[str]] = {}
+    for table in contributions("hub.country_modules"):
+        for country, modules in table.items():
+            out[country] = out.get(country, frozenset()) | modules
+    return out
 
 
 class ProfileError(ValueError):
@@ -41,7 +51,7 @@ class Profile:
 
     @property
     def modules(self) -> frozenset[str]:
-        return COUNTRY_MODULES.get(self.country, frozenset())
+        return country_modules().get(self.country, frozenset())
 
     def has(self, module: str) -> bool:
         return module in self.modules

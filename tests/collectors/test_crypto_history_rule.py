@@ -5,12 +5,12 @@ from __future__ import annotations
 
 from hub.collectors import runtime
 from hub.collectors.market import flow as market
-from hub.core.connectors import CATALOG
+from hub.core.connectors import catalog
 
 
 def test_every_crypto_connector_reads_its_history() -> None:
     flows = runtime.flows()
-    crypto = [c.name for c in CATALOG if "crypto" in c.accounts]
+    crypto = [c.name for c in catalog() if "crypto" in c.accounts]
     assert crypto  # le catalogue en a
     for name in crypto:
         if name == "market":

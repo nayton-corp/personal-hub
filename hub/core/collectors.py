@@ -337,7 +337,7 @@ def request_run(conn: Connection, name: str, by: str) -> State:
     """Actualisation demandée depuis l'app : un run complet, hors horaire, que le service
     collecteur prend dans la minute. Seulement pour une connexion prête et active : une
     connexion suspendue repasse d'abord par un contrôle (risque de blocage de l'accès). Les
-    limites de la source restent celles du flux (synchros par jour d'Enable Banking)."""
+    limites de la source restent celles du flux (synchros par jour de la banque)."""
     connection = _ensure(conn, name)
     if not connection.ready:
         raise Problem("validation.params", "secrets de la connexion à donner d'abord")
@@ -364,8 +364,8 @@ def request_link(conn: Connection, name: str, by: str) -> State:
     """Nouveau consentement demandé depuis l'app : le service qui exécute la connexion ouvre
     l'autorisation dans la minute et remonte l'adresse à ouvrir."""
     connection = _ensure(conn, name)
-    if connection.connector != "enable_banking":
-        raise Problem("validation.params", "seule une connexion Enable Banking se lie ainsi")
+    if connection.spec is None or not connection.spec.link:
+        raise Problem("validation.params", "seule une connexion bancaire ouverte se lie ainsi")
     if not connection.ready:
         raise Problem("validation.params", "secrets de la connexion à donner d'abord")
     _set(conn, name, link_requested_at=now_iso(), link_url=None, link_url_at=None)
@@ -398,7 +398,7 @@ def auth_pending(name_label: str) -> Message:
     )
 
 
-# --- liaison d'un consentement (Revolut, Enable Banking) ------------------------------------
+# --- liaison d'un consentement (banque ouverte) ---------------------------------------------
 
 
 def register_link(conn: Connection, name: str, state: str) -> str:

@@ -80,7 +80,7 @@ def refresh_all(hub_ctx: Ctx, principal: AppSession) -> CollectorListOut:
 def catalog(_principal: AppSession) -> ConnectorListOut:
     """Les connecteurs que ce hub sait collecter (méthode, pays, secrets attendus)."""
     return ConnectorListOut(
-        items=[ConnectorOut.model_validate(c.public()) for c in connectors.CATALOG]
+        items=[ConnectorOut.model_validate(c.public()) for c in connectors.catalog()]
     )
 
 
