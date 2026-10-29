@@ -42,7 +42,16 @@ if TYPE_CHECKING:
 log = get_logger("hub.finance.rebuild")
 
 # propositions dont l'effet est déjà dans les données de référence copiées
-REFERENCE_KINDS = frozenset({"create_account", "create_category", "create_rule", "disable_rule"})
+REFERENCE_KINDS = frozenset(
+    {
+        "create_account",
+        "create_category",
+        "create_rule",
+        "disable_rule",
+        "save_debt",
+        "record_debt_balance",
+    }
+)
 EXAMPLES = 5
 
 
@@ -133,6 +142,9 @@ def copy_reference(src: Connection, dst: Connection) -> None:
     for rule_id in list(dst.execute(text("SELECT id FROM rules")).scalars()):
         if rule_id not in kept:
             dst.execute(text("DELETE FROM rules WHERE id = :i"), {"i": rule_id})
+    for table, key in (("debts", "id"), ("debt_balances", "debt_id, on_date")):
+        cols, rows = _rows(src, table, key)
+        _upsert(dst, table, key, cols, rows)
     cols, rows = _rows(src, "rule_packs", "name")
     _upsert(dst, "rule_packs", "name", cols, rows)
     version = src.execute(text("SELECT version FROM rules_meta")).scalar_one()

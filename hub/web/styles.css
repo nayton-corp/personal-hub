@@ -503,3 +503,9 @@ code { font-family: var(--mono); font-size: .9em; }
 #jBody > .hint:first-child { margin: 10px 16px 0; }
 #jBody > .seg.rview { margin: 10px 16px 0; }
 #jBody > .seg.rview + .hint { margin: 10px 16px 0; }
+
+/* dettes : deux champs côte à côte, la ligne de clôture garde son bouton compact */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.two .field { margin-top: 12px; }
+.two input { width: 100%; min-width: 0; }
+.setrow .secondary { width: auto; min-height: 40px; }

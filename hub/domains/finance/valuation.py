@@ -18,6 +18,9 @@ un apport, un dividende un effet marché. L'effet marché est la différence ent
 les versements. Un compte dans une autre devise est
 converti au dernier cours de `fx_rates` connu à la date ; sans cours, il est laissé de côté et
 signalé dans `missing_fx`.
+
+Les dettes (debts.py) sont retranchées : enveloppe « dettes », clé `debt:<id>` dans
+`by_account`, et versement de même montant (un remboursement n'est pas un effet marché).
 """
 
 from __future__ import annotations
@@ -30,11 +33,11 @@ from decimal import Decimal, localcontext
 from sqlalchemy import Connection, text
 
 from hub.core.money import DECIMAL_CONTEXT, Money, base_currency
-from hub.domains.finance import institutions
+from hub.domains.finance import debts, institutions
 
 # enveloppes de by_envelope_json (spécification, section 2), tirées du type de compte
 ENVELOPES = {"cash": "cash", "pension": "pilier3a", "securities": "titres", "crypto": "crypto"}
-ENVELOPE_ORDER = ("cash", "pilier3a", "titres", "crypto")
+ENVELOPE_ORDER = ("cash", "pilier3a", "titres", "crypto", "dettes")
 # hors versements : rendement, frais et mouvements internes des courtiers (préfixes de code)
 NOT_DEPOSITS = institutions.prefixes(market=True)
 # achats de positions tenues hors registre : actions Revolut, cryptos (virements vers SwissBorg…)
@@ -242,6 +245,7 @@ def _value(
     balances: dict[str, tuple[int, int]],
     fx: FxTable,
     positions: Positions,
+    book: debts.Book,
     on_date: str,
 ) -> Valuation:
     out = Valuation(on_date)
@@ -260,6 +264,13 @@ def _value(
         out.by_account[a.id] = value
         if a.liquid:
             out.liquid += value
+    owed, missing_fx = debts.values(book, on_date, fx.to_base)
+    for k, value in owed.items():
+        out.net_worth += value
+        out.deposits += value
+        out.by_envelope["dettes"] += value
+        out.by_account[k] = value
+    out.missing_fx += missing_fx
     out.missing_prices = sorted(set(out.missing_prices))
     return out
 
@@ -276,7 +287,7 @@ def value_at(conn: Connection, on_date: str) -> Valuation:
     ).fetchall()
     fx = FxTable(conn)
     balances = {r[0]: (int(r[1]), int(r[2])) for r in rows}
-    return _value(accts, balances, fx, Positions(conn, fx), on_date)
+    return _value(accts, balances, fx, Positions(conn, fx), debts.Book.read(conn), on_date)
 
 
 def series(conn: Connection, dates: Sequence[str]) -> list[Valuation]:
@@ -284,6 +295,7 @@ def series(conn: Connection, dates: Sequence[str]) -> list[Valuation]:
     accts = accounts(conn)
     fx = FxTable(conn)
     positions = Positions(conn, fx)
+    book = debts.Book.read(conn)
     daily = conn.execute(
         text(
             f"SELECT e.booking_date, e.account_id, sum(e.amount_minor), {DEPOSITS_SQL} "  # noqa: S608
@@ -299,5 +311,5 @@ def series(conn: Connection, dates: Sequence[str]) -> list[Valuation]:
             b, c = balances.get(daily[i][1], (0, 0))
             balances[daily[i][1]] = (b + int(daily[i][2]), c + int(daily[i][3]))
             i += 1
-        out.append(_value(accts, dict(balances), fx, positions, d))
+        out.append(_value(accts, dict(balances), fx, positions, book, d))
     return out

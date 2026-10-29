@@ -54,7 +54,7 @@ SHEETS.account = (id, sh) => {
       <h3 class="field">Disponibilité</h3>
       ${radio("availability", [auto(`Selon le type (${facetName("liq", a.availability_auto).toLowerCase()})`), ...facet("liq")], t.availability)}
       <h3 class="field">Catégorie</h3>
-      ${radio("category", [auto("Selon chaque ligne"), ...facet("cat")], t.category)}
+      ${radio("category", [auto("Selon chaque ligne"), ...facet("cat").filter(([v]) => v !== "debt")], t.category)}
       <p class="hint">« Selon chaque ligne » range les liquidités, les fonds et les cryptos du compte chacun à sa place. Une catégorie choisie s'applique à tout le compte.</p>
       <label class="field" for="acc-spend">Dépenses de ce compte<select id="acc-spend" class="select-full"><option value="" ${t.spend ? "" : "selected"}>Selon les règles habituelles</option>${spendOpts}</select></label>
       <p class="hint">Pour une poche dédiée (vacances, voiture) : toutes ses sorties vont dans cette catégorie, celles déjà importées comme les prochaines. Les virements vers tes autres comptes restent des virements, et une catégorie choisie à la main reste la sienne.</p>
