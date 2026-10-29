@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### Construction des images plus rapide
+
+- Les images hub et collector ne copient plus `hub/web` : une retouche du front ne
+  reconstruit que l'image web. Seul le paquet hub est recompilé en bytecode à chaque
+  version, plus tout l'environnement Python.
+
 ### Hub générique, G6 — première installation
 
 - `make init` (`hub init` dans un conteneur jetable, seul Docker requis) : clé age en 0400,

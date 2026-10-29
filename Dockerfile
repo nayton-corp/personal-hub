@@ -9,6 +9,12 @@ ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright/python:v1.63.0-noble@sha256:72
 
 FROM ${RESTIC_IMAGE} AS restic
 
+# Sources Python sans le front : une retouche de hub/web ne change pas ce contenu, donc
+# BuildKit (cache par empreinte du contenu copié) garde les images hub et collector.
+FROM ${PYTHON_IMAGE} AS src
+COPY hub /hub
+RUN rm -rf /hub/web
+
 FROM ${PYTHON_IMAGE} AS build
 RUN pip install --no-cache-dir uv==0.13.6
 ENV UV_COMPILE_BYTECODE=1 \
@@ -19,9 +25,11 @@ WORKDIR /srv/hub/app
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY alembic.ini ./
-COPY hub ./hub
+COPY --from=src /hub ./hub
 COPY deploy/crontab deploy/brain-crontab deploy/settings.toml ./deploy/
-RUN uv sync --frozen --no-dev --no-editable
+# dépendances déjà compilées à l'étape précédente : seul le paquet hub l'est ici
+RUN UV_COMPILE_BYTECODE=0 uv sync --frozen --no-dev --no-editable \
+ && python -m compileall -q /srv/hub/venv/lib/python3.12/site-packages/hub
 
 # --- API, importeur, planificateur : une seule image, des commandes différentes ---
 FROM ${PYTHON_IMAGE} AS hub
@@ -67,9 +75,10 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /srv/hub/app
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --extra collectors --no-install-project
-COPY hub ./hub
+COPY --from=src /hub ./hub
 COPY deploy/settings.toml ./deploy/
-RUN uv sync --frozen --no-dev --extra collectors --no-editable \
+RUN UV_COMPILE_BYTECODE=0 uv sync --frozen --no-dev --extra collectors --no-editable \
+ && python3.12 -m compileall -q /srv/hub/venv/lib/python3.12/site-packages/hub \
  && rm /usr/local/bin/uv
 RUN groupadd --gid 10001 hub \
  && useradd --uid 10001 --gid 10001 --home-dir /var/lib/hub-collector --shell /usr/sbin/nologin hub \
