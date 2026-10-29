@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Déploiement phase 1 (spécification, section 10.0) : images au lieu d'un clone git.
 #   deploy/deploy.sh <tag>
-# 1. construit les images linux/arm64 ; 2. verify dans un conteneur jetable (arrêt si échec) ;
+# 1. tire les images publiées d'un tag vX.Y.Z (GHCR, chantier S13), ou construit les images
+#    linux/arm64 d'un autre tag (ou avec HUB_BUILD=1) ; 2. verify dans un conteneur jetable (arrêt si échec) ;
 # 3. copie .backup des bases ; 4. migrations ; 5. second verify, sinon restauration et retour
 # à l'image précédente ; 6. connexions des collecteurs (reprise d'avant G4, fichiers des deux
 # services) ; 7. compose up ; 8. /api/health dans les 30 s, sinon retour arrière.
@@ -24,11 +25,45 @@ say() { printf '\n==> %s\n' "$*"; }
 # shellcheck disable=SC1091
 set -a; . "$HERE/.env"; set +a
 
-if [ -z "${HUB_SKIP_BUILD:-}" ]; then
+REGISTRY="${HUB_REGISTRY:-ghcr.io/nayton-corp/personal-hub}"
+SEMVER='^v[0-9]+\.[0-9]+\.[0-9]+$'
+# une version publiée est un tag git vX.Y.Z (make tag) ; un autre nom se construit ici
+published=0
+tag_rev="$(git -C "$ROOT" rev-parse -q --verify "refs/tags/$TAG^{commit}" 2>/dev/null || true)"
+if [[ "$TAG" =~ $SEMVER ]] && [ -n "$tag_rev" ] && [ -z "${HUB_BUILD:-}" ]; then
+  published=1
+  # compose.yaml, crontab et scripts viennent du clone : ils doivent être ceux du tag
+  [ "$(git -C "$ROOT" rev-parse HEAD)" = "$tag_rev" ] || {
+    echo "le clone n'est pas sur $TAG : git checkout $TAG (puis relancer)"; exit 1; }
+elif [[ "$TAG" =~ $SEMVER ]] && [ -z "${HUB_BUILD:-}" ]; then
+  echo "(aucun tag git $TAG dans le clone : images construites ici ; git fetch --tags si publié)"
+fi
+
+if [ -n "${HUB_SKIP_BUILD:-}" ]; then
+  :
+elif [ "$published" = 1 ]; then
+  say "Images publiées $TAG ($REGISTRY)"
+  for target in hub web collector; do
+    docker pull --platform "$PLATFORM" "$REGISTRY/$target:$TAG" || {
+      echo "image $target:$TAG absente de $REGISTRY : release terminée ? docker login ghcr.io ?"
+      echo "(HUB_BUILD=1 construit les images ici, depuis le clone)"
+      exit 1; }
+  done
+  docker tag "$REGISTRY/hub:$TAG" "hub:$TAG"
+  docker tag "$REGISTRY/web:$TAG" "hub-web:$TAG"
+  docker tag "$REGISTRY/collector:$TAG" "hub-collector:$TAG"
+else
   say "Construction des images $TAG ($PLATFORM)"
   docker build --platform "$PLATFORM" --target hub -t "hub:$TAG" "$ROOT"
   docker build --platform "$PLATFORM" --target web -t "hub-web:$TAG" "$ROOT"
   docker build --platform "$PLATFORM" --target collector -t "hub-collector:$TAG" "$ROOT"
+fi
+
+# une seule version : celle du paquet dans l'image doit être celle du tag
+image_version="$(docker run --rm --entrypoint python "hub:$TAG" -c 'import hub; print(hub.__version__)')"
+if [ "v$image_version" != "$TAG" ]; then
+  if [ "$published" = 1 ]; then echo "l'image $TAG porte la version $image_version : arrêt"; exit 1; fi
+  echo "(image construite en version $image_version, étiquetée $TAG)"
 fi
 
 first_deploy=0

@@ -1,0 +1,135 @@
+# Publication d'une version (chantier S13) : un tag vX.Y.Z posé sur main par `make tag`.
+# 1. le tag est égal à la version de pyproject.toml et le CHANGELOG a sa section ;
+# 2. toutes les barrières de la CI ; 3. images linux/arm64 poussées sur GHCR, avec leur SBOM
+# et leur provenance ; 4. analyse des vulnérabilités de chaque image ; 5. notes de version.
+# Rien ne se déploie ici : le Mac tire l'image après un « oui déploie vX » (make deploy).
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+      - name: Le tag est la version de pyproject.toml, et le CHANGELOG la décrit
+        run: uv run python scripts/release.py check "$GITHUB_REF_NAME"
+      - name: Le tag est sur main
+        run: |
+          git fetch --quiet origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+  quality:
+    needs: version
+    uses: ./.github/workflows/ci.yml
+    with:
+      release: true
+
+  publish:
+    needs: quality
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        target: [hub, web, collector]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.target }}
+          tags: |
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=personal-hub ${{ matrix.target }}
+      - id: build
+        name: Image ${{ matrix.target }} (linux/arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+      - name: Vulnérabilités de l’image (Trivy, critiques corrigeables)
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.target }}@${{ steps.build.outputs.digest }}
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD \
+            aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+            image --platform linux/arm64 --scanners vuln --ignore-unfixed \
+            --severity HIGH,CRITICAL --format table "$IMAGE" | tee "trivy-${{ matrix.target }}.txt"
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD \
+            aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+            image --platform linux/arm64 --scanners vuln --ignore-unfixed \
+            --severity CRITICAL --exit-code 1 --quiet "$IMAGE"
+      - name: Empreinte publiée
+        run: echo "${{ matrix.target }}=${{ steps.build.outputs.digest }}" > "digest-${{ matrix.target }}.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            digest-${{ matrix.target }}.txt
+            trivy-${{ matrix.target }}.txt
+
+  notes:
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+      - name: Notes de version (CHANGELOG et empreintes des images)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            python3 scripts/release.py notes "$GITHUB_REF_NAME"
+            echo
+            echo "### Images (linux/arm64)"
+            echo
+            for f in digest-*.txt; do
+              t="${f#digest-}"; t="${t%.txt}"
+              echo "- \`ghcr.io/${GITHUB_REPOSITORY}/$t:$GITHUB_REF_NAME\` · \`$(cut -d= -f2 "$f")\`"
+            done
+            echo
+            echo "Déployer : \`make deploy TAG=$GITHUB_REF_NAME\` sur le Mac, après « oui déploie $GITHUB_REF_NAME »."
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md trivy-*.txt

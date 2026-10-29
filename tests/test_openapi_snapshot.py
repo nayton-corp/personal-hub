@@ -19,6 +19,7 @@ SNAPSHOT = Path(__file__).parent / "openapi.snapshot.json"
 def test_openapi_matches_snapshot(settings: Settings) -> None:
     hub = HubContext.build(settings, Registry())  # le cœur seul, sans domaine
     schema = create_app(hub).openapi()
+    schema["info"]["version"] = "<version du hub>"  # change à chaque version, pas le contrat
     rendered = json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
     if os.environ.get("UPDATE_OPENAPI") == "1":
         SNAPSHOT.write_text(rendered)

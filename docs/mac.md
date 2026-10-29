@@ -44,7 +44,8 @@ make deploy TAG=v0.1.0
 ```
 
 `deploy/mac-preflight.sh` vérifie d'abord FileVault, la veille, la clé, les dossiers et
-l'absence de port publié. Puis `deploy/deploy.sh` : construction des images, `hub verify`,
+l'absence de port publié. Puis `deploy/deploy.sh` : images tirées de GHCR pour un tag `vX.Y.Z`
+publié (le clone sur ce tag, [versions.md](versions.md)), construites sinon, `hub verify`,
 copie des bases, migrations, second `verify`, démarrage et contrôle de `/api/health` dans les
 30 s. Au moindre échec après la copie, il restaure les bases et revient à l'image précédente.
 

@@ -1,18 +1,25 @@
 # Barrières de qualité (spécification, section 11) sur chaque pull request, et construction
 # des images linux/arm64. Aucune donnée réelle : tous les tests utilisent des fixtures générées.
+# Le workflow Release (tag vX.Y.Z) l'appelle avec `release: true` : mêmes barrières, puis il
+# construit et publie lui-même les images.
 name: CI
 
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ inputs.release && 'release' || 'ci' }}
+  cancel-in-progress: ${{ !inputs.release }}
 
 jobs:
   quality:
@@ -48,10 +55,17 @@ jobs:
         run: uv run pytest -q --cov=hub --cov-report=term --cov-fail-under=85
       - name: Migrations
         run: uv run pytest -q -m migrations
+      - name: Migration depuis la version précédente (bases et relevé fictifs)
+        run: scripts/upgrade_from_previous.sh
+      - name: Version unique (pyproject, paquet, CHANGELOG)
+        run: uv run python scripts/release.py check
+      - name: Vulnérabilités connues des dépendances (pip-audit)
+        run: make audit
 
   image:
     runs-on: ubuntu-24.04
     needs: quality
+    if: ${{ !inputs.release }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3

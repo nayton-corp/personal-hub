@@ -7,6 +7,16 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-015 · Une version publiée se déploie depuis son image (29.10.2026)
+
+- **Contexte** : les images se construisaient sur le Mac à chaque déploiement (jusqu'à 20 min),
+  sans version ni tag : rien ne disait ce qui tournait.
+- **Décision** : la version de `pyproject.toml` est la seule ; un tag `vX.Y.Z` sur main publie
+  les images sur GHCR après toutes les barrières, et `make deploy` tire l'image de ce tag, le
+  clone placé sur le même commit.
+- **Conséquence** : une image publiée ne se reconstruit pas ; la version de l'image est
+  vérifiée avant le déploiement. Construire sur le Mac reste possible (`HUB_BUILD=1`).
+
 ## D-014 · Les contrats d'architecture listent leurs écarts (29.10.2026)
 
 - **Contexte** : le découpage visé (noyau, plateforme, cœur, domaines en couches) n'existe pas

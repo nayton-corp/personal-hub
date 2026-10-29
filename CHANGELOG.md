@@ -2,6 +2,20 @@
 
 ## [Non publié]
 
+### Versions publiées et CI/CD (chantier S13)
+
+- Une seule version, celle de `pyproject.toml` : `hub.__version__` la lit, `/api/health` la
+  rend, et l'instantané OpenAPI ne la fige plus. `make release VERSION=X.Y.Z` prépare la PR de
+  version (pyproject, `uv.lock`, section du CHANGELOG) ; `make tag` pose le tag sur main.
+- Workflow `Release` sur un tag `vX.Y.Z` : barrières de la CI, images linux/arm64 poussées sur
+  GHCR avec SBOM et provenance, analyse Trivy, release GitHub avec notes et empreintes.
+- `make deploy TAG=vX.Y.Z` tire les images publiées (clone sur le tag, version de l'image
+  vérifiée) ; `HUB_BUILD=1` ou un autre tag construit sur le Mac comme avant.
+- CI : migration depuis la dernière version taguée sur bases et relevé fictifs
+  (`make upgrade-test`), cohérence de la version, `pip-audit` (`make audit`).
+- Dependabot : une PR groupée par semaine pour Python, les actions et les images du compose.
+- `docs/versions.md`, décision D-015.
+
 ### Garde-fous du socle (chantier S0)
 
 - Cinq contrats import-linter de plus décrivent l'architecture visée : un noyau pur, une

@@ -1995,7 +1995,7 @@
   },
   "info": {
     "title": "Personal Hub",
-    "version": "0.1.0"
+    "version": "<version du hub>"
   },
   "openapi": "3.1.0",
   "paths": {
