@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- La recherche web de l'assistant (SearXNG, 127.0.0.1:8888), installée par searxng/install.sh. Une clé secrète neuve
+     à chaque démarrage : elle ne signe que des liens de cette instance. Remplacer COMPTE par le nom du compte. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ch.domia.searxng</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string><string>-c</string>
+    <string>SEARXNG_SECRET=$(/usr/bin/openssl rand -hex 32) exec /Users/COMPTE/Domia/searxng/.venv/bin/searxng-run</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SEARXNG_SETTINGS_PATH</key><string>/Users/COMPTE/personal-hub/personal-hub/assistant/searxng/settings.yml</string>
+  </dict>
+  <key>WorkingDirectory</key><string>/Users/COMPTE/Domia/searxng/src</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/COMPTE/Domia/logs/searxng.log</string>
+  <key>StandardErrorPath</key><string>/Users/COMPTE/Domia/logs/searxng.log</string>
+</dict>
+</plist>

@@ -1,0 +1,24 @@
+# Copier en config.yaml (la vraie maison) ou config.essai.yaml (le banc, contre l'essai) ; le jeton dans .env :
+#   DOMIA_ASSISTANT_TOKEN=<le jeton de l'appareil autorisé « Assistant de maison »>
+domia:
+  url: http://192.168.0.63:3000        # l'essai : http://192.168.0.63:3001
+model:
+  url: http://127.0.0.1:11434/v1       # Ollama ; LM Studio : http://127.0.0.1:1234/v1
+  name: domia-mistral                  # Mistral Small 3.2, choisi par le banc, gabarit de ollama/domia-mistral.Modelfile
+  embeddings: bge-m3                   # null : recherche par mots dans la bibliothèque
+  vision: gemma3:27b                   # pour lire une plaque signalétique (inventaire en photos)
+  keep_alive: 24h                      # Ollama garde le modèle chargé ; null : son défaut (5 min)
+  # reasoning: low                     # seulement pour un modèle qui réfléchit (gpt-oss) : low, medium ou high
+listen:
+  host: 0.0.0.0
+  port: 8770
+  allow_from: [192.168.0.63, 127.0.0.1]  # le Pi (Domia relaie POST /api/talk) et le Mac
+assistant:
+  home: ~/Domia                        # Bibliothèque/, assistant.sqlite, library.sqlite
+  eventkit_url: http://127.0.0.1:8771  # le pont Rappels/Calendrier
+  web_search_url: http://127.0.0.1:8888  # SearXNG sur le Mac (README, « La recherche web ») ; null : pas de recherche web
+  brief_at: "21:00"                    # null : pas de brief du soir
+  timezone: Europe/Zurich
+  voice: true                          # la voix (README, « La voix ») : Whisper sur le Mac, réponse dite par say
+  say_voice: null                      # une voix de `say -v '?'`, par ex. "Amélie (amélioré)" ; null : celle du système
+  settings_write: false                # true : le modèle propose des réglages avec un Oui ; false : il les lit et renvoie à Réglages

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Le pont Rappels/Calendrier, lancé à l'ouverture de session (un LaunchAgent : il voit le trousseau et les autorisations de
+     l'utilisateur). Remplacer COMPTE par le nom du compte ; installer : README.md, « Lancer avec launchd ». -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ch.domia.eventkit</string>
+  <key>ProgramArguments</key>
+  <array>
+    <!-- l'app de eventkit/make-app.sh, responsable du pont pour macOS : c'est elle qui reçoit Rappels et Calendrier ;
+         -W attend qu'elle s'arrête, pour que KeepAlive la relance -->
+    <string>/usr/bin/open</string><string>-W</string><string>-g</string>
+    <string>/Users/COMPTE/Applications/Domia Rappels.app</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/COMPTE/Domia/logs/eventkit.log</string>
+  <key>StandardErrorPath</key><string>/Users/COMPTE/Domia/logs/eventkit.log</string>
+</dict>
+</plist>

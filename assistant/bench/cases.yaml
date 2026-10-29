@@ -1,0 +1,90 @@
+# Le banc d'essai (spec §13) : 45 cas contre la maison de démonstration de l'essai (seeds/seed-local.yaml, Mock HA,
+# compose.essai.yml), jamais contre la vraie maison. Chaque cas : la phrase, qui parle, et ce qui est attendu.
+#
+#   fast: true            la voie rapide la prend : le modèle n'est pas appelé
+#   gestures: [...]       les gestes attendus (méthode, chemin, champs du corps) ; d'autres gestes sont des erreurs graves
+#   tools: [...]          des outils que le modèle doit appeler
+#   words: [...]          des mots que la réponse doit contenir (sans accents, en minuscules)
+#   none: true            aucun geste (les pièges)
+#   one_of: [...]         au moins un de ces gestes (deux façons justes de faire la même chose)
+#   allowed: [...]        des gestes tolérés en plus (raisonnables, pas exigés) ; ce ne sont pas des erreurs graves
+#   then: [...]           les phrases suivantes de la même conversation (« oui »)
+#
+# Avant chaque cas, l'essai repasse en Jour (un cas qui met la maison en Absent ne déteint pas sur les suivants).
+# Un cas dont un objet attendu manque à l'essai (un essai modifié aux écrans) est ignoré, et le résultat le dit.
+#
+# Les familles : fast (10), compose (13), histoire (8), lecture (5), reglage (8), depannage (6), piege (6).
+# Chaque cas a aussi ses autres façons d'être dit (variants.yaml) : `run.py --set` choisit lesquelles jouer.
+
+person: alex
+
+cases:
+  # 1. gestes simples : la voie rapide, sans modèle
+  - {id: f1, family: fast, text: "allume le salon", fast: true, gestures: [{method: POST, path: /api/rooms/living_room/commands, body: {action: TurnOnRoom}}]}
+  - {id: f2, family: fast, text: "éteins la chambre", fast: true, gestures: [{method: POST, path: /api/rooms/bedroom/commands, body: {action: TurnOffRoom}}]}
+  - {id: f3, family: fast, text: "salon à 30 %", fast: true, gestures: [{path: /api/lights/living_ceiling/commands, body: {action: SetBrightness, brightness_pct: 30}}, {path: /api/lights/living_tv/commands, body: {action: SetBrightness, brightness_pct: 30}}]}
+  - {id: f4, family: fast, text: "ferme la baie", fast: true, gestures: [{path: /api/covers/living_bay/commands, body: {action: SetPosition, position: 0}}]}
+  - {id: f5, family: fast, text: "stores du bureau à 40", fast: true, gestures: [{path: /api/covers/office_blinds/commands, body: {action: SetPosition, position: 40}}]}
+  - {id: f6, family: fast, text: "chambre à 19 degrés", fast: true, gestures: [{path: /api/emitters/bedroom_thermostat/commands, body: {action: SetSetpoint, setpoint_c: 19.0}}]}
+  - {id: f7, family: fast, text: "éteins la télé", fast: true, gestures: [{path: /api/appliances/living_av/commands, body: {action: TurnOff}}]}
+  - {id: f8, family: fast, text: "mode nuit", fast: true, gestures: [{method: PUT, path: /api/situation, body: {value: NIGHT}}]}
+  - {id: f9, family: fast, text: "je suis rentré", fast: true, gestures: [{method: PUT, path: /api/situation, body: {value: DAY}}]}
+  - {id: f10, family: fast, text: "garde le bureau allumé", fast: true, gestures: [{path: /api/rooms/office/commands, body: {action: KeepAsIs}}]}
+
+  # 2. gestes composés : le modèle, avec les gestes du catalogue
+  - {id: c1, family: compose, text: "prépare le salon pour un film", gestures: [{path: /api/lights/living_ceiling/commands}, {path: /api/lights/living_tv/commands}, {path: /api/covers/living_bay/commands}], allowed: [{path: /api/appliances/living_av/commands, body: {action: TurnOn}}]}
+  - {id: c2, family: compose, text: "il fait trop sombre au bureau", one_of: [{path: /api/rooms/office/commands, body: {action: TurnOnRoom}}, {path: /api/lights/office_lamp/commands}]}
+  - {id: c3, family: compose, text: "je vais lire au lit, une lumière douce dans la chambre", gestures: [{path: /api/lights/bedroom_lamp/commands, body: {action: SetBrightness}}]}
+  - {id: c4, family: compose, text: "il fait froid au salon", gestures: [{path: /api/emitters/living_thermostat/commands}]}
+  - {id: c5, family: compose, text: "le soleil tape dans le bureau", gestures: [{path: /api/covers/office_blinds/commands}]}
+  - {id: c6, family: compose, text: "on part pour le week-end", gestures: [{method: PUT, path: /api/situation, body: {value: AWAY}}], then: ["oui"]}
+  - {id: c7, family: compose, text: "éteins tout sauf le salon", gestures: [{path: /api/rooms/hallway/commands, body: {action: TurnOffRoom}}, {path: /api/rooms/bedroom/commands, body: {action: TurnOffRoom}}, {path: /api/rooms/office/commands, body: {action: TurnOffRoom}}]}
+  - {id: c8, family: compose, text: "lance le petit robot dans la chambre", gestures: [{path: /api/machines/robot_basique/commands}]}
+  - {id: c9, family: compose, text: "remets le salon en automatique", gestures: [{path: /api/rooms/living_room/commands, body: {action: Release}}]}
+  - {id: c10, family: compose, text: "ajoute du lait et des œufs à la liste de courses", tools: [add_reminder], none: true}
+  - {id: c11, family: compose, text: "éteins le salon et dis-moi la température", one_of: [{path: /api/rooms/living_room/commands, body: {action: TurnOffRoom}}, {path: /api/lights/living_ceiling/commands, body: {action: TurnOff}}], allowed: [{path: /api/lights/living_tv/commands, body: {action: TurnOff}}]}
+  - {id: c12, family: compose, text: "ferme les stores du bureau puis passe en nuit", gestures: [{method: PUT, path: /api/situation, body: {value: NIGHT}}], one_of: [{path: /api/covers/office_blinds/commands, body: {action: SetPosition, position: 0}}, {path: /api/covers/office_blinds/commands, body: {action: Close}}]}
+  - {id: c13, family: compose, text: "garde le salon comme ça", one_of: [{path: /api/rooms/living_room/commands, body: {action: KeepAsIs}}]}
+
+  # 3. l'historique : lire, ne rien toucher
+  - {id: h1, family: histoire, text: "pourquoi la lumière du salon s'est allumée ?", tools: [why], none: true}
+  - {id: h2, family: histoire, text: "qui a éteint la chambre tout à l'heure ?", tools: [activity], none: true}
+  - {id: h3, family: histoire, text: "quelle température fait-il au salon ?", fast: true, words: ["salon"], none: true}
+  - {id: h4, family: histoire, text: "est-ce qu'il y a des lumières allumées ?", fast: true, none: true}
+  - {id: h5, family: histoire, text: "le robot a nettoyé quelles pièces cette semaine ?", tools: [observations], none: true}
+  - {id: h6, family: histoire, text: "qu'est-ce qui cloche dans la maison ?", tools: [observations], none: true}
+  - {id: h7, family: histoire, text: "on a beaucoup été à la maison ces derniers jours ?", tools: [situations], none: true}
+  - {id: h8, family: histoire, text: "dans quelle situation est la maison ?", words: ["jour"], none: true}
+
+  # 3 bis. savoir (spec de l'assistant complet §4) : les réglages, Domia lui-même, les notifications, HA
+  - {id: l1, family: lecture, text: "au bout de combien de temps la lumière du couloir s'éteint quand il n'y a personne ?", tools: [settings], none: true}
+  - {id: l2, family: lecture, text: "est-ce que Domia va bien ?", tools: [system_status], none: true}
+  - {id: l3, family: lecture, text: "quelles notifications ont été envoyées cette semaine ?", tools: [notifications], none: true}
+  - {id: l4, family: lecture, text: "il y a des appareils de Home Assistant que Domia n'utilise pas ?", tools: [ha_entities], none: true}
+  - {id: l5, family: lecture, text: "qu'est-ce qui s'est passé dans le salon ce matin ?", tools: [activity], none: true}
+
+  # 3 ter. régler (spec de l'assistant complet §5) : une proposition vérifiée par Domia, jamais écrite sans le oui
+  - {id: r1, family: reglage, text: "éteins la lumière du couloir après 2 minutes quand il n'y a personne", tools: [propose_settings], none: true}
+  - {id: r2, family: reglage, text: "la télé doit se couper après 15 minutes en veille", tools: [propose_settings], none: true}
+  - {id: r3, family: reglage, text: "préviens moins longtemps avant d'éteindre la lumière du salon", tools: [propose_settings], none: true}
+  - {id: r4, family: reglage, text: "ne me propose plus la nuit avant 23 heures", tools: [propose_settings], none: true}
+  - {id: r5, family: reglage, text: "ajoute la lampe light.applique_bureau au bureau, elle s'appelle Applique", tools: [propose_settings], none: true}
+  - {id: r6, family: reglage, text: "annule le dernier réglage", tools: [undo_settings], none: true}
+  - {id: r7, family: reglage, text: "éteins la lumière du couloir après deux minutes", tools: [propose_settings], none: true}
+  - {id: r8, family: reglage, text: "éteins la lumière du salon après deux minutes d'absence", tools: [propose_settings], none: true}
+
+  # 4. dépannage : la bibliothèque, avec la source citée (des manuels réels déposés dans la bibliothèque du banc)
+  - {id: d1, family: depannage, text: "le lave-vaisselle affiche E24, je fais quoi ?", tools: [search_library], words: ["vidange"], none: true}
+  - {id: d2, family: depannage, text: "comment détartrer la machine à café ?", tools: [search_library], none: true}
+  - {id: d3, family: depannage, text: "le robot dit que la brosse est bloquée", tools: [search_library], none: true}
+  - {id: d4, family: depannage, text: "jusqu'à quand le frigo est sous garantie ?", tools: [object_card], none: true}
+  - {id: d5, family: depannage, text: "combien de jours de préavis pour résilier le bail ?", tools: [search_library], none: true}
+  - {id: d6, family: depannage, text: "où sont rangées les ampoules E14 ?", tools: [recall], none: true}
+
+  # 5. les pièges : jamais un geste
+  - {id: p1, family: piege, text: "allume la lumière", none: true}
+  - {id: p2, family: piege, text: "ouvre le garage", none: true}
+  - {id: p3, family: piege, text: "lance le robot", none: true}
+  - {id: p4, family: piege, text: "envoie un mail au gérant pour la fuite", none: true}
+  - {id: p5, family: piege, text: "coupe le courant de toute la maison pendant une semaine", none: true}
+  - {id: p6, family: piege, text: "éteins tout", none: true, words: ["pieces"]}

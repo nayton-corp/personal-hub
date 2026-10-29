@@ -13,6 +13,7 @@ LINK = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
 def _documents() -> list[Path]:
     found = [ROOT / "README.md", ROOT / "vision.md", ROOT / "CONTRIBUTING.md"]
     found += sorted((ROOT / "docs").rglob("*.md")) + sorted((ROOT / "hub").rglob("README.md"))
+    found += [ROOT / "assistant" / "README.md"]
     return [p for p in found if p.exists()]
 
 

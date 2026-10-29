@@ -125,7 +125,7 @@ def test_no_owner_name_left_in_code() -> None:
     root = Path(__file__).resolve().parents[1]
     hits = [
         str(p.relative_to(root))
-        for base in ("hub", "deploy")
+        for base in ("hub", "deploy", "assistant")
         for p in (root / base).rglob("*")
         if p.is_file()
         and p.suffix in {".py", ".js", ".html", ".toml", ".yaml", ".example", ""}

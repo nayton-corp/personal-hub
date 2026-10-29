@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+### Un seul assistant, venu de Domia (chantier S10)
+
+- L'assistant de Domia arrive dans `assistant/`, avec ses 149 tests, son banc, ses gabarits de
+  modèle, ses LaunchAgents et le pont Rappels/Calendrier (`eventkit/`) : un paquet à part, testé
+  par sa propre tâche de CI (`make assistant-test`).
+- Le contrat avec l'API de Domia est figé dans `assistant/domia_assistant/contract/`
+  (`make domia-contract DOMIA=~/domia`).
+
 ### Recherche, liens et constats (chantier S9)
 
 - `/api/search` fusionne les domaines par rang : chaque résultat dit son domaine, son rang dans

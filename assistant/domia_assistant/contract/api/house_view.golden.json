@@ -1,0 +1,358 @@
+{
+  "view_version" : 19,
+  "config_revision" : 0,
+  "published_at" : "2026-09-23T19:01:30Z",
+  "ha_connected" : true,
+  "situation" : {
+    "value" : "NIGHT",
+    "updated_at" : "2026-09-23T19:00:00Z",
+    "updated_by" : "UI",
+    "planned_end" : null,
+    "changed_by" : null,
+    "because" : [ ]
+  },
+  "rooms" : [ {
+    "id" : "living_room",
+    "name" : "Salon",
+    "occupancy" : "OCCUPIED",
+    "vacant_since" : null,
+    "vacant_effective_since" : null,
+    "depart_at" : null,
+    "occupied_since" : "2026-09-23T19:00:00Z",
+    "lux" : 12.0,
+    "temperature" : null,
+    "humidity" : null,
+    "co2" : null,
+    "stale" : false,
+    "false_offs" : {
+      "count" : 0,
+      "since" : "2026-09-23T19:00:00Z"
+    },
+    "sensors" : [ {
+      "id" : "living_occ",
+      "name" : "living_occ",
+      "kind" : "OCCUPANCY",
+      "state" : "on",
+      "last_changed" : "2026-09-23T19:00:00Z",
+      "stale" : false,
+      "opening" : null
+    }, {
+      "id" : "living_lux",
+      "name" : "living_lux",
+      "kind" : "LUX",
+      "state" : "12",
+      "last_changed" : "2026-09-23T19:00:00Z",
+      "stale" : false,
+      "opening" : null
+    } ],
+    "lights" : [ {
+      "id" : "living_ceiling",
+      "name" : "living_ceiling",
+      "ha_entity_id" : "light.salon_plafond",
+      "model" : null,
+      "dimmable" : true,
+      "dark_below_lux" : 20.0,
+      "auto_off" : true,
+      "off_warning_sec" : 60,
+      "restore_on_return" : false,
+      "restore_within_sec" : 1800,
+      "situations" : {
+        "DAY" : {
+          "auto_on" : true,
+          "brightness" : 80
+        },
+        "NIGHT" : {
+          "auto_on" : true,
+          "brightness" : 20
+        },
+        "AWAY" : {
+          "auto_on" : true,
+          "brightness" : 50
+        }
+      },
+      "dark" : true,
+      "dark_reason" : "LUX_BELOW_THRESHOLD",
+      "on" : true,
+      "brightness_pct" : 20,
+      "color" : {
+        "rgb" : true,
+        "min_kelvin" : 2202,
+        "max_kelvin" : 6535,
+        "kelvin" : 2700,
+        "current" : null
+      },
+      "available" : true,
+      "pending" : false,
+      "unresponsive" : false,
+      "last_command" : null,
+      "auto" : {
+        "desired" : "ON",
+        "brightness_pct" : 20
+      },
+      "mode" : {
+        "value" : "AUTO",
+        "on" : null,
+        "brightness_pct" : null,
+        "by" : null,
+        "since" : null,
+        "until" : null,
+        "until_at" : null,
+        "ends_at" : null
+      },
+      "warning" : null,
+      "restore" : null,
+      "last_handback" : null
+    }, {
+      "id" : "living_tv",
+      "name" : "living_tv",
+      "ha_entity_id" : "light.meuble_tv",
+      "model" : null,
+      "dimmable" : true,
+      "dark_below_lux" : 20.0,
+      "auto_off" : true,
+      "off_warning_sec" : 60,
+      "restore_on_return" : false,
+      "restore_within_sec" : 1800,
+      "situations" : {
+        "DAY" : {
+          "auto_on" : false,
+          "brightness" : null
+        },
+        "NIGHT" : {
+          "auto_on" : false,
+          "brightness" : null
+        },
+        "AWAY" : {
+          "auto_on" : false,
+          "brightness" : null
+        }
+      },
+      "dark" : true,
+      "dark_reason" : "LUX_BELOW_THRESHOLD",
+      "on" : false,
+      "brightness_pct" : null,
+      "color" : null,
+      "available" : true,
+      "pending" : false,
+      "unresponsive" : false,
+      "last_command" : null,
+      "auto" : {
+        "desired" : "NONE",
+        "brightness_pct" : null
+      },
+      "mode" : {
+        "value" : "MANUAL",
+        "on" : false,
+        "brightness_pct" : null,
+        "by" : "EXTERNAL",
+        "since" : "2026-09-23T19:01:20Z",
+        "until" : "DEPARTURE",
+        "until_at" : null,
+        "ends_at" : null
+      },
+      "warning" : null,
+      "restore" : null,
+      "last_handback" : null
+    } ],
+    "appliances" : [ ],
+    "covers" : [ ],
+    "emitters" : [ ],
+    "held_by" : null
+  }, {
+    "id" : "hallway",
+    "name" : "Couloir",
+    "occupancy" : "VACANT",
+    "vacant_since" : "2026-09-23T19:00:20Z",
+    "vacant_effective_since" : "2026-09-23T19:01:20Z",
+    "depart_at" : "2026-09-23T19:11:20Z",
+    "occupied_since" : null,
+    "lux" : null,
+    "temperature" : null,
+    "humidity" : null,
+    "co2" : null,
+    "stale" : false,
+    "false_offs" : {
+      "count" : 0,
+      "since" : "2026-09-23T19:00:00Z"
+    },
+    "sensors" : [ {
+      "id" : "hallway_occ",
+      "name" : "hallway_occ",
+      "kind" : "OCCUPANCY",
+      "state" : "off",
+      "last_changed" : "2026-09-23T19:00:20Z",
+      "stale" : false,
+      "opening" : null
+    } ],
+    "lights" : [ {
+      "id" : "hallway_ceiling",
+      "name" : "hallway_ceiling",
+      "ha_entity_id" : "switch.couloir_plafond",
+      "model" : null,
+      "dimmable" : false,
+      "dark_below_lux" : null,
+      "auto_off" : true,
+      "off_warning_sec" : 60,
+      "restore_on_return" : false,
+      "restore_within_sec" : 1800,
+      "situations" : {
+        "DAY" : {
+          "auto_on" : true,
+          "brightness" : null
+        },
+        "NIGHT" : {
+          "auto_on" : true,
+          "brightness" : null
+        },
+        "AWAY" : {
+          "auto_on" : true,
+          "brightness" : null
+        }
+      },
+      "dark" : true,
+      "dark_reason" : "NO_LUX_SENSOR",
+      "on" : true,
+      "brightness_pct" : null,
+      "color" : null,
+      "available" : true,
+      "pending" : false,
+      "unresponsive" : false,
+      "last_command" : null,
+      "auto" : {
+        "desired" : "OFF",
+        "brightness_pct" : null
+      },
+      "mode" : {
+        "value" : "MANUAL",
+        "on" : true,
+        "brightness_pct" : null,
+        "by" : "UI",
+        "since" : "2026-09-23T19:00:00Z",
+        "until" : "DEPARTURE",
+        "until_at" : null,
+        "ends_at" : "2026-09-23T19:11:20Z"
+      },
+      "warning" : null,
+      "restore" : null,
+      "last_handback" : null
+    } ],
+    "appliances" : [ ],
+    "covers" : [ ],
+    "emitters" : [ ],
+    "held_by" : null
+  }, {
+    "id" : "office",
+    "name" : "Bureau",
+    "occupancy" : "NO_SENSOR",
+    "vacant_since" : null,
+    "vacant_effective_since" : null,
+    "depart_at" : null,
+    "occupied_since" : null,
+    "lux" : null,
+    "temperature" : null,
+    "humidity" : null,
+    "co2" : null,
+    "stale" : false,
+    "false_offs" : {
+      "count" : 0,
+      "since" : "2026-09-23T19:00:00Z"
+    },
+    "sensors" : [ ],
+    "lights" : [ {
+      "id" : "office_lamp",
+      "name" : "office_lamp",
+      "ha_entity_id" : "light.bureau",
+      "model" : null,
+      "dimmable" : true,
+      "dark_below_lux" : null,
+      "auto_off" : true,
+      "off_warning_sec" : 60,
+      "restore_on_return" : false,
+      "restore_within_sec" : 1800,
+      "situations" : {
+        "DAY" : {
+          "auto_on" : true,
+          "brightness" : null
+        },
+        "NIGHT" : {
+          "auto_on" : true,
+          "brightness" : null
+        },
+        "AWAY" : {
+          "auto_on" : true,
+          "brightness" : null
+        }
+      },
+      "dark" : true,
+      "dark_reason" : "NO_LUX_SENSOR",
+      "on" : true,
+      "brightness_pct" : 100,
+      "color" : null,
+      "available" : true,
+      "pending" : false,
+      "unresponsive" : false,
+      "last_command" : null,
+      "auto" : {
+        "desired" : "NONE",
+        "brightness_pct" : null
+      },
+      "mode" : {
+        "value" : "AUTO",
+        "on" : null,
+        "brightness_pct" : null,
+        "by" : null,
+        "since" : null,
+        "until" : null,
+        "until_at" : null,
+        "ends_at" : null
+      },
+      "warning" : null,
+      "restore" : null,
+      "last_handback" : null
+    } ],
+    "appliances" : [ ],
+    "covers" : [ {
+      "id" : "office_blinds",
+      "name" : "Stores",
+      "ha_entity_id" : "cover.bureau_stores",
+      "opening" : "o_baie",
+      "available" : true,
+      "position" : 40,
+      "tilt" : 50,
+      "motion" : "CLOSING",
+      "can_position" : true,
+      "can_tilt" : true,
+      "can_stop" : true,
+      "pending" : false,
+      "last_command" : null,
+      "has_law" : false,
+      "sun_known" : false,
+      "opening_open" : null,
+      "auto" : {
+        "position" : null,
+        "reason" : null,
+        "at" : null,
+        "blocked" : false
+      },
+      "mode" : {
+        "value" : "AUTO",
+        "position" : null,
+        "tilt" : null,
+        "by" : null,
+        "since" : null,
+        "until" : null,
+        "until_at" : null,
+        "ends_at" : null
+      },
+      "last_handback" : null
+    } ],
+    "emitters" : [ ],
+    "held_by" : null
+  } ],
+  "machines" : [ ],
+  "people" : [ ],
+  "calm_since" : null,
+  "everyone_gone" : null,
+  "proposal" : null,
+  "silent" : [ ]
+}

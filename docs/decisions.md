@@ -7,6 +7,21 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-021 · L'assistant de Domia devient celui du hub, en paquet à part (30.10.2026)
+
+- **Contexte** : deux assistants (celui de Domia, mesuré au banc, et le brain du hub), deux
+  modèles qui se chassent de la mémoire du Mac. Domia est un produit pour d'autres foyers : un
+  foyer sans hub ne doit pas perdre son assistant.
+- **Décision** : l'assistant arrive dans `assistant/` tel quel, avec ses tests, son banc et le
+  pont Rappels/Calendrier. Il reste un paquet à part (`domia_assistant`, ses dépendances et sa
+  CI), utilisable avec Domia seul ; les outils du hub s'y ajoutent comme un module. Le contrat
+  avec l'API de Domia est figé dans `domia_assistant/contract/` (`DOMIA_VERSION` : la plus
+  ancienne version lue) et repris par `make domia-contract`. Les prénoms d'exemple deviennent
+  ceux des tests.
+- **Conséquence** : l'assistant du dépôt de Domia reste en service jusqu'à ce que celui-ci
+  passe le banc ; la bascule consiste à changer l'adresse que Domia relaie, le retour arrière à
+  la remettre.
+
 ## D-020 · Recherche fusionnée par rang ; liens et constats tenus par le cœur (30.10.2026)
 
 - **Contexte** : `/api/search` triait les résultats de tous les domaines sur leurs scores bruts,

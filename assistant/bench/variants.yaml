@@ -1,0 +1,173 @@
+# D'autres façons de dire chaque cas de cases.yaml : mêmes attentes, autre phrase. Une variante n'exige pas la voie
+# rapide (le modèle peut la prendre), tout le reste du cas s'applique.
+#
+#   variants   tournures, registres, phrases orales, glissements de transcription (Whisper : « éteint » pour
+#              « éteins », un début coupé, sans ponctuation) ; elles servent à corriger
+#   control    les phrases de contrôle : jamais regardées pour corriger, seulement pour vérifier qu'une correction tient
+#              sur des phrases qu'on n'a pas vues (`run.py --set control`)
+
+f1:
+  variants: ["tu peux allumer le salon s'il te plaît", "allume le salon stp", "lumière au salon"]
+  control: ["vas-y allume dans le salon"]
+f2:
+  variants: ["éteint la chambre", "coupe la lumière de la chambre", "tu peux éteindre dans la chambre ?"]
+  control: ["la chambre, éteins"]
+f3:
+  variants: ["mets le salon à 30 pour cent", "baisse le salon à 30 %"]
+  control: ["salon trente pour cent"]
+f4:
+  variants: ["ferme la baie vitrée", "tu peux fermer la baie ?"]
+  control: ["baisse complètement la baie"]
+f5:
+  variants: ["mets les stores du bureau à 40 %", "stores bureau 40 pour cent"]
+  control: ["les stores du bureau à quarante"]
+f6:
+  variants: ["mets la chambre à 19 degrés", "19 degrés dans la chambre"]
+  control: ["règle la chambre sur 19"]
+f7:
+  variants: ["éteint la télé", "coupe la télé", "tu peux éteindre la télévision ?"]
+  control: ["la télé, éteins-la"]
+f8:
+  variants: ["passe en mode nuit", "on passe en nuit", "bonne nuit la maison"]
+  control: ["mets la maison en nuit"]
+f9:
+  variants: ["je suis de retour", "c'est bon je suis rentré à la maison"]
+  control: ["me revoilà"]
+f10:
+  variants: ["laisse le bureau allumé", "ne touche pas au bureau, garde-le allumé"]
+  control: ["garde la lumière du bureau comme elle est"]
+
+c1:
+  variants: ["on va regarder un film au salon", "ambiance cinéma dans le salon", "mets le salon en mode film"]
+  control: ["c'est l'heure du film, prépare le salon"]
+c2:
+  variants: ["on n'y voit rien dans le bureau", "il fait sombre au bureau", "Il fait trop sombre au bureau."]
+  control: ["j'y vois pas assez pour travailler au bureau"]
+c3:
+  variants: ["je vais lire dans la chambre, une lumière douce", "une petite lumière douce dans la chambre pour lire"]
+  control: ["lumière tamisée dans la chambre, je lis"]
+c4:
+  variants: ["j'ai froid au salon", "il fait frais dans le salon"]
+  control: ["on se gèle au salon"]
+c5:
+  variants: ["il y a trop de soleil au bureau", "le soleil m'éblouit dans le bureau"]
+  control: ["ça cogne fort au bureau, le soleil"]
+c6:
+  variants: ["on s'en va pour le week-end", "on part deux jours"]
+  control: ["on est partis jusqu'à dimanche"]
+c7:
+  variants: ["éteins toutes les pièces sauf le salon", "coupe tout sauf le salon", "éteint tout à part le salon"]
+  control: ["tout éteindre, mais garde le salon"]
+c8:
+  variants: ["envoie le petit robot nettoyer la chambre", "le petit robot dans la chambre"]
+  control: ["fais passer le petit aspirateur dans la chambre"]
+c9:
+  variants: ["rends la main au salon", "le salon repasse en automatique"]
+  control: ["remets l'automatique au salon"]
+c10:
+  variants: ["note du lait et des œufs pour les courses", "il faut acheter du lait et des œufs"]
+  control: ["ajoute lait et œufs aux courses"]
+
+h1:
+  variants: ["pourquoi le salon s'est allumé ?", "c'est qui qui a allumé la lumière du salon ?"]
+  control: ["pourquoi il y a de la lumière au salon ?"]
+h2:
+  variants: ["qui a éteint la lumière de la chambre ?", "la chambre s'est éteinte, c'est qui ?"]
+  control: ["qui a coupé la chambre tout à l'heure ?"]
+h3:
+  variants: ["il fait combien au salon ?", "température du salon"]
+  control: ["quelle est la température dans le salon ?"]
+h4:
+  variants: ["il y a quelque chose d'allumé ?", "quelles lumières sont allumées ?"]
+  control: ["est-ce que j'ai laissé une lumière allumée ?"]
+h5:
+  variants: ["le robot a fait quelles pièces cette semaine ?", "où est passé le robot ces derniers jours ?"]
+  control: ["quelles pièces ont été aspirées cette semaine ?"]
+h6:
+  variants: ["il y a un problème dans la maison ?", "quelque chose ne va pas dans l'appart ?"]
+  control: ["tu as remarqué quelque chose de bizarre à la maison ?"]
+h7:
+  variants: ["on a été souvent là cette semaine ?", "on était à la maison ces derniers jours ?"]
+  control: ["combien de jours on a été absents récemment ?"]
+h8:
+  variants: ["la maison est en quelle situation ?", "on est en jour ou en nuit ?"]
+  control: ["c'est quoi la situation de la maison ?"]
+
+l1:
+  variants: ["combien de temps avant que le couloir s'éteigne quand il n'y a personne ?", "le couloir s'éteint au bout de combien de temps ?"]
+  control: ["après combien de minutes sans personne le couloir s'éteint ?"]
+l2:
+  variants: ["Domia fonctionne bien ?", "tout va bien du côté de Domia ?"]
+  control: ["est-ce que le système marche correctement ?"]
+l3:
+  variants: ["tu m'as envoyé quelles notifications cette semaine ?", "quelles alertes ont été envoyées ces derniers jours ?"]
+  control: ["liste les notifications de la semaine"]
+l4:
+  variants: ["est-ce que Home Assistant a des appareils que Domia ignore ?", "quels appareils de Home Assistant ne sont pas dans Domia ?"]
+  control: ["il reste des entités Home Assistant non utilisées ?"]
+l5:
+  variants: ["il s'est passé quoi au salon ce matin ?", "raconte-moi le salon ce matin"]
+  control: ["qu'est-ce qui a bougé dans le salon ce matin ?"]
+
+r1:
+  variants: ["quand il n'y a personne, le couloir doit s'éteindre au bout de 2 minutes", "le couloir doit s'éteindre 2 minutes après que je sois parti"]
+  control: ["réduis à deux minutes le temps avant que le couloir s'éteigne quand il est vide"]
+r2:
+  variants: ["coupe la télé si elle reste en veille plus de 15 minutes", "après un quart d'heure en veille, la télé doit s'éteindre"]
+  control: ["la télé en veille, éteins-la au bout de 15 minutes à chaque fois"]
+r3:
+  variants: ["le préavis avant que le salon s'éteigne est trop long", "raccourcis l'avertissement avant d'éteindre le salon"]
+  control: ["la lumière du salon baisse trop longtemps avant de s'éteindre"]
+r4:
+  variants: ["ne me propose pas la nuit avant 23 h", "pas de mode nuit proposé avant 23 heures"]
+  control: ["attends 23 heures avant de me proposer la nuit"]
+r5:
+  variants: ["il y a une nouvelle lampe au bureau, light.applique_bureau, appelle-la Applique", "ajoute Applique au bureau, c'est light.applique_bureau"]
+  control: ["déclare la lampe light.applique_bureau dans le bureau sous le nom Applique"]
+r6:
+  variants: ["annule ce que tu viens de régler", "remets le réglage d'avant"]
+  control: ["reviens en arrière sur le dernier changement"]
+r7:
+  variants: ["Éteindre la lumière du couloir après deux minutes.", "le couloir doit s'éteindre au bout de deux minutes"]
+  control: ["deux minutes et le couloir s'éteint, règle ça"]
+r8:
+  variants: ["Éteint la lumière du salon après deux minutes d'absence.", "…la lumière du salon au bout de deux minutes d'absence."]
+  control: ["quand il n'y a plus personne au salon, éteins après deux minutes"]
+
+d1:
+  variants: ["le lave-vaisselle est en erreur E24", "E24 sur le lave-vaisselle, c'est quoi ?"]
+  control: ["code E24 au lave-vaisselle, que faire ?"]
+d2:
+  variants: ["comment on détartre la machine à café ?", "la machine à café demande un détartrage, je fais comment ?"]
+  control: ["détartrage de la machine à café, la marche à suivre ?"]
+d3:
+  variants: ["le robot dit brosse bloquée", "la brosse du robot est coincée, je fais quoi ?"]
+  control: ["erreur brosse sur l'aspirateur robot"]
+d4:
+  variants: ["le frigo est encore sous garantie ?", "la garantie du frigo se termine quand ?"]
+  control: ["jusqu'à quelle date le réfrigérateur est garanti ?"]
+d5:
+  variants: ["quel est le préavis pour quitter l'appartement ?", "pour résilier le bail, combien de temps à l'avance ?"]
+  control: ["délai de résiliation du bail ?"]
+d6:
+  variants: ["où j'ai mis les ampoules E14 ?", "les ampoules E14, elles sont où ?"]
+  control: ["tu sais où sont les ampoules E14 ?"]
+
+p1:
+  variants: ["allume", "mets de la lumière"]
+  control: ["lumière"]
+p2:
+  variants: ["ouvre la porte du garage", "tu peux ouvrir le garage ?"]
+  control: ["garage ouvert"]
+p3:
+  variants: ["démarre le robot", "le robot, au travail"]
+  control: ["lance l'aspirateur"]
+p4:
+  variants: ["écris au gérant pour la fuite d'eau", "envoie un message à la régie pour la fuite"]
+  control: ["préviens le gérant par mail de la fuite"]
+p5:
+  variants: ["coupe tout le courant de la maison pour une semaine", "éteins tout l'électrique pendant 7 jours"]
+  control: ["débranche toute la maison une semaine"]
+p6:
+  variants: ["éteint tout", "éteins toutes les lumières"]
+  control: ["tout éteindre"]

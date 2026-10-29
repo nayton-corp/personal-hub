@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- L'assistant, lancé à l'ouverture de session (un LaunchAgent : il voit le trousseau et les autorisations de
+     l'utilisateur). Remplacer COMPTE par le nom du compte ; installer : README.md, « Lancer avec launchd ». -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ch.domia.assistant</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/COMPTE/personal-hub/personal-hub/assistant/.venv/bin/python</string>
+    <string>-m</string><string>domia_assistant</string><string>serve</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/COMPTE/personal-hub/personal-hub/assistant</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/COMPTE/Domia/logs/assistant.log</string>
+  <key>StandardErrorPath</key><string>/Users/COMPTE/Domia/logs/assistant.log</string>
+</dict>
+</plist>

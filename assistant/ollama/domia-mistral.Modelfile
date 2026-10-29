@@ -1,0 +1,27 @@
+# Mistral Small 3.2 pour l'assistant : `ollama create domia-mistral -f ollama/domia-mistral.Modelfile`, puis
+# `model.name: domia-mistral` dans config.yaml.
+#
+# Le gabarit d'origine (Ollama 0.40) ne met les outils qu'avant un message utilisateur parmi les deux derniers : au
+# deuxième appel d'une phrase (après le résultat d'un outil), ils disparaissent, le début du prompt change et Ollama
+# recalcule tout (20 à 40 s pour ~3 000 jetons sur un M1 Max). Ici les outils suivent toujours le système, à une
+# place fixe : la consigne, l'inventaire et les outils restent en cache d'une phrase et d'un appel à l'autre. C'est
+# aussi la forme de Mistral pour une conversation à une seule demande, celle de l'assistant.
+FROM mistral-small3.2:24b
+PARAMETER num_ctx 32768
+PARAMETER temperature 0.15
+TEMPLATE """{{- range $index, $_ := .Messages }}
+{{- if eq .Role "system" }}[SYSTEM_PROMPT]{{ .Content }}[/SYSTEM_PROMPT]
+{{- if $.Tools }}[AVAILABLE_TOOLS]{{ $.Tools }}[/AVAILABLE_TOOLS]
+{{- end }}
+{{- else if eq .Role "user" }}[INST]{{ .Content }}[/INST]
+{{- else if eq .Role "assistant" }}
+{{- if .Content }}{{ .Content }}
+{{- if not (eq (len (slice $.Messages $index)) 1) }}</s>
+{{- end }}
+{{- else if .ToolCalls }}
+{{- range $i, $_ := .ToolCalls }}[TOOL_CALLS]{{ .Function.Name }}[CALL_ID]{{ $i }}[ARGS]{{ .Function.Arguments }}
+{{- end }}</s>
+{{- end }}
+{{- else if eq .Role "tool" }}[TOOL_RESULTS]{"content": {{ .Content }}}[/TOOL_RESULTS]
+{{- end }}
+{{- end }}"""

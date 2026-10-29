@@ -1,0 +1,246 @@
+{
+  "at" : "2026-09-23T19:05:00Z",
+  "night" : {
+    "value" : null,
+    "since" : "2026-09-23T19:00:00Z",
+    "reason" : "NO_SITE"
+  },
+  "turn_at" : null,
+  "planned_end" : null,
+  "rooms" : {
+    "living_room" : {
+      "room_id" : "living_room",
+      "occupancy" : "OCCUPIED",
+      "vacant_since" : null,
+      "vacant_effective_since" : null,
+      "departed_at" : null,
+      "occupied_since" : "2026-09-23T19:00:00Z",
+      "stale" : false,
+      "lux" : {
+        "value" : 12.0,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "SENSOR"
+      },
+      "temperature" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "humidity" : {
+        "value" : 58.0,
+        "since" : "2026-09-23T19:05:00Z",
+        "reason" : "SENSOR"
+      },
+      "humidity_rise" : {
+        "value" : 8.0,
+        "since" : "2026-09-23T19:05:00Z",
+        "reason" : "COMPUTED"
+      },
+      "co2" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "window_open" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "heat_rate" : {
+        "value" : 1.0,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_MEMORY"
+      },
+      "heat_rate_rises" : 0,
+      "held_by" : null,
+      "released_at" : null
+    },
+    "hallway" : {
+      "room_id" : "hallway",
+      "occupancy" : "CLEARING",
+      "vacant_since" : "2026-09-23T19:05:00Z",
+      "vacant_effective_since" : null,
+      "departed_at" : null,
+      "occupied_since" : null,
+      "stale" : false,
+      "lux" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "temperature" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "humidity" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "humidity_rise" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "co2" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "window_open" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "heat_rate" : {
+        "value" : 1.0,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_MEMORY"
+      },
+      "heat_rate_rises" : 0,
+      "held_by" : null,
+      "released_at" : null
+    },
+    "office" : {
+      "room_id" : "office",
+      "occupancy" : "NO_SENSOR",
+      "vacant_since" : null,
+      "vacant_effective_since" : null,
+      "departed_at" : null,
+      "occupied_since" : null,
+      "stale" : false,
+      "lux" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "temperature" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "humidity" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "humidity_rise" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "co2" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "window_open" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "heat_rate" : {
+        "value" : 1.0,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_MEMORY"
+      },
+      "heat_rate_rises" : 0,
+      "held_by" : null,
+      "released_at" : null
+    }
+  },
+  "openings" : {
+    "o_baie" : {
+      "opening_id" : "o_baie",
+      "open" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "exposed" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SITE"
+      },
+      "exposed_at" : null
+    }
+  },
+  "appliances" : { },
+  "sensors" : {
+    "living_occ" : {
+      "sensor_id" : "living_occ",
+      "battery" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "battery_entity_id" : null,
+      "battery_low" : false,
+      "available" : true,
+      "last_seen" : "2026-09-23T19:00:00Z",
+      "silent" : false
+    },
+    "living_lux" : {
+      "sensor_id" : "living_lux",
+      "battery" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "battery_entity_id" : null,
+      "battery_low" : false,
+      "available" : true,
+      "last_seen" : "2026-09-23T19:00:00Z",
+      "silent" : false
+    },
+    "living_humidity" : {
+      "sensor_id" : "living_humidity",
+      "battery" : {
+        "value" : 62.0,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "SENSOR"
+      },
+      "battery_entity_id" : "sensor.salon_humidite_battery",
+      "battery_low" : false,
+      "available" : true,
+      "last_seen" : "2026-09-23T19:05:00Z",
+      "silent" : false
+    },
+    "hallway_occ" : {
+      "sensor_id" : "hallway_occ",
+      "battery" : {
+        "value" : null,
+        "since" : "2026-09-23T19:00:00Z",
+        "reason" : "NO_SENSOR"
+      },
+      "battery_entity_id" : null,
+      "battery_low" : false,
+      "available" : true,
+      "last_seen" : "2026-09-23T19:05:00Z",
+      "silent" : false
+    }
+  },
+  "household" : {
+    "people" : { },
+    "everyone_gone" : {
+      "value" : null,
+      "since" : null,
+      "reason" : "NO_VALUE"
+    },
+    "anyone_arrived" : null,
+    "last_motion" : {
+      "at" : "2026-09-23T19:00:00Z",
+      "room_id" : "living_room"
+    },
+    "calm_since" : {
+      "value" : null,
+      "since" : "2026-09-23T19:00:00Z",
+      "reason" : "COMPUTED"
+    },
+    "door_closed_at" : null,
+    "door_opened_at" : null,
+    "last_activity" : null
+  },
+  "estimates" : { }
+}

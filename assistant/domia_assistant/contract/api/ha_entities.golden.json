@@ -1,0 +1,56 @@
+[ {
+  "entity_id" : "binary_sensor.couloir_presence",
+  "domain" : "binary_sensor",
+  "name" : "Présence couloir",
+  "state" : "off",
+  "device_class" : "motion"
+}, {
+  "entity_id" : "binary_sensor.salon_presence",
+  "domain" : "binary_sensor",
+  "name" : "Présence salon",
+  "state" : "off",
+  "device_class" : "occupancy"
+}, {
+  "entity_id" : "cover.bureau_stores",
+  "domain" : "cover",
+  "name" : "Stores bureau",
+  "state" : "open"
+}, {
+  "entity_id" : "event.molette",
+  "domain" : "event",
+  "name" : "Molette",
+  "state" : "unknown",
+  "event_types" : [ "press", "rotation" ]
+}, {
+  "entity_id" : "light.bureau",
+  "domain" : "light",
+  "name" : "Lampe bureau",
+  "state" : "off"
+}, {
+  "entity_id" : "light.meuble_tv",
+  "domain" : "light",
+  "name" : "Meuble TV",
+  "state" : "off"
+}, {
+  "entity_id" : "light.salon_plafond",
+  "domain" : "light",
+  "name" : "Plafond salon",
+  "state" : "off"
+}, {
+  "entity_id" : "sensor.four_power",
+  "domain" : "sensor",
+  "name" : "Four",
+  "state" : "1200",
+  "device_class" : "power"
+}, {
+  "entity_id" : "sensor.salon_light",
+  "domain" : "sensor",
+  "name" : "Luminosité salon",
+  "state" : "100",
+  "device_class" : "illuminance"
+}, {
+  "entity_id" : "switch.couloir_plafond",
+  "domain" : "switch",
+  "name" : "Plafond couloir",
+  "state" : "off"
+} ]

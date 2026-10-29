@@ -1,0 +1,4 @@
+PyYAML==6.0.3
+mcp==1.30.0
+pypdf==6.21.2
+fonttools==4.60.1

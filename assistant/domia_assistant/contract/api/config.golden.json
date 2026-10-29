@@ -1,0 +1,815 @@
+{
+  "config_revision" : 0,
+  "config" : {
+    "version" : 28,
+    "house" : {
+      "name" : "Maison Dev (Mock)",
+      "timezone" : "Europe/Zurich",
+      "situation_default" : "DAY"
+    },
+    "rooms" : [ {
+      "id" : "living_room",
+      "name" : "Salon",
+      "space" : null,
+      "vacant_after_sec" : 120,
+      "depart_after_sec" : 1800,
+      "lights" : [ {
+        "id" : "living_ceiling",
+        "name" : "Plafond",
+        "ha_entity_id" : "light.salon_plafond",
+        "dimmable" : true,
+        "dark_below_lux" : 20.0,
+        "auto_off" : true,
+        "off_warning_sec" : 60,
+        "restore_on_return" : false,
+        "restore_within_sec" : 1800,
+        "situations" : {
+          "DAY" : {
+            "auto_on" : true,
+            "brightness" : 80
+          },
+          "NIGHT" : {
+            "auto_on" : true,
+            "brightness" : 20
+          },
+          "AWAY" : {
+            "auto_on" : false,
+            "brightness" : 50
+          }
+        },
+        "place" : null
+      }, {
+        "id" : "living_tv",
+        "name" : "Meuble TV",
+        "ha_entity_id" : "light.meuble_tv",
+        "dimmable" : true,
+        "dark_below_lux" : null,
+        "auto_off" : true,
+        "off_warning_sec" : 60,
+        "restore_on_return" : false,
+        "restore_within_sec" : 1800,
+        "situations" : {
+          "DAY" : {
+            "auto_on" : false,
+            "brightness" : null
+          },
+          "NIGHT" : {
+            "auto_on" : false,
+            "brightness" : null
+          },
+          "AWAY" : {
+            "auto_on" : false,
+            "brightness" : null
+          }
+        },
+        "place" : null
+      } ],
+      "sensors" : [ {
+        "id" : "living_occ",
+        "name" : "Présence salon",
+        "kind" : "OCCUPANCY",
+        "ha_entity_id" : "binary_sensor.salon_presence",
+        "opening" : null,
+        "entrance" : null
+      }, {
+        "id" : "living_lux",
+        "name" : "Lux salon",
+        "kind" : "LUX",
+        "ha_entity_id" : "sensor.salon_light",
+        "opening" : null,
+        "entrance" : null
+      }, {
+        "id" : "living_bay_contact",
+        "name" : "Contact baie",
+        "kind" : "CONTACT",
+        "ha_entity_id" : "binary_sensor.salon_baie_contact",
+        "opening" : "o_baie_sejour",
+        "entrance" : null
+      }, {
+        "id" : "living_temp",
+        "name" : "Température salon",
+        "kind" : "TEMPERATURE",
+        "ha_entity_id" : "sensor.salon_temperature",
+        "opening" : null,
+        "entrance" : null
+      }, {
+        "id" : "living_humidity",
+        "name" : "Humidité salon",
+        "kind" : "HUMIDITY",
+        "ha_entity_id" : "sensor.salon_humidite",
+        "opening" : null,
+        "entrance" : null
+      } ],
+      "appliances" : [ {
+        "id" : "living_box",
+        "name" : "Box internet",
+        "ha_entity_id" : "switch.box_internet",
+        "never_off" : true,
+        "power_sensor" : null,
+        "standby_below_w" : null,
+        "standby_off_after_sec" : null,
+        "auto_off" : false,
+        "situations" : null,
+        "place" : null,
+        "icon" : "ROUTER"
+      }, {
+        "id" : "living_av",
+        "name" : "Télé",
+        "ha_entity_id" : "switch.salon_tv",
+        "never_off" : false,
+        "power_sensor" : "sensor.salon_tv_power",
+        "standby_below_w" : 10.0,
+        "standby_off_after_sec" : 1800,
+        "auto_off" : false,
+        "situations" : {
+          "NIGHT" : {
+            "turn_off" : true
+          },
+          "AWAY" : {
+            "turn_off" : true
+          }
+        },
+        "place" : null,
+        "icon" : "TV"
+      } ],
+      "covers" : [ {
+        "id" : "living_bay",
+        "name" : "Baie",
+        "ha_entity_id" : "cover.salon_baie",
+        "opening" : "o_baie_sejour",
+        "travel_sec" : 40,
+        "close_at_night" : false,
+        "sun_protection" : false,
+        "sun_position" : null,
+        "protect_above_c" : null,
+        "situations" : null,
+        "open_by_day" : false,
+        "min_move_interval_sec" : 900
+      } ],
+      "ha_area" : "salon",
+      "machines" : [ {
+        "id" : "robot_demo",
+        "name" : "Robot",
+        "ha_entity_id" : "vacuum.robot_demo",
+        "translation" : {
+          "what" : {
+            "AUTO" : {
+              "select.robot_demo_intelligent" : "Quotidien"
+            },
+            "BOTH" : {
+              "select.robot_demo_intelligent" : "Éteint",
+              "select.robot_demo_mode" : "Aspirer et laver"
+            },
+            "MOP" : {
+              "select.robot_demo_intelligent" : "Éteint",
+              "select.robot_demo_mode" : "Laver"
+            },
+            "VACUUM" : {
+              "select.robot_demo_intelligent" : "Éteint",
+              "select.robot_demo_mode" : "Aspirer"
+            }
+          },
+          "suction" : {
+            "MAX" : {
+              "fan_speed" : "Max"
+            },
+            "NORMAL" : {
+              "fan_speed" : "Standard"
+            },
+            "QUIET" : {
+              "fan_speed" : "Silencieux"
+            },
+            "STRONG" : {
+              "fan_speed" : "Turbo"
+            }
+          },
+          "water" : {
+            "HIGH" : {
+              "select.robot_demo_eau" : "Beaucoup"
+            },
+            "LOW" : {
+              "select.robot_demo_eau" : "Peu"
+            },
+            "MEDIUM" : {
+              "select.robot_demo_eau" : "Moyen"
+            }
+          },
+          "passes" : {
+            "1" : {
+              "number.robot_demo_passages" : "1"
+            },
+            "2" : {
+              "number.robot_demo_passages" : "2"
+            }
+          },
+          "room_order" : {
+            "bedroom" : "select.robot_demo_ordre_chambre",
+            "living_room" : "select.robot_demo_ordre_salon"
+          }
+        },
+        "programs" : [ {
+          "id" : "quotidien",
+          "name" : "Quotidien",
+          "rooms" : [ "living_room", "bedroom" ],
+          "recipe" : {
+            "what" : "VACUUM",
+            "suction" : "NORMAL",
+            "water" : null,
+            "passes" : null
+          },
+          "by_room" : { },
+          "settings" : { },
+          "script" : null
+        }, {
+          "id" : "grand_menage",
+          "name" : "Grand ménage",
+          "rooms" : [ ],
+          "recipe" : {
+            "what" : "BOTH",
+            "suction" : "STRONG",
+            "water" : "HIGH",
+            "passes" : 2
+          },
+          "by_room" : { },
+          "settings" : { },
+          "script" : null
+        } ],
+        "situations" : null,
+        "min_interval_sec" : 86400,
+        "start_after_sec" : 300,
+        "show" : {
+          "sensors" : [ "sensor.robot_demo_brosse", "sensor.robot_demo_filtre" ],
+          "buttons" : [ "button.robot_demo_vider" ],
+          "current_room" : "sensor.robot_demo_piece",
+          "map" : "camera.robot_demo_carte",
+          "error" : "sensor.robot_demo_erreur"
+        },
+        "place" : null
+      } ],
+      "emitters" : [ {
+        "id" : "living_thermostat",
+        "name" : "Thermostat salon",
+        "ha_entity_id" : "climate.salon_thermostat",
+        "place" : null,
+        "pilot_wire" : null,
+        "situations" : {
+          "DAY" : {
+            "setpoint_c" : 20.0,
+            "cool_above_c" : null
+          },
+          "NIGHT" : {
+            "setpoint_c" : 17.0,
+            "cool_above_c" : null
+          },
+          "AWAY" : {
+            "setpoint_c" : 7.0,
+            "cool_above_c" : null
+          }
+        },
+        "window_open_after_sec" : 60,
+        "frost_c" : 7.0,
+        "min_change_interval_sec" : 900,
+        "preheat_max_sec" : 21600,
+        "preheat_hold_sec" : 7200,
+        "eco_delta_c" : null,
+        "eco_after_sec" : null,
+        "cool" : false
+      } ],
+      "bedroom" : null
+    }, {
+      "id" : "hallway",
+      "name" : "Couloir",
+      "space" : null,
+      "vacant_after_sec" : 60,
+      "depart_after_sec" : 600,
+      "lights" : [ {
+        "id" : "hallway_ceiling",
+        "name" : "Plafond couloir",
+        "ha_entity_id" : "switch.couloir_plafond",
+        "dimmable" : false,
+        "dark_below_lux" : null,
+        "auto_off" : true,
+        "off_warning_sec" : 60,
+        "restore_on_return" : false,
+        "restore_within_sec" : 1800,
+        "situations" : {
+          "DAY" : {
+            "auto_on" : true,
+            "brightness" : null
+          },
+          "NIGHT" : {
+            "auto_on" : true,
+            "brightness" : null
+          },
+          "AWAY" : {
+            "auto_on" : true,
+            "brightness" : null
+          }
+        },
+        "place" : null
+      } ],
+      "sensors" : [ {
+        "id" : "hallway_occ",
+        "name" : "Présence couloir",
+        "kind" : "OCCUPANCY",
+        "ha_entity_id" : "binary_sensor.couloir_presence",
+        "opening" : null,
+        "entrance" : null
+      }, {
+        "id" : "entrance_door",
+        "name" : "Porte d'entrée",
+        "kind" : "CONTACT",
+        "ha_entity_id" : "binary_sensor.porte_entree_contact",
+        "opening" : null,
+        "entrance" : true
+      } ],
+      "appliances" : [ ],
+      "covers" : [ ],
+      "ha_area" : null,
+      "machines" : [ ],
+      "emitters" : [ ],
+      "bedroom" : null
+    }, {
+      "id" : "bedroom",
+      "name" : "Chambre",
+      "space" : null,
+      "vacant_after_sec" : 90,
+      "depart_after_sec" : 900,
+      "lights" : [ {
+        "id" : "bedroom_lamp",
+        "name" : "Lampe chambre",
+        "ha_entity_id" : "light.lampe_chambre",
+        "dimmable" : true,
+        "dark_below_lux" : 15.0,
+        "auto_off" : true,
+        "off_warning_sec" : 60,
+        "restore_on_return" : false,
+        "restore_within_sec" : 1800,
+        "situations" : {
+          "DAY" : {
+            "auto_on" : true,
+            "brightness" : null
+          },
+          "NIGHT" : {
+            "auto_on" : false,
+            "brightness" : null
+          },
+          "AWAY" : {
+            "auto_on" : false,
+            "brightness" : null
+          }
+        },
+        "place" : null
+      } ],
+      "sensors" : [ {
+        "id" : "bedroom_occ",
+        "name" : "Présence chambre",
+        "kind" : "OCCUPANCY",
+        "ha_entity_id" : "binary_sensor.chambre_presence",
+        "opening" : null,
+        "entrance" : null
+      }, {
+        "id" : "bedroom_lux",
+        "name" : "Lux chambre",
+        "kind" : "LUX",
+        "ha_entity_id" : "sensor.chambre_light",
+        "opening" : null,
+        "entrance" : null
+      }, {
+        "id" : "bedroom_co2",
+        "name" : "CO2 chambre",
+        "kind" : "CO2",
+        "ha_entity_id" : "sensor.chambre_co2",
+        "opening" : null,
+        "entrance" : null
+      }, {
+        "id" : "bedroom_window_contact",
+        "name" : "Contact fenêtre chambre",
+        "kind" : "CONTACT",
+        "ha_entity_id" : "binary_sensor.chambre_fenetre_contact",
+        "opening" : "o_fenetre_chambre",
+        "entrance" : null
+      } ],
+      "appliances" : [ ],
+      "covers" : [ {
+        "id" : "bedroom_window",
+        "name" : "Fenêtre chambre",
+        "ha_entity_id" : "cover.chambre_fenetre",
+        "opening" : "o_fenetre_chambre",
+        "travel_sec" : 60,
+        "close_at_night" : false,
+        "sun_protection" : false,
+        "sun_position" : null,
+        "protect_above_c" : null,
+        "situations" : null,
+        "open_by_day" : false,
+        "min_move_interval_sec" : 900
+      } ],
+      "ha_area" : "chambre",
+      "machines" : [ {
+        "id" : "robot_basique",
+        "name" : "Petit robot",
+        "ha_entity_id" : "vacuum.robot_basique",
+        "translation" : null,
+        "programs" : [ ],
+        "situations" : null,
+        "min_interval_sec" : 86400,
+        "start_after_sec" : 300,
+        "show" : {
+          "sensors" : [ ],
+          "buttons" : [ ],
+          "current_room" : null,
+          "map" : null,
+          "error" : null
+        },
+        "place" : null
+      } ],
+      "emitters" : [ {
+        "id" : "bedroom_thermostat",
+        "name" : "Thermostat chambre",
+        "ha_entity_id" : "climate.chambre_thermostat",
+        "place" : null,
+        "pilot_wire" : null,
+        "situations" : {
+          "DAY" : {
+            "setpoint_c" : 19.0,
+            "cool_above_c" : null
+          },
+          "NIGHT" : {
+            "setpoint_c" : 17.0,
+            "cool_above_c" : null
+          },
+          "AWAY" : {
+            "setpoint_c" : 7.0,
+            "cool_above_c" : null
+          }
+        },
+        "window_open_after_sec" : 60,
+        "frost_c" : 7.0,
+        "min_change_interval_sec" : 900,
+        "preheat_max_sec" : 21600,
+        "preheat_hold_sec" : 7200,
+        "eco_delta_c" : null,
+        "eco_after_sec" : null,
+        "cool" : false
+      } ],
+      "bedroom" : true
+    }, {
+      "id" : "office",
+      "name" : "Bureau",
+      "space" : null,
+      "vacant_after_sec" : 60,
+      "depart_after_sec" : 600,
+      "lights" : [ {
+        "id" : "office_lamp",
+        "name" : "Lampe bureau",
+        "ha_entity_id" : "light.bureau",
+        "dimmable" : true,
+        "dark_below_lux" : null,
+        "auto_off" : true,
+        "off_warning_sec" : 60,
+        "restore_on_return" : false,
+        "restore_within_sec" : 1800,
+        "situations" : {
+          "DAY" : {
+            "auto_on" : true,
+            "brightness" : null
+          },
+          "NIGHT" : {
+            "auto_on" : true,
+            "brightness" : null
+          },
+          "AWAY" : {
+            "auto_on" : false,
+            "brightness" : null
+          }
+        },
+        "place" : null
+      } ],
+      "sensors" : [ ],
+      "appliances" : [ {
+        "id" : "office_pc",
+        "name" : "Bureau (PC)",
+        "ha_entity_id" : "switch.bureau_pc",
+        "never_off" : false,
+        "power_sensor" : "sensor.bureau_pc_power",
+        "standby_below_w" : 10.0,
+        "standby_off_after_sec" : null,
+        "auto_off" : false,
+        "situations" : null,
+        "place" : null,
+        "icon" : "COMPUTER"
+      } ],
+      "covers" : [ {
+        "id" : "office_blinds",
+        "name" : "Stores",
+        "ha_entity_id" : "cover.bureau_stores",
+        "opening" : "o_baie_jardin",
+        "travel_sec" : 60,
+        "close_at_night" : false,
+        "sun_protection" : false,
+        "sun_position" : null,
+        "protect_above_c" : null,
+        "situations" : null,
+        "open_by_day" : false,
+        "min_move_interval_sec" : 900
+      } ],
+      "ha_area" : "bureau",
+      "machines" : [ ],
+      "emitters" : [ {
+        "id" : "office_radiator",
+        "name" : "Radiateur bureau",
+        "ha_entity_id" : "select.bureau_fil_pilote",
+        "place" : null,
+        "pilot_wire" : {
+          "comfort_c" : 20.0,
+          "eco_c" : 17.0,
+          "options" : {
+            "comfort" : "comfort",
+            "eco" : "eco",
+            "frost" : "frost_protection",
+            "off" : "off"
+          }
+        },
+        "situations" : {
+          "DAY" : {
+            "setpoint_c" : 20.0,
+            "cool_above_c" : null
+          },
+          "NIGHT" : {
+            "setpoint_c" : 17.0,
+            "cool_above_c" : null
+          },
+          "AWAY" : {
+            "setpoint_c" : 7.0,
+            "cool_above_c" : null
+          }
+        },
+        "window_open_after_sec" : 60,
+        "frost_c" : 7.0,
+        "min_change_interval_sec" : 900,
+        "preheat_max_sec" : 21600,
+        "preheat_hold_sec" : 7200,
+        "eco_delta_c" : null,
+        "eco_after_sec" : null,
+        "cool" : false
+      }, {
+        "id" : "office_ac",
+        "name" : "Clim bureau",
+        "ha_entity_id" : "climate.bureau_clim",
+        "place" : null,
+        "pilot_wire" : null,
+        "situations" : {
+          "DAY" : {
+            "setpoint_c" : null,
+            "cool_above_c" : 26.0
+          }
+        },
+        "window_open_after_sec" : 60,
+        "frost_c" : 7.0,
+        "min_change_interval_sec" : 60,
+        "preheat_max_sec" : 21600,
+        "preheat_hold_sec" : 7200,
+        "eco_delta_c" : null,
+        "eco_after_sec" : null,
+        "cool" : true
+      } ],
+      "bedroom" : null
+    } ],
+    "buttons" : [ {
+      "id" : "entry_btn",
+      "name" : "Bouton entrée",
+      "ha_entity_id" : "sensor.entrance_button_action"
+    }, {
+      "id" : "bedroom_remote",
+      "name" : "Télécommande chambre",
+      "ha_entity_id" : "event.telecommande_chambre"
+    } ],
+    "bindings" : [ {
+      "id" : "entry_next",
+      "button_id" : "entry_btn",
+      "trigger" : "single",
+      "target" : {
+        "kind" : "HOUSE",
+        "id" : null,
+        "ids" : null
+      },
+      "action" : "NextSituation",
+      "action_payload" : null
+    }, {
+      "id" : "entry_away",
+      "button_id" : "entry_btn",
+      "trigger" : "double",
+      "target" : {
+        "kind" : "HOUSE",
+        "id" : null,
+        "ids" : null
+      },
+      "action" : "SetSituation",
+      "action_payload" : {
+        "brightness_pct" : null,
+        "situation" : "AWAY",
+        "percent_per_turn" : null,
+        "off_after_deg" : null,
+        "program_id" : null,
+        "position" : null,
+        "setpoint_c" : null,
+        "mode" : null,
+        "room_id" : null,
+        "recipe" : null
+      }
+    }, {
+      "id" : "entry_hold_release",
+      "button_id" : "entry_btn",
+      "trigger" : "hold",
+      "target" : {
+        "kind" : "ROOM",
+        "id" : "hallway",
+        "ids" : null
+      },
+      "action" : "Release",
+      "action_payload" : null
+    }, {
+      "id" : "remote_night",
+      "button_id" : "bedroom_remote",
+      "trigger" : "button_1_single",
+      "target" : {
+        "kind" : "HOUSE",
+        "id" : null,
+        "ids" : null
+      },
+      "action" : "SetSituation",
+      "action_payload" : {
+        "brightness_pct" : null,
+        "situation" : "NIGHT",
+        "percent_per_turn" : null,
+        "off_after_deg" : null,
+        "program_id" : null,
+        "position" : null,
+        "setpoint_c" : null,
+        "mode" : null,
+        "room_id" : null,
+        "recipe" : null
+      }
+    }, {
+      "id" : "remote_day",
+      "button_id" : "bedroom_remote",
+      "trigger" : "button_1_double",
+      "target" : {
+        "kind" : "HOUSE",
+        "id" : null,
+        "ids" : null
+      },
+      "action" : "SetSituation",
+      "action_payload" : {
+        "brightness_pct" : null,
+        "situation" : "DAY",
+        "percent_per_turn" : null,
+        "off_after_deg" : null,
+        "program_id" : null,
+        "position" : null,
+        "setpoint_c" : null,
+        "mode" : null,
+        "room_id" : null,
+        "recipe" : null
+      }
+    }, {
+      "id" : "remote_bedroom_lamp",
+      "button_id" : "bedroom_remote",
+      "trigger" : "button_2_single",
+      "target" : {
+        "kind" : "LIGHT",
+        "id" : null,
+        "ids" : [ "bedroom_lamp" ]
+      },
+      "action" : "Toggle",
+      "action_payload" : null
+    }, {
+      "id" : "remote_bedroom_off",
+      "button_id" : "bedroom_remote",
+      "trigger" : "button_2_long",
+      "target" : {
+        "kind" : "ROOM",
+        "id" : "bedroom",
+        "ids" : null
+      },
+      "action" : "TurnOffRoom",
+      "action_payload" : null
+    }, {
+      "id" : "remote_keep",
+      "button_id" : "bedroom_remote",
+      "trigger" : "button_3_single",
+      "target" : {
+        "kind" : "ROOM",
+        "id" : "bedroom",
+        "ids" : null
+      },
+      "action" : "KeepAsIs",
+      "action_payload" : null
+    }, {
+      "id" : "remote_office_pc",
+      "button_id" : "bedroom_remote",
+      "trigger" : "button_4_single",
+      "target" : {
+        "kind" : "APPLIANCE",
+        "id" : "office_pc",
+        "ids" : null
+      },
+      "action" : "Toggle",
+      "action_payload" : null
+    }, {
+      "id" : "remote_robot",
+      "button_id" : "bedroom_remote",
+      "trigger" : "button_4_double",
+      "target" : {
+        "kind" : "MACHINE",
+        "id" : "robot_demo",
+        "ids" : null
+      },
+      "action" : "StartProgram",
+      "action_payload" : {
+        "brightness_pct" : null,
+        "situation" : null,
+        "percent_per_turn" : null,
+        "off_after_deg" : null,
+        "program_id" : "quotidien",
+        "position" : null,
+        "setpoint_c" : null,
+        "mode" : null,
+        "room_id" : null,
+        "recipe" : null
+      }
+    } ],
+    "notifications" : null,
+    "people" : [ {
+      "id" : "alex",
+      "name" : "Alex",
+      "presences" : [ {
+        "entity" : "person.alex",
+        "via" : "APP"
+      } ],
+      "phone" : {
+        "charging" : "sensor.iphone_alex_battery_state",
+        "focus" : "binary_sensor.iphone_alex_focus"
+      },
+      "stale_after_sec" : null
+    }, {
+      "id" : "sam",
+      "name" : "Sam",
+      "presences" : [ {
+        "entity" : "device_tracker.iphone_sam",
+        "via" : "WIFI"
+      } ],
+      "phone" : null,
+      "stale_after_sec" : null
+    } ],
+    "situation_changes" : {
+      "departure" : {
+        "mode" : "AUTO",
+        "away_after_min" : 10
+      },
+      "arrival" : {
+        "mode" : "AUTO"
+      },
+      "bedtime" : {
+        "mode" : "PROPOSE",
+        "window" : {
+          "from" : "21:30",
+          "to" : "02:00"
+        },
+        "calm_for_sec" : 1200,
+        "signals" : [ "PHONE_CHARGING", "SLEEP_FOCUS", "BEDROOM_LAMP_OFF" ],
+        "min_signals" : 1
+      },
+      "wake" : {
+        "mode" : "PROPOSE",
+        "not_before" : "05:30",
+        "calm_before_sec" : 3600
+      },
+      "schedule" : [ {
+        "at" : "01:00",
+        "from" : "DAY",
+        "to" : "NIGHT"
+      } ],
+      "expires_after_sec" : 1800,
+      "mute_after_refusal_sec" : 3600
+    },
+    "estimates" : [ {
+      "id" : "salon_tv",
+      "kind" : "WATCHING_TV",
+      "room" : "living_room",
+      "appliance" : "living_av",
+      "mode" : "OBSERVE",
+      "min_confidence" : 0.8,
+      "ttl_sec" : null
+    }, {
+      "id" : "chambre_lit",
+      "kind" : "IN_BED",
+      "room" : "bedroom",
+      "appliance" : null,
+      "mode" : "OBSERVE",
+      "min_confidence" : 0.8,
+      "ttl_sec" : 90
+    } ]
+  }
+}
