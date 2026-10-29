@@ -214,6 +214,9 @@ def test_refresh_triggers(year: FinanceDomain) -> None:
         b = catalog.add_account(conn, institution="BCF", name="Épargne", iban=IBAN_2)
         importer.open_account(conn, b.id, "2026-10-01", 50_000, "CHF")
     assert snapshots.refresh(year.engine(), date(2026, 10, 28)).reason == "entries"
+    with begin_immediate(year.engine()) as conn:  # une recatégorisation change une dette
+        ledger.append_event(conn, "proposal.applied", "urn:core:proposal:p1", {"kind": "x"})
+    assert snapshots.refresh(year.engine(), date(2026, 10, 28)).reason == "events"
     year.nightly()
     assert rows(year, "SELECT as_of FROM snapshot_state") == [("2026-10-27",)]
 
