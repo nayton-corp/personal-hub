@@ -15,6 +15,28 @@
   Binance, SwissBorg) par le txId, sinon la quantité, à cinq jours près (`links.py`) : le second
   prend la valeur du premier et la paire passe avant les autres virements.
 
+### Budget proposé par l'assistant, au mois ou à l'année
+
+- `finance_propose_budget` prend `cadence` (`month` par défaut, ou `year` : `amount` est alors
+  la cible annuelle, suivie en cumul depuis janvier). Un budget complet se propose d'un coup et
+  se valide d'un seul Face ID.
+
+### « À classer » : dépenses et entrées à confirmer séparées
+
+- En tête de « À classer », un sélecteur « À classer / À confirmer » (avec leur nombre) montre
+  soit les écritures sans catégorie, soit celles classées d'office par la règle « tout le
+  reste », au lieu de les mettre bout à bout.
+
+### Achats uniques : une carte par catégorie
+
+- `categorize_entries` : une catégorie pour quelques écritures choisies (30 au plus), une seule
+  carte. L'outil `finance_propose_categories` la propose (16 outils Finance) ;
+  `finance_to_review` prend `offset` pour parcourir toute la file.
+- IA locale : `hub-brain direct` classe les commerçants vus une seule fois, sans créer de
+  règle ; les cartes se déplient dans « À valider » pour décocher une écriture.
+- `HUB_PROPOSALS_PER_HOUR` (deploy/.env) règle la limite de cartes par heure et par jeton ;
+  `catchup --limit` va au-delà de 50 quand elle est relevée.
+
 ### Classer plus vite : commerçant lu dans le libellé, revenus à confirmer, rattrapage par l'IA
 
 - Les paiements par carte BCF (« Paiement jj.mm.aaaa hh:mm COMMERÇANTVILLE Numéro de carte… »,

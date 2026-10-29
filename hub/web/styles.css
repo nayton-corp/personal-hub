@@ -120,6 +120,7 @@ button:disabled { cursor: default; }
 
 /* segments */
 .seg { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg.rview b { font-weight: 600; color: var(--muted); margin-left: 4px; }
 .seg button { flex: 1; height: 34px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; padding: 0 8px; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
 .seg.small button { font-size: 12.5px; }
@@ -382,6 +383,11 @@ button:disabled { cursor: default; }
 .prop b { display: block; font-size: 14px; }
 .prop span span { font-size: 12.5px; color: var(--muted); display: block; }
 .prop .reject { margin-left: auto; color: var(--muted); font-size: 12.5px; font-weight: 600; min-height: 36px; text-decoration: underline; text-underline-offset: 3px; flex: none; }
+.prop-more { margin: -4px 0 6px 30px; font-size: 13px; }
+.prop-more summary { color: var(--accent); font-weight: 600; cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.prop-more .check-in { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.prop-more .check-in span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prop-more .check-in .num { color: var(--muted); font-size: 12.5px; flex: none; }
 .err { color: var(--neg); font-size: 12.5px; margin-top: 6px; }
 
 /* message éphémère */
@@ -495,3 +501,5 @@ code { font-family: var(--mono); font-size: .9em; }
 #jBody > .section-title + .hint { margin: 4px 16px 0; }
 .primary.small { width: auto; min-height: 40px; font-size: 13.5px; border-radius: 12px; flex: none; }
 #jBody > .hint:first-child { margin: 10px 16px 0; }
+#jBody > .seg.rview { margin: 10px 16px 0; }
+#jBody > .seg.rview + .hint { margin: 10px 16px 0; }

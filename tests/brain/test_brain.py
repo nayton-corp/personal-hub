@@ -18,7 +18,15 @@ from hub.brain import agent
 from hub.brain.hubapi import HubApi, HubError
 from hub.brain.llm import LlmError, OpenAICompatible, Reply, ToolCall, clean
 from hub.brain.mcp import McpServer
-from hub.brain.suggest import Memory, catchup, for_merchant, listing, parse_choice, suggest
+from hub.brain.suggest import (
+    Memory,
+    catchup,
+    direct,
+    for_merchant,
+    listing,
+    parse_choice,
+    suggest,
+)
 from hub.brain.toolbox import CAPABILITIES, LOAD, Toolbox
 from hub.core import proposals
 from hub.core.context import HubContext
@@ -88,7 +96,7 @@ def test_single_domain_is_loaded_at_start(
     box = box_for(client, ctx, "brain")
     names = [t["name"] for t in box.definitions()]
     assert names[:2] == [CAPABILITIES, LOAD]
-    assert len(names) == 17  # 2 outils de routage + 15 outils Finance
+    assert len(names) == 18  # 2 outils de routage + 16 outils Finance
     agg = box_for(client, ctx, "aggregates")
     assert len(agg.definitions()) == 2 + 7
 
@@ -369,6 +377,34 @@ def test_catchup_proposes_one_rule_per_merchant(
     assert not [x for x in again.prompts if "kiosque" in merchant(x)]
     dry = catchup(box, Every(choose), Memory(tmp_path / "dry"), dry_run=True, limit=1)
     assert (dry.merchants, dry.proposals) == (1, 0)
+
+
+def test_direct_groups_one_off_purchases_by_category(
+    client: TestClient, ctx: HubContext, year: FinanceDomain, tmp_path: Path
+) -> None:
+    def choose(messages: list[dict[str, Any]]) -> Reply:
+        if "kiosque" in merchant(messages[0]["content"]):
+            return Reply('{"category": "alimentation", "sure": true, "reason": "Un kiosque."}')
+        return Reply('{"category": null, "sure": false, "reason": "incertain"}')
+
+    box = box_for(client, ctx, "brain")
+    model = Every(choose)
+    report = direct(box, model, Memory(tmp_path / "brain"), max_count=5)
+    assert report.merchants == len(model.prompts) >= 1
+    assert (report.suggested, report.proposals) == (1, 1)
+    with ctx.core.engine.connect() as conn:
+        (p,) = proposals.list_by_status(conn, "pending")
+    # une carte par catégorie, sans règle
+    assert p.kind == "categorize_entries"
+    assert p.params["category_id"] == "alimentation"
+    assert p.params["suggested"] is True
+    assert p.preview["details"]["count"] == len(p.params["entry_ids"])
+    # ni le commerçant proposé ni l'incertain ne sont redemandés
+    again = Every(choose)
+    assert direct(box, again, Memory(tmp_path / "brain"), max_count=5).merchants == 0
+    # par défaut, seulement les commerçants vus une fois
+    dry = direct(box, Every(choose), Memory(tmp_path / "dry"), dry_run=True)
+    assert dry.proposals == 0
 
 
 # --- client du modèle -------------------------------------------------------------------------
