@@ -118,6 +118,8 @@ class ProposeBudgetArgs(_Args):
         decimal_places=2,
         validation_alias=AliasChoices("amount", "amount_chf"),
     )
+    # « year » : `amount` est la cible annuelle, suivie en cumul depuis janvier
+    cadence: Literal["month", "year"] = "month"
     reason: Reason = None
 
 
@@ -481,8 +483,12 @@ class FinanceTools:
         if cat["group"] not in insights.EXPENSE_GROUPS:
             raise Problem("validation.params", "budget : catégorie de dépense seulement")
         minor = Money.from_decimal(a.amount, base_currency()).minor
+        if a.cadence == "year":
+            minor = (minor + 6) // 12  # cible mensuelle stockée, arrondie au centime
         return caller.propose(
-            "set_budget", {"category_id": a.category, "monthly_minor": minor}, a.reason
+            "set_budget",
+            {"category_id": a.category, "monthly_minor": minor, "cadence": a.cadence},
+            a.reason,
         )
 
     def propose_note(self, a: ProposeNoteArgs, caller: ToolCaller) -> dict[str, Any]:
@@ -678,12 +684,14 @@ class FinanceTools:
             ),
             tool(
                 "finance_propose_budget",
-                "Propose une cible mensuelle, dans la devise de base, pour une catégorie de "
-                "dépense ; rien n'est appliqué.",
+                "Propose une cible, dans la devise de base, pour une catégorie de dépense : "
+                "mensuelle, ou annuelle (cadence year, suivie en cumul depuis janvier) pour les "
+                "dépenses par à-coups ; rien n'est appliqué.",
                 _obj(
                     {
                         "category": category,
                         "amount": {"type": "string", "pattern": r"^\d{1,7}(\.\d{1,2})?$"},
+                        "cadence": {"type": "string", "enum": ["month", "year"]},
                         "reason": REASON_PROP,
                     },
                     ["category", "amount"],

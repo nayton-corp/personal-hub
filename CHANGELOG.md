@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### Budget proposé par l'assistant, au mois ou à l'année
+
+- `finance_propose_budget` prend `cadence` (`month` par défaut, ou `year` : `amount` est alors
+  la cible annuelle, suivie en cumul depuis janvier). Un budget complet se propose d'un coup et
+  se valide d'un seul Face ID.
+
 ### « À classer » : dépenses et entrées à confirmer séparées
 
 - En tête de « À classer », un sélecteur « À classer / À confirmer » (avec leur nombre) montre
