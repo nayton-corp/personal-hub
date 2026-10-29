@@ -200,6 +200,7 @@ class FinanceTools:
                 {
                     "account": f["name"],
                     "last_import": f["last_import"],
+                    "last_data": f["last_data"],
                     "last_statement": (f["last_clbd"] or {}).get("on_date"),
                 }
                 for f in reads.freshness(conn)

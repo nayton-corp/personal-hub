@@ -85,7 +85,7 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
         text(
             "SELECT a.id, a.institution, a.name, a.kind, a.currency, a.iban, a.liquid, "
             "a.budget_account, coalesce(b.balance_minor, 0), b.last_booking, a.external_ref, "
-            "a.goal "
+            "a.goal, a.availability, a.category, a.hidden "
             "FROM accounts a LEFT JOIN v_balances b ON b.account_id = a.id "
             "ORDER BY a.institution, a.name"
         )
@@ -104,9 +104,14 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
                 "external_ref": r[10],
                 "liquid": bool(r[6]),
                 "budget_account": bool(r[7]),
-                "availability": availability(r[3], bool(r[6])),
+                "availability": r[12] or availability(r[3], bool(r[6])),
+                "availability_set": r[12] is not None,
+                "availability_auto": availability(r[3], bool(r[6])),
                 "goal": r[11] or default_goal(r[3], bool(r[7])),
                 "goal_set": r[11] is not None,
+                # catégorie imposée à toutes les lignes du compte ; NULL : déduite de chaque ligne
+                "category": r[13],
+                "hidden": bool(r[14]),
                 "balance": money(r[8], r[4]),
                 # valeur de marché pour un compte de titres (parts × dernier cours), sinon le solde
                 "value": money(value, r[4]),
@@ -143,23 +148,44 @@ def last_clbd(conn: Connection, account_id: str) -> dict[str, Any] | None:
     }
 
 
+# Une donnée d'un compte : écriture, position relevée, ordre ou solde de clôture. Seuls les
+# relevés bancaires ont un solde de clôture ; Revolut, les cryptos ou les titres n'en ont pas.
+_LAST_DATA = (
+    "SELECT max(d) FROM ("
+    "SELECT max(booking_date) AS d FROM entries WHERE account_id = :a AND kind != 'correction' "
+    "UNION ALL SELECT max(on_date) FROM holdings WHERE account_id = :a "
+    "UNION ALL SELECT max(trade_date) FROM trades WHERE account_id = :a "
+    "UNION ALL SELECT max(on_date) FROM checkpoints WHERE account_id = :a AND kind = 'CLBD')"
+)
+# un import compte pour chaque compte qu'il a alimenté, y compris les comptes créés à sa lecture
+# (sous-comptes IBKR par devise), pas seulement pour le compte de son relevé
+_LAST_IMPORT = (
+    "SELECT max(i.received_at) FROM imports i WHERE i.id IN ("
+    "SELECT import_id FROM import_statements WHERE account_id = :a AND status = 'applied' "
+    "UNION SELECT import_id FROM entries WHERE account_id = :a "
+    "UNION SELECT import_id FROM holdings WHERE account_id = :a "
+    "UNION SELECT import_id FROM trades WHERE account_id = :a)"
+)
+
+
+def last_data(conn: Connection, account_id: str) -> str | None:
+    d = conn.execute(text(_LAST_DATA), {"a": account_id}).scalar_one()
+    return str(d) if d is not None else None
+
+
 def freshness(conn: Connection) -> list[dict[str, Any]]:
     out = []
-    for a in conn.execute(text("SELECT id, name FROM accounts ORDER BY name")).fetchall():
-        last_import = conn.execute(
-            text(
-                "SELECT max(i.received_at) FROM imports i JOIN import_statements s "
-                "ON s.import_id = i.id WHERE s.account_id = :a AND s.status = 'applied'"
-            ),
-            {"a": a[0]},
-        ).scalar_one()
-        clbd = last_clbd(conn, a[0])
+    rows = conn.execute(text("SELECT id, name, institution, hidden FROM accounts ORDER BY name"))
+    for a in rows.fetchall():
         out.append(
             {
                 "account_id": a[0],
                 "name": a[1],
-                "last_import": last_import,
-                "last_clbd": clbd,
+                "institution": a[2],
+                "hidden": bool(a[3]),
+                "last_import": conn.execute(text(_LAST_IMPORT), {"a": a[0]}).scalar_one(),
+                "last_data": last_data(conn, a[0]),
+                "last_clbd": last_clbd(conn, a[0]),
                 "collector": None,  # collecteurs : lot 5
             }
         )

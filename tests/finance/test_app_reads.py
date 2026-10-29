@@ -411,3 +411,27 @@ def test_ratio_and_periods() -> None:
     assert insights.days_left("2026-02", date(2026, 2, 10)) == 18
     with pytest.raises(insights.FutureMonth):
         insights.as_of("2026-11", TODAY)
+
+
+def test_freshness_without_closing_balance(
+    client: TestClient, ctx: HubContext, fin: FinanceDomain
+) -> None:
+    """Un compte à positions n'a jamais de solde de clôture : sa fraîcheur vient de ses
+    positions et de leur import."""
+    with begin_immediate(fin.engine()) as conn:
+        catalog.add_account(
+            conn,
+            institution="Revolut",
+            name="Invest",
+            kind="securities",
+            external_ref="revolut:invest",
+        )
+    csv_rows = (
+        "date,account,instrument,name,kind,quantity,price,currency\n"
+        "2026-10-20,revolut:invest,BTC,Bitcoin,crypto,0.05,61000,CHF\n"
+    )
+    fin.importer.process([Incoming("positions.csv", csv_rows.encode())])
+    app_session(ctx, client)
+    (f,) = client.get("/api/finance/freshness").json()["items"]
+    assert (f["last_clbd"], f["last_data"], f["hidden"]) == (None, "2026-10-20", False)
+    assert f["last_import"] is not None

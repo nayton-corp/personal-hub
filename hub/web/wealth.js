@@ -5,11 +5,9 @@
 import { reveal } from "./finance.js";
 import { MOIS, MOIS_L, base, date } from "./format.js";
 import { CCY_NAME, FACET, FACETS, assetMark, facetColor, facetIc, facetMark, facetName, setInstitutions } from "./meta.js";
-import { outcome, proposeAndApprove } from "./proposals.js";
 import { store } from "./store.js";
 import {
-  SHEETS, SH, amount, announce, closeSheet, esc, failure, fill, ibox, ic, money, n0, n2, openSheet, pctOnly, pf, pref,
-  qty, renderSheet, setPref, sgn, share, toast,
+  SHEETS, amount, announce, esc, fill, ic, money, n0, n2, openSheet, pctOnly, pf, pref, qty, setPref, sgn, share, toast,
 } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -66,6 +64,7 @@ function lines() {
   setInstitutions(acc.items.map((a) => a.institution));
   const out = [];
   for (const a of acc.items) {
+    if (a.hidden) continue;
     const total = byAcc[a.id] ? byAcc[a.id].minor / 100 : 0;
     const own = hold.items.filter((p) => p.account_id === a.id);
     const meta = { acc: a.id, accName: a.name, inst: a.institution, liq: a.availability, goal: a.goal, kind: a.kind };
@@ -74,14 +73,14 @@ function lines() {
       const v = p.value.minor / 100;
       held += v;
       const crypto = p.kind === "crypto";
-      out.push({ ...meta, asset: `isin:${p.isin}`, name: p.name, symbol: crypto ? p.isin : null, cat: crypto ? "crypto" : "funds", qty: p.quantity, unit: crypto ? p.isin : "parts", value: v, price: p.price, priceCcy: p.price_currency, priceDate: p.price_date });
+      out.push({ ...meta, asset: `isin:${p.isin}`, name: p.name, symbol: crypto ? p.isin : null, cat: a.category || (crypto ? "crypto" : "funds"), qty: p.quantity, unit: crypto ? p.isin : "parts", value: v, price: p.price, priceCcy: p.price_currency, priceDate: p.price_date });
     }
     const rest = total - held;
     if (!own.length || Math.abs(rest) >= 1) {
       // sans positions : le solde, dans la devise du compte ; avec : le reste, déjà converti
       const ccy = own.length ? base() : a.balance.currency;
       const q = own.length ? rest : a.balance.minor / 100;
-      out.push({ ...meta, asset: `ccy:${ccy}`, name: CCY_NAME[ccy] || ccy, symbol: ccy, cat: a.kind === "crypto" && !own.length ? "crypto" : "cash", qty: q, unit: ccy, value: own.length ? rest : total });
+      out.push({ ...meta, asset: `ccy:${ccy}`, name: CCY_NAME[ccy] || ccy, symbol: ccy, cat: a.category || (a.kind === "crypto" && !own.length ? "crypto" : "cash"), qty: q, unit: ccy, value: own.length ? rest : total });
     }
   }
   cache = { key, lines: out };
@@ -420,7 +419,7 @@ function accountDetail(r, all) {
   const ls = r.ls.slice().sort((a, b) => b.value - a.value), tot = sum(ls) || 1;
   const items = current.items;
   const f = ls[0];
-  return `<div class="sub-head"><span>Composition du compte · objectif <b>${esc(facetName("goal", f.goal))}</b></span><button class="linkish" type="button" data-a="w-goal" data-v="${esc(f.acc)}">Changer</button></div>
+  return `<div class="sub-head"><span>Composition du compte · objectif <b>${esc(facetName("goal", f.goal))}</b></span><button class="linkish" type="button" data-a="acc-edit" data-v="${esc(f.acc)}">Modifier</button></div>
     <div class="compo" aria-hidden="true">${ls.map((l) => `<i data-css="--f:${Math.max(0, l.value).toFixed(2)};--c:${facetColor("cat", l.cat)}"></i>`).join("")}</div>
     ${ls.map((l) => {
       const c = change(items, fractions(all, [l]));
@@ -462,21 +461,6 @@ SHEETS.filters = () => {
       }).join("")}</div></div>`;
     }).join(""),
     foot: `<button class="primary num" type="button" data-a="sheet-close" data-autofocus>Afficher ${amount(sum(all.filter((l) => match(l))))}</button>`,
-  };
-};
-
-SHEETS.goal = (id, sh) => {
-  const acc = store.data(paths.accounts);
-  const a = acc ? acc.items.find((x) => x.id === id) : null;
-  if (!a) return null;
-  if (sh.tmp == null) sh.tmp = a.goal;
-  const f = FACET.goal;
-  return {
-    title: `${facetMark("inst", a.institution)}<span>${esc(a.name)}</span>`,
-    body: `<p class="hint">L'objectif range ce compte dans le filtre « Objectif » et la répartition.${a.goal_set ? "" : " Pour l'instant, il est déduit du type de compte."}</p>
-      <div class="catgrid" role="radiogroup" aria-label="Objectif">${f.values.map((v) => `<button type="button" role="radio" aria-checked="${sh.tmp === v}" data-a="w-goal-pick" data-v="${v}">${facetMark("goal", v, "xs")}${esc(f.names[v])}</button>`).join("")}</div>
-      ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}`,
-    foot: `<button class="primary" type="button" data-a="w-goal-save" ${(sh.tmp !== a.goal || !a.goal_set) && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer avec Face ID"}</button>`,
   };
 };
 
@@ -570,27 +554,6 @@ export const actions = {
     FOLD[k] = !FOLD[k];
     setPref("fold", FOLD);
     store.notify();
-  },
-  "w-goal": (id) => openSheet("goal", id),
-  "w-goal-pick": (v) => { SH.tmp = v; renderSheet(); },
-  "w-goal-save": async () => {
-    const id = SH.arg, goal = SH.tmp;
-    SH.busy = true;
-    SH.err = "";
-    renderSheet();
-    try {
-      const [text, bad] = outcome(await proposeAndApprove([["set_account_goal", { account_id: id, goal }]]));
-      if (bad) SH.err = text;
-      else {
-        closeSheet();
-        toast(`Objectif enregistré : ${facetName("goal", goal)}`);
-      }
-    } catch (e) {
-      SH.err = failure(e);
-    } finally {
-      SH.busy = false;
-      if (SH.kind) renderSheet();
-    }
   },
 };
 

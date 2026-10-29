@@ -27,6 +27,7 @@ from hub.domains.finance.reads import (
     Totals,
     _budget_accounts,
     _in,
+    last_data,
     money,
     month_bounds,
     period_lines,
@@ -180,8 +181,13 @@ def _last_clbds(conn: Connection) -> list[tuple[str, str | None]]:
 
 
 def stale_accounts(conn: Connection, today: date) -> int:
+    """Comptes affichés dont la dernière donnée (écriture, position, solde de clôture) a plus de
+    STALE_DAYS jours. Un compte encore jamais alimenté n'en fait pas partie."""
     limit = (today - timedelta(days=STALE_DAYS)).isoformat()
-    return sum(1 for _a, d in _last_clbds(conn) if d is None or d < limit)
+    ids = conn.execute(
+        text("SELECT id FROM accounts WHERE closed_on IS NULL AND hidden = 0")
+    ).scalars()
+    return sum(1 for a in ids if (d := last_data(conn, a)) is not None and d < limit)
 
 
 def to_categorize(conn: Connection) -> int:

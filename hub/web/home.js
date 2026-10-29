@@ -1,5 +1,6 @@
 // Accueil : deux tuiles (patrimoine, reste à vivre), ce qui attend une action, puis ce qui est
 // bon à savoir. Chaque ligne mène à l'écran où l'on agit.
+import { hiddenIds } from "./accounts.js";
 import { budgetPath, model } from "./budget.js";
 import { go } from "./finance.js";
 import { base, date, monthName } from "./format.js";
@@ -95,8 +96,12 @@ export function render() {
     fill($("homeBody"), '<div class="loading">Chargement…</div>');
     return;
   }
-  const net = k.net_worth.minor / 100;
-  const vals = se && se.data ? se.data.items.map((i) => i.net_worth.minor / 100) : [];
+  // un compte masqué sort aussi du patrimoine de l'accueil
+  store.use("/finance/accounts");
+  const hidden = hiddenIds();
+  const worth = (i) => (hidden.size ? Object.entries(i.by_account || {}).reduce((t, [id, v]) => t + (hidden.has(id) ? 0 : v.minor), 0) : i.net_worth.minor) / 100;
+  const vals = se && se.data ? se.data.items.map(worth) : [];
+  const net = hidden.size && vals.length ? vals[vals.length - 1] : k.net_worth.minor / 100;
   const p30 = vals.length > 1 && vals[0] ? vals[vals.length - 1] / vals[0] - 1 : null;
   const m = be.data ? model(be.data, true) : null;
   const all = items();

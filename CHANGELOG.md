@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+### Comptes : fraîcheur juste et réglages dans l'app
+
+- La fraîcheur d'un compte vient de sa dernière donnée (écriture, position, ordre ou solde de
+  clôture) et de son dernier import, y compris pour les comptes sans relevé bancaire (Revolut,
+  SwissBorg, Ledger, titres) et les sous-comptes IBKR. « Comptes à rafraîchir » de l'accueil
+  suit la même règle et ignore les comptes jamais alimentés ou masqués.
+- Réglages d'un compte, validés avec Face ID (proposition `edit_account`, migration finance
+  0013) : nom, objectif, disponibilité, catégorie imposée à tout le compte, masquage. Un compte
+  masqué sort du patrimoine et de l'accueil, sans rien effacer. La carte « Comptes » des
+  réglages liste la fraîcheur et ouvre ces réglages ; le détail d'un compte aussi.
+
 ### Construction des images plus rapide
 
 - Les images hub et collector ne copient plus `hub/web` : une retouche du front ne

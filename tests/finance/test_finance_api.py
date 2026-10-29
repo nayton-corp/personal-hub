@@ -124,6 +124,7 @@ def test_accounts_and_freshness(client: TestClient, ctx: HubContext, loaded: Fin
     assert a["last_clbd"]["gap"]["minor"] == 0
     (f,) = client.get("/api/finance/freshness", headers=token(ctx, "aggregates")).json()["items"]
     assert f["last_clbd"]["on_date"] == "2026-10-04"
+    assert f["last_data"] == "2026-10-04"
     assert f["last_import"] is not None
 
 
@@ -269,7 +270,7 @@ def test_upload_and_import_detail(client: TestClient, ctx: HubContext, fin: Fina
 
 def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
     r = client.get("/api/health").json()
-    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 12, "ok": True}
+    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 13, "ok": True}
     events = loaded.events_since(0, 10)
     assert [e.type for e in events] == ["entries.appended", "import.applied"]
     assert loaded.applied([]) == {}

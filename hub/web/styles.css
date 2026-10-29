@@ -448,3 +448,4 @@ code { font-family: var(--mono); font-size: .9em; }
 .auth .card h2 { font-size: 18px; margin: 0 0 6px; }
 .auth .card p { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
 .auth .btn { width: 100%; }
+#sheet-body .setrow { margin-top: 16px; }

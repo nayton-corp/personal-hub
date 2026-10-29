@@ -143,6 +143,7 @@ règle qui sert aussi aux prochains imports.
 | `add_note` | note sur une écriture | — |
 | `apply_import` | applique un relevé en attente dont les motifs se forcent | — |
 | `set_account_goal` | objectif d'un compte (filtre « Objectif » du patrimoine) | — |
+| `edit_account` | réglages d'un compte dans l'app : nom, objectif, disponibilité, catégorie (`auto` rend la déduction par type), masqué | — |
 | `create_account` · `create_category` | comptes et catégories (le CLI passe par là) | — |
 
 Un relevé en attente pour un motif qui se force (`ledger_check_failed`, `near_duplicate`…)
