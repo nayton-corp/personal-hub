@@ -7,6 +7,8 @@
 - Les images hub et collector ne copient plus `hub/web` : une retouche du front ne
   reconstruit que l'image web. Seul le paquet hub est recompilé en bytecode à chaque
   version, plus tout l'environnement Python.
+- `make deploy` ne finit plus en erreur sur macOS : une apostrophe dans `${…:-…}` cassait
+  le bash 3.2 du Mac après le déploiement.
 
 ### Hub générique, G6 — première installation
 

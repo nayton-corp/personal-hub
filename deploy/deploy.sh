@@ -117,6 +117,8 @@ echo "$TAG" > "$STATE"
 say "Déployé : $TAG (précédent : ${PREV:-aucun})"
 
 if [ "$first_deploy" = 1 ]; then
-  say "Première passkey : ouvre ${HUB_PUBLIC_ORIGIN:-l'app} et saisis ce code"
+  # pas d'apostrophe dans ${…:-…} : le bash 3.2 de macOS y voit le début d'une chaîne
+  where="${HUB_PUBLIC_ORIGIN:-}"
+  say "Première passkey : ouvre ${where:-ton hub} et saisis ce code"
   once "$TAG" hub auth bootstrap-code || true
 fi
