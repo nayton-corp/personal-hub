@@ -691,7 +691,9 @@ def sync_events(hub: HubContext, limit: int = 500) -> dict[str, int]:
 def _notify(hub: HubContext, payload: dict[str, Any]) -> int:
     title = str(payload.get("title") or "Personal Hub")[:120]
     body = str(payload.get("body") or "")[:300]
-    return int(hub.notifier.send(Message(title, body, tags=str(payload.get("tags") or ""))))
+    click = str(payload.get("click") or "")
+    msg = Message(title, body, tags=str(payload.get("tags") or ""), click=click[:200])
+    return int(hub.notifier.send(msg))
 
 
 def _requested(hub: HubContext, d: Domain, payload: dict[str, Any]) -> int:

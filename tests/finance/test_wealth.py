@@ -470,6 +470,13 @@ def test_generic_composition_and_breakdown(finance: FinanceDomain) -> None:
         lookthrough.UNKNOWN: 50_000,
     }
     assert out["items"][-1]["bucket"] == lookthrough.UNKNOWN  # le reste en dernier
+    # chaque case nomme les actifs qui la remplissent, le plus gros d'abord
+    na = next(i for i in out["items"] if i["bucket"] == lookthrough.NORTH_AMERICA)
+    assert [(a["isin"], a["value"]["minor"]) for a in na["assets"]] == [(WORLD, 70_000)]
+    unknown = out["items"][-1]["assets"]
+    assert [a["value"]["minor"] for a in unknown] == sorted(
+        (a["value"]["minor"] for a in unknown), reverse=True
+    )
     assert out["covered"] == "0.1695"
     assert {i["bucket"] for i in cur["items"]} == {"USD", "CHF"}
     assert top["items"][0]["bucket"] == "Ethereum"

@@ -74,22 +74,29 @@ class Refresh:
     reason: str
 
 
-def _state(conn: Connection) -> tuple[int, int, str] | None:
+def _state(conn: Connection) -> tuple[int, int, str, int] | None:
     row = conn.execute(
-        text("SELECT event_cursor, entries_seq, as_of FROM snapshot_state WHERE id = 1")
+        text(
+            "SELECT event_cursor, entries_seq, as_of, categorizations_seq FROM snapshot_state "
+            "WHERE id = 1"
+        )
     ).first()
-    return (int(row[0]), int(row[1]), str(row[2])) if row else None
+    return (int(row[0]), int(row[1]), str(row[2]), int(row[3])) if row else None
 
 
 def refresh(engine: Engine, as_of: date, *, force: bool = False) -> Refresh:
     """Recalcule si un import a été appliqué depuis le dernier calcul, si le registre a
-    grandi (ouverture d'un compte), si la date a changé, ou sur demande (tâche de nuit)."""
+    grandi (ouverture d'un compte), si une écriture a été reclassée (versements, paiements
+    d'une dette), si la date a changé, ou sur demande (tâche de nuit)."""
     with begin_immediate(engine) as conn:
         state = _state(conn)
         cursor = state[0] if state else 0
         head = int(conn.execute(text("SELECT coalesce(max(seq), 0) FROM events")).scalar_one())
         entries_seq = int(
             conn.execute(text("SELECT coalesce(max(seq), 0) FROM entries")).scalar_one()
+        )
+        categorizations_seq = int(
+            conn.execute(text("SELECT coalesce(max(seq), 0) FROM categorizations")).scalar_one()
         )
         applied = conn.execute(
             text("SELECT count(*) FROM events WHERE seq > :c AND type IN (:t, :u)"),
@@ -103,6 +110,8 @@ def refresh(engine: Engine, as_of: date, *, force: bool = False) -> Refresh:
             reason = "events"
         elif state[1] != entries_seq:
             reason = "entries"
+        elif state[3] != categorizations_seq:
+            reason = "categories"
         elif state[2] != as_of.isoformat():
             reason = "as_of"
         else:
@@ -122,12 +131,19 @@ def refresh(engine: Engine, as_of: date, *, force: bool = False) -> Refresh:
             )
         conn.execute(
             text(
-                "INSERT INTO snapshot_state (id, event_cursor, entries_seq, as_of, computed_at) "
-                "VALUES (1, :c, :e, :d, :at) ON CONFLICT (id) DO UPDATE SET "
-                "event_cursor = excluded.event_cursor, entries_seq = excluded.entries_seq, "
-                "as_of = excluded.as_of, computed_at = excluded.computed_at"
+                "INSERT INTO snapshot_state (id, event_cursor, entries_seq, as_of, computed_at, "
+                "categorizations_seq) VALUES (1, :c, :e, :d, :at, :k) ON CONFLICT (id) DO UPDATE "
+                "SET event_cursor = excluded.event_cursor, entries_seq = excluded.entries_seq, "
+                "as_of = excluded.as_of, computed_at = excluded.computed_at, "
+                "categorizations_seq = excluded.categorizations_seq"
             ),
-            {"c": head, "e": entries_seq, "d": as_of.isoformat(), "at": at},
+            {
+                "c": head,
+                "e": entries_seq,
+                "d": as_of.isoformat(),
+                "at": at,
+                "k": categorizations_seq,
+            },
         )
     log.info("snapshots.refreshed", rows=len(rows), reason=reason)
     return Refresh(True, len(rows), reason)

@@ -76,9 +76,15 @@ function remembered() {
   }
 }
 
+// Hors ligne : une réponse qui ne vient pas (réseau coupé, hub arrêté) laisse à l'écran les
+// derniers chiffres reçus pendant la session ; rien n'est gardé sur l'appareil.
+const unreachable = (e) => !(e instanceof ApiError) || e.status >= 500;
+
 class Store {
   constructor() {
     this.cache = new Map();
+    this.offline = false;
+    this.lastOk = null; // heure de la dernière réponse du hub (ms)
     this.listeners = new Set();
     const { period, tab } = remembered();
     this.params = { ...DEFAULTS, ...(period ? { period } : {}), ...(tab ? { tab } : {}), month: currentMonth() };
@@ -86,21 +92,35 @@ class Store {
     this.pending = false;
   }
 
-  // { status: "loading" | "ok" | "error", data, error }
+  // { status: "loading" | "ok" | "error", data, error } ; une valeur périmée (invalidate) reste
+  // affichée pendant qu'elle se relit, et après un échec du réseau
   use(path) {
     let entry = this.cache.get(path);
     if (!entry) {
-      entry = { status: "loading", data: null, error: null };
+      entry = { status: "loading", data: null, error: null, stale: false, busy: false };
       this.cache.set(path, entry);
-      api(path)
-        .then((data) => Object.assign(entry, { status: "ok", data }))
-        .catch((error) => {
-          Object.assign(entry, { status: "error", error });
-          // session expirée : l'app revient à l'écran de connexion
-          if (error.status === 401) window.dispatchEvent(new Event("hub:auth"));
-        })
-        .finally(() => this.notify());
     }
+    if (entry.busy || (entry.status !== "loading" && !entry.stale)) return entry;
+    entry.busy = true;
+    api(path)
+      .then((data) => {
+        Object.assign(entry, { status: "ok", data, error: null, stale: false });
+        this.offline = false;
+        this.lastOk = Date.now();
+      })
+      .catch((error) => {
+        // session expirée : l'app revient à l'écran de connexion
+        if (error.status === 401) window.dispatchEvent(new Event("hub:auth"));
+        if (entry.data != null && unreachable(error)) {
+          entry.stale = false; // pas de nouvel essai à chaque rendu : au prochain retour dans l'app
+          this.offline = true;
+        } else Object.assign(entry, { status: "error", error, stale: false });
+        if (entry.data == null && unreachable(error)) this.offline = true;
+      })
+      .finally(() => {
+        entry.busy = false;
+        this.notify();
+      });
     return entry;
   }
 
@@ -121,8 +141,12 @@ class Store {
     this.notify();
   }
 
+  // tout se relit ; les chiffres déjà là restent affichés d'ici la réponse (pas de saut)
   invalidate() {
-    this.cache.clear();
+    for (const [path, e] of this.cache) {
+      if (e.status === "ok") e.stale = true;
+      else if (!e.busy) this.cache.delete(path);
+    }
     this.today = currentMonth();
     this.notify();
   }

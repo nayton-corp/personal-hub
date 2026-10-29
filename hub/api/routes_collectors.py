@@ -194,6 +194,7 @@ def notify(
             f"Collecte {name_label} : consentement à renouveler",
             "Le consentement expire bientôt : relance la liaison depuis l'app (Sources).",
             "high",
+            click=collectors.SOURCES_CLICK,
         )
     return CollectorNotifyOut(sent=hub_ctx.notifier.send(msg))
 

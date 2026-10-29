@@ -70,3 +70,32 @@ export function el(tag, cls, txt) {
   if (txt != null) e.textContent = txt;
   return e;
 }
+
+// « il y a 2 h », « hier à 07:31 », « le 26 oct. »
+export function ago(ms, now = Date.now()) {
+  const min = Math.round((now - ms) / 60_000);
+  if (min < 2) return "à l'instant";
+  if (min < 60) return `il y a ${min} min`;
+  if (min < 12 * 60) return `il y a ${Math.round(min / 60)} h`;
+  const d = new Date(ms);
+  const hm = d.toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
+  const days = Math.floor((new Date(now).setHours(0, 0, 0, 0) - new Date(ms).setHours(0, 0, 0, 0)) / 86_400_000);
+  if (days <= 0) return `aujourd'hui à ${hm}`;
+  if (days === 1) return `hier à ${hm}`;
+  return `le ${d.getDate()} ${MOIS[d.getMonth()]}`;
+}
+
+// Ligne sous les titres : la dernière donnée reçue par le hub (tous comptes visibles), ou, hors
+// ligne, l'heure des chiffres affichés. 45 jours sans donnée sur un compte : en orange.
+export const STALE_DAYS = 45;
+export function freshLine(fr, offline, lastOk) {
+  if (offline) return { text: lastOk ? `Hors ligne · chiffres ${ago(lastOk)}` : "Hors ligne", warn: true };
+  if (!fr) return { text: "", warn: false };
+  const items = fr.items.filter((f) => !f.hidden);
+  const last = Math.max(0, ...items.map((f) => (f.last_import ? Date.parse(f.last_import) : 0)));
+  const late = items.filter((f) => { const a = daysSince(f.last_data); return a == null || a > STALE_DAYS; }).length;
+  if (!items.length) return { text: "Aucun compte pour l'instant", warn: false };
+  const data = items.map((f) => f.last_data).filter(Boolean).sort().pop();
+  const text = last ? `Mis à jour ${ago(last)}` : data ? `Données au ${date(data)}` : "Aucune donnée reçue";
+  return { text: late ? `${text} · ${late} compte${late > 1 ? "s" : ""} en retard` : text, warn: (!last && !data) || late > 0 };
+}

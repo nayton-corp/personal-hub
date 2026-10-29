@@ -223,3 +223,28 @@ def test_interest_accrues_between_payments() -> None:
     # une mensualité qui ne couvre pas les intérêts ne finit jamais
     assert debts.projected_end(d, 918_200, "2026-01-01", 1_000) is None
     assert debts.projected_end(d, 0, "2026-01-01", 1_000) is None
+
+
+def test_recategorized_payment_reaches_the_history(
+    client: TestClient, ctx: HubContext, fin: FinanceDomain, loan: dict[str, Any]
+) -> None:
+    save(
+        ctx,
+        {
+            "name": "Crédit voiture",
+            "lender": LENDER,
+            "kind": "loan",
+            "opening_entry_id": loan["entry_id"],
+            "category_id": "voiture-credit",
+        },
+    )
+    h = token(ctx, "brain")
+
+    def owed() -> int:
+        items = client.get("/api/finance/networth/history", headers=h).json()["items"]
+        return int(items[-1]["by_envelope"]["dettes"]["minor"])
+
+    assert owed() == -445_000
+    # un paiement classé après coup compte dès la lecture suivante, sans import ni nuit
+    categorize(fin, "Kiosque Fictif", "voiture-credit")
+    assert owed() == -441_000

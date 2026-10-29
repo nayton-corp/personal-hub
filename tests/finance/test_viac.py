@@ -212,6 +212,13 @@ def test_buy_moves_cash_to_titles(viac: FinanceDomain) -> None:
     ]
     assert rows(viac, "SELECT price, source FROM prices") == [("100", "viac_notice")]
     assert viac.verify_ledger().ok
+    # l'app liste les ordres d'un actif (journal d'un actif)
+    from hub.domains.finance import reads
+
+    with viac.engine().connect() as conn:
+        (t,) = reads.trades(conn, f.FUND_WORLD[1])
+        assert reads.trades(conn, f.FUND_WORLD[1], "autre-compte") == []
+    assert (t["account_id"], t["quantity"], t["amount"]["minor"]) == (titles, "9.5", 95000)
 
 
 def test_notice_price_is_the_printed_chf_price(viac: FinanceDomain) -> None:

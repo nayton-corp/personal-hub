@@ -111,6 +111,7 @@ téléchargement) que le conteneur lance dans la minute ; s'il réussit, « Réa
 « Désactiver » arrête un collecteur actif. Le retour à l'état actif reste toujours manuel.
 
 Les alertes passent par ntfy, avec des textes génériques (« Collecte BCF : action requise »).
+Toucher l'alerte ouvre Réglages › Connexions (`/#sources`).
 Le sujet ntfy vaut un mot de passe : il vit dans `secrets.enc.yaml`, section `ntfy`.
 
 Pour comprendre un sélecteur manquant : `hubc run --rm collector-browser hub-collector run bcf

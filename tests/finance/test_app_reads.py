@@ -206,6 +206,8 @@ def test_old_statement_recomputes_the_past(fin: FinanceDomain) -> None:
 
 
 def test_refresh_triggers(year: FinanceDomain) -> None:
+    # le jeu de données est classé après son import : un reclassement relance le calcul
+    assert year.refresh_snapshots().reason == "categories"
     assert year.refresh_snapshots().reason == "current"
     assert year.refresh_snapshots(force=True).reason == "forced"
     later = snapshots.refresh(year.engine(), date(2026, 10, 28))

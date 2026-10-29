@@ -69,6 +69,11 @@ def test_alerts_are_raised_once_and_notified(
         assert not re.search(r"\d", m.title + m.body)
         assert "Alimentation" not in m.title
         assert "Restaurants" not in m.title
+        # toucher la notification ouvre l'alerte : un identifiant opaque, pas la catégorie
+        assert re.fullmatch(r"/#alert=[0-9a-f]{20}", m.click)
+        assert "alimentation" not in m.click
+    ids = {sentinels.alert_id(a.key) for a in first}
+    assert {m.click.removeprefix("/#alert=") for m in sent} == ids
     assert proposals.sync_events(ctx)["notified"] == 0
 
 

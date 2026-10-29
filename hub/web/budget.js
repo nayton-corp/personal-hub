@@ -1,15 +1,17 @@
-// Budget : reste à vivre et rythme du mois, projection, diagramme de flux (revenus → usage →
-// postes), catégories avec leur trait de rythme, abonnements et tendance sur six mois. Les
+// Budget : reste à vivre et rythme du mois, projection et taux d'épargne ; une section
+// Catégories (variables d'abord, les dépassements en tête, puis les fixes repliées) ; le
+// diagramme de flux (revenus → usage → postes), toujours ouvert ; abonnements et tendance sur
+// six mois, repliés sur une ligne de résumé. Les
 // montants viennent de /finance/budget, /flows, /budget/months ; seul le rythme (part du mois
 // écoulée) et la projection se calculent ici.
 import { go, reveal } from "./finance.js";
 import { MOIS, base, date, monthName } from "./format.js";
-import { GROUP_LABEL, catIc, catLook, catMark } from "./meta.js";
+import { GROUP_LABEL, catLook, catMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { monthStartDay, shiftMonth, store } from "./store.js";
 import {
   SHEETS, SH, amount, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, money, n0, nf, openSheet, pf, pref,
-  renderSheet, setPref, toast,
+  renderSheet, setPref, skel, toast,
 } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -207,7 +209,7 @@ export function render() {
       <button type="button" data-a="bm" data-v="1" aria-label="Mois suivant" ${P.month >= store.today ? "disabled" : ""}>${ic("chev")}</button></div>
     <div class="seg small" role="group" aria-label="Période"><button type="button" data-a="bper" data-v="m" aria-pressed="${P.period === "m"}">Mois</button><button type="button" data-a="bper" data-v="q" aria-pressed="${P.period === "q"}" aria-label="Trois mois complets avant le mois choisi">3 mois</button></div>`);
   if (be.status === "error") return fill($("budBody"), `<div class="err-box" role="alert">Impossible de charger le budget : ${esc(be.error.message)}</div>`);
-  if (!b) return fill($("budBody"), '<div class="loading">Chargement…</div>');
+  if (!b) return fill($("budBody"), skel());
   const m = model(b);
   const st = m.state;
   let proj = "";
@@ -221,6 +223,7 @@ export function render() {
       ${m.T == null ? "" : `<div class="hint">${amount(m.spent)} dépensés sur ${amount(m.T)} de budget</div>
       <div class="pbar" role="img" aria-label="${pf(m.ratio, 0)} % du budget dépensé${m.expected != null ? `, ${pf(m.expected, 0)} % attendus à ce jour` : ""}" data-css="--c:${st.color}"><i data-css="width:${Math.min(100, m.ratio * 100).toFixed(1)}%"></i>${m.expected != null ? `<span class="pace" data-css="left:${(m.expected * 100).toFixed(1)}%"></span>` : ""}</div>`}
       <div class="status ${st.k}">${ic(st.icon)}<span>${st.text}</span></div>
+      ${fe.data ? savingsStrip(fe.data) : ""}
       ${proj}
     </section>`;
   // flux
@@ -230,17 +233,24 @@ export function render() {
     if (B.sk && ![...sd.srcs, ...sd.mids, ...sd.mids.flatMap((x) => x.kids)].some((n) => n.id === B.sk)) B.sk = null;
     const spentF = sd.out - sd.S;
     flow = `<section class="card" aria-labelledby="t-flow">
-      <div class="section-head"><h2 class="section-title" id="t-flow">Flux de l'argent</h2></div>
-      <div class="flowkpi">
-        <span><small>Entré · ${base()}</small><b class="num">${money(sd.I)}</b></span>
-        <span><small>Dépensé</small><b class="num">${money(spentF)}</b></span>
-        <span><small>Épargné</small><b class="num">${money(sd.S)}</b></span>
-        <span><small>Taux d'épargne</small><b class="num">${sd.I ? `${pf(sd.S / sd.I, 0)} %` : "—"}</b></span>
-      </div>
+      <div class="section-head"><h2 class="section-title" id="t-flow">Où va l'argent</h2></div>
+      <p class="hint">Entré ${amount(sd.I)} · dépensé ${amount(spentF)} · épargné ${amount(sd.S)}</p>
       ${sd.tot > 1 ? `<div class="skcols" aria-hidden="true"><span>Revenus</span><span>Usage</span><span>Postes</span></div>${sankeySvg(sd)}${sankeyInfo(sd)}` : '<div class="empty">Aucun mouvement sur la période.</div>'}
     </section>`;
   } else if (fe.status === "error") flow = `<div class="err-box">Flux indisponible : ${esc(fe.error.message)}</div>`;
-  fill($("budBody"), hero + flow + categories(m) + subscriptions(re) + trend(me) + '<div class="endspace"></div>');
+  fill($("budBody"), hero + categories(m) + flow + subscriptions(re) + trend(me) + '<div class="endspace"></div>');
+}
+
+// revenus, épargne et taux d'épargne de la période, sous le reste à vivre
+function savingsStrip(f) {
+  const I = u(f.income), S = u(f.groups.find((x) => x.group === "savings")?.total);
+  return `<div class="strip three"><div><span>Revenus</span><b class="num">${money(I)}</b></div><div><span>Épargné</span><b class="num">${money(S)}</b></div><div><span>Taux d'épargne</span><b class="num">${I ? `${pf(S / I, 0)} %` : "—"}</b></div></div>`;
+}
+
+// en-tête d'une section repliable, avec sa ligne de résumé une fois repliée
+function foldHead(id, title, open, sum) {
+  return `<div class="section-head"><button class="fold-btn" type="button" data-a="bfold" data-v="${id}" aria-expanded="${open}" aria-controls="${id}-body"><h2 class="section-title" id="t-${id}">${title}</h2><svg class="fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>
+    ${open ? "" : `<button class="sec-sum" type="button" data-a="bfold" data-v="${id}" aria-label="Déplier ${title}"><span>${sum}</span></button>`}`;
 }
 
 // catégorie suivie à l'année : le cumul depuis janvier face à la cible annuelle
@@ -262,58 +272,76 @@ function yearRow(c) {
     <span class="crow-st ${s.k}">${s.txt}${month}</span></span></button>`;
 }
 
+// une ligne de catégorie : barre, trait du rythme, et l'état en mots (en pastille s'il dérape)
+function catRow(c, pv) {
+  if (c.yearly) return yearRow(c);
+  const cp = c.group === "fixed" ? null : pv;
+  const s = catState(c, cp), r = c.t ? c.s / c.t : 0;
+  const tag = s.k === "bad" ? '<span class="pill bad">Dépassé</span>' : s.k === "warn" ? '<span class="pill warn">Au-dessus du rythme</span>' : "";
+  return `<button class="crow" type="button" data-a="cat" data-v="${esc(c.category)}" aria-label="${esc(c.name)}, ${n0(c.s)}${c.t != null ? ` sur ${n0(c.t)}` : ""} ${base()}, ${s.txt}">
+    ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}${tag}</b><span class="t num">${money(c.s)}${c.t != null ? ` / ${money(c.t)}` : ""}</span></span>
+    ${c.t != null ? `<span class="pbar thin" data-css="--c:${s.col}"><i data-css="width:${Math.min(100, r * 100).toFixed(1)}%"></i>${cp != null ? `<span class="pace" data-css="left:${(cp * 100).toFixed(1)}%"></span>` : ""}</span>` : ""}
+    <span class="crow-st ${s.k}">${s.txt}</span></span></button>`;
+}
+
+// gravité pour le tri : dépassé, puis au-dessus du rythme, puis le reste par part consommée
+const rank = (c, pv) => ({ bad: 2, warn: 1 })[catState(c, c.group === "fixed" ? null : pv).k] || 0;
+
 function categories(m) {
   const pv = m.pace;
-  const nOver = m.lines.filter((l) => l.over).length;
   const uncl = m.lines.find((l) => l.category === UNCAT);
-  const show = B.bgroup ? [B.bgroup] : ["fixed", "variable", "mixed"];
-  const body = show.map((g) => {
-    if (g === "rest") return '<div class="empty">Ni dépensé ni épargné pour l\'instant.</div>';
-    if (g === "savings") {
-      const f = store.data(flowsPath());
-      const items = f ? (f.groups.find((x) => x.group === "savings")?.items || []) : [];
-      return `<div class="grp"><span>Épargne</span><span class="num">${amount(items.reduce((t, i) => t + u(i.total), 0))}</span></div>` +
-        items.map((i) => `<div class="crow">${catMark(i.category, "savings")}<span><span class="crow-top"><b>${esc(i.name)}</b><span class="t num">${amount(u(i.total))}</span></span><span class="crow-st ok">${f.income.minor ? `${pf(u(i.total) / u(f.income), 0)} % des revenus` : ""}</span></span></div>`).join("");
-    }
-    const cs = m.lines.filter((l) => l.group === g && l.category !== UNCAT)
-      .sort((x, y) => Number(y.over) - Number(x.over) || (y.t ? y.s / y.t : 0) - (x.t ? x.s / x.t : 0) || y.s - x.s);
-    if (!cs.length) return "";
-    const sp = cs.filter((c) => !c.yearly).reduce((t, c) => t + c.s, 0), tg = cs.reduce((t, c) => t + (c.t || 0), 0);
-    return `<div class="grp"><span>${GROUP_LABEL[g]}</span><span class="num">${money(sp)}${tg ? ` / ${money(tg)}` : ""}</span></div>` + cs.map((c) => {
-      if (c.yearly) return yearRow(c);
-      const cp = g === "fixed" ? null : pv;
-      const s = catState(c, cp), r = c.t ? c.s / c.t : 0;
-      return `<button class="crow" type="button" data-a="cat" data-v="${esc(c.category)}" aria-label="${esc(c.name)}, ${n0(c.s)}${c.t != null ? ` sur ${n0(c.t)}` : ""} ${base()}, ${s.txt}">
-        ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}</b><span class="t num">${money(c.s)}${c.t != null ? ` / ${money(c.t)}` : ""}</span></span>
-        ${c.t != null ? `<span class="pbar thin" data-css="--c:${s.col}"><i data-css="width:${Math.min(100, r * 100).toFixed(1)}%"></i>${cp != null ? `<span class="pace" data-css="left:${(cp * 100).toFixed(1)}%"></span>` : ""}</span>` : ""}
-        <span class="crow-st ${s.k}">${s.txt}</span></span></button>`;
-    }).join("");
-  }).join("");
+  const sum2 = (cs) => [cs.filter((c) => !c.yearly).reduce((t, c) => t + c.s, 0), cs.reduce((t, c) => t + (c.t || 0), 0)];
+  const pick = (gs) => m.lines.filter((l) => gs.includes(l.group) && l.category !== UNCAT)
+    .sort((x, y) => rank(y, pv) - rank(x, pv) || (y.t ? y.s / y.t : 0) - (x.t ? x.s / x.t : 0) || y.s - x.s);
+  if (B.bgroup === "savings" || B.bgroup === "rest") return savingsOrRest();
+  const vars = B.bgroup === "fixed" ? [] : pick(["variable", "mixed"]);
+  const fixed = B.bgroup === "variable" ? [] : pick(["fixed"]);
+  const [vs, vt] = sum2(vars), [fs, ft] = sum2(fixed);
+  const paid = fixed.filter((c) => c.t != null && c.s >= c.t - 0.5).length, due = fixed.filter((c) => c.t != null).length;
+  const openFixed = B.bgroup === "fixed" || pref("fixedOpen", false);
+  const nOver = m.lines.filter((l) => l.over).length;
   const head = B.bgroup
-    ? `<button class="chip" type="button" data-a="bgroupx" aria-label="Retirer le filtre ${GROUP_LABEL[B.bgroup] || "Reste"}">${GROUP_LABEL[B.bgroup] || "Reste"}${ic("close")}</button>`
-    : `<span class="pill ${nOver ? "bad" : "ok"}">${nOver ? `${nOver} dépassée${nOver > 1 ? "s" : ""}` : "aucun dépassement"}</span>`;
-  const unclRow = uncl && (!B.bgroup || B.bgroup === "variable")
+    ? `<button class="chip" type="button" data-a="bgroupx" aria-label="Retirer le filtre ${GROUP_LABEL[B.bgroup]}">${GROUP_LABEL[B.bgroup]}${ic("close")}</button>`
+    : `<span class="hint num">${money(vs + fs)}${vt + ft ? ` / ${money(vt + ft)}` : ""}</span>`;
+  const unclRow = uncl && B.bgroup !== "fixed"
     ? `<button class="crow" type="button" data-a="gotodo">${catMark(null)}<span><span class="crow-top"><b>Non classées</b><span class="t num">${amount(uncl.s)}</span></span><span class="crow-st warn">${uncl.count} écriture${uncl.count > 1 ? "s" : ""} à classer dans le journal</span></span></button>` : "";
+  const varPart = vars.length ? `<div class="grp"><span>Variables</span><span class="num">${money(vs)}${vt ? ` / ${money(vt)}` : ""}</span></div>${vars.map((c) => catRow(c, pv)).join("")}` : "";
+  const fixedPart = fixed.length ? `<button class="grp grp-btn" type="button" data-a="bfixed" aria-expanded="${openFixed}" aria-controls="fixed-body"><span>Fixes · <span class="num">${money(fs)}${ft ? ` / ${money(ft)}` : ""}</span></span>
+      <span class="grp-st">${due ? `${paid === due ? ic("check") : ""}${paid} sur ${due} payée${due > 1 ? "s" : ""}` : ""}${ic("down", openFixed ? "up" : "")}</span></button>
+      <div id="fixed-body">${openFixed ? fixed.map((c) => catRow(c, pv)).join("") : ""}</div>` : "";
   return `<section class="card" id="budCats" aria-labelledby="t-cats">
-      <div class="section-head"><h2 class="section-title" id="t-cats">${B.bgroup === "savings" ? "Épargne" : B.bgroup === "rest" ? "Reste" : "Catégories"}</h2>${head}</div>
+      <div class="section-head"><h2 class="section-title" id="t-cats">Catégories${nOver ? ` <span class="pill bad">${nOver} dépassée${nOver > 1 ? "s" : ""}</span>` : ""}</h2>${head}</div>
+      ${unclRow}${varPart}${fixedPart || ""}${!vars.length && !fixed.length && !uncl ? '<div class="empty">Aucune dépense sur la période.</div>' : ""}
       ${B.bgroup ? "" : `<button class="secondary plan-btn" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}${m.T == null ? "Créer mon budget" : "Préparer le budget"}</button>`}
-      ${unclRow}${body || '<div class="empty">Aucune dépense sur la période.</div>'}
-      ${pv != null && (!B.bgroup || B.bgroup === "variable") ? '<p class="hint">Le trait vertical marque où tu devrais en être aujourd\'hui. Les charges fixes sont dues en entier, elles n\'en ont pas.</p>' : ""}
+      ${pv != null && vars.length ? '<p class="hint">Le trait vertical marque où tu devrais en être aujourd\'hui. Les charges fixes sont dues en entier, elles n\'en ont pas.</p>' : ""}
     </section>`;
+}
+
+// le flux filtré sur l'épargne ou le reste : ses postes, sans budget
+function savingsOrRest() {
+  const head = `<div class="section-head"><h2 class="section-title" id="t-cats">${B.bgroup === "savings" ? "Épargne" : "Reste"}</h2><button class="chip" type="button" data-a="bgroupx" aria-label="Retirer le filtre">${B.bgroup === "savings" ? "Épargne" : "Reste"}${ic("close")}</button></div>`;
+  if (B.bgroup === "rest") return `<section class="card" id="budCats" aria-labelledby="t-cats">${head}<div class="empty">Ni dépensé ni épargné pour l'instant.</div></section>`;
+  const f = store.data(flowsPath());
+  const items = f ? (f.groups.find((x) => x.group === "savings")?.items || []) : [];
+  return `<section class="card" id="budCats" aria-labelledby="t-cats">${head}<div class="grp"><span>Épargne</span><span class="num">${amount(items.reduce((t, i) => t + u(i.total), 0))}</span></div>` +
+    items.map((i) => `<div class="crow">${catMark(i.category, "savings")}<span><span class="crow-top"><b>${esc(i.name)}</b><span class="t num">${amount(u(i.total))}</span></span><span class="crow-st ok">${f.income.minor ? `${pf(u(i.total) / u(f.income), 0)} % des revenus` : ""}</span></span></div>`).join("") + "</section>";
 }
 
 function subscriptions(re) {
   const r = re.data;
   const items = r && r.items ? r.items.filter((x) => x.active) : [];
   if (!items.length) return "";
-  const open = pref("subs", true);
+  const open = pref("subsOpen", false);
   const total = r.monthly_total.map((x) => `${n0(Math.abs(u(x)))} ${x.currency}`).join(" + ");
+  const next = items.slice().sort((a, b) => (a.next_date || "").localeCompare(b.next_date || ""))[0];
+  const ups = items.filter((s) => Math.abs(u(s.last_amount)) - Math.abs(u(s.amount)) > 0.009).length;
+  const sum = `${items.length} abonnement${items.length > 1 ? "s" : ""} · ${esc(total)} par mois${next ? ` · prochain : ${esc(next.label)} le ${date(next.next_date)}` : ""}${ups ? ` · ${ups} en hausse` : ""}`;
   return `<section class="card${open ? "" : " folded"}" id="subs" aria-labelledby="t-subs">
-      <div class="section-head"><button class="fold-btn" type="button" data-a="subsfold" aria-expanded="${open}" aria-controls="subs-body"><h2 class="section-title" id="t-subs">Abonnements</h2><svg class="fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><span class="hint num">${esc(total)} / mois</span></div>
-      <div class="sec-body" id="subs-body">${items.map((s) => {
+      ${foldHead("subs", "Abonnements", open, sum)}
+      ${open ? `<div class="sec-body" id="subs-body">${items.map((s) => {
         const up = Math.abs(u(s.last_amount)) - Math.abs(u(s.amount));
         return `<div class="kv">${ibox(ic("repeat"), "var(--s4)", "sm")}<span>${esc(s.label)}<span class="s">${CADENCE[s.cadence] || esc(s.cadence)} · prochain le ${date(s.next_date)}</span>${up > 0.009 ? ` <span class="pill warn">${ic("alert")}hausse +${amount2(up)}</span>` : ""}</span><b class="num">${amount2(Math.abs(u(s.last_amount)))}${s.amount.currency === base() ? "" : ` ${esc(s.amount.currency)}`}</b></div>`;
-      }).join("")}<p class="hint">Paiements réguliers repérés dans le registre ; les prochaines échéances sont estimées.</p></div>
+      }).join("")}<p class="hint">Paiements réguliers repérés dans le registre ; les prochaines échéances sont estimées.</p></div>` : ""}
     </section>`;
 }
 
@@ -322,8 +350,15 @@ function trend(me) {
   if (!d) return "";
   const ms = d.series.map((s) => ({ m: s.month, F: u(s.fixed), V: u(s.variable), S: u(s.savings) }));
   const mx = Math.max(1, ...ms.map((x) => x.F + x.V + x.S));
-  return `<section class="card" aria-labelledby="t-trend">
-      <div class="section-head"><h2 class="section-title" id="t-trend">Tendance sur 6 mois</h2><span class="hint">toucher un mois</span></div>
+  const open = pref("trendOpen", false);
+  const spend = ms.map((x) => x.F + x.V);
+  const avg = spend.length > 1 ? spend.slice(0, -1).reduce((t, v) => t + v, 0) / (spend.length - 1) : null;
+  const last = ms[ms.length - 1];
+  const sum = last ? `Dépenses ${shortMonth(last.m)} ${n0(spend[spend.length - 1])}${avg != null ? `, moyenne des mois d'avant ${n0(avg)}` : ""} ${base()}` : "";
+  if (!open) return `<section class="card folded" id="trend" aria-labelledby="t-trend">${foldHead("trend", "Tendance sur 6 mois", false, sum)}</section>`;
+  return `<section class="card" id="trend" aria-labelledby="t-trend">
+      ${foldHead("trend", "Tendance sur 6 mois", true, sum)}
+      <p class="hint">Toucher un mois l'affiche.</p>
       <div class="months" role="group" aria-label="Choisir un mois">${ms.map((x) => {
         const t = x.F + x.V + x.S;
         return `<button class="mcol" type="button" data-a="month" data-v="${x.m}" aria-pressed="${P.period === "m" && P.month === x.m}" aria-label="${monthName(x.m)} : fixes ${n0(x.F)}, variables ${n0(x.V)}, épargne ${n0(x.S)}">
@@ -340,7 +375,7 @@ SHEETS.cat = (id, sh) => {
   const cats = store.data("/finance/categories");
   const c = cats ? cats.items.find((x) => x.id === id) : null;
   const l = b ? b.lines.find((x) => x.category === id) : null;
-  if (!c && !l) return { title: "Catégorie", body: '<div class="loading">Chargement…</div>' };
+  if (!c && !l) return { title: "Catégorie", body: skel("block") };
   const name = c ? c.name : l.name, group = c ? c.group : l.group;
   const m = b ? model(b) : null;
   const line = m ? m.lines.find((x) => x.category === id) : null;
@@ -354,7 +389,7 @@ SHEETS.cat = (id, sh) => {
   const shown = was === "year" ? Math.round(year ?? -1) : Math.round(target ?? -1);
   const s = line ? (line.yearly ? yearState(line) : catState(line, group === "fixed" ? null : m.pace)) : { k: "ok", txt: "Aucune dépense" };
   const te = store.use(trendPath(id));
-  let hist = '<div class="loading">Chargement…</div>';
+  let hist = skel("block");
   if (te.data) {
     const pts = te.data.series.map((x) => ({ m: x.month, v: Math.abs(u(x.total)) }));
     const mx = Math.max(1, ...pts.map((p) => p.v), target || 0) * 1.1;
@@ -404,7 +439,7 @@ const planChanges = (d, tmp) => d.rows.filter((r) => tmp[r.id] != null && tmp[r.
 
 SHEETS.plan = (_arg, sh) => {
   const d = planData();
-  if (!d) return { title: "Préparer le budget", body: '<div class="loading">Chargement…</div>' };
+  if (!d) return { title: "Préparer le budget", body: skel("block") };
   if (!sh.tmp) sh.tmp = Object.fromEntries(d.rows.map((r) => [r.id, r.now ?? roundUp(r.avg)]));
   const total = d.rows.reduce((t, r) => t + (sh.tmp[r.id] || 0) / (r.year ? 12 : 1), 0);
   const ch = planChanges(d, sh.tmp);
@@ -482,12 +517,17 @@ export const actions = {
     B.bgroup = null;
     store.notify();
   },
-  subsfold: () => {
-    setPref("subs", !pref("subs", true));
+  bfold: (k) => {
+    const key = `${k}Open`;
+    setPref(key, !pref(key, false));
+    store.notify();
+  },
+  bfixed: () => {
+    setPref("fixedOpen", !pref("fixedOpen", false));
     store.notify();
   },
   subs: () => {
-    setPref("subs", true);
+    setPref("subsOpen", true);
     store.set({ month: store.today, period: "m" });
     go("budget");
     requestAnimationFrame(() => requestAnimationFrame(() => reveal($("subs"))));
