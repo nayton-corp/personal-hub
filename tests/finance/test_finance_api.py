@@ -209,6 +209,19 @@ def test_review_and_search(client: TestClient, ctx: HubContext, fin: FinanceDoma
     assert g["first_date"] <= g["last_date"]
     assert abs(g["min"]["minor"]) <= abs(g["max"]["minor"])
     assert [s["id"] for s in g["samples"]] == g["entry_ids"]
+    assert g["history"] == []
+    # une écriture déjà classée à la main : sa catégorie est proposée en premier pour les autres
+    from hub.domains.finance.cli import propose_and_accept
+
+    propose_and_accept(
+        fin, "recategorize", {"entry_id": g["entry_ids"][0], "category_id": "loisirs"}
+    )
+    left = next(
+        x
+        for x in client.get("/api/finance/review", headers=h).json()["groups"]
+        if x["counterparty"] == "jean exemple"
+    )
+    assert (left["count"], left["history"]) == (1, ["loisirs"])
     hits = client.get("/api/finance/search?q=EMPLOYEUR", headers=h).json()["items"]
     assert [x["counterparty"] for x in hits] == ["Employeur Fictif SA"]
     assert client.get("/api/finance/search?q=%20%20a%20%20", headers=h).status_code == 422

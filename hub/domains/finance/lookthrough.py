@@ -38,6 +38,7 @@ DIMENSIONS = ("region", "sector", "currency", "holding")
 GENERIC_HEADER = ("isin", "dimension", "bucket", "weight_pct", "on_date")
 MAX_BYTES = 10 * 1024 * 1024
 TOP = 10
+ASSETS_PER_BUCKET = 5  # actifs nommés sous chaque case de la répartition
 UNKNOWN = "Non ventilé"
 CRYPTO = "Crypto"
 _ISIN_IN_NAME = re.compile(r"([A-Z]{2}[A-Z0-9]{9}\d)")
@@ -438,6 +439,13 @@ def breakdown(conn: Connection, dimension: str, on_date: str) -> dict[str, Any]:
         comps[isin].append((bucket, Decimal(weight)))
         dates[isin] = on
     sums: dict[str, Decimal] = defaultdict(Decimal)
+    # qui remplit chaque case : bucket → ISIN → valeur (l'app montre les actifs d'un bloc)
+    parts: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+
+    def put(bucket: str, isin: str, value: Decimal) -> None:
+        sums[bucket] += value
+        parts[bucket][isin] += value
+
     total = covered = 0
     with localcontext(DECIMAL_CONTEXT):
         for account_id in sorted(positions.accounts):
@@ -450,14 +458,14 @@ def breakdown(conn: Connection, dimension: str, on_date: str) -> dict[str, Any]:
                     weights = comps[line.isin]
                     assigned = sum((w for _b, w in weights), Decimal(0))
                     for bucket, w in weights:
-                        sums[bucket] += line.value * w
+                        put(bucket, line.isin, line.value * w)
                     if dimension != "holding" and assigned < 1:
-                        sums[UNKNOWN] += line.value * (1 - assigned)
+                        put(UNKNOWN, line.isin, line.value * (1 - assigned))
                     elif dimension == "holding" and assigned < 1:
-                        sums["Autres lignes"] += line.value * (1 - assigned)
+                        put("Autres lignes", line.isin, line.value * (1 - assigned))
                 else:
                     info = meta.get(line.isin, (line.isin, None, None, line.currency, "other"))
-                    sums[_fallback(dimension, info)] += Decimal(line.value)
+                    put(_fallback(dimension, info), line.isin, Decimal(line.value))
     found: list[tuple[str, int]] = []
     for bucket, value in sums.items():
         minor = int(value.to_integral_value())
@@ -473,8 +481,22 @@ def breakdown(conn: Connection, dimension: str, on_date: str) -> dict[str, Any]:
         if total:
             with localcontext(DECIMAL_CONTEXT):
                 weight = str((Decimal(minor) / total).quantize(Decimal("0.0001")))
+        assets = sorted(parts[bucket].items(), key=lambda x: (-x[1], x[0]))[:ASSETS_PER_BUCKET]
         out.append(
-            {"bucket": bucket, "value": Money(minor, base_currency()).to_api(), "weight": weight}
+            {
+                "bucket": bucket,
+                "value": Money(minor, base_currency()).to_api(),
+                "weight": weight,
+                "assets": [
+                    {
+                        "isin": isin,
+                        "name": meta.get(isin, (isin,))[0],
+                        "value": Money(int(v.to_integral_value()), base_currency()).to_api(),
+                    }
+                    for isin, v in assets
+                    if v >= 1
+                ],
+            }
         )
     since = min(dates.values(), default=None)
     return {

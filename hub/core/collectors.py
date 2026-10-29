@@ -233,6 +233,10 @@ def _first_today(conn: Connection, name: str, outcome: str, run_id: str) -> bool
     return True
 
 
+# les notifications des collecteurs ouvrent la page des sources dans l'app
+SOURCES_CLICK = "/#sources"
+
+
 TEXTS: dict[str, tuple[str, str]] = {
     "auth_error": ("urgent", "Connexion refusée."),
     "selector_missing": ("high", "Écran inattendu ({detail})."),
@@ -248,7 +252,9 @@ def _alert(name_label: str, outcome: str, detail: str | None, degraded: bool) ->
     body = body.format(detail=detail or "?")
     if degraded:
         body += " Collecte suspendue : import manuel en attendant, puis contrôle depuis l'app."
-    return Message(f"Collecte {name_label} : action requise", body, priority)  # type: ignore[arg-type]
+    return Message(  # type: ignore[arg-type]
+        f"Collecte {name_label} : action requise", body, priority, click=SOURCES_CLICK
+    )
 
 
 def record(conn: Connection, name: str, run: Run, by: str) -> Recorded:
@@ -358,6 +364,7 @@ def auth_pending(name_label: str) -> Message:
         f"Collecte {name_label} : connexion à valider",
         "Valide la connexion sur ton téléphone (3 minutes).",
         "high",
+        click=SOURCES_CLICK,
     )
 
 

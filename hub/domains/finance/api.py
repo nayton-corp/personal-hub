@@ -107,6 +107,14 @@ def build_router(domain: FinanceDomain) -> APIRouter:
             raise Problem("validation.params", "curseur invalide") from None
         return {"items": items, "next_cursor": next_cursor}
 
+    @r.get("/trades")
+    def trades_route(
+        _p: Reader, isin: Annotated[str, Query(max_length=40)], account: str | None = None
+    ) -> dict[str, Any]:
+        """Achats et ventes d'un actif (ordres), pour le journal d'un actif dans l'app."""
+        with engine.connect() as conn:
+            return {"items": reads.trades(conn, isin, account)}
+
     @r.get("/entries/{entry_id}")
     def entry(_p: Reader, entry_id: str) -> dict[str, Any]:
         with engine.connect() as conn:

@@ -202,6 +202,34 @@ def freshness(conn: Connection) -> list[dict[str, Any]]:
     return out
 
 
+TRADES_LIMIT = 200  # ordres montrés pour un actif dans l'app
+
+
+def trades(conn: Connection, isin: str, account: str | None = None) -> list[dict[str, Any]]:
+    """Achats (+) et ventes (−) d'un actif, les plus récents d'abord."""
+    rows = conn.execute(
+        text(
+            "SELECT t.seq, t.account_id, t.trade_date, t.isin, t.quantity, t.amount_minor, "
+            "t.currency, i.name FROM trades t LEFT JOIN instruments i ON i.isin = t.isin "
+            "WHERE t.isin = :i AND (:a IS NULL OR t.account_id = :a) "
+            "ORDER BY t.trade_date DESC, t.seq DESC LIMIT :n"
+        ),
+        {"i": isin, "a": account, "n": TRADES_LIMIT},
+    ).fetchall()
+    return [
+        {
+            "id": r[0],
+            "account_id": r[1],
+            "trade_date": r[2],
+            "isin": r[3],
+            "name": r[7] or r[3],
+            "quantity": r[4],
+            "amount": money(int(r[5]), r[6]),
+        }
+        for r in rows
+    ]
+
+
 def categories(conn: Connection) -> list[dict[str, Any]]:
     rows = conn.execute(text("SELECT id, name, grp, active FROM categories ORDER BY grp, name"))
     return [{"id": r[0], "name": r[1], "group": r[2], "active": bool(r[3])} for r in rows]
@@ -535,6 +563,7 @@ def _direction(amounts: list[int]) -> str:
     return "any"
 
 
+REVIEW_HISTORY = 3  # catégories passées proposées en premier
 REVIEW_SAMPLES = 10  # écritures montrées en dépliant un groupe dans l'app
 
 
@@ -564,6 +593,31 @@ def review_key(counterparty: str | None, label: str) -> str:
     return merchant.key(label) or normalize(ledger.party(counterparty) or label) or "(inconnu)"
 
 
+def _past_categories(conn: Connection, keys: set[str]) -> dict[str, list[str]]:
+    """Pour chaque groupe d'« À classer », les catégories que ses écritures déjà classées ont
+    reçues (à la main ou par une règle précise), par nombre d'écritures décroissant."""
+    if not keys:
+        return {}
+    rows = conn.execute(
+        text(
+            "SELECT e.counterparty, e.label, vc.category_id FROM entries e "
+            "JOIN v_entry_shown vc ON vc.entry_seq = e.seq "
+            "LEFT JOIN categorizations c ON c.seq = vc.categorization_seq "
+            "LEFT JOIN rules r ON r.id = c.rule_id "
+            "WHERE e.kind = 'movement' AND vc.category_id IS NOT NULL "
+            f"AND vc.category_id != :uncat AND NOT ({CATCH_ALL})"
+        ),
+        {"uncat": UNCATEGORIZED},
+    ).fetchall()
+    counts: dict[str, dict[str, int]] = {}
+    for counterparty, label, category in rows:
+        key = review_key(counterparty, label)
+        if key in keys:
+            per = counts.setdefault(key, {})
+            per[category] = per.get(category, 0) + 1
+    return {k: sorted(v, key=lambda c: (-v[c], c)) for k, v in counts.items()}
+
+
 def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
     """Écritures sans catégorie (puis celles d'une règle « tout le reste »), groupées par
     commerçant ou contrepartie, avec de quoi décider : libellés bancaires, communications,
@@ -583,6 +637,7 @@ def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
     groups: dict[tuple[str, str, str | None], list[Any]] = {}
     for r in rows:
         groups.setdefault((review_key(r[0], r[1]), r[2], r[9]), []).append(r)
+    history = _past_categories(conn, {k for k, _c, _g in groups})
     out: list[dict[str, Any]] = []
     for (key, ccy, guess), v in groups.items():
         amounts = [int(r[3]) for r in v]
@@ -592,6 +647,8 @@ def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
                 "counterparty": key,
                 # classée d'office par une règle « tout le reste » : à confirmer
                 "guess": guess,
+                # catégories déjà données à ce commerçant, la plus fréquente d'abord
+                "history": [c for c in history.get(key, []) if c != guess][:REVIEW_HISTORY],
                 "count": len(v),
                 "total": money(sum(amounts), ccy),
                 "direction": _direction(amounts),
