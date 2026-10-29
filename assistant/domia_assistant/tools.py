@@ -53,10 +53,14 @@ class Tool:
     run: Callable[[dict, Speaker], Any]
     gesture: bool = False
     house_wide: Callable[[dict], bool] = field(default=lambda args: False)
+    family: str | None = None  # un outil du hub : son domaine est son type de demande
+    allowed: Callable[[Speaker | None], bool] = field(default=lambda who: True)  # qui le voit et l'appelle
 
     @property
     def families(self) -> frozenset[str]:
         """Les types de demande où le modèle voit cet outil (le modèle en deux temps)."""
+        if self.family is not None:
+            return frozenset({self.family})
         return (
             frozenset({"gestes"})
             if self.gesture and self.name not in FAMILY_OF
@@ -847,19 +851,39 @@ FAMILY_OF = _families(
 
 
 class Toolbox:
-    def __init__(self, tools: list[Tool]):
+    def __init__(
+        self,
+        tools: list[Tool],
+        families: dict[str, str] | None = None,
+        notes: str = "",
+        owner: Speaker | None = None,
+    ):
         self.tools = {t.name: t for t in tools}
+        self.extra = families or {}  # les domaines du hub, en plus des types de la maison
+        self.notes = notes  # leurs consignes, pour qui atteint leurs outils
+        self.owner = owner  # une personne qui les atteint (le préchauffage de son préfixe)
 
-    def schemas(self, families: frozenset[str] | None = None) -> list[dict]:
-        """Les outils montrés au modèle : tous, ou ceux de ces types de demande."""
-        return [t.schema() for t in self.tools.values() if families is None or t.families & families]
+    def families(self, who: Speaker | None = None) -> dict[str, str]:
+        """Les types de demande que le routeur peut nommer pour cette personne."""
+        seen = {f for t in self.tools.values() if t.family and t.allowed(who) for f in t.families}
+        return {**FAMILIES, **{name: what for name, what in self.extra.items() if name in seen}}
+
+    def schemas(self, families: frozenset[str] | None = None, who: Speaker | None = None) -> list[dict]:
+        """Les outils montrés au modèle : tous, ou ceux de ces types de demande ; jamais un outil que la personne
+        n'atteint pas (les outils du hub, pour Kim)."""
+        return [
+            t.schema() for t in self.tools.values() if t.allowed(who) and (families is None or t.families & families)
+        ]
+
+    def system_notes(self, who: Speaker | None) -> str:
+        return self.notes if any(t.family and t.allowed(who) for t in self.tools.values()) else ""
 
     def get(self, name: str) -> Tool | None:
         return self.tools.get(name)
 
     def run(self, name: str, args: dict, who: Speaker) -> Any:
         tool = self.tools.get(name)
-        if tool is None:
+        if tool is None or not tool.allowed(who):
             return {"error": f"outil inconnu : {name}"}
         try:
             result = tool.run(args, who)
@@ -881,6 +905,7 @@ def build(
     plan: Callable[[datetime, Any], Any] | None = None,
     engagements: Any | None = None,
     settings_write: bool = False,
+    hub: Any | None = None,
 ) -> Toolbox:
     """Tous les outils, les gestes relus du catalogue et de la maison du moment."""
     house = domia.house()
@@ -896,4 +921,6 @@ def build(
     if agenda:
         tools += agenda_tools(agenda)
     tools += web_tools(searx_url)
+    if hub is not None:  # domia_assistant.hub.HubModule
+        return Toolbox(tools + hub.tools, hub.families, hub.notes, hub.owner)
     return Toolbox(tools)

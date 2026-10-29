@@ -91,6 +91,8 @@ jobs:
           cache: pip
           cache-dependency-path: assistant/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
+      - name: le paquet du hub, pour les outils du hub
+        run: pip install -e ..
       - name: assistant (ruff, mypy)
         run: python -m ruff check . && python -m ruff format --check . && python -m mypy
       - name: assistant (pytest)

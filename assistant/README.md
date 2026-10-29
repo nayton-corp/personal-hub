@@ -130,6 +130,24 @@ Sans mlx-whisper, `POST /voice` répond `VOICE_UNAVAILABLE` et l'écran le dit ;
 `assistant.voice: false` éteint la voix. Le micro de l'écran ne marche que par l'adresse https de Domia (Tailscale) :
 le navigateur le refuse en http.
 
+## Les outils du hub
+
+Avec le paquet du hub installé à côté (`.venv/bin/pip install -e ..`) et une section `hub:` dans `config.yaml`,
+l'assistant reprend les outils des domaines du hub (`hub_capabilities`) : un type de demande par domaine pour le
+modèle en deux temps, et les consignes de chaque domaine dans son système. Trois règles, tenues par le code
+(`domia_assistant/hub.py`) :
+
+- **Au propriétaire seul.** Les outils du hub ne sont montrés et ne répondent qu'aux personnes de `hub.owners`.
+  Kim, les invités et une voix de pièce gardent la maison ; même nommé par le modèle, un outil du hub n'existe pas
+  pour eux.
+- **Des agrégats.** Le jeton est celui des agrégats (`aggregates`) ; un domaine que le jeton lirait en entier est
+  écarté, sauf s'il est nommé dans `hub.full_domains`. Une question d'argent n'obtient que des totaux.
+- **Rien sans validation.** Un outil qui écrit crée une proposition, validée dans l'app du hub.
+
+Le jeton vient du fichier de secrets chiffré du hub (`hub.secrets`, section `brain`, déchiffré avec `hub.age_key`) ;
+`HUB_ASSISTANT_TOKEN` le remplace pour un essai. Un hub qui ne répond pas laisse la maison telle quelle et se
+retente toutes les 5 minutes. `check` dit s'il répond et quels domaines il ouvre.
+
 ## La bibliothèque
 
 `~/Domia/Bibliothèque/` : une fiche par objet (`lave-vaisselle.yaml`) et ses documents à côté, en sous-dossier

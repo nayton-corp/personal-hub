@@ -225,17 +225,19 @@ class Assistant:
             lines.append("Derniers échanges : " + " | ".join(f"« {r['text']} » → « {r['answer']} »" for r in recent))
         return "\n".join(lines)
 
-    def _families(self, text: str, person: str | None = None) -> frozenset[str] | None:
+    def _families(
+        self, text: str, person: str | None = None, catalog: dict[str, str] = FAMILIES
+    ) -> frozenset[str] | None:
         """Le premier temps : un appel court, sans outils, qui nomme le ou les types de la demande (avec l'échange
         d'avant, pour « et dans la chambre ? »). Rien de reconnu : tous les outils, comme sans routage."""
         last = self.memory.recent(person, 1) if person else []
         before = f"Échange précédent : « {last[0]['text']} » → « {last[0]['answer']} »\n" if last else ""
         try:
-            said = self.model.chat([ROUTER, {"role": "user", "content": before + "Demande : " + text}], [])
+            said = self.model.chat([router(catalog), {"role": "user", "content": before + "Demande : " + text}], [])
         except ModelError:
             return None
         named = grammar.normalize(said.get("content") or "")
-        found = frozenset(f for f in FAMILIES if grammar.normalize(f) in named)
+        found = frozenset(f for f in catalog if grammar.normalize(f) in named)
         LOG.info("route families=%s", ",".join(sorted(found)) or "toutes")
         return found or None
 
@@ -244,27 +246,35 @@ class Assistant:
         la première phrase après un redémarrage du Mac attend ~40 s. Lève ModelError si le modèle ne répond pas."""
         house = self.domia.house()
         box = self.toolbox()
-        system = self._system(house, box)
         ok = {"role": "user", "content": "Demande : rien, réponds juste ok."}
-        if not self.route:
-            self.model.chat([system, ok], box.schemas())
-            return
-        self._families("rien")
-        for family in FAMILIES:  # un préfixe par type de demande, chacun dans son cache
-            self.model.chat([system, ok], box.schemas(frozenset({family})))
+        # le foyer, puis le propriétaire du hub s'il y en a un (ses outils font un second préfixe)
+        for who in [None] if box.owner is None else [None, box.owner]:
+            system = self._system(house, box, who)
+            if not self.route:
+                self.model.chat([system, ok], box.schemas(None, who))
+                continue
+            self._families("rien", catalog=box.families(who))
+            for family in box.families(who):  # un préfixe par type de demande, chacun dans son cache
+                self.model.chat([system, ok], box.schemas(frozenset({family}), who))
 
     @staticmethod
-    def _system(house: dict, tools: Toolbox) -> dict:
+    def _system(house: dict, tools: Toolbox, who: Speaker | None = None) -> dict:
         prompt = SYSTEM.format(write=WRITE if "propose_settings" in tools.tools else READ_ONLY)
-        return {"role": "system", "content": prompt + "\n\nLa maison :\n" + "\n".join(inventory(house))}
+        notes = tools.system_notes(who)
+        hub = f"\n\nLe hub (des totaux, jamais une écriture ; une proposition attend une validation dans l'app) :\n{notes}"
+        return {
+            "role": "system",
+            "content": prompt + (hub if notes else "") + "\n\nLa maison :\n" + "\n".join(inventory(house)),
+        }
 
     def _model(self, text: str, who: Speaker, house: dict, key: str) -> dict:
         tools = self.toolbox()
-        families = self._families(text, who.person) if self.route else None
+        families = self._families(text, who.person, tools.families(who)) if self.route else None
         messages: list[dict] = [
             # Le système et les outils restent les mêmes d'une phrase à l'autre : le serveur de modèle garde leur calcul
-            # (le préfixe), seul le moment (heure, qui parle, derniers échanges) est relu, avec la demande.
-            self._system(house, tools),
+            # (le préfixe), seul le moment (heure, qui parle, derniers échanges) est relu, avec la demande. Les outils du
+            # hub et leurs consignes ne sont là que pour son propriétaire (un second préfixe).
+            self._system(house, tools, who),
             {"role": "user", "content": self._context(house, who) + "\n\nDemande : " + text},
         ]
         done: list[str] = []
@@ -274,7 +284,7 @@ class Assistant:
         seen: dict[str, Any] = {}  # un appel répété mot pour mot dans une phrase ne repart pas (deux rappels « lait »)
         try:
             for _ in range(self.max_steps):
-                message = self.model.chat(messages, tools.schemas(families))
+                message = self.model.chat(messages, tools.schemas(families, who))
                 tool_calls = message.get("tool_calls") or []
                 if not tool_calls:
                     return reply(_told(acts, missed, (message.get("content") or "").strip()), done)
@@ -339,12 +349,16 @@ class Assistant:
             return reply(f"Je ne peux pas réfléchir pour l'instant ({e}).", done)
 
 
-ROUTER = {
-    "role": "system",
-    "content": "Tu ranges une demande faite à l'assistant d'une maison dans un ou deux types. "
-    "Réponds seulement par leurs noms, séparés par une virgule, sans rien d'autre.\n"
-    + "\n".join(f"{name} : {what}" for name, what in FAMILIES.items()),
-}
+def router(catalog: dict[str, str]) -> dict:
+    return {
+        "role": "system",
+        "content": "Tu ranges une demande faite à l'assistant d'une maison dans un ou deux types. "
+        "Réponds seulement par leurs noms, séparés par une virgule, sans rien d'autre.\n"
+        + "\n".join(f"{name} : {what}" for name, what in catalog.items()),
+    }
+
+
+ROUTER = router(FAMILIES)
 
 # proposer ou annuler un réglage finit la phrase sur la question ; le oui suivant l'applique (spec de l'assistant complet §5)
 SETTLERS = ("propose_settings", "undo_settings")

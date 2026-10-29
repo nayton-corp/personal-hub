@@ -9,6 +9,9 @@
   par sa propre tâche de CI (`make assistant-test`).
 - Le contrat avec l'API de Domia est figé dans `assistant/domia_assistant/contract/`
   (`make domia-contract DOMIA=~/domia`).
+- L'assistant reprend les outils des domaines du hub (`hub_capabilities`), un type de demande
+  par domaine : montrés et ouverts aux seules personnes de `hub.owners` (jamais à Kim ni à une
+  voix de pièce), avec le jeton des agrégats ; un domaine lu en entier est écarté.
 
 ### Recherche, liens et constats (chantier S9)
 

@@ -7,7 +7,7 @@ from domia_assistant.memory import Memory
 from domia_assistant.tools import Speaker, build
 from tests.fakes import FakeDomia
 
-COMPTE = Speaker(person="robin", client="client_phone")
+ROBIN = Speaker(person="robin", client="client_phone")
 
 
 def make(replies=(), domia=None):
@@ -21,7 +21,7 @@ def make(replies=(), domia=None):
 
 def test_the_fast_path_never_reaches_the_model():
     assistant, domia, model, _, _ = make()
-    answer = assistant.talk("éteins le salon", COMPTE)
+    answer = assistant.talk("éteins le salon", ROBIN)
     assert answer["answer"] == "C'est fait."
     assert answer["done"] == ["Salon"]
     assert domia.gestures == [("POST", "/api/rooms/living/commands", {"action": "TurnOffRoom"}, "robin")]
@@ -30,24 +30,24 @@ def test_the_fast_path_never_reaches_the_model():
 
 def test_the_whole_house_waits_for_a_yes_from_the_same_speaker():
     assistant, domia, _, _, _clock = make()
-    asked = assistant.talk("on part", COMPTE)
+    asked = assistant.talk("on part", ROBIN)
     assert asked["answer"] == "Je passe la maison en Absent ?"
     assert asked["confirm"]
     assert domia.gestures == []
     # un autre appareil qui dit oui ne joue rien
     assistant.talk("oui", Speaker(person="kim", client="client_kim"))
     assert domia.gestures == []
-    assert assistant.talk("oui", COMPTE)["answer"] == "Mode Absent."
+    assert assistant.talk("oui", ROBIN)["answer"] == "Mode Absent."
     assert domia.gestures == [("PUT", "/api/situation", {"value": "AWAY"}, "robin")]
 
 
 def test_no_or_too_late_plays_nothing():
     assistant, domia, _, _, clock = make([say("Rien à faire.")])
-    assistant.talk("éteins tout", COMPTE)
-    assert assistant.talk("non", COMPTE)["answer"] == "D'accord, je ne fais rien."
-    assistant.talk("éteins tout", COMPTE)
+    assistant.talk("éteins tout", ROBIN)
+    assert assistant.talk("non", ROBIN)["answer"] == "D'accord, je ne fais rien."
+    assistant.talk("éteins tout", ROBIN)
     clock[0] += 61
-    assistant.talk("oui", COMPTE)
+    assistant.talk("oui", ROBIN)
     assert domia.gestures == []
 
 
@@ -62,7 +62,7 @@ def test_the_model_picks_its_tools_and_acts_on_behalf_of_the_speaker():
             say("Bon film !"),
         ]
     )
-    answer = assistant.talk("prépare le salon pour un film", COMPTE)
+    answer = assistant.talk("prépare le salon pour un film", ROBIN)
     assert (
         answer["answer"] == "Fait : Salon › Lampadaire à 25 % ; Salon › Volet à 0 %. Bon film !"
     )  # les gestes d'après ce qui a été joué
@@ -90,23 +90,23 @@ def test_the_model_picks_its_tools_and_acts_on_behalf_of_the_speaker():
 
 def test_a_house_wide_gesture_from_the_model_also_waits_for_yes():
     assistant, domia, _, _, _ = make([calls(call("set_situation", {"value": "AWAY"})), say("Bon voyage.")])
-    asked = assistant.talk("on s'absente pour le week-end, tu t'occupes de la maison ?", COMPTE)
+    asked = assistant.talk("on s'absente pour le week-end, tu t'occupes de la maison ?", ROBIN)
     assert asked["answer"] == "Je passe la maison en Absent ?"
     assert domia.gestures == []
-    assistant.talk("oui", COMPTE)
+    assistant.talk("oui", ROBIN)
     assert domia.gestures == [("PUT", "/api/situation", {"value": "AWAY"}, "robin")]
 
 
 def test_a_refused_gesture_is_said_not_hidden():
     domia = FakeDomia(refuse={"/api/rooms/living/commands": "HA_UNAVAILABLE"})
     assistant, _, _, _, _ = make(domia=domia)
-    assert assistant.talk("allume le salon", COMPTE)["answer"].startswith("Je n'ai pas pu")
+    assert assistant.talk("allume le salon", ROBIN)["answer"].startswith("Je n'ai pas pu")
 
 
 def test_a_synonym_is_learned_then_used_by_the_fast_path():
     assistant, domia, model, _memory, _ = make()
-    assert assistant.talk("La baie, c'est le volet du salon", COMPTE)["answer"] == "Noté : La baie, c'est Volet."
-    assistant.talk("ferme la baie", COMPTE)
+    assert assistant.talk("La baie, c'est le volet du salon", ROBIN)["answer"] == "Noté : La baie, c'est Volet."
+    assistant.talk("ferme la baie", ROBIN)
     assert domia.gestures == [
         ("POST", "/api/covers/living_cover/commands", {"action": "SetPosition", "position": 0}, "robin")
     ]
@@ -122,7 +122,7 @@ def test_a_room_voice_cannot_read_personal_notes():
     assert [n["text"] for n in tools.run("recall", {"question": "salon ampoules"}, room_voice)] == [
         "Les ampoules E14 sont dans le placard de l'entrée"
     ]
-    assert len(tools.run("recall", {"question": "salon ampoules"}, COMPTE)) == 2
+    assert len(tools.run("recall", {"question": "salon ampoules"}, ROBIN)) == 2
     assert tools.run("remember", {"fact": "x", "personal": True}, room_voice) == {
         "error": "une note personnelle a besoin de savoir qui parle"
     }
@@ -130,12 +130,12 @@ def test_a_room_voice_cannot_read_personal_notes():
 
 def test_the_model_down_is_said():
     assistant, _, _, _, _ = make([])
-    assert assistant.talk("raconte-moi la maison", COMPTE)["answer"].startswith("Je ne peux pas réfléchir")
+    assert assistant.talk("raconte-moi la maison", ROBIN)["answer"].startswith("Je ne peux pas réfléchir")
 
 
 def test_the_model_sees_the_house_inventory_and_the_situation_in_french():
     assistant, _, model, _, _ = make([say("Il n'y a pas de chauffage au bureau.")])
-    assistant.talk("il fait froid au bureau", COMPTE)
+    assistant.talk("il fait froid au bureau", ROBIN)
     system, asked = (m["content"] for m in model.requests[0][0][:2])
     assert (
         "Situation : Jour." in asked and "Situation" not in system
@@ -150,9 +150,9 @@ def test_the_model_sees_the_house_inventory_and_the_situation_in_french():
 def test_the_system_prompt_is_the_same_from_one_sentence_to_the_next():
     # le serveur de modèle garde le calcul d'un préfixe identique : 40 s par question sans, quelques-unes avec
     assistant, _, model, _, clock = make([say("Rien de spécial."), say("Toujours rien.")])
-    assistant.talk("quoi de neuf ?", COMPTE)
+    assistant.talk("quoi de neuf ?", ROBIN)
     clock[0] += 120
-    assistant.talk("et maintenant ?", COMPTE)
+    assistant.talk("et maintenant ?", ROBIN)
     first, second = model.requests[0][0], model.requests[1][0]
     assert first[0] == second[0]
     assert first[1] != second[1]  # derniers échanges
@@ -160,9 +160,9 @@ def test_the_system_prompt_is_the_same_from_one_sentence_to_the_next():
 
 def test_a_room_temperature_is_read_without_the_model():
     assistant, domia, model, _, _ = make()
-    assert assistant.talk("quelle température au salon ?", COMPTE)["answer"] == "Salon : 21,4 °C."
+    assert assistant.talk("quelle température au salon ?", ROBIN)["answer"] == "Salon : 21,4 °C."
     assert (
-        assistant.talk("quelle est la température dans la cuisine", COMPTE)["answer"]
+        assistant.talk("quelle est la température dans la cuisine", ROBIN)["answer"]
         == "Cuisine : pas de température connue."
     )
     assert model.requests == [] and domia.gestures == []
@@ -172,14 +172,14 @@ def test_turn_on_with_a_brightness_becomes_set_brightness():
     # c3 au banc : « une lumière douce dans la chambre » → TurnOn avec brightness_pct, que TurnOn ne porte pas
     domia = FakeDomia()
     tools = build(domia, None, Memory(":memory:"), None)
-    tools.run("light_command", {"id": "bed_lamp", "action": "TurnOn", "brightness_pct": 30}, COMPTE)
-    tools.run("light_command", {"id": "bed_lamp", "action": "TurnOn"}, COMPTE)
+    tools.run("light_command", {"id": "bed_lamp", "action": "TurnOn", "brightness_pct": 30}, ROBIN)
+    tools.run("light_command", {"id": "bed_lamp", "action": "TurnOn"}, ROBIN)
     assert [g[2] for g in domia.gestures] == [{"action": "SetBrightness", "brightness_pct": 30}, {"action": "TurnOn"}]
 
 
 def test_what_is_on_is_read_without_the_model():
     assistant, domia, model, _, _ = make()
-    assert assistant.talk("Qu'est-ce qui est allumé ?", COMPTE)["answer"] == "Allumé : Salon (Plafond, Meuble TV)."
+    assert assistant.talk("Qu'est-ce qui est allumé ?", ROBIN)["answer"] == "Allumé : Salon (Plafond, Meuble TV)."
     assert model.requests == [] and domia.gestures == []
 
 
@@ -193,7 +193,7 @@ def test_a_gesture_is_told_by_the_assistant_and_the_model_adds_what_was_read():
             say("Il fait 21 °C au salon."),
         ]
     )
-    answer = assistant.talk("éteins le lampadaire et dis-moi la température", COMPTE)
+    answer = assistant.talk("éteins le lampadaire et dis-moi la température", ROBIN)
     assert answer["answer"] == "Fait : Salon › Lampadaire éteint. Il fait 21 °C au salon." and len(domia.gestures) == 1
     assert "déjà dit à la personne" in model.requests[1][0][-2]["content"]  # le modèle sait qu'il n'a pas à le redire
 
@@ -203,7 +203,7 @@ def test_a_failed_gesture_is_told_as_not_done():
         [calls(call("light_command", {"id": "nope", "action": "TurnOff"})), say("J'ai éteint la lampe.")],
         FakeDomia(refuse={"/api/lights/nope/commands": "NOT_FOUND"}),
     )
-    assert assistant.talk("éteins la lampe", COMPTE)["answer"].startswith("Pas fait : nope éteint")
+    assert assistant.talk("éteins la lampe", ROBIN)["answer"].startswith("Pas fait : nope éteint")
 
 
 def test_a_call_repeated_word_for_word_is_played_once():
@@ -215,14 +215,14 @@ def test_a_call_repeated_word_for_word_is_played_once():
             say("Lampadaire éteint."),
         ]
     )
-    assert len(assistant.talk("éteins juste le lampadaire, pas le reste", COMPTE)["done"]) == 1
+    assert len(assistant.talk("éteins juste le lampadaire, pas le reste", ROBIN)["done"]) == 1
     assert len(domia.gestures) == 1
     assert "déjà fait" in model.requests[2][0][-1]["content"]
 
 
 def test_bedtime_comes_from_the_situations_in_a_few_lines():
     tools = build(FakeDomia(), None, Memory(":memory:"), None)
-    lines = tools.run("situations", {"days": 2}, COMPTE)
+    lines = tools.run("situations", {"days": 2}, ROBIN)
     assert lines == ["samedi 24.10 23:41 Jour → Nuit (UI)", "dimanche 25.10 06:58 Nuit → Jour (AUTOMATION)"]
 
 
@@ -244,7 +244,7 @@ def test_in_two_steps_the_model_sees_only_the_tools_of_the_kind_of_request():
         clock=lambda: 0.0,
         route=True,
     )
-    answer = assistant.talk("éteins le lampadaire et dis-moi la température", COMPTE)
+    answer = assistant.talk("éteins le lampadaire et dis-moi la température", ROBIN)
     assert answer["answer"] == "Fait : Salon › Lampadaire éteint. Il fait 21 °C."
     router, first = model.requests[0], model.requests[1]
     assert router[1] == [] and router[0][-1]["content"].endswith("éteins le lampadaire et dis-moi la température")
@@ -267,5 +267,5 @@ def test_an_unclear_kind_shows_every_tool():
         clock=lambda: 0.0,
         route=True,
     )
-    assistant.talk("raconte-moi une blague", COMPTE)
+    assistant.talk("raconte-moi une blague", ROBIN)
     assert len(model.requests[1][1]) == len(build(domia, None, Memory(":memory:"), None).schemas())

@@ -11,7 +11,7 @@ from domia_assistant.memory import Memory
 from domia_assistant.tools import Speaker, build
 from tests.fakes import FakeDomia
 
-COMPTE = Speaker(person="robin")
+ROBIN = Speaker(person="robin")
 ROOT = Path(__file__).resolve().parents[1]
 JOURNAL = [
     {"at": "2026-10-25T06:00:00Z", "type": "checkpoint", "checkpoint": {"instance": {"x": "y" * 50_000}}},
@@ -53,36 +53,36 @@ def tools_for(domia):
 
 def test_the_house_is_read_for_one_room_or_one_kind():
     box = tools()
-    salon = box.run("house", {"room": "salon"}, COMPTE)
+    salon = box.run("house", {"room": "salon"}, ROBIN)
     assert [r["id"] for r in salon["rooms"]] == ["living"] and "people" not in salon
-    lights = box.run("house", {"kind": "lights"}, COMPTE)
+    lights = box.run("house", {"kind": "lights"}, ROBIN)
     assert all(set(r) == {"id", "name", "lights"} for r in lights["rooms"])
-    assert "people" in box.run("house", {}, COMPTE)
+    assert "people" in box.run("house", {}, ROBIN)
 
 
 def test_a_mistyped_argument_answers_an_error_instead_of_ending_the_turn():
     # au banc, le modèle a donné la pièce en objet : le tour s'arrêtait sur une exception
-    assert "arguments invalides" in tools().run("house", {"room": {"name": "salon"}}, COMPTE)["error"]
+    assert "arguments invalides" in tools().run("house", {"room": {"name": "salon"}}, ROBIN)["error"]
 
 
 def test_settings_give_an_index_then_one_object_with_its_meaning():
     box = tools()
-    index = box.run("settings", {}, COMPTE)
+    index = box.run("settings", {}, ROBIN)
     assert index["revision"] == 0 and index["rooms"][0]["lights"][0][0] == "living_ceiling"
     assert reading.size(index) < 2000
     lamp = box.run(
-        "settings", {"kind": "light", "id": "living_ceiling", "explain": True, "field": "off_warning_sec"}, COMPTE
+        "settings", {"kind": "light", "id": "living_ceiling", "explain": True, "field": "off_warning_sec"}, ROBIN
     )
     assert lamp["room"] == "living_room" and lamp["settings"]["ha_entity_id"] == "light.salon_plafond"
     assert "off_warning_sec" in lamp["aide"]
-    room = box.run("settings", {"kind": "room", "id": "living_room"}, COMPTE)
+    room = box.run("settings", {"kind": "room", "id": "living_room"}, ROBIN)
     assert room["settings"]["lights"] == ["living_ceiling", "living_tv"]
-    assert "error" in box.run("settings", {"kind": "light", "id": "nope"}, COMPTE)
+    assert "error" in box.run("settings", {"kind": "light", "id": "nope"}, ROBIN)
 
 
 def test_the_journal_is_read_in_aggregates_without_checkpoints():
     box = tools(journal=JOURNAL)
-    out = box.run("activity", {"hours": 24}, COMPTE)
+    out = box.run("activity", {"hours": 24}, ROBIN)
     assert out["gestes"][0]["geste"] == "LightAction" and out["gestes"][0]["light_id"] == "living_ceiling"
     salon = next(c for c in out["changements"] if c["entité"] == "light.salon_plafond")
     assert salon == {
@@ -93,22 +93,22 @@ def test_the_journal_is_read_in_aggregates_without_checkpoints():
         "à": salon["à"],
     }
     assert reading.size(out) < 1500  # le point de reprise de 50 000 caractères n'y est pas
-    one = box.run("activity", {"object": "office_lamp"}, COMPTE)
+    one = box.run("activity", {"object": "office_lamp"}, ROBIN)
     assert [c["entité"] for c in one["changements"]] == ["light.bureau"] and one["gestes"] == []
-    room = box.run("activity", {"room": "Salon"}, COMPTE)
+    room = box.run("activity", {"room": "Salon"}, ROBIN)
     assert {c["entité"] for c in room["changements"]} == {"light.salon_plafond"}
     # un extrait du journal : ni tics ni points de reprise (59 Mo par jour sur la vraie maison), les entités visées
     domia = FakeDomia(journal=JOURNAL)
-    tools_for(domia).run("activity", {"object": "office_lamp"}, COMPTE)
+    tools_for(domia).run("activity", {"object": "office_lamp"}, ROBIN)
     assert domia.journal_asked == (["command", "entity_change"], ["light.bureau"])
-    tools_for(domia).run("activity", {}, COMPTE)
+    tools_for(domia).run("activity", {}, ROBIN)
     assert "light.bureau" in domia.journal_asked[1] and not [
         e for e in domia.journal_asked[1] if e.startswith("sensor.")
     ]
 
 
 def test_why_says_the_state_the_gestures_and_the_situation():
-    out = tools(journal=JOURNAL).run("why", {"object": "living_ceiling"}, COMPTE)
+    out = tools(journal=JOURNAL).run("why", {"object": "living_ceiling"}, ROBIN)
     assert out["situation"] == "DAY" and out["gestes"][0]["light_id"] == "living_ceiling"
 
 
@@ -124,12 +124,12 @@ def test_status_notifications_estimates_and_ha_entities():
             }
         ]
     )
-    status = box.run("system_status", {}, COMPTE)
+    status = box.run("system_status", {}, ROBIN)
     assert status["status"] == "DEGRADED" and status["alertes"][0]["code"] == "SENSOR_STALE"
-    sent = box.run("notifications", {"services": True}, COMPTE)
+    sent = box.run("notifications", {"services": True}, ROBIN)
     assert sent["envoyées"][0]["titre"] == "Pile faible" and sent["services"][0]["id"] == "mobile_app_iphone"
-    assert {e["id"] for e in box.run("estimates", {}, COMPTE)} == {"salon_tv", "chambre_lit"}
-    unused = box.run("ha_entities", {"unused": True}, COMPTE)
+    assert {e["id"] for e in box.run("estimates", {}, ROBIN)} == {"salon_tv", "chambre_lit"}
+    unused = box.run("ha_entities", {"unused": True}, ROBIN)
     assert unused and all("dans_domia" not in e for e in unused)
     assert "light.salon_plafond" not in {e["entity_id"] for e in unused}
 
@@ -182,7 +182,7 @@ def test_the_radar_counts_as_a_gesture_only_when_its_value_changes():
 
 
 def test_an_estimate_asked_by_person_gives_every_estimate():
-    out = tools().run("estimates", {"id": "person_cebf8bc3"}, COMPTE)
+    out = tools().run("estimates", {"id": "person_cebf8bc3"}, ROBIN)
     assert "n'est pas un modèle" in out["note"] and {e["id"] for e in out["estimations"]} == {"salon_tv", "chambre_lit"}
 
 
@@ -190,7 +190,7 @@ def test_every_read_stays_under_the_budget_and_says_how_to_narrow():
     long = [
         {"at": "2099-01-01T08:00:00Z", "title": f"Titre {i}", "message": "x" * 80, "status": "SENT"} for i in range(200)
     ]
-    out = tools(notifications=long).run("notifications", {}, COMPTE)
+    out = tools(notifications=long).run("notifications", {}, ROBIN)
     assert reading.size(out) <= reading.BUDGET_CHARS and "tronqué" in out
     assert out["envoyées"][-1]["titre"] == "Titre 199"  # les plus récentes restent
     assert reading.fit(list(range(5000)))["items"][-1] == 4999
@@ -207,7 +207,7 @@ def test_every_read_stays_under_the_budget_and_says_how_to_narrow():
         "situations",
         "observations",
     ):
-        assert reading.size(box.run(name, {}, COMPTE)) <= reading.BUDGET_CHARS, name
+        assert reading.size(box.run(name, {}, ROBIN)) <= reading.BUDGET_CHARS, name
 
 
 def test_no_route_of_domia_is_impossible_for_the_assistant():

@@ -28,6 +28,7 @@ from .assistant import Assistant
 from .config import Settings, load
 from .domia import Domia, DomiaError, Noting
 from .engagements import Engagements
+from .hub import HubModule, connect
 from .library import Library
 from .llm import ModelError, OpenAICompatible
 from .memory import Memory
@@ -36,11 +37,14 @@ from .tools import Speaker, build
 from .voice import Voice
 
 HERE = Path(__file__).resolve().parent.parent
+HUB_RETRY_S = 300
 
 
 class Parts:
     def __init__(self, s: Settings):
         self.settings = s
+        self._hub: HubModule | None = None
+        self._hub_retry = 0.0
         self.memory = Memory(s.database)
         auth = (s.config_user, s.config_password) if s.config_password else None
         # Noting relaie tout à Domia (__getattr__) : pour le typage, c'est un Domia
@@ -64,6 +68,17 @@ class Parts:
             route=s.route,
         )
 
+    def hub(self) -> HubModule | None:
+        """Les outils du hub, gardés d'une phrase à l'autre (leur préfixe reste en cache) ; un hub qui ne répondait
+        pas est retenté toutes les 5 minutes."""
+        cfg = self.settings.hub
+        if cfg is None:
+            return None
+        if self._hub is None and time.monotonic() >= self._hub_retry:
+            self._hub = connect(cfg)
+            self._hub_retry = time.monotonic() + HUB_RETRY_S
+        return self._hub
+
     def toolbox(self):
         vision = self.settings.vision_model
         look = (lambda image, mime, question: self.model.look(image, mime, question, vision)) if vision else None
@@ -78,6 +93,7 @@ class Parts:
             self.observer.plan,
             self.engagements,
             self.settings.settings_write,
+            self.hub(),
         )
 
     def status(self) -> dict:
@@ -97,6 +113,9 @@ class Parts:
         except AgendaUnavailable as e:
             out["reminders"] = {"ok": False, "error": f"Rappels non autorisés ou injoignables : {e}"}
         out["model"] = self.settings.model
+        if self.settings.hub is not None:
+            hub = self.hub()
+            out["hub"] = {"ok": hub is not None, "domains": sorted(hub.families) if hub else []}
         return out
 
 

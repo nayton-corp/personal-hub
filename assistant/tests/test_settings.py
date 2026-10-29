@@ -15,7 +15,7 @@ from domia_assistant.settings import Draft, Settler, human
 from domia_assistant.tools import Speaker, build
 from tests.fakes import FakeDomia
 
-COMPTE = Speaker(person="robin", client="client_phone")
+ROBIN = Speaker(person="robin", client="client_phone")
 SHORTER = {"op": "set", "kind": "room", "id": "hallway", "fields": {"vacant_after_sec": 120}}
 
 
@@ -74,7 +74,7 @@ def test_changes_are_typed_and_never_carry_an_id():
 
 def test_a_setting_waits_for_a_yes_then_is_written_on_the_read_revision():
     assistant, domia, _memory = make([calls(call("propose_settings", {"changes": [SHORTER]})), say("ignoré")])
-    asked = assistant.talk("éteins le couloir après 2 minutes", COMPTE)
+    asked = assistant.talk("éteins le couloir après 2 minutes", ROBIN)
     assert (
         asked["confirm"]
         and "vacant_after_sec" in asked["answer"]
@@ -82,7 +82,7 @@ def test_a_setting_waits_for_a_yes_then_is_written_on_the_read_revision():
         and "Je l'applique ?" in asked["answer"]
     )
     assert room(domia, "hallway")["vacant_after_sec"] != 120 and domia.gestures == []  # vérifié, rien d'écrit
-    done = assistant.talk("oui", COMPTE)
+    done = assistant.talk("oui", ROBIN)
     assert done["answer"].startswith("C'est réglé") and done["done"] == ["réglage"]
     assert room(domia, "hallway")["vacant_after_sec"] == 120
     assert domia.gestures[-1] == ("PUT", "/api/config", None, "robin")
@@ -90,8 +90,8 @@ def test_a_setting_waits_for_a_yes_then_is_written_on_the_read_revision():
 
 def test_no_yes_no_write_and_a_refused_setting_is_explained():
     assistant, domia, _ = make([calls(call("propose_settings", {"changes": [SHORTER]}))])
-    assistant.talk("éteins le couloir après 2 minutes", COMPTE)
-    assert assistant.talk("non", COMPTE)["answer"] == "D'accord, je ne fais rien." and domia.gestures == []
+    assistant.talk("éteins le couloir après 2 minutes", ROBIN)
+    assert assistant.talk("non", ROBIN)["answer"] == "D'accord, je ne fais rien." and domia.gestures == []
     settler = Settler(domia, Memory(":memory:"))
     refused = settler.propose([{**SHORTER, "fields": {"vacant_after_sec": -5}}], "robin")
     assert refused["error"] == "Domia refuse ce réglage" and "vacant_after_sec" in refused["messages"][0]
@@ -173,9 +173,9 @@ def test_a_no_closes_the_proposal_even_after_a_while():
     assistant, domia, memory = make([calls(call("propose_settings", {"changes": [SHORTER]}))])
     clock = [0.0]
     assistant.clock = lambda: clock[0]
-    assistant.talk("éteins le couloir après 2 minutes", COMPTE)
+    assistant.talk("éteins le couloir après 2 minutes", ROBIN)
     clock[0] += 120
-    assert assistant.talk("Non, ne l'applique pas.", COMPTE)["answer"] == "D'accord, je ne fais rien."
+    assert assistant.talk("Non, ne l'applique pas.", ROBIN)["answer"] == "D'accord, je ne fais rien."
     assert memory.settings_change(1)["state"] == "REFUSED" and "error" in Settler(domia, memory).apply(1, "robin")
 
 
@@ -183,10 +183,10 @@ def test_a_yes_to_a_setting_may_come_after_a_minute():
     assistant, domia, _ = make([calls(call("propose_settings", {"changes": [SHORTER]}))])
     clock = [0.0]
     assistant.clock = lambda: clock[0]
-    assistant.talk("éteins le couloir après 2 minutes", COMPTE)
+    assistant.talk("éteins le couloir après 2 minutes", ROBIN)
     clock[0] += 300
     assert (
-        assistant.talk("oui", COMPTE)["answer"].startswith("C'est réglé")
+        assistant.talk("oui", ROBIN)["answer"].startswith("C'est réglé")
         and room(domia, "hallway")["vacant_after_sec"] == 120
     )
 
@@ -208,7 +208,7 @@ def test_without_the_right_to_write_the_model_reads_settings_and_says_where_to_c
     memory = Memory(":memory:")
     model = ScriptedModel([say("Le couloir s'éteint après 10 minutes ; ça se change dans Réglages.")])
     assistant = Assistant(domia, model, memory, lambda: build(domia, None, memory, None), clock=lambda: 0.0)
-    assistant.talk("le couloir doit s'éteindre après 2 minutes", COMPTE)
+    assistant.talk("le couloir doit s'éteindre après 2 minutes", ROBIN)
     system, tools = model.requests[0][0][0]["content"], {t["function"]["name"] for t in model.requests[0][1]}
     assert "settings" in tools and not tools & {"propose_settings", "apply_settings", "undo_settings"}
     assert "se change dans Réglages" in system and "propose_settings" not in system

@@ -38,7 +38,7 @@ audit:  # vulnérabilités connues des dépendances livrées (images hub et coll
 check: lint test migrations-test
 
 assistant-test:  # l'assistant (assistant/) : ruff, mypy, pytest, dans assistant/.venv
-	cd assistant && python3.12 -m venv .venv && .venv/bin/pip -q install -r requirements-dev.txt && \
+	cd assistant && python3.12 -m venv .venv && .venv/bin/pip -q install -r requirements-dev.txt -e .. && \
 	  .venv/bin/python -m ruff check . && .venv/bin/python -m ruff format --check . && \
 	  .venv/bin/python -m mypy && .venv/bin/python -m pytest -q
 	cd assistant/eventkit && ../.venv/bin/pip -q install -r requirements-dev.txt && ../.venv/bin/python -m pytest -q

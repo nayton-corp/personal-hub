@@ -9,6 +9,9 @@ from pathlib import Path
 
 import yaml
 
+from .hub import HubSettings
+from .hub import settings as hub_settings
+
 HOME = Path.home() / "Domia"
 
 
@@ -49,6 +52,7 @@ class Settings:
     voice: bool = True
     stt_model: str = "mlx-community/whisper-large-v3-turbo"
     say_voice: str | None = None
+    hub: HubSettings | None = None  # les outils du hub (domia_assistant.hub) ; absent : la maison seule
     database_file: str = (
         "assistant.sqlite"  # le banc a la sienne : ses conversations ne vont pas dans la mémoire du foyer
     )
@@ -105,5 +109,6 @@ def load(path: Path, env: dict[str, str] | None = None) -> Settings:
         listen_host=str(listen.get("host", Settings.listen_host)),
         listen_port=int(listen.get("port", Settings.listen_port)),
         allow_from=tuple(listen.get("allow_from", Settings.allow_from)),
+        hub=hub_settings(raw.get("hub"), env),
         **extra,
     )
