@@ -1,7 +1,8 @@
 """Contrat de domaine (spécification, section 5, revue d'architecture).
 
-Le cœur découvre les domaines par un manifeste, sans aucun `if domain == …`. Un domaine
-s'enregistre par le point d'entrée Python `hub.domains` ; les tests montent un domaine factice.
+Le cœur découvre les domaines par un manifeste (`hub.core.manifest`), sans aucun
+`if domain == …`. Un domaine s'enregistre par le point d'entrée Python `hub.domains` ;
+`HUB_DOMAINS` choisit ceux qu'une instance monte. Les tests montent un domaine factice.
 """
 
 from __future__ import annotations
@@ -15,6 +16,8 @@ import typer
 from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import Connection, Engine
+
+from hub.core.manifest import Manifest, Observation
 
 
 @dataclass(frozen=True)
@@ -144,9 +147,18 @@ class Health:
 @runtime_checkable
 class Domain(Protocol):
     name: str
+    description: str  # une phrase pour l'app et l'assistant
     schema_version: int
     scopes: frozenset[str]
     proposal_kinds: Mapping[str, ProposalKind]
+
+    def manifest(self) -> Manifest:
+        """Ce que le domaine apporte à l'app, à la boîte d'entrée et à l'assistant (S2)."""
+        ...
+
+    def observations(self, limit: int) -> list[Observation]:
+        """Constats récents, les plus récents d'abord (budget dépassé, abonnement en hausse)."""
+        ...
 
     def engine(self) -> Engine:
         """Base SQLite du domaine (les effets locaux s'y appliquent)."""

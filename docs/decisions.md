@@ -7,6 +7,19 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-016 · Le manifeste d'un domaine, v2 (29.10.2026)
+
+- **Contexte** : l'app, la boîte d'entrée et l'assistant connaissaient la finance par son nom.
+- **Décision** : chaque domaine déclare un manifeste (`hub.core.manifest`) : onglets, cartes
+  d'accueil, rubriques de réglages, module des cartes à valider, fichiers qu'il réclame,
+  connecteurs qui le nourrissent, tables en ajout seul, consignes pour l'assistant ; ses
+  constats passent par `observations()`. `HUB_DOMAINS` choisit les domaines montés. Le
+  catalogue des connecteurs reste un point d'entrée (`hub.connectors`) : les services
+  collecteurs le lisent sans monter de domaine ; le manifeste en nomme seulement les entrées.
+- **Conséquence** : `hub verify` contrôle les triggers des tables protégées ; un manifeste
+  invalide est refusé au démarrage ; la coquille de l'app (S5) et la boîte d'entrée par
+  domaine (S4) lisent le manifeste au lieu d'une liste en dur.
+
 ## D-015 · Une version publiée se déploie depuis son image (29.10.2026)
 
 - **Contexte** : les images se construisaient sur le Mac à chaque déploiement (jusqu'à 20 min),

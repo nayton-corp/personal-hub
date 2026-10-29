@@ -90,6 +90,50 @@
         "title": "AcceptResultOut",
         "type": "object"
       },
+      "AppModuleOut": {
+        "properties": {
+          "cards": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cards"
+          },
+          "home_cards": {
+            "items": {
+              "$ref": "#/components/schemas/HomeCardOut"
+            },
+            "title": "Home Cards",
+            "type": "array"
+          },
+          "settings": {
+            "items": {
+              "$ref": "#/components/schemas/SettingsSectionOut"
+            },
+            "title": "Settings",
+            "type": "array"
+          },
+          "tabs": {
+            "items": {
+              "$ref": "#/components/schemas/TabOut"
+            },
+            "title": "Tabs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tabs",
+          "home_cards",
+          "settings",
+          "cards"
+        ],
+        "title": "AppModuleOut",
+        "type": "object"
+      },
       "ApprovalChallengeIn": {
         "additionalProperties": false,
         "properties": {
@@ -176,6 +220,10 @@
             "title": "Domain",
             "type": "string"
           },
+          "instructions": {
+            "title": "Instructions",
+            "type": "string"
+          },
           "tools": {
             "items": {
               "type": "string"
@@ -187,6 +235,7 @@
         "required": [
           "domain",
           "description",
+          "instructions",
           "tools",
           "aggregates_only"
         ],
@@ -1140,6 +1189,65 @@
         "title": "DomainHealthOut",
         "type": "object"
       },
+      "DomainListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DomainOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "DomainListOut",
+        "type": "object"
+      },
+      "DomainOut": {
+        "properties": {
+          "app": {
+            "$ref": "#/components/schemas/AppModuleOut"
+          },
+          "connectors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Connectors",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "importers": {
+            "items": {
+              "$ref": "#/components/schemas/ImporterOut"
+            },
+            "title": "Importers",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "schema_version",
+          "app",
+          "importers",
+          "connectors"
+        ],
+        "title": "DomainOut",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1216,6 +1324,55 @@
           "date"
         ],
         "title": "HitOut",
+        "type": "object"
+      },
+      "HomeCardOut": {
+        "properties": {
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "endpoint"
+        ],
+        "title": "HomeCardOut",
+        "type": "object"
+      },
+      "ImporterOut": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "suffixes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Suffixes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "suffixes"
+        ],
+        "title": "ImporterOut",
         "type": "object"
       },
       "LinkOut": {
@@ -1892,6 +2049,72 @@
           "needs_bootstrap"
         ],
         "title": "SessionOut",
+        "type": "object"
+      },
+      "SettingsSectionOut": {
+        "properties": {
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "icon": {
+            "title": "Icon",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "module": {
+            "title": "Module",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "icon",
+          "group",
+          "module"
+        ],
+        "title": "SettingsSectionOut",
+        "type": "object"
+      },
+      "TabOut": {
+        "properties": {
+          "icon": {
+            "title": "Icon",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "module": {
+            "title": "Module",
+            "type": "string"
+          },
+          "order": {
+            "title": "Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "icon",
+          "module",
+          "order"
+        ],
+        "title": "TabOut",
         "type": "object"
       },
       "ToolCallOut": {
@@ -3134,6 +3357,28 @@
         "summary": "Day Digest",
         "tags": [
           "propositions"
+        ]
+      }
+    },
+    "/api/domains": {
+      "get": {
+        "description": "Les domaines actifs et leurs manifestes : onglets, cartes d'accueil et rubriques que\nl'app monte, fichiers que chacun réclame. Un jeton ne voit que les domaines qu'il ouvre.",
+        "operationId": "list_domains_api_domains_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Domains",
+        "tags": [
+          "cœur"
         ]
       }
     },

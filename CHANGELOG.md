@@ -2,6 +2,19 @@
 
 ## [Non publié]
 
+### Contrat de domaine v2 (chantier S2)
+
+- Manifeste d'un domaine (`hub.core.manifest`) : onglets, cartes d'accueil, rubriques de
+  réglages et module des cartes à valider pour l'app ; importeurs (les fichiers de la boîte
+  d'entrée qu'il réclame) ; connecteurs ; tables protégées ; consignes pour l'assistant. Les
+  constats arrivent par `Domain.observations()` (la finance y verse ses alertes).
+- `GET /api/domains` : les domaines actifs et leurs manifestes, pour la coquille de l'app (S5).
+  `GET /api/tools` donne aussi les consignes de chaque domaine à l'assistant.
+- `HUB_DOMAINS` (`*` par défaut) choisit les domaines montés : un domaine éteint n'a ni base,
+  ni route, ni onglet, ni connecteur. Un nom inconnu empêche le démarrage.
+- `hub verify` contrôle que chaque table protégée garde ses triggers d'ajout seul.
+- Un manifeste invalide (identifiant, module, extension) est refusé à l'enregistrement.
+
 ## [0.12.0] · 2026-10-29
 
 ### Le cœur ne nomme plus aucune source (chantier S1, seconde partie)

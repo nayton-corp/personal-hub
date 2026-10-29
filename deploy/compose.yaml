@@ -21,6 +21,7 @@ x-hub-env: &hub-env
   HUB_TZ: ${HUB_TZ:-Europe/Zurich}
   HUB_CURRENCY: ${HUB_CURRENCY:-CHF}
   HUB_COUNTRY: ${HUB_COUNTRY:-CH}
+  HUB_DOMAINS: ${HUB_DOMAINS:-*}   # domaines montés : * tous, ou finance,agenda
   HUB_AUTH__TOKEN_PROPOSALS_PER_HOUR: ${HUB_PROPOSALS_PER_HOUR:-60}   # cartes par heure et par jeton
 
 x-collector: &collector

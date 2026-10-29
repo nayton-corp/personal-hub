@@ -99,6 +99,7 @@ class Settings(BaseSettings):
     secrets: Secrets = Secrets()
     backup: Backup = Backup()
     log_level: str = "INFO"
+    domains: str = "*"  # HUB_DOMAINS : « * » tous, sinon « finance,agenda » ; vide : aucun
 
     @classmethod
     def settings_customise_sources(
@@ -121,8 +122,23 @@ class Settings(BaseSettings):
         section = extra.get(name, {})
         return dict(section) if isinstance(section, dict) else {}
 
+    def active_domains(self) -> frozenset[str] | None:
+        """Les domaines à monter ; None : tous ceux qui sont installés."""
+        return parse_domains(self.domains)
+
     def db_path(self, name: str) -> Path:
         return self.paths.data / f"{name}.db"
+
+
+def parse_domains(value: str) -> frozenset[str] | None:
+    if value.strip() == "*":
+        return None
+    return frozenset(n.strip() for n in value.split(",") if n.strip())
+
+
+def env_domains() -> frozenset[str] | None:
+    """`HUB_DOMAINS` lu sans les réglages complets (collecteurs, catalogue des connecteurs)."""
+    return parse_domains(os.environ.get("HUB_DOMAINS", "*"))
 
 
 @lru_cache(maxsize=1)

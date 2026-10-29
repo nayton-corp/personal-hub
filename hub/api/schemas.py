@@ -356,14 +356,7 @@ class CollectorLinkOut(BaseModel):
     code: str | None = None
 
 
-# --- outils de l'assistant (lot 7) ------------------------------------------------------------
-
-
-class CapabilityOut(BaseModel):
-    domain: str
-    description: str
-    tools: list[str]
-    aggregates_only: bool
+# --- profil de l'instance ---------------------------------------------------------------------
 
 
 class ProfileOut(BaseModel):
@@ -380,23 +373,3 @@ class ProfileIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     display_name: str | None = Field(default=None, max_length=60)
     country: str | None = Field(default=None, pattern=r"^[A-Za-z]{2}$")
-
-
-class CapabilitiesOut(BaseModel):
-    domains: list[CapabilityOut]
-    profile: ProfileOut
-
-
-class ToolOut(BaseModel):
-    name: str
-    description: str
-    input_schema: dict[str, Any]
-
-
-class ToolsOut(BaseModel):
-    domain: str
-    items: list[ToolOut]
-
-
-class ToolCallOut(BaseModel):
-    result: Any

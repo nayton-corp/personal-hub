@@ -11,7 +11,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, Path
 
-from hub.api.schemas import CapabilitiesOut, ToolCallOut, ToolOut, ToolsOut
+from hub.api.schemas_domains import CapabilitiesOut, ToolCallOut, ToolOut, ToolsOut
 from hub.core import profile, tools
 from hub.core.auth import Ctx, CurrentPrincipal, Principal
 from hub.core.errors import Problem

@@ -29,6 +29,7 @@ from hub.api.schemas import (
     RevertIn,
     SearchOut,
 )
+from hub.api.schemas_domains import DomainListOut
 from hub.core import passkeys, profile, proposals
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal, require
 from hub.core.errors import Problem
@@ -79,6 +80,19 @@ def _searcher(principal: CurrentPrincipal, hub_ctx: Ctx) -> Principal:
 
 
 Searcher = Annotated[Principal, Depends(_searcher)]
+
+
+@router.get("/domains", response_model=DomainListOut, tags=["cœur"])
+def list_domains(hub_ctx: Ctx, principal: Reader) -> DomainListOut:
+    """Les domaines actifs et leurs manifestes : onglets, cartes d'accueil et rubriques que
+    l'app monte, fichiers que chacun réclame. Un jeton ne voit que les domaines qu'il ouvre."""
+    items = [
+        {"name": d.name, "schema_version": d.schema_version, **d.manifest().public()}
+        for d in hub_ctx.registry
+        if principal.is_app
+        or principal.allows_any(*(f"{d.name}:{v}" for v in ("read", "propose", "aggregates")))
+    ]
+    return DomainListOut.model_validate({"items": items})
 
 
 @router.get("/profile", response_model=ProfileOut, tags=["cœur"])
