@@ -320,6 +320,27 @@ def test_create_rule_conflict_when_an_import_lands(ctx: HubContext, fin: Finance
     assert "CH56…009" in iban.preview["summary"]
 
 
+def test_rules_for_different_merchants_validate_together(
+    ctx: HubContext, fin: FinanceDomain
+) -> None:
+    """Un lot de règles (rattrapage du brain, « Toujours » sur plusieurs groupes) : en valider
+    une ne rend pas les autres périmées."""
+    ready_account(fin)
+    load(
+        fin,
+        [
+            Tx("10.00", True, D, counterparty="Zorglub Fictif"),
+            Tx("12.00", True, D, counterparty="Bidule Fictif"),
+        ],
+    )
+    a = create(ctx, "create_rule", {"pattern": "zorglub", "category_id": "loisirs"})
+    b = create(ctx, "create_rule", {"pattern": "bidule", "category_id": "cadeaux"})
+    accept(ctx, a)
+    out = accept(ctx, b)  # sans conflit
+    assert out.result is not None
+    assert current(fin, "Bidule Fictif")[0] == "cadeaux"
+
+
 def test_rule_never_takes_a_human_decision(ctx: HubContext, fin: FinanceDomain) -> None:
     ready_account(fin)
     load(fin, [Tx("10.00", True, D, counterparty="Zorglub Fictif")])

@@ -326,9 +326,10 @@ class CreateRuleHandler:
                 "to_category": params.category_id,
                 "rules_version": rules.version(conn),
             },
+            # les écritures touchées et leur état, pas la version globale des règles : une autre
+            # règle validée dans le même lot (un autre commerçant) ne rend pas celle-ci périmée
             fingerprint=_fp(
                 "create_rule",
-                rules.version(conn),
                 sorted((c.current.entry_id, c.current.categorization_seq or 0) for c in found),
             ),
         )
