@@ -460,8 +460,11 @@ def kpis(
     }
 
 
-def flows(conn: Connection, month: str, *, aggregates_only: bool) -> dict[str, Any]:
-    lines = lines_for(conn, [month])
+def flows(
+    conn: Connection, month: str, *, aggregates_only: bool, period: str = "m"
+) -> dict[str, Any]:
+    months = period_months(month, period)
+    lines = lines_for(conn, months)
     names = category_names(conn)
     t = Totals.of(lines)
 
@@ -489,6 +492,8 @@ def flows(conn: Connection, month: str, *, aggregates_only: bool) -> dict[str, A
     ]
     return {
         "month": month,
+        "period": period,
+        "months": months,
         "currency": base_currency(),
         "income": in_base(t.income),
         "sources": items("income", 1),

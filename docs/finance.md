@@ -33,8 +33,10 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
 | Route | Ce qu'elle donne |
 |---|---|
 | `kpis?month=` | patrimoine net et variations (1 mois, depuis le 31 décembre), revenus, dépenses, épargne, reste à vivre, jours restants, liquidités, mois couverts, taux d'épargne 3 mois, comptes périmés, à catégoriser, marge 3a |
-| `networth/history?from=&to=` | instantanés : patrimoine, versements cumulés, valeur par enveloppe |
-| `flows?month=` | revenus → fixe, variable, épargne → catégories, et le reste sur compte |
+| `networth/history?from=&to=&step=` | instantanés : patrimoine, versements cumulés, valeur par enveloppe et par compte ; `step=day\|week` calcule un point par jour ou par semaine à la demande (400 points au plus, `from` requis) |
+| `flows?month=&period=m\|q` | revenus → fixe, variable, épargne → catégories, et le reste sur compte |
+| `accounts` | comptes, solde, valeur, disponibilité (`immediate`, `days`, `locked`, déduite du type) et objectif (`current`, `safety`, `projects`, `long_term`, `retirement`, déduit du type tant qu'il n'est pas choisi) |
+| `entries?direction=in\|out` | le journal, filtré aussi sur les crédits ou les débits |
 | `budget?month=&period=m\|q` | réel et cible par catégorie de dépense, dépassements, reste à vivre |
 | `budget/totals?month=&period=m\|q` | revenus, dépenses fixes et variables, épargne, placements, taux |
 | `budget/months?month=&months=6` | les mêmes totaux, mois par mois (graphique Tendance) |
@@ -140,6 +142,7 @@ règle qui sert aussi aux prochains imports.
 | `set_budget` | cible mensuelle d'une catégorie de dépense, dès le 1er du mois | oui |
 | `add_note` | note sur une écriture | — |
 | `apply_import` | applique un relevé en attente dont les motifs se forcent | — |
+| `set_account_goal` | objectif d'un compte (filtre « Objectif » du patrimoine) | — |
 | `create_account` · `create_category` | comptes et catégories (le CLI passe par là) | — |
 
 Un relevé en attente pour un motif qui se force (`ledger_check_failed`, `near_duplicate`…)

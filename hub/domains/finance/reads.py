@@ -59,12 +59,33 @@ def _in(name: str, values: list[str]) -> tuple[str, dict[str, str]]:
 # --- comptes et fraîcheur -------------------------------------------------------------------
 
 
+GOALS = ("current", "safety", "projects", "long_term", "retirement")
+
+
+def availability(kind: str, liquid: bool) -> str:
+    """Délai pour disposer de l'argent : tout de suite, quelques jours (vente, retrait),
+    ou bloqué (prévoyance)."""
+    if liquid:
+        return "immediate"
+    return "locked" if kind == "pension" else "days"
+
+
+def default_goal(kind: str, budget_account: bool) -> str:
+    """Objectif d'un compte qui n'en a pas reçu : déduit de son type."""
+    if kind == "pension":
+        return "retirement"
+    if kind in ("securities", "crypto"):
+        return "long_term"
+    return "current" if budget_account else "safety"
+
+
 def accounts(conn: Connection) -> list[dict[str, Any]]:
     out = []
     rows = conn.execute(
         text(
             "SELECT a.id, a.institution, a.name, a.kind, a.currency, a.iban, a.liquid, "
-            "a.budget_account, coalesce(b.balance_minor, 0), b.last_booking, a.external_ref "
+            "a.budget_account, coalesce(b.balance_minor, 0), b.last_booking, a.external_ref, "
+            "a.goal "
             "FROM accounts a LEFT JOIN v_balances b ON b.account_id = a.id "
             "ORDER BY a.institution, a.name"
         )
@@ -83,6 +104,9 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
                 "external_ref": r[10],
                 "liquid": bool(r[6]),
                 "budget_account": bool(r[7]),
+                "availability": availability(r[3], bool(r[6])),
+                "goal": r[11] or default_goal(r[3], bool(r[7])),
+                "goal_set": r[11] is not None,
                 "balance": money(r[8], r[4]),
                 # valeur de marché pour un compte de titres (parts × dernier cours), sinon le solde
                 "value": money(value, r[4]),
@@ -180,6 +204,7 @@ class EntryFilter:
     date_to: str | None = None
     category: str | None = None
     uncategorized: bool = False
+    direction: str | None = None  # "in" (crédits) ou "out" (débits)
 
 
 def encode_cursor(booking_date: str, seq: int) -> str:
@@ -211,6 +236,8 @@ def entries(
         params["cat"] = f.category
     if f.uncategorized:
         where.append("vc.category_id IS NULL AND e.kind = 'movement'")
+    if f.direction:
+        where.append("e.amount_minor > 0" if f.direction == "in" else "e.amount_minor < 0")
     if cursor:
         d, s = decode_cursor(cursor)
         where.append("(e.booking_date < :cd OR (e.booking_date = :cd AND e.seq < :cs))")

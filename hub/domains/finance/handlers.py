@@ -592,6 +592,49 @@ class CreateAccountHandler:
         service.retry_needs_review(quiet=True)
 
 
+GOAL_LABEL = {
+    "current": "Courant",
+    "safety": "Réserve de sécurité",
+    "projects": "Projets",
+    "long_term": "Long terme",
+    "retirement": "Retraite",
+}
+
+
+class SetAccountGoal(_Params):
+    account_id: str = Field(min_length=1, max_length=40)
+    goal: Literal["current", "safety", "projects", "long_term", "retirement"]
+
+
+class SetAccountGoalHandler:
+    def _row(self, conn: Connection, account_id: str) -> Any:
+        row = conn.execute(
+            text("SELECT institution, name, goal FROM accounts WHERE id = :a"), {"a": account_id}
+        ).first()
+        if row is None:
+            raise _bad("compte inconnu")
+        return row
+
+    def preview(self, conn: Connection, params: BaseModel) -> Preview:
+        assert isinstance(params, SetAccountGoal)  # noqa: S101
+        row = self._row(conn, params.account_id)
+        before = f" (avant {GOAL_LABEL[row[2]]})" if row[2] else ""
+        return Preview(
+            summary=f"Objectif de {row[0]} « {row[1]} » : {GOAL_LABEL[params.goal]}{before}",
+            details={"account_id": params.account_id, "goal": params.goal, "previous": row[2]},
+            fingerprint=_fp("set_account_goal", params.account_id, row[2]),
+        )
+
+    def apply(self, conn: Connection, params: BaseModel, proposal_id: str) -> dict[str, Any]:
+        assert isinstance(params, SetAccountGoal)  # noqa: S101
+        previous = self._row(conn, params.account_id)[2]
+        conn.execute(
+            text("UPDATE accounts SET goal = :g WHERE id = :a"),
+            {"g": params.goal, "a": params.account_id},
+        )
+        return {"account_id": params.account_id, "previous": previous}
+
+
 class CreateCategory(_Params):
     id: Slug
     name: str = Field(min_length=1, max_length=60)
@@ -680,5 +723,6 @@ def build_kinds(domain: FinanceDomain) -> Mapping[str, ProposalKind]:
         ),
         "create_account": ProposalKind(CreateAccount, CreateAccountHandler(domain)),
         "create_category": ProposalKind(CreateCategory, CreateCategoryHandler()),
+        "set_account_goal": ProposalKind(SetAccountGoal, SetAccountGoalHandler()),
         "install_pack": ProposalKind(InstallPack, InstallPackHandler()),
     }

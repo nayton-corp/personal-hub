@@ -369,6 +369,27 @@ def test_set_budget_and_inverse(client: TestClient, ctx: HubContext, fin: Financ
     assert default.preview["details"]["valid_from"] == fin.today().replace(day=1).isoformat()
 
 
+def test_set_account_goal(client: TestClient, ctx: HubContext, fin: FinanceDomain) -> None:
+    a = ready_account(fin)
+    h = token(ctx, "brain")
+    (before,) = client.get("/api/finance/accounts", headers=h).json()["items"]
+    # sans objectif enregistré : déduit du type de compte
+    assert (before["goal"], before["goal_set"], before["availability"]) == (
+        "safety",
+        False,
+        "days",
+    )
+    p = create(ctx, "set_account_goal", {"account_id": a.id, "goal": "projects"})
+    assert p.preview["summary"].endswith(": Projets")
+    accept(ctx, p)
+    (after,) = client.get("/api/finance/accounts", headers=h).json()["items"]
+    assert (after["goal"], after["goal_set"]) == ("projects", True)
+    q = create(ctx, "set_account_goal", {"account_id": a.id, "goal": "current"})
+    assert "(avant Projets)" in q.preview["summary"]
+    with pytest.raises(Problem):
+        create(ctx, "set_account_goal", {"account_id": "inconnu", "goal": "current"})
+
+
 def test_add_note_is_searchable(ctx: HubContext, fin: FinanceDomain) -> None:
     ready_account(fin)
     load(fin, [Tx("10.00", True, D, counterparty="Zorglub Fictif")])
