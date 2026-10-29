@@ -9,8 +9,8 @@ quels, en français. Un mot nouveau entre ici dans la même PR que le code qui l
 | --- | --- | --- |
 | **Hub** | Une instance pour une personne : son API, ses bases, son app. | `hub` |
 | **Instance** | Un hub installé, avec son profil et ses domaines actifs. | `hub init`, `HUB_DOMAINS` (à venir) |
-| **Noyau** | Le code pur partagé par tous : argent en centimes, URN, horloge, JSON canonique. Ni base, ni réseau. | `hub.core.money`, `canonical`, `clock`, `ids`, `text` ; plus tard `hub.kernel` |
-| **Plateforme** | La technique commune : SQLite, migrations, réglages, secrets, journaux, planificateur, sauvegarde. Elle ne connaît pas le métier. | `hub.core.db`, `coredb`, `settings`, `secrets`, `logging`, `cron` ; plus tard `hub.platform` |
+| **Noyau** | Le code pur partagé par tous : argent en centimes, URN, horloge, JSON canonique. Ni base, ni réseau. | `hub.kernel` : `money`, `canonical`, `clock`, `ids`, `text` |
+| **Plateforme** | La technique commune : SQLite, migrations, réglages, secrets, journaux, planificateur, sauvegarde. Elle ne connaît pas le métier. | `hub.platform` : `db`, `migrations`, `settings`, `secrets`, `logging`, `cron` |
 | **Cœur** | Ce que tous les domaines partagent : identité et accès, validation (Double Sas), intégration (URN, liens, recherche), sources, profil. Il ne cite aucun domaine. | `hub.core` |
 | **Domaine** | Un pan de la vie (finance, puis agenda, documents, maison). Sa base, ses migrations, ses outils, ses propositions. | `hub.domains.<nom>`, protocole `Domain` |
 | **Manifeste** | Ce qu'un domaine déclare au cœur : sortes de propositions, outils, routes, tâches de nuit. | `hub.core.domain` |
@@ -53,7 +53,7 @@ quels, en français. Un mot nouveau entre ici dans la même PR que le code qui l
 | **Données fictives** | Un an de relevés inventés pour deux comptes, seules données des tests, de la CI et de l'instance d'essai. | `scripts/demo_data.py` |
 | **Instance d'essai** | Un hub jetable où l'image d'une version migre les données fictives et répond, avant tout déploiement. | `deploy/trial.sh` |
 | **Agrégat** | Un total qui ne révèle aucune transaction (moins de 3 écritures : fondu ou masqué). C'est tout ce que Claude voit. | portée `*:aggregates` |
-| **URN** | L'identifiant stable d'un objet, d'un domaine à l'autre : `hub:<domaine>:<sorte>:<id>`. | `hub.core.ids` |
+| **URN** | L'identifiant stable d'un objet, d'un domaine à l'autre : `hub:<domaine>:<sorte>:<id>`. | `hub.kernel.ids` |
 | **Lien** | Une relation entre deux URN, tenue par le cœur. | `links` |
 
 ## Accès et IA

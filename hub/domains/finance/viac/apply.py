@@ -19,11 +19,11 @@ from decimal import Decimal, localcontext
 
 from sqlalchemy import Connection, text
 
-from hub.core.clock import now_iso
-from hub.core.ids import urn
-from hub.core.money import DECIMAL_CONTEXT, Money
 from hub.domains.finance import catalog, ledger, rules
 from hub.domains.finance.viac.models import CASH_SIGN, LABEL, TX_CODE, Notice, PortfolioReport
+from hub.kernel.clock import now_iso
+from hub.kernel.ids import urn
+from hub.kernel.money import DECIMAL_CONTEXT, Money
 
 CCY = "CHF"
 PRICE_PLACES = 8

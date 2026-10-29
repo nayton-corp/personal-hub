@@ -13,12 +13,12 @@ from sqlalchemy import text
 from typer.testing import CliRunner
 
 from hub import cli as hub_cli
-from hub.core import db as core_db
 from hub.core import proposals
 from hub.core.auth import Principal
-from hub.core.clock import iso, utcnow
 from hub.core.context import HubContext
 from hub.core.errors import Problem
+from hub.kernel.clock import iso, utcnow
+from hub.platform import db as core_db
 from tests.support.demo_domain import DemoDomain
 from tests.support.soft_authenticator import SoftAuthenticator
 from tests.test_passkeys import ORIGIN, _code, _register

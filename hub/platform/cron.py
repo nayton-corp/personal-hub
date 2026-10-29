@@ -15,8 +15,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from hub.core.clock import local_tz
-from hub.core.logging import get_logger
+from hub.kernel.clock import local_tz
+from hub.platform.logging import get_logger
 
 log = get_logger("hub.scheduler")
 

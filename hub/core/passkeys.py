@@ -28,11 +28,11 @@ from webauthn.helpers.structs import (
     UserVerificationRequirement,
 )
 
-from hub.core.clock import iso, now_iso, utcnow
 from hub.core.coredb import audit
 from hub.core.errors import Problem
-from hub.core.ids import actor, new_id
-from hub.core.settings import Settings
+from hub.kernel.clock import iso, now_iso, utcnow
+from hub.kernel.ids import actor, new_id
+from hub.platform.settings import Settings
 
 # un seul utilisateur : identifiant fixe, jamais une donnée personnelle
 USER_HANDLE = b"personal-hub-owner"

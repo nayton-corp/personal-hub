@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+### Noyau, plateforme et cœur séparés (chantier S1, première partie)
+
+- `hub/kernel` (argent, URN, horloge, JSON canonique, texte) et `hub/platform` (SQLite,
+  migrations, réglages, secrets, journaux, planificateur) sortent de `hub/core`. Déplacements
+  seuls, sans changement de comportement ; le lanceur de migrations devient
+  `hub.platform.migrations`.
+- Import-linter : les étages domaines → cœur → plateforme → noyau ne s'importent que vers le
+  bas ; le noyau n'importe aucune bibliothèque d'E/S, la plateforme ni le cœur ni HTTP.
+
 ### App web testée et instance d'essai (chantier S13, suite)
 
 - `scripts/demo_data.py` : un an de relevés camt.053 fictifs pour deux comptes, bibliothèque

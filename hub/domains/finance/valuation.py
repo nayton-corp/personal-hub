@@ -32,8 +32,8 @@ from decimal import Decimal, localcontext
 
 from sqlalchemy import Connection, text
 
-from hub.core.money import DECIMAL_CONTEXT, Money, base_currency
 from hub.domains.finance import debts, institutions
+from hub.kernel.money import DECIMAL_CONTEXT, Money, base_currency
 
 # enveloppes de by_envelope_json (spécification, section 2), tirées du type de compte
 ENVELOPES = {"cash": "cash", "pension": "pilier3a", "securities": "titres", "crypto": "crypto"}

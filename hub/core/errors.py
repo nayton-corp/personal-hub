@@ -109,7 +109,7 @@ def install(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
-        from hub.core.logging import get_logger
+        from hub.platform.logging import get_logger
 
         type_ = "ledger.append_only" if "ledger.append_only" in str(exc) else "internal"
         get_logger("hub.api").error("api.unhandled", error=type(exc).__name__, type=type_)

@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from hub.core import secrets
 from hub.domains.finance import importer
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
+from hub.platform import secrets
 from tests.factories.camt import IBAN, IBAN_2, Detail, Stmt, Tx, camt053, zipped
 from tests.finance.conftest import D, add_account, ledger_state, ready_account, rows, simple_stmt
 
@@ -361,7 +361,7 @@ def test_history_refusals(finance: FinanceDomain, tmp_path: Path) -> None:
 
 def test_opening_only_once(finance: FinanceDomain) -> None:
     a = ready_account(finance)
-    from hub.core.db import begin_immediate
+    from hub.platform.db import begin_immediate
 
     with pytest.raises(importer.ImportRefused), begin_immediate(finance.engine()) as conn:
         importer.open_account(conn, a.id, "2020-01-01", 1, "CHF")

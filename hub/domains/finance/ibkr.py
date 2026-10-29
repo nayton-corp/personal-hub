@@ -34,12 +34,12 @@ from lxml import etree
 from lxml.etree import _Element
 from sqlalchemy import Connection, text
 
-from hub.core import canonical
-from hub.core.clock import now_iso
-from hub.core.ids import urn
-from hub.core.money import DECIMAL_CONTEXT, Money, base_currency
 from hub.domains.finance import assets, catalog, ledger, rules
 from hub.domains.finance.assets import AssetError, DocumentError, Result
+from hub.kernel import canonical
+from hub.kernel.clock import now_iso
+from hub.kernel.ids import urn
+from hub.kernel.money import DECIMAL_CONTEXT, Money, base_currency
 
 SOURCE = "ibkr_flex"
 INSTITUTION = "IBKR"

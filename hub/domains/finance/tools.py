@@ -22,11 +22,11 @@ from sqlalchemy import Connection, text
 
 from hub.core.domain import McpTool, ToolCaller
 from hub.core.errors import Problem
-from hub.core.money import Money, base_currency
-from hub.core.text import normalize
 from hub.domains.finance import insights, period, reads, recurring, sentinels
 from hub.domains.finance.handlers import ENTRIES_MAX
 from hub.domains.finance.reads import MIN_COUNT_FOR_AGGREGATES
+from hub.kernel.money import Money, base_currency
+from hub.kernel.text import normalize
 
 if TYPE_CHECKING:
     from hub.domains.finance.domain import FinanceDomain

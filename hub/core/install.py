@@ -19,9 +19,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import pyrage
 import yaml
 
-from hub.core import secrets
-from hub.core.money import CurrencyError, exponent
 from hub.core.profile import ProfileError, clean_country
+from hub.kernel.money import CurrencyError, exponent
+from hub.platform import secrets
 
 _LINE = re.compile(r"^([A-Z_]+)=(.*)$")
 _ORIGIN = re.compile(r"^https://[A-Za-z0-9.-]+(:\d+)?$")

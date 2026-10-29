@@ -8,10 +8,10 @@ from dataclasses import dataclass
 from sqlalchemy import Connection, text
 from sqlalchemy.exc import IntegrityError
 
-from hub.core.clock import now_iso
-from hub.core.ids import new_id
-from hub.core.money import base_currency
-from hub.core.text import compact_iban, is_iban
+from hub.kernel.clock import now_iso
+from hub.kernel.ids import new_id
+from hub.kernel.money import base_currency
+from hub.kernel.text import compact_iban, is_iban
 
 KINDS = ("cash", "securities", "pension", "crypto")
 GROUPS = ("fixed", "variable", "savings", "income", "transfer")

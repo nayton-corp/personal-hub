@@ -14,9 +14,9 @@ import re
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from typing import Literal
 
-from hub.core.money import DECIMAL_CONTEXT
 from hub.domains.finance.viac import DATE, NUM, PORTFOLIO, ViacError, first, iso, num
 from hub.domains.finance.viac.models import Ignored, Notice, NoticeKind
+from hub.kernel.money import DECIMAL_CONTEXT
 
 Document = Literal["report", "notice", "attestation", "statement", "nil_fee"]
 HEAD_LINES = 15

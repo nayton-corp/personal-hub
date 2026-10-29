@@ -16,14 +16,14 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import Connection, text
 
-from hub.core import canonical
-from hub.core.clock import now_iso
 from hub.core.domain import Preview, ProposalKind
 from hub.core.errors import Problem
-from hub.core.ids import new_id, urn
-from hub.core.money import Money, base_currency
-from hub.core.text import mask_iban, normalize
 from hub.domains.finance import catalog, debts, importer, ledger, merchant, packs, period, rules
+from hub.kernel import canonical
+from hub.kernel.clock import now_iso
+from hub.kernel.ids import new_id, urn
+from hub.kernel.money import Money, base_currency
+from hub.kernel.text import mask_iban, normalize
 
 if TYPE_CHECKING:
     from hub.domains.finance.domain import FinanceDomain

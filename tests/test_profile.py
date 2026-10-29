@@ -13,9 +13,10 @@ from typer.testing import CliRunner
 
 from hub import cli
 from hub.brain import agent
-from hub.core import clock, profile
+from hub.core import profile
 from hub.core.context import HubContext
-from hub.core.settings import Settings, get_settings
+from hub.kernel import clock
+from hub.platform.settings import Settings, get_settings
 from tests.conftest import bearer
 from tests.finance.test_finance_api import app_session
 

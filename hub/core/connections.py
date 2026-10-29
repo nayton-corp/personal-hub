@@ -19,10 +19,11 @@ from typing import Any
 from sqlalchemy import Connection as Db
 from sqlalchemy import text
 
-from hub.core import connectors, cron, secrets
-from hub.core.clock import now_iso
+from hub.core import connectors
 from hub.core.coredb import audit
 from hub.core.errors import Problem
+from hub.kernel.clock import now_iso
+from hub.platform import cron, secrets
 
 ID = re.compile(r"^[a-z][a-z0-9-]{1,39}$")
 RESERVED = frozenset({"catalog", "connections", "refresh", "runner"})  # segments de route
@@ -30,13 +31,7 @@ MAX_SETTINGS = 16_384
 MAX_SECRETS = 65_536
 MAX_WALLETS = 50
 WALLET_ASSETS = ("BTC", "ETH", "SOL", "ATOM")
-WALLET_NETWORKS = (
-    "ethereum",
-    "arbitrum",
-    "base",
-    "bsc",
-    "polygon",
-)  # réseaux d'un portefeuille ETH
+WALLET_NETWORKS = ("ethereum", "arbitrum", "base", "bsc", "polygon")  # d'un portefeuille ETH
 WALLET_ACCOUNT = re.compile(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$")
 _COLUMNS = "id, connector, label, schedule, settings, secrets, secrets_at, created_at, updated_at"
 

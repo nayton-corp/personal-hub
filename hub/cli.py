@@ -11,13 +11,14 @@ from typing import Annotated, Any
 import typer
 import yaml
 
-from hub.core import connections, connectors, profile, proposals, secrets, sessions, tokens
-from hub.core import logging as hub_logging
+from hub.core import connections, connectors, profile, proposals, sessions, tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
 from hub.core.registry import Registry
-from hub.core.settings import get_settings
+from hub.platform import logging as hub_logging
+from hub.platform import secrets
+from hub.platform.settings import get_settings
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, help="Personal Hub")
 db_app = typer.Typer(no_args_is_help=True, help="Bases et migrations")
@@ -104,10 +105,7 @@ def db_status() -> None:
 def token_create(
     name: Annotated[str, typer.Argument(help="ex. brain-mac, collector-api")],
     scope: Annotated[
-        list[str],
-        typer.Option(
-            "--scope", "-s", help="brain, aggregates, collector ou portée qualifiée finance:read"
-        ),
+        list[str], typer.Option("--scope", "-s", help="brain, aggregates, collector, finance:read…")
     ],
 ) -> None:
     """Crée un jeton. Il n'est affiché qu'une fois : seule son empreinte est gardée."""
@@ -538,7 +536,7 @@ def restore(
 @app.command()
 def scheduler(crontab: Path) -> None:
     """Exécute la crontab du dépôt (conteneur `scheduler`)."""
-    from hub.core.cron import run_forever
+    from hub.platform.cron import run_forever
 
     hub_logging.configure(get_settings().log_level)
     run_forever(crontab)

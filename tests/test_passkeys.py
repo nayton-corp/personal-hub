@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from hub.core import sessions
-from hub.core.clock import iso, utcnow
 from hub.core.context import HubContext
+from hub.kernel.clock import iso, utcnow
 from tests.support.soft_authenticator import SoftAuthenticator
 
 ORIGIN = "https://hub.example.ts.net"

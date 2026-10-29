@@ -27,7 +27,7 @@ from hub.collectors.base import Failure, Kind, Result
 from hub.collectors.dropbox import is_revolut_json
 from hub.collectors.revolut.enable_banking import EnableBanking
 from hub.collectors.runtime import Env
-from hub.core.clock import iso, now_iso, utcnow
+from hub.kernel.clock import iso, now_iso, utcnow
 
 FORMAT = "hub.revolut.v1"
 HISTORY_FROM = "2015-01-01"  # Revolut n'existe pas avant : « tout l'historique »

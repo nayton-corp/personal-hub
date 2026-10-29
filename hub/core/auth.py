@@ -11,8 +11,8 @@ from fastapi import Depends, Request
 
 from hub.core import sessions, tokens
 from hub.core.context import HubContext
-from hub.core.db import begin_immediate
 from hub.core.errors import Problem
+from hub.platform.db import begin_immediate
 
 SESSION_COOKIE = "hub_session"
 

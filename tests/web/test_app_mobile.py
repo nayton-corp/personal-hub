@@ -24,7 +24,7 @@ import pytest
 
 from hub.core import sessions
 from hub.core.context import HubContext
-from hub.core.settings import Paths, Secrets, Server, Settings
+from hub.platform.settings import Paths, Secrets, Server, Settings
 
 playwright = pytest.importorskip("playwright.sync_api")
 

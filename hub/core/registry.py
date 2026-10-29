@@ -7,7 +7,7 @@ from importlib.metadata import entry_points
 
 from hub.core.domain import Domain
 from hub.core.errors import Problem
-from hub.core.settings import Settings
+from hub.platform.settings import Settings
 
 ENTRY_POINT_GROUP = "hub.domains"
 DomainFactory = Callable[[Settings], Domain]

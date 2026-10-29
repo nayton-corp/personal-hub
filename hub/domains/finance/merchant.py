@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 
-from hub.core.text import normalize
+from hub.kernel.text import normalize
 
 _CARD = re.compile(r"^paiement \d\d\.\d\d\.\d{4} \d\d:\d\d (.+?) numero de carte\b")
 _MAESTRO = re.compile(r"^debit direct maestro \d\d:\d\d (.+?) numero de carte\b")

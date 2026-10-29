@@ -14,9 +14,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Literal
 
-from hub.core import secrets
-from hub.core.logging import get_logger
-from hub.core.settings import Settings
+from hub.platform import secrets
+from hub.platform.logging import get_logger
+from hub.platform.settings import Settings
 
 log = get_logger("hub.notify")
 

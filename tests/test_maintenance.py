@@ -5,11 +5,11 @@ from typing import Any
 
 import pyrage
 
-from hub.core import secrets
 from hub.core.context import HubContext
 from hub.core.maintenance import backup_all, prune_local_copies, restic_backup, verify
 from hub.core.registry import Registry
-from hub.core.settings import Backup, Secrets, Settings
+from hub.platform import secrets
+from hub.platform.settings import Backup, Secrets, Settings
 from tests.conftest import make_settings
 
 

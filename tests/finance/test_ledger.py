@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
-from hub.core.db import backup, begin_immediate, make_engine
 from hub.domains.finance import hashing, ledger
 from hub.domains.finance.domain import FinanceDomain
+from hub.platform.db import backup, begin_immediate, make_engine
 from tests.finance.conftest import ready_account
 
 

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from hub.collectors.base import Failure
-from hub.core.clock import local_tz, utcnow
+from hub.kernel.clock import local_tz, utcnow
 
 if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Download, ElementHandle, Frame, Page

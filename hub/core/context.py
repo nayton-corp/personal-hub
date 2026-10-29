@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from hub.core.coredb import CoreDB
 from hub.core.notify import Notifier
 from hub.core.registry import Registry
-from hub.core.settings import Settings
+from hub.platform.settings import Settings
 
 
 @dataclass

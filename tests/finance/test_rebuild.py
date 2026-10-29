@@ -10,11 +10,11 @@ import pytest
 from sqlalchemy import text
 
 from hub.core.context import HubContext
-from hub.core.db import begin_immediate
 from hub.core.registry import Registry
 from hub.domains.finance import ledger, rebuild
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
+from hub.platform.db import begin_immediate
 from tests.factories import ibkr as f
 from tests.factories import viac as v
 from tests.factories.camt import Tx

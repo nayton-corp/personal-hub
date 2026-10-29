@@ -14,9 +14,9 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core.money import Money, base_currency
-from hub.core.text import mask_iban, normalize
 from hub.domains.finance import ledger, merchant, period, valuation
+from hub.kernel.money import Money, base_currency
+from hub.kernel.text import mask_iban, normalize
 
 OTHERS = "autres"
 MIN_COUNT_FOR_AGGREGATES = 3

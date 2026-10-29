@@ -8,10 +8,10 @@ from sqlalchemy import text
 
 from hub.core import proposals
 from hub.core.auth import Principal
-from hub.core.clock import iso, utcnow
 from hub.core.context import HubContext
 from hub.core.errors import Problem
 from hub.core.maintenance import nightly
+from hub.kernel.clock import iso, utcnow
 from tests.conftest import bearer
 from tests.support.demo_domain import DemoDomain
 

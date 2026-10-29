@@ -9,10 +9,10 @@ from typing import Any
 
 import pytest
 
-from hub.core.db import begin_immediate
 from hub.domains.finance import catalog, links, market, transfers
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
+from hub.platform.db import begin_immediate
 from tests.finance.conftest import rows
 
 

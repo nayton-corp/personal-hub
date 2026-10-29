@@ -23,8 +23,8 @@ from typing import Any
 import yaml
 from sqlalchemy import Connection, text
 
-from hub.core.clock import now_iso
 from hub.domains.finance import catalog, rules
+from hub.kernel.clock import now_iso
 
 FOLDER = Path(__file__).parent / "packs"
 _NAME = re.compile(r"^[a-z][a-z0-9-]{1,30}$")

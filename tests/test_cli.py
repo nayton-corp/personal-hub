@@ -7,7 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from hub import cli
-from hub.core.settings import get_settings
+from hub.platform.settings import get_settings
 
 runner = CliRunner()
 

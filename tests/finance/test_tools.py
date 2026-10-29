@@ -13,9 +13,9 @@ from fastapi.testclient import TestClient
 
 from hub.core import proposals
 from hub.core.context import HubContext
-from hub.core.settings import Auth
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.tools import FinanceTools
+from hub.platform.settings import Auth
 from tests.conftest import add_connections
 from tests.factories.camt import IBAN
 from tests.finance.test_app_reads import (  # noqa: F401 - fixtures

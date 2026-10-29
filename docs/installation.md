@@ -93,9 +93,9 @@ La carte disparaît quand tout est fait, ou avec « Masquer ».
 ## 5. Ensuite
 
 - **Mettre à jour :** `git fetch --tags && git checkout vX.Y.Z && make deploy TAG=vX.Y.Z`. Les
-  images d'une version publiée se tirent de GHCR (une connexion `docker login ghcr.io` d'abord,
-  [versions.md](versions.md)) ; le déploiement copie les bases avant de migrer et revient seul à
-  la version précédente au moindre échec.
+  images d'une version publiée se tirent de GHCR ([versions.md](versions.md)) ; le déploiement
+  les essaie sur des données fictives, copie les bases avant de migrer et revient seul à la
+  version précédente au moindre échec.
 - **Commandes à la main :** l'alias `hubc` de [mac.md](mac.md#5-commandes-utiles).
 - **Alertes sur le téléphone** (ntfy) et **IA locale** : [brain.md](brain.md).
 - **Sauvegardes :** la réplique Litestream et restic tournent seuls dans `backup/`. Une copie

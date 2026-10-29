@@ -30,11 +30,12 @@ from hub.api.schemas import (
     ConnectorOut,
     RunnerListOut,
 )
-from hub.core import collectors, connections, connectors, secrets
+from hub.core import collectors, connections, connectors
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal
 from hub.core.errors import Problem
-from hub.core.logging import get_logger
 from hub.core.notify import Message
+from hub.platform import secrets
+from hub.platform.logging import get_logger
 
 router = APIRouter(prefix="/collectors", tags=["collecteurs"])
 log = get_logger("hub.api.collectors")

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from hub.core.text import normalize
 from hub.domains.finance.merchant import key
+from hub.kernel.text import normalize
 
 
 @pytest.mark.parametrize(

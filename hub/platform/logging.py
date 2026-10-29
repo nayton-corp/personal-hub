@@ -16,7 +16,7 @@ from typing import Any, TextIO
 
 import structlog
 
-from hub.core.money import Money
+from hub.kernel.money import Money
 
 FORBIDDEN_KEYS: frozenset[str] = frozenset(
     {

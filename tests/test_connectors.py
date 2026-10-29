@@ -12,8 +12,9 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from hub.collectors import base, runtime
-from hub.core import connectors, cron
+from hub.core import connectors
 from hub.core.context import HubContext
+from hub.platform import cron
 from tests.finance.test_finance_api import app_session
 
 ROOT = Path(__file__).resolve().parents[1]

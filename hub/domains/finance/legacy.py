@@ -19,8 +19,8 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core.text import normalize
 from hub.domains.finance import rules
+from hub.kernel.text import normalize
 
 # nom de l'ancien script -> (identifiant, nom, groupe) dans le hub
 CATEGORY_MAP: dict[str, tuple[str, str, str]] = {

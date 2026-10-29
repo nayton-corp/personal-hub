@@ -20,11 +20,11 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core import canonical
-from hub.core.clock import now_iso
-from hub.core.ids import urn
 from hub.domains.finance import insights, ledger, period
 from hub.domains.finance.reads import money
+from hub.kernel import canonical
+from hub.kernel.clock import now_iso
+from hub.kernel.ids import urn
 
 MIN_DAY_FOR_PROJECTION = 7  # avant le 7, une projection linéaire ne dit rien
 LIKELY_MARGIN_PCT = 10  # « va dépasser » : projection au-delà de la cible + 10 %

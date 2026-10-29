@@ -24,9 +24,6 @@ from datetime import date, timedelta
 from decimal import InvalidOperation
 from typing import Any
 
-from hub.core import canonical
-from hub.core.money import CurrencyError, Money
-from hub.core.text import normalize
 from hub.domains.finance.camt.models import (
     Anomaly,
     Balance,
@@ -34,6 +31,9 @@ from hub.domains.finance.camt.models import (
     ParsedFile,
     ParsedStatement,
 )
+from hub.kernel import canonical
+from hub.kernel.money import CurrencyError, Money
+from hub.kernel.text import normalize
 
 EB_FORMAT = "hub.revolut.v1"
 EB_SOURCE = "revolut_eb"

@@ -2,8 +2,8 @@
 
 from alembic import context
 
-from hub.core.db import make_engine
-from hub.core.migrations.runner import url_to_path
+from hub.platform.db import make_engine
+from hub.platform.migrations import url_to_path
 
 config = context.config
 url = config.get_main_option("sqlalchemy.url") or ""

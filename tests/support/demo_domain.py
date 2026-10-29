@@ -13,10 +13,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, Engine, text
 
-from hub.core import canonical
 from hub.core.auth import require
-from hub.core.clock import now_iso
-from hub.core.db import make_engine
 from hub.core.domain import (
     Event,
     ExternalResult,
@@ -27,7 +24,10 @@ from hub.core.domain import (
     ProposalKind,
     Ref,
 )
-from hub.core.ids import urn
+from hub.kernel import canonical
+from hub.kernel.clock import now_iso
+from hub.kernel.ids import urn
+from hub.platform.db import make_engine
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (seq INTEGER PRIMARY KEY, name TEXT NOT NULL, created_at TEXT);

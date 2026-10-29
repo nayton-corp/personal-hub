@@ -10,7 +10,7 @@ import hashlib
 from collections.abc import Mapping
 from typing import Any
 
-from hub.core import canonical
+from hub.kernel import canonical
 
 GENESIS = "0" * 64
 

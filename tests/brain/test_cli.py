@@ -16,11 +16,11 @@ from typer.testing import CliRunner
 from hub.brain import cli
 from hub.brain.config import BrainConfig, TokenMissing, config, token
 from hub.brain.llm import LlmError, Reply
-from hub.core import secrets
-from hub.core.clock import local_tz
 from hub.core.context import HubContext
-from hub.core.settings import Secrets, Settings
 from hub.domains.finance.domain import FinanceDomain
+from hub.kernel.clock import local_tz
+from hub.platform import secrets
+from hub.platform.settings import Secrets, Settings
 from tests.brain.test_brain import Scripted, box_for, calls, last_tool
 from tests.finance.test_app_reads import (  # noqa: F401 - fixtures
     client,

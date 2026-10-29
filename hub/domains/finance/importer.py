@@ -25,12 +25,6 @@ from typing import Any, Literal
 
 from sqlalchemy import Connection, Engine, text
 
-from hub.core import canonical, secrets
-from hub.core.clock import now_iso, utcnow
-from hub.core.db import begin_immediate
-from hub.core.ids import new_id, urn
-from hub.core.logging import get_logger
-from hub.core.text import mask_iban
 from hub.domains.finance import catalog, dedup, documents, ibkr, ledger, revolut, rules
 from hub.domains.finance.assets import DocumentError
 from hub.domains.finance.camt import parser
@@ -41,6 +35,13 @@ from hub.domains.finance.viac import notice as viac_notice
 from hub.domains.finance.viac import report as viac_report
 from hub.domains.finance.viac import text as viac_text
 from hub.domains.finance.viac.models import Notice, Report
+from hub.kernel import canonical
+from hub.kernel.clock import now_iso, utcnow
+from hub.kernel.ids import new_id, urn
+from hub.kernel.text import mask_iban
+from hub.platform import secrets
+from hub.platform.db import begin_immediate
+from hub.platform.logging import get_logger
 
 log = get_logger("hub.finance.import")
 
@@ -962,10 +963,7 @@ def finish(conn: Connection, import_id: str) -> str:
     params = {"import_id": import_id}
     if applied and old[0] != "applied":
         ledger.append_event(
-            conn,
-            "import.applied",
-            target,
-            {"new": stats["new"], "duplicates": stats["duplicates"]},
+            conn, "import.applied", target, {"new": stats["new"], "duplicates": stats["duplicates"]}
         )
         if old[0] == "needs_review":
             # appliqué tout seul : sa carte `apply_import` éventuelle devient sans objet

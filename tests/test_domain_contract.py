@@ -11,7 +11,7 @@ from hub.core.context import HubContext
 from hub.core.domain import ProposalKind
 from hub.core.errors import Problem
 from hub.core.registry import Registry
-from hub.core.settings import Settings
+from hub.platform.settings import Settings
 from tests.conftest import bearer
 from tests.support.demo_domain import AddItem, AddItemHandler, DemoDomain
 

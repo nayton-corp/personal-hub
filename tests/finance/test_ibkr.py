@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from hub.core.db import begin_immediate
 from hub.domains.finance import catalog, ibkr, importer, valuation
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
+from hub.platform.db import begin_immediate
 from tests.factories import ibkr as f
 from tests.finance.conftest import rows
 

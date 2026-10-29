@@ -11,9 +11,6 @@ from typing import Literal
 from lxml import etree
 from lxml.etree import _Element
 
-from hub.core import canonical
-from hub.core.money import CurrencyError, Money
-from hub.core.text import compact_iban
 from hub.domains.finance.camt.models import (
     Anomaly,
     Balance,
@@ -21,6 +18,9 @@ from hub.domains.finance.camt.models import (
     ParsedFile,
     ParsedStatement,
 )
+from hub.kernel import canonical
+from hub.kernel.money import CurrencyError, Money
+from hub.kernel.text import compact_iban
 
 MAX_BYTES = 20 * 1024 * 1024
 NS_PREFIX = "urn:iso:std:iso:20022:tech:xsd:camt.053.001."
