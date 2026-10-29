@@ -2,6 +2,25 @@
 
 ## [Non publié]
 
+### Poches et enveloppes : virements, règle d'un compte, budget annuel
+
+- Les mouvements entre deux comptes du même établissement (le compte Revolut et ses poches),
+  de même montant, à un jour d'écart au plus et sans autre candidat, sont appariés comme
+  virements, même sans IBAN ni code de virement.
+- Un virement apparié passe avant une règle « tout le reste » (motif vide, comme « tout crédit
+  restant → Autres revenus ») : il est montré et compté comme « Virement entre mes comptes »
+  (vue `v_entry_shown`, migration finance 0014). Une catégorie choisie ou posée par une règle
+  précise reste la sienne. Les deux côtés quittent aussi « À classer ».
+- Règle d'un compte (`create_rule` avec `account_id`, motif vide permis) : dans les réglages
+  d'un compte, « Dépenses de ce compte » range toutes ses sorties dans une catégorie (une poche
+  Vacances), celles déjà importées comme les prochaines. `/finance/accounts` donne
+  `spend_rule`.
+- Budget annuel : `set_budget` accepte `cadence` (`month` ou `year`, table `budget_cadence`).
+  Une catégorie suivie à l'année est comparée au cumul depuis janvier (`yearly` dans les lignes
+  du budget), sort du budget et du reste à vivre du mois (`budgeted_expenses`) et n'alerte
+  qu'au dépassement annuel. Dans l'app : « Par mois / Par an » dans la fiche d'une catégorie.
+- Catégories « Voiture : crédit » (fixe) et « Voiture : entretien » (variable).
+
 ### Mois budgétaire, création du budget et journal revu
 
 - Réglage « Le mois commence le » (1 à 28, `GET/POST /finance/settings`, table
