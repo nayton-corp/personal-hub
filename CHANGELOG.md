@@ -17,6 +17,12 @@
   comme versement, seuls les intérêts font baisser le patrimoine. `GET /finance/debts`, carte
   « Dettes » dans les réglages, propositions `save_debt` et `record_debt_balance` (Face ID).
 
+### Diagramme de flux du budget plus lisible
+
+- Les flux ne se croisent plus : revenus (du plus gros au plus petit) et groupes sont empilés dans le même ordre, et chaque revenu remplit les groupes dans l'ordre Fixes, Variables, Épargne, Reste. Un petit revenu (remboursement) ne s'étale plus en filets vers tous les groupes.
+- Une couleur par groupe, de la source jusqu'aux postes : flux, barre du groupe et barres de ses postes. Les Fixes passent en bleu pour ne plus ressembler au Reste gris (même couleur dans l'historique des mois).
+- Toucher un revenu n'allume que les groupes et postes qu'il alimente vraiment.
+
 ### Historique Binance dans le Journal, mouvements crypto reliés entre mes comptes
 
 - Le collecteur Binance lit, en plus des soldes, les dépôts et retraits crypto (txId, adresse),

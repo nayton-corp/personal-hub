@@ -85,7 +85,8 @@ function sankeyData(f) {
   const g = Object.fromEntries(f.groups.map((x) => [x.group, x]));
   const F = u(g.fixed?.total), V = u(g.variable?.total), S = u(g.savings?.total);
   const out = F + V + S;
-  const srcs = f.sources.filter((s) => u(s.total) > 0).map((s) => ({ id: `src:${s.category}`, name: s.name, v: u(s.total), c: catLook(s.category, "income").color, ic: catLook(s.category, "income").icon, col: 0 }));
+  const srcs = f.sources.filter((s) => u(s.total) > 0).map((s) => ({ id: `src:${s.category}`, name: s.name, v: u(s.total), c: catLook(s.category, "income").color, ic: catLook(s.category, "income").icon, col: 0 }))
+    .sort((a, b) => b.v - a.v);
   if (out > I) srcs.push({ id: "src:deficit", name: "Réserves", v: out - I, c: "var(--neg)", ic: "wallet", col: 0, note: "Les sorties dépassent les revenus : la différence vient de tes réserves." });
   const tot = Math.max(I, out) || 1, R = Math.max(0, I - out), small = tot * 0.03;
   const kids = (key) => {
@@ -100,14 +101,14 @@ function sankeyData(f) {
     return big;
   };
   const mids = [
-    { id: "g:fixed", g: "fixed", name: "Fixes", v: F, c: "var(--s6)", ic: "home", kids: kids("fixed") },
+    { id: "g:fixed", g: "fixed", name: "Fixes", v: F, c: "var(--s1)", ic: "home", kids: kids("fixed") },
     { id: "g:variable", g: "variable", name: "Variables", v: V, c: "var(--s3)", ic: "cart", kids: kids("variable") },
     { id: "g:savings", g: "savings", name: "Épargne", v: S, c: "var(--s2)", ic: "piggy", kids: kids("savings") },
   ].filter((m) => m.v > 0);
   if (R > 0) mids.push({ id: "g:rest", g: "rest", name: "Reste", v: R, c: "var(--faint)", ic: "wallet", kids: [] });
   for (const m of mids) {
     m.col = 1;
-    for (const k of m.kids) { k.col = 2; k.parent = m.id; }
+    for (const k of m.kids) { k.col = 2; k.parent = m.id; k.bar = m.c; }
   }
   return { srcs, mids, tot, I, R, out, S };
 }
@@ -129,21 +130,28 @@ function sankeySvg(sd) {
     return `M${xa},${ya0.toFixed(1)}C${xm},${ya0.toFixed(1)} ${xm},${yb0.toFixed(1)} ${xb},${yb0.toFixed(1)}L${xb},${yb1.toFixed(1)}C${xm},${yb1.toFixed(1)} ${xm},${ya1.toFixed(1)} ${xa},${ya1.toFixed(1)}Z`;
   };
   const cls = (on) => `sk-link${selN ? (on ? " on" : " off") : ""}`;
+  // revenus et groupes sont deux piles du même total : chaque flux relie les tranches qui se
+  // recouvrent, donc aucun flux n'en croise un autre (le salaire paie d'abord les fixes, etc.).
+  // Chaque flux (et la barre de chaque poste) prend la couleur de son groupe, de la source aux postes.
   let links = "";
-  const sOut = {}, mIn = {}, mOut = {};
-  for (const s of sd.srcs) for (const m of sd.mids) {
-    const w = s.v * (m.v / sd.tot) * k;
-    const a0 = s.y + (sOut[s.id] || 0), b0 = m.y + (mIn[m.id] || 0);
-    sOut[s.id] = (sOut[s.id] || 0) + w;
-    mIn[m.id] = (mIn[m.id] || 0) + w;
-    const on = !selN || sel === s.id || sel === m.id || selN.parent === m.id;
-    links += `<path class="${cls(on)}" d="${band(X[0] + nw, a0, a0 + w, X[1], b0, b0 + w)}" data-css="fill:${m.c}"/>`;
+  const mOut = {}, feeds = new Set();
+  let s0 = 0, m0 = 0, si = 0, mi = 0;
+  while (si < sd.srcs.length && mi < sd.mids.length) {
+    const s = sd.srcs[si], m = sd.mids[mi];
+    const lo = Math.max(s0, m0), hi = Math.min(s0 + s.v, m0 + m.v);
+    if (hi - lo > 1e-6) {
+      feeds.add(`${s.id}|${m.id}`);
+      const w = (hi - lo) * k, a0 = s.y + (lo - s0) * k, b0 = m.y + (lo - m0) * k;
+      const on = !selN || sel === s.id || sel === m.id || selN.parent === m.id;
+      links += `<path class="${cls(on)}" d="${band(X[0] + nw, a0, a0 + w, X[1], b0, b0 + w)}" data-css="fill:${m.c}"/>`;
+    }
+    if (s0 + s.v <= m0 + m.v) { s0 += s.v; si++; } else { m0 += m.v; mi++; }
   }
   for (const m of sd.mids) for (const kd of m.kids) {
     const w = kd.h, a0 = m.y + (mOut[m.id] || 0);
     mOut[m.id] = (mOut[m.id] || 0) + w;
-    const on = !selN || sel === m.id || sel === kd.id || selN.col === 0;
-    links += `<path class="${cls(on)}" d="${band(X[1] + nw, a0, a0 + w, X[2], kd.y, kd.y + w)}" data-css="fill:${kd.c === "var(--faint)" ? m.c : kd.c}"/>`;
+    const on = !selN || sel === m.id || sel === kd.id || feeds.has(`${sel}|${m.id}`);
+    links += `<path class="${cls(on)}" d="${band(X[1] + nw, a0, a0 + w, X[2], kd.y, kd.y + w)}" data-css="fill:${m.c}"/>`;
   }
   // libellés sans chevauchement : chaque colonne repousse vers le bas ce qui toucherait le précédent
   const labels = (arr, x, w) => {
@@ -151,11 +159,11 @@ function sankeySvg(sd) {
     return arr.map((n) => {
       const cy = Math.max(n.y + n.h / 2, prev + 25);
       prev = cy;
-      const dim = selN && !(n.id === sel || n.parent === sel || selN.parent === n.id || (selN.col === 0 && n.col === 1) || (n.col === 0 && selN.col === 1));
+      const dim = selN && !(n.id === sel || n.parent === sel || selN.parent === n.id || feeds.has(`${sel}|${n.id}`) || feeds.has(`${n.id}|${sel}`) || feeds.has(`${sel}|${n.parent}`) || feeds.has(`${n.id}|${selN.parent}`));
       const pctI = sd.I ? ` · ${pf(n.v / sd.I, 0)} %` : "";
       return `<g class="sk-node${sel === n.id ? " sel" : ""}${dim ? " dim" : ""}" data-a="sk" data-v="${esc(n.id)}" tabindex="0" role="button" aria-pressed="${sel === n.id}" aria-label="${esc(n.name)}, ${n0(n.v)} ${base()}${sd.I ? `, ${pf(n.v / sd.I, 0)} % des revenus` : ""}">
         <rect class="sk-hit" x="${x - 4}" y="${(Math.min(n.y, cy - 14) - 2).toFixed(1)}" width="${w}" height="${(Math.max(n.h, 28) + 4).toFixed(1)}"/>
-        <rect class="sk-bar" x="${x}" y="${n.y.toFixed(1)}" width="${nw}" height="${n.h.toFixed(1)}" rx="2" data-css="fill:${n.c}"/>
+        <rect class="sk-bar" x="${x}" y="${n.y.toFixed(1)}" width="${nw}" height="${n.h.toFixed(1)}" rx="2" data-css="fill:${n.bar || n.c}"/>
         <text class="sk-name" x="${x + nw + 5}" y="${(cy - 2).toFixed(1)}">${esc(n.name)}</text>
         <text class="sk-val money" x="${x + nw + 5}" y="${(cy + 10).toFixed(1)}">${n0(n.v)}${n.col === 1 ? pctI : ""}</text></g>`;
     }).join("");
@@ -319,9 +327,9 @@ function trend(me) {
       <div class="months" role="group" aria-label="Choisir un mois">${ms.map((x) => {
         const t = x.F + x.V + x.S;
         return `<button class="mcol" type="button" data-a="month" data-v="${x.m}" aria-pressed="${P.period === "m" && P.month === x.m}" aria-label="${monthName(x.m)} : fixes ${n0(x.F)}, variables ${n0(x.V)}, épargne ${n0(x.S)}">
-          <span class="bars" data-css="--h:${((t / mx) * 100).toFixed(0)}%"><i data-css="--f:${x.F};--c:var(--s6)"></i><i data-css="--f:${x.V};--c:var(--s3)"></i><i data-css="--f:${x.S};--c:var(--s2)"></i></span><span>${shortMonth(x.m)}</span></button>`;
+          <span class="bars" data-css="--h:${((t / mx) * 100).toFixed(0)}%"><i data-css="--f:${x.F};--c:var(--s1)"></i><i data-css="--f:${x.V};--c:var(--s3)"></i><i data-css="--f:${x.S};--c:var(--s2)"></i></span><span>${shortMonth(x.m)}</span></button>`;
       }).join("")}</div>
-      <div class="legend"><span><i data-css="--c:var(--s6)"></i>Fixes</span><span><i data-css="--c:var(--s3)"></i>Variables</span><span><i data-css="--c:var(--s2)"></i>Épargne</span></div>
+      <div class="legend"><span><i data-css="--c:var(--s1)"></i>Fixes</span><span><i data-css="--c:var(--s3)"></i>Variables</span><span><i data-css="--c:var(--s2)"></i>Épargne</span></div>
     </section>`;
 }
 
