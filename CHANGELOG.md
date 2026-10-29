@@ -2,6 +2,39 @@
 
 ## [Non publié]
 
+### Mois budgétaire, création du budget et journal revu
+
+- Réglage « Le mois commence le » (1 à 28, `GET/POST /finance/settings`, table
+  `budget_period` dans la migration 0013) : budget, flux, tendance, projection, sentinelles et
+  outils découpent les mois à partir de ce jour. Après le 15, le mois porte le nom de sa fin.
+  Le Budget affiche alors les dates exactes sous le mois.
+- « Créer mon budget » : une cible par catégorie de dépense, proposée d'après la moyenne des
+  3 derniers mois et arrondie à la dizaine, modifiable, validée en une fois avec Face ID.
+- Journal : panneau de filtres (compte, catégorie, période, montant), tri par plus gros
+  montant, puces des filtres actifs ; la recherche se combine aux filtres et se pagine
+  (`/finance/entries` accepte `min_minor`, `max_minor`, `q`, `sort`).
+- « À classer » : chaque groupe montre ses comptes, ses dates, la fourchette des montants et
+  les libellés bancaires, et se déplie sur ses dernières écritures.
+
+### Comptes : fraîcheur juste et réglages dans l'app
+
+- La fraîcheur d'un compte vient de sa dernière donnée (écriture, position, ordre ou solde de
+  clôture) et de son dernier import, y compris pour les comptes sans relevé bancaire (Revolut,
+  SwissBorg, Ledger, titres) et les sous-comptes IBKR. « Comptes à rafraîchir » de l'accueil
+  suit la même règle et ignore les comptes jamais alimentés ou masqués.
+- Réglages d'un compte, validés avec Face ID (proposition `edit_account`, migration finance
+  0013) : nom, objectif, disponibilité, catégorie imposée à tout le compte, masquage. Un compte
+  masqué sort du patrimoine et de l'accueil, sans rien effacer. La carte « Comptes » des
+  réglages liste la fraîcheur et ouvre ces réglages ; le détail d'un compte aussi.
+
+### Construction des images plus rapide
+
+- Les images hub et collector ne copient plus `hub/web` : une retouche du front ne
+  reconstruit que l'image web. Seul le paquet hub est recompilé en bytecode à chaque
+  version, plus tout l'environnement Python.
+- `make deploy` ne finit plus en erreur sur macOS : une apostrophe dans `${…:-…}` cassait
+  le bash 3.2 du Mac après le déploiement.
+
 ### Hub générique, G6 — première installation
 
 - `make init` (`hub init` dans un conteneur jetable, seul Docker requis) : clé age en 0400,

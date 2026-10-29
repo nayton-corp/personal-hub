@@ -33,13 +33,29 @@ export function setTimeZone(tz) {
   return changed;
 }
 
-// Mois civil de l'instance : le serveur ne déduit jamais « ce mois » des données.
-export function currentMonth(now = new Date()) {
+// Jour où commence le mois budgétaire (réglage du hub, 1 par défaut) : après le 15, le mois
+// porte le nom de sa fin, comme period.py côté serveur.
+let startDay = 1;
+export const monthStartDay = () => startDay;
+
+// Mois budgétaire en cours, dans le fuseau de l'instance : le serveur ne le déduit jamais des
+// données.
+export function currentMonth(now = new Date(), day = startDay) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: zone, year: "numeric", month: "2-digit",
+    timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit",
   }).formatToParts(now);
-  const get = (t) => parts.find((p) => p.type === t).value;
-  return `${get("year")}-${get("month")}`;
+  const get = (t) => Number(parts.find((p) => p.type === t).value);
+  let month = `${get("year")}-${String(get("month")).padStart(2, "0")}`;
+  if (get("day") < day) month = shiftMonth(month, -1);
+  return day > 15 ? shiftMonth(month, 1) : month;
+}
+
+// Bornes d'un mois budgétaire, dates comprises (period.bounds côté serveur, fin exclue).
+export function monthSpan(month, day = startDay) {
+  const first = day > 15 ? shiftMonth(month, -1) : month;
+  const d = String(day).padStart(2, "0");
+  const end = new Date(Date.parse(`${shiftMonth(first, 1)}-${d}T00:00:00Z`) - 864e5);
+  return [`${first}-${d}`, end.toISOString().slice(0, 10)];
 }
 
 export function shiftMonth(month, delta) {
@@ -48,8 +64,9 @@ export function shiftMonth(month, delta) {
   return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`;
 }
 
-// tx : all, todo, in, out ; txcat : { id, month } quand le journal suit une catégorie du budget
-const DEFAULTS = { tab: "accueil", period: "m", tx: "all", q: "", txcat: null };
+// tx : all, todo, in, out ; txcat : { id, month } quand le journal suit une catégorie du budget ;
+// jf : filtres du journal (compte, catégorie, from, to, min, max en unités, tri)
+const DEFAULTS = { tab: "accueil", period: "m", tx: "all", q: "", txcat: null, jf: {} };
 
 function remembered() {
   try {
@@ -108,6 +125,16 @@ class Store {
     this.cache.clear();
     this.today = currentMonth();
     this.notify();
+  }
+
+  // nouveau jour de début : le mois en cours et le mois affiché suivent
+  setMonthStart(day) {
+    if (!day || day === startDay) return;
+    const wasToday = this.params.month === this.today;
+    startDay = day;
+    this.today = currentMonth();
+    if (wasToday || this.params.month > this.today) this.params.month = this.today;
+    this.invalidate();
   }
 
   on(fn) {

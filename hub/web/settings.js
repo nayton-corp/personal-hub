@@ -1,31 +1,34 @@
 // Sources et réglages : connexions et comptes en attente (connections.js, formulaires construits
-// à l'ouverture), fraîcheur des relevés, affichage de cet appareil. Profil, passkeys et état du
-// hub sont remplis par app.js.
+// à l'ouverture), comptes avec leur fraîcheur et leurs réglages (accounts.js), affichage de cet
+// appareil. Profil, passkeys et état du hub sont remplis par app.js.
+import { accountsList } from "./accounts.js";
 import { accountsCard, connectionsCard } from "./connections.js";
-import { date, daysSince } from "./format.js";
-import { store } from "./store.js";
-import { esc, fill, ibox, ic, pref } from "./ui.js";
+import { api, monthStartDay, store } from "./store.js";
+import { esc, failure, fill, pref, toast } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
-const STALE_DAYS = 45;
 const THEMES = [["system", "Système"], ["light", "Clair"], ["dark", "Sombre"]];
+const SETTINGS = "/finance/settings";
+const DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
+
+// exemple lisible du réglage : « novembre va du 25 octobre au 24 novembre »
+function example(s) {
+  if (!s) return "";
+  const [a, b] = [s.current_period.start, s.current_period.end].map((x) => new Date(`${x}T00:00:00Z`));
+  b.setUTCDate(b.getUTCDate() - 1);
+  const f = (d) => d.toLocaleDateString("fr-CH", { day: "numeric", month: "long", timeZone: "UTC" });
+  const name = new Date(`${s.current_month}-01T00:00:00Z`).toLocaleDateString("fr-CH", { month: "long", timeZone: "UTC" });
+  return `Le mois en cours, ${name}, va du ${f(a)} au ${f(b)}.`;
+}
 
 export function render() {
   connectionsCard();
   accountsCard();
-  const f = store.use("/finance/freshness");
-  if (f.status !== "ok") fill($("fresh-list"), `<div class="empty">${f.status === "error" ? `Impossible de charger : ${esc(f.error.message)}` : "Chargement…"}</div>`);
-  else if (!f.data.items.length) fill($("fresh-list"), '<div class="empty">Aucun compte pour l\'instant.</div>');
-  else {
-    fill($("fresh-list"), f.data.items.map((a) => {
-      const clbd = a.last_clbd && a.last_clbd.on_date;
-      const age = daysSince(clbd);
-      const stale = age == null || age > STALE_DAYS;
-      return `<div class="row">${ibox(ic(stale ? "clock" : "check"), stale ? "var(--s3)" : "var(--pos)", "sm")}
-        <span class="row-main"><span class="row-title">${esc(a.name)}</span><span class="row-sub">${clbd ? `relevé du ${date(clbd)}${a.last_import ? ` · importé le ${date(a.last_import.slice(0, 10))}` : ""}` : "aucun relevé importé"}</span></span>
-        <span class="pill ${stale ? "warn" : "ok"}">${age == null ? "—" : `${age} j`}</span></div>`;
-    }).join(""));
-  }
+  accountsList();
+  const se = store.use(SETTINGS), day = se.data ? se.data.month_start_day : monthStartDay();
+  fill($("budget-rows"), `
+    <div class="setrow"><label for="month-start" id="month-start-lbl">Début du mois budgétaire<small>${se.data ? esc(example(se.data)) : "Le jour de ta paie, par exemple."} Après le 15, le mois porte le nom du mois où il finit.</small></label>
+      <select id="month-start" class="select-day">${DAYS.map((d) => `<option value="${d}" ${d === day ? "selected" : ""}>le ${d === 1 ? "1er" : d}</option>`).join("")}</select></div>`);
   const hide = pref("hide", false), theme = pref("theme", "system");
   fill($("display-rows"), `
     <div class="setrow"><span id="hide-lbl">Masquer les montants<small>Floute les montants sur tous les écrans de cet appareil</small></span><button class="switch" type="button" role="switch" aria-checked="${hide}" aria-labelledby="hide-lbl" data-a="hide"></button></div>
@@ -33,3 +36,16 @@ export function render() {
 }
 
 export const actions = {};
+
+document.addEventListener("change", async (e) => {
+  if (e.target.id !== "month-start") return;
+  const day = Number(e.target.value);
+  try {
+    const s = await api(SETTINGS, { month_start_day: day });
+    store.setMonthStart(s.month_start_day);
+    toast(`Le mois budgétaire commence le ${day === 1 ? "1er" : day}`);
+  } catch (err) {
+    toast(failure(err), { error: true });
+    store.invalidate();
+  }
+});

@@ -16,7 +16,7 @@ from sqlalchemy import Connection, text
 
 from hub.core.money import Money, base_currency
 from hub.core.text import mask_iban, normalize
-from hub.domains.finance import ledger, valuation
+from hub.domains.finance import ledger, period, valuation
 
 OTHERS = "autres"
 MIN_COUNT_FOR_AGGREGATES = 3
@@ -29,9 +29,8 @@ def money(minor: int, currency: str) -> dict[str, int | str]:
 
 
 def month_bounds(month: str) -> tuple[str, str]:
-    y, m = (int(x) for x in month.split("-"))
-    start = date(y, m, 1)
-    end = date(y + (m == 12), m % 12 + 1, 1)
+    """Premier jour et lendemain du dernier jour du mois budgétaire (period.py)."""
+    start, end = period.bounds(month)
     return start.isoformat(), end.isoformat()
 
 
@@ -85,7 +84,7 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
         text(
             "SELECT a.id, a.institution, a.name, a.kind, a.currency, a.iban, a.liquid, "
             "a.budget_account, coalesce(b.balance_minor, 0), b.last_booking, a.external_ref, "
-            "a.goal "
+            "a.goal, a.availability, a.category, a.hidden "
             "FROM accounts a LEFT JOIN v_balances b ON b.account_id = a.id "
             "ORDER BY a.institution, a.name"
         )
@@ -104,9 +103,14 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
                 "external_ref": r[10],
                 "liquid": bool(r[6]),
                 "budget_account": bool(r[7]),
-                "availability": availability(r[3], bool(r[6])),
+                "availability": r[12] or availability(r[3], bool(r[6])),
+                "availability_set": r[12] is not None,
+                "availability_auto": availability(r[3], bool(r[6])),
                 "goal": r[11] or default_goal(r[3], bool(r[7])),
                 "goal_set": r[11] is not None,
+                # catégorie imposée à toutes les lignes du compte ; NULL : déduite de chaque ligne
+                "category": r[13],
+                "hidden": bool(r[14]),
                 "balance": money(r[8], r[4]),
                 # valeur de marché pour un compte de titres (parts × dernier cours), sinon le solde
                 "value": money(value, r[4]),
@@ -143,23 +147,44 @@ def last_clbd(conn: Connection, account_id: str) -> dict[str, Any] | None:
     }
 
 
+# Une donnée d'un compte : écriture, position relevée, ordre ou solde de clôture. Seuls les
+# relevés bancaires ont un solde de clôture ; Revolut, les cryptos ou les titres n'en ont pas.
+_LAST_DATA = (
+    "SELECT max(d) FROM ("
+    "SELECT max(booking_date) AS d FROM entries WHERE account_id = :a AND kind != 'correction' "
+    "UNION ALL SELECT max(on_date) FROM holdings WHERE account_id = :a "
+    "UNION ALL SELECT max(trade_date) FROM trades WHERE account_id = :a "
+    "UNION ALL SELECT max(on_date) FROM checkpoints WHERE account_id = :a AND kind = 'CLBD')"
+)
+# un import compte pour chaque compte qu'il a alimenté, y compris les comptes créés à sa lecture
+# (sous-comptes IBKR par devise), pas seulement pour le compte de son relevé
+_LAST_IMPORT = (
+    "SELECT max(i.received_at) FROM imports i WHERE i.id IN ("
+    "SELECT import_id FROM import_statements WHERE account_id = :a AND status = 'applied' "
+    "UNION SELECT import_id FROM entries WHERE account_id = :a "
+    "UNION SELECT import_id FROM holdings WHERE account_id = :a "
+    "UNION SELECT import_id FROM trades WHERE account_id = :a)"
+)
+
+
+def last_data(conn: Connection, account_id: str) -> str | None:
+    d = conn.execute(text(_LAST_DATA), {"a": account_id}).scalar_one()
+    return str(d) if d is not None else None
+
+
 def freshness(conn: Connection) -> list[dict[str, Any]]:
     out = []
-    for a in conn.execute(text("SELECT id, name FROM accounts ORDER BY name")).fetchall():
-        last_import = conn.execute(
-            text(
-                "SELECT max(i.received_at) FROM imports i JOIN import_statements s "
-                "ON s.import_id = i.id WHERE s.account_id = :a AND s.status = 'applied'"
-            ),
-            {"a": a[0]},
-        ).scalar_one()
-        clbd = last_clbd(conn, a[0])
+    rows = conn.execute(text("SELECT id, name, institution, hidden FROM accounts ORDER BY name"))
+    for a in rows.fetchall():
         out.append(
             {
                 "account_id": a[0],
                 "name": a[1],
-                "last_import": last_import,
-                "last_clbd": clbd,
+                "institution": a[2],
+                "hidden": bool(a[3]),
+                "last_import": conn.execute(text(_LAST_IMPORT), {"a": a[0]}).scalar_one(),
+                "last_data": last_data(conn, a[0]),
+                "last_clbd": last_clbd(conn, a[0]),
                 "collector": None,  # collecteurs : lot 5
             }
         )
@@ -205,6 +230,10 @@ class EntryFilter:
     category: str | None = None
     uncategorized: bool = False
     direction: str | None = None  # "in" (crédits) ou "out" (débits)
+    min_minor: int | None = None  # montant absolu, bornes comprises
+    max_minor: int | None = None
+    q: str | None = None  # recherche plein texte (contrepartie, libellé, communication)
+    sort: str = "date"  # "date" (récentes d'abord) ou "amount" (plus gros montants d'abord)
 
 
 def encode_cursor(booking_date: str, seq: int) -> str:
@@ -238,20 +267,48 @@ def entries(
         where.append("vc.category_id IS NULL AND e.kind = 'movement'")
     if f.direction:
         where.append("e.amount_minor > 0" if f.direction == "in" else "e.amount_minor < 0")
+    if f.min_minor is not None:
+        where.append("abs(e.amount_minor) >= :amin")
+        params["amin"] = f.min_minor
+    if f.max_minor is not None:
+        where.append("abs(e.amount_minor) <= :amax")
+        params["amax"] = f.max_minor
+    if f.q:
+        query = fts_query(f.q)
+        if query is None:
+            return [], None
+        where.append("e.seq IN (SELECT rowid FROM entries_fts WHERE entries_fts MATCH :q)")
+        params["q"] = query
+    by_amount = f.sort == "amount"
     if cursor:
-        d, s = decode_cursor(cursor)
-        where.append("(e.booking_date < :cd OR (e.booking_date = :cd AND e.seq < :cs))")
-        params.update(cd=d, cs=s)
+        if by_amount:
+            a, _, sq = cursor.partition("~")
+            where.append(
+                "(abs(e.amount_minor) < :ca OR (abs(e.amount_minor) = :ca AND e.seq < :cs))"
+            )
+            params.update(ca=int(a), cs=int(sq))
+        else:
+            d, s = decode_cursor(cursor)
+            where.append("(e.booking_date < :cd OR (e.booking_date = :cd AND e.seq < :cs))")
+            params.update(cd=d, cs=s)
+    order = (
+        "abs(e.amount_minor) DESC, e.seq DESC" if by_amount else "e.booking_date DESC, e.seq DESC"
+    )
     rows = conn.execute(
         text(
             f"SELECT {_ENTRY_COLS} FROM entries e "
             "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
-            f"WHERE {' AND '.join(where)} ORDER BY e.booking_date DESC, e.seq DESC LIMIT :lim"
+            f"WHERE {' AND '.join(where)} ORDER BY {order} LIMIT :lim"
         ),
         params,
     ).fetchall()
     page = rows[:limit]
-    next_cursor = encode_cursor(page[-1][4], page[-1][0]) if len(rows) > limit else None
+    next_cursor = None
+    if len(rows) > limit:
+        last = page[-1]
+        next_cursor = (
+            f"{abs(int(last[6]))}~{last[0]}" if by_amount else encode_cursor(last[4], last[0])
+        )
     return [_entry(r) for r in page], next_cursor
 
 
@@ -433,7 +490,7 @@ def trend(
     )
     rows = conn.execute(
         text(
-            "SELECT substr(v.booking_date, 1, 7), sum(v.amount_minor), count(*) "
+            "SELECT v.booking_date, sum(v.amount_minor), count(*) "
             "FROM v_entry_allocation v JOIN entries e ON e.seq = v.entry_seq "
             "LEFT JOIN categories c ON c.id = v.category_id "
             f"WHERE v.account_id IN {ids} AND v.currency = :ccy AND e.kind = 'movement' "
@@ -441,7 +498,11 @@ def trend(
         ),
         {**params, "ccy": currency, "s": start, "e": end, "cat": category},
     ).fetchall()
-    found = {r[0]: (int(r[1]), int(r[2])) for r in rows}
+    found: dict[str, tuple[int, int]] = {}
+    for day, total, count in rows:  # par jour, rangé dans son mois budgétaire
+        m = period.month_of(date.fromisoformat(day))
+        t, c = found.get(m, (0, 0))
+        found[m] = (t + int(total), c + int(count))
     series = []
     for i in range(months):
         m = shift_month(first, i)
@@ -461,30 +522,68 @@ def _direction(amounts: list[int]) -> str:
     return "any"
 
 
+REVIEW_SAMPLES = 10  # écritures montrées en dépliant un groupe dans l'app
+
+
+def _distinct(values: list[str | None], n: int = 3) -> list[str]:
+    seen: list[str] = []
+    for v in values:
+        if v and v not in seen:
+            seen.append(v)
+        if len(seen) == n:
+            break
+    return seen
+
+
 def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
+    """Écritures sans catégorie, groupées par contrepartie, avec de quoi décider : libellés
+    bancaires, communications, comptes, période et fourchette des montants."""
     rows = conn.execute(
         text(
-            "SELECT e.counterparty, e.label, e.currency, e.amount_minor, e.id FROM entries e "
+            "SELECT e.counterparty, e.label, e.currency, e.amount_minor, e.id, e.account_id, "
+            "e.booking_date, e.remittance, e.bank_tx_code FROM entries e "
             "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
-            "WHERE vc.category_id IS NULL AND e.kind = 'movement' ORDER BY e.booking_date DESC"
+            "WHERE vc.category_id IS NULL AND e.kind = 'movement' "
+            "ORDER BY e.booking_date DESC, e.seq DESC"
         )
     ).fetchall()
-    groups: dict[tuple[str, str], list[tuple[int, str]]] = {}
-    for cp, label, ccy, amount, entry_id in rows:
+    groups: dict[tuple[str, str], list[Any]] = {}
+    for r in rows:
         # sans vraie contrepartie, on groupe par libellé : un nom de remplissage réunirait
         # des marchands sans rapport, et « Toujours » en ferait une règle beaucoup trop large
-        key = normalize(ledger.party(cp) or label) or "(inconnu)"
-        groups.setdefault((key, ccy), []).append((int(amount), entry_id))
-    out: list[dict[str, Any]] = [
-        {
-            "counterparty": k[0],
-            "count": len(v),
-            "total": money(sum(a for a, _ in v), k[1]),
-            "direction": _direction([a for a, _ in v]),
-            "entry_ids": [i for _, i in v[:REVIEW_IDS]],
-        }
-        for k, v in groups.items()
-    ]
+        key = normalize(ledger.party(r[0]) or r[1]) or "(inconnu)"
+        groups.setdefault((key, r[2]), []).append(r)
+    out: list[dict[str, Any]] = []
+    for (key, ccy), v in groups.items():
+        amounts = [int(r[3]) for r in v]
+        out.append(
+            {
+                "counterparty": key,
+                "count": len(v),
+                "total": money(sum(amounts), ccy),
+                "direction": _direction(amounts),
+                "entry_ids": [r[4] for r in v[:REVIEW_IDS]],
+                "first_date": v[-1][6],
+                "last_date": v[0][6],
+                "min": money(min(amounts, key=abs), ccy),
+                "max": money(max(amounts, key=abs), ccy),
+                "accounts": _distinct([r[5] for r in v], 5),
+                "labels": _distinct([r[1] for r in v]),
+                "remittances": _distinct([r[7] for r in v]),
+                "bank_tx_codes": _distinct([r[8] for r in v]),
+                "samples": [
+                    {
+                        "id": r[4],
+                        "account_id": r[5],
+                        "booking_date": r[6],
+                        "amount": money(int(r[3]), ccy),
+                        "label": r[1],
+                        "remittance": r[7],
+                    }
+                    for r in v[:REVIEW_SAMPLES]
+                ],
+            }
+        )
     out.sort(key=lambda g: (-g["count"], g["counterparty"]))
     return out[:limit]
 

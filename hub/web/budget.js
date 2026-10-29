@@ -6,7 +6,7 @@ import { go, reveal } from "./finance.js";
 import { MOIS, base, date, monthName } from "./format.js";
 import { GROUP_LABEL, catIc, catLook, catMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
-import { shiftMonth, store } from "./store.js";
+import { monthStartDay, shiftMonth, store } from "./store.js";
 import {
   SHEETS, SH, amount, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, money, n0, nf, openSheet, pf, pref,
   renderSheet, setPref, toast,
@@ -26,17 +26,15 @@ const recurringPath = "/finance/recurring";
 const trendPath = (cat) => `/finance/trend?category=${encodeURIComponent(cat)}&months=6&month=${P.month}`;
 const u = (m) => (m ? m.minor / 100 : 0);
 
-function daysIn(month) {
-  const [y, m] = month.split("-").map(Number);
-  return new Date(Date.UTC(y, m, 0)).getUTCDate();
-}
+// jours de la période : le mois budgétaire peut commencer un autre jour que le 1er
+const daysIn = (b) => Math.round((Date.parse(`${b.end}T00:00:00Z`) - Date.parse(`${b.start}T00:00:00Z`)) / 864e5);
 
 // chiffres d'une période : dépensé, budget, reste, rythme attendu, état, projection
 export function model(b, current = b.month === store.today && b.period === "m") {
   const lines = b.lines.map((l) => ({ ...l, s: u(l.spent), t: l.target ? u(l.target) : null }));
   const T = b.budget ? u(b.budget) : null;
   const spent = u(b.expenses);
-  const pace = current ? (daysIn(b.month) - b.days_left) / daysIn(b.month) : null;
+  const pace = current ? (daysIn(b) - b.days_left) / daysIn(b) : null;
   const tf = lines.filter((l) => l.group === "fixed" && l.t).reduce((t, l) => t + l.t, 0);
   const tv = lines.filter((l) => l.group !== "fixed" && l.t).reduce((t, l) => t + l.t, 0);
   const expected = pace != null && tf + tv > 0 ? (tf + tv * pace) / (tf + tv) : null;
@@ -66,6 +64,13 @@ function catState(l, pace) {
 }
 
 const shortMonth = (m) => MOIS[Number(m.slice(5, 7)) - 1];
+// dates d'une période dont le mois ne commence pas le 1er : « 25 sept. – 24 oct. »
+function spanLabel(b) {
+  const last = new Date(Date.parse(`${b.end}T00:00:00Z`) - 864e5);
+  const first = new Date(`${b.start}T00:00:00Z`);
+  return `${first.getUTCDate()} ${MOIS[first.getUTCMonth()]} – ${last.getUTCDate()} ${MOIS[last.getUTCMonth()]}`;
+}
+
 function periodLabel(b) {
   if (P.period === "m") return monthName(P.month);
   const ms = b ? b.months : [shiftMonth(P.month, -3), shiftMonth(P.month, -1)];
@@ -189,7 +194,7 @@ export function render() {
   const oldest = shiftMonth(store.today, -OLDEST);
   fill($("budCtx"), `<div class="stepper" role="group" aria-label="Mois affiché">
       <button type="button" data-a="bm" data-v="-1" aria-label="Mois précédent" ${P.month <= oldest ? "disabled" : ""}>${ic("back")}</button>
-      <b aria-live="polite">${esc(lab)}</b>
+      <b aria-live="polite">${esc(lab)}${b && monthStartDay() !== 1 ? `<small class="per-dates">${esc(spanLabel(b))}</small>` : ""}</b>
       <button type="button" data-a="bm" data-v="1" aria-label="Mois suivant" ${P.month >= store.today ? "disabled" : ""}>${ic("chev")}</button></div>
     <div class="seg small" role="group" aria-label="Période"><button type="button" data-a="bper" data-v="m" aria-pressed="${P.period === "m"}">Mois</button><button type="button" data-a="bper" data-v="q" aria-pressed="${P.period === "q"}" aria-label="Trois mois complets avant le mois choisi">3 mois</button></div>`);
   if (be.status === "error") return fill($("budBody"), `<div class="err-box" role="alert">Impossible de charger le budget : ${esc(be.error.message)}</div>`);
@@ -262,6 +267,7 @@ function categories(m) {
     ? `<button class="crow" type="button" data-a="gotodo">${catMark(null)}<span><span class="crow-top"><b>Non classées</b><span class="t num">${amount(uncl.s)}</span></span><span class="crow-st warn">${uncl.count} écriture${uncl.count > 1 ? "s" : ""} à classer dans le journal</span></span></button>` : "";
   return `<section class="card" id="budCats" aria-labelledby="t-cats">
       <div class="section-head"><h2 class="section-title" id="t-cats">${B.bgroup === "savings" ? "Épargne" : B.bgroup === "rest" ? "Reste" : "Catégories"}</h2>${head}</div>
+      ${B.bgroup ? "" : `<button class="secondary plan-btn" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}${m.T == null ? "Créer mon budget" : "Préparer le budget"}</button>`}
       ${unclRow}${body || '<div class="empty">Aucune dépense sur la période.</div>'}
       ${pv != null && (!B.bgroup || B.bgroup === "variable") ? '<p class="hint">Le trait vertical marque où tu devrais en être aujourd\'hui. Les charges fixes sont dues en entier, elles n\'en ont pas.</p>' : ""}
     </section>`;
@@ -340,6 +346,57 @@ SHEETS.cat = (id, sh) => {
   };
 };
 
+// --- préparer le budget : une cible par catégorie de dépense, proposée d'après les 3 derniers mois
+
+const CATS = "/finance/categories";
+const roundUp = (v) => (v > 0 ? Math.ceil(v / 10) * 10 : 0);
+
+function planData() {
+  const cur = store.data(budgetPath(store.today, "m")), past = store.data(budgetPath(store.today, "q")), cats = store.data(CATS);
+  if (!cur || !past || !cats) return null;
+  const now = Object.fromEntries(cur.lines.map((l) => [l.category, l.target ? u(l.target) : null]));
+  const avg = Object.fromEntries(past.lines.map((l) => [l.category, u(l.spent) / past.months.length]));
+  const rows = cats.items.filter((c) => c.active && (c.group === "fixed" || c.group === "variable"))
+    .map((c) => ({ id: c.id, name: c.name, group: c.group, now: now[c.id] ?? null, avg: avg[c.id] || 0 }))
+    .sort((a, b) => (a.group === b.group ? 0 : a.group === "fixed" ? -1 : 1) || b.avg - a.avg || a.name.localeCompare(b.name, "fr"));
+  return { rows, income: u(past.income) / past.months.length, months: past.months };
+}
+
+const planChanges = (d, tmp) => d.rows.filter((r) => tmp[r.id] != null && tmp[r.id] !== (r.now ?? 0) && !(r.now == null && tmp[r.id] === 0));
+
+SHEETS.plan = (_arg, sh) => {
+  const d = planData();
+  if (!d) return { title: "Préparer le budget", body: '<div class="loading">Chargement…</div>' };
+  if (!sh.tmp) sh.tmp = Object.fromEntries(d.rows.map((r) => [r.id, r.now ?? roundUp(r.avg)]));
+  const total = d.rows.reduce((t, r) => t + (sh.tmp[r.id] || 0), 0);
+  const ch = planChanges(d, sh.tmp);
+  const from = `${shortMonth(d.months[0])} – ${shortMonth(d.months[d.months.length - 1])}`;
+  let g = null;
+  const rows = d.rows.map((r) => {
+    const head = r.group !== g ? `<div class="grp"><span>${GROUP_LABEL[r.group]}</span></div>` : "";
+    g = r.group;
+    const v = sh.tmp[r.id];
+    return `${head}<div class="plan-row">${catMark(r.id, r.group, "sm")}
+      <label for="plan-${esc(r.id)}"><b>${esc(r.name)}</b><small>${r.avg ? `moyenne ${n0(r.avg)}` : "rien dépensé"}${r.now != null ? ` · cible ${n0(r.now)}` : ""}</small></label>
+      <input id="plan-${esc(r.id)}" data-plan="${esc(r.id)}" inputmode="numeric" value="${v ? v : ""}" placeholder="—" aria-label="Cible mensuelle ${esc(r.name)} en ${base()}"></div>`;
+  }).join("");
+  return {
+    title: "Préparer le budget",
+    body: `<p class="hint">Une cible par mois et par catégorie, proposée d'après ta moyenne des derniers mois (${esc(from)}) et arrondie à la dizaine. Laisse vide ce que tu ne veux pas suivre.</p>
+      <div class="plan-sum"><span>Revenus<b class="num">${amount(d.income)}</b></span><span>Budget<b class="num">${amount(total)}</b></span><span>Reste<b class="num${d.income - total < 0 ? " neg" : ""}">${amount(d.income - total)}</b></span></div>
+      ${rows}${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}`,
+    foot: `<button class="primary" type="button" data-a="plan-save" ${ch.length && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : ch.length ? `Enregistrer ${ch.length} cible${ch.length > 1 ? "s" : ""} avec Face ID` : "Aucun changement"}</button>`,
+  };
+};
+
+document.addEventListener("input", (e) => {
+  const id = e.target.dataset && e.target.dataset.plan;
+  if (!id || SH.kind !== "plan" || !SH.tmp) return;
+  const n = parseInt(e.target.value.replace(/\D/g, ""), 10);
+  SH.tmp[id] = Number.isNaN(n) ? 0 : n;
+  renderSheet();
+});
+
 document.addEventListener("input", (e) => {
   if (e.target.id !== "t-input" || SH.kind !== "cat") return;
   const n = parseInt(e.target.value.replace(/\D/g, ""), 10);
@@ -400,6 +457,33 @@ export const actions = {
   tstep: (v) => {
     SH.tmp = Math.max(0, (SH.tmp || 0) + Number(v));
     renderSheet();
+  },
+  plan: () => {
+    for (const p of [budgetPath(store.today, "m"), budgetPath(store.today, "q"), CATS]) store.use(p);
+    openSheet("plan");
+  },
+  "plan-save": async () => {
+    const d = planData();
+    if (!d) return;
+    const ch = planChanges(d, SH.tmp);
+    if (!ch.length) return;
+    SH.busy = true;
+    SH.err = "";
+    renderSheet();
+    try {
+      const items = ch.map((r) => ["set_budget", { category_id: r.id, monthly_minor: Math.round(SH.tmp[r.id] * 100), valid_from: `${store.today}-01` }]);
+      const [text, bad] = outcome(await proposeAndApprove(items));
+      if (bad) SH.err = text;
+      else {
+        closeSheet();
+        toast(`${ch.length} cible${ch.length > 1 ? "s" : ""} enregistrée${ch.length > 1 ? "s" : ""}`);
+      }
+    } catch (e) {
+      SH.err = failure(e);
+    } finally {
+      SH.busy = false;
+      if (SH.kind) renderSheet();
+    }
   },
   "target-save": async () => {
     const id = SH.arg, value = SH.tmp;

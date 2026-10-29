@@ -390,6 +390,44 @@ def test_set_account_goal(client: TestClient, ctx: HubContext, fin: FinanceDomai
         create(ctx, "set_account_goal", {"account_id": "inconnu", "goal": "current"})
 
 
+def test_edit_account(client: TestClient, ctx: HubContext, fin: FinanceDomain) -> None:
+    a = ready_account(fin)
+    h = token(ctx, "brain")
+    p = create(
+        ctx,
+        "edit_account",
+        {
+            "account_id": a.id,
+            "name": "  Compte salaire ",
+            "availability": "immediate",
+            "category": "cash",
+            "hidden": True,
+        },
+    )
+    assert p.preview["summary"] == (
+        "Compte BCF « Compte privé » : nom « Compte salaire », disponibilité immédiate, "
+        "catégorie liquidités, masqué"
+    )
+    accept(ctx, p)
+    (after,) = client.get("/api/finance/accounts", headers=h).json()["items"]
+    assert after["name"] == "Compte salaire"
+    assert (after["availability"], after["availability_set"]) == ("immediate", True)
+    assert (after["category"], after["hidden"]) == ("cash", True)
+    # « auto » rend la déduction ; un champ inchangé ne compte pas
+    q = create(
+        ctx,
+        "edit_account",
+        {"account_id": a.id, "name": "Compte salaire", "category": "auto", "hidden": False},
+    )
+    assert q.preview["details"]["changes"] == {"category": None, "hidden": 0}
+    accept(ctx, q)
+    (back,) = client.get("/api/finance/accounts", headers=h).json()["items"]
+    assert (back["category"], back["hidden"]) == (None, False)
+    for bad in ({"name": "Compte salaire"}, {"name": " "}, {}):
+        with pytest.raises(Problem):
+            create(ctx, "edit_account", {"account_id": a.id, **bad})
+
+
 def test_add_note_is_searchable(ctx: HubContext, fin: FinanceDomain) -> None:
     ready_account(fin)
     load(fin, [Tx("10.00", True, D, counterparty="Zorglub Fictif")])
