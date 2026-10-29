@@ -339,22 +339,37 @@ frais payés), pour le registre : toutes au premier passage (mémoire `btc_txs`)
 dernière page de chaque adresse utilisée, une requête par adresse et par jour.
 **ETH** : le solde natif et les jetons de `erc20_tokens` (USDC et USDT par défaut). Un
 portefeuille qui nomme d'autres réseaux (`networks`, cases « Réseaux » dans l'app) est lu aussi
-sur Arbitrum, Base et Polygon (`evm_networks` : nœud public, Blockscout, jetons) : leur ETH, leur
-USDC/USDT, le WETH compté comme ETH, et le POL sur Polygon. Les jetons de staking de
+sur Arbitrum, Base, BNB Smart Chain et Polygon (`evm_networks` : nœud public, `chain_id`, jetons) : leur ETH, leur
+USDC/USDT, le WETH compté comme ETH, le POL sur Polygon et le BNB sur BNB Smart Chain. Les jetons de staking de
 `staking_tokens` (par défaut Kiln Native20, le « cbwsETH » de Coinbase Wallet) comptent comme
 de l'ETH, à leur valeur sous-jacente (`balanceOfUnderlying` : la mise et ses récompenses). **SOL** : le
 solde natif et les jetons de `spl_tokens` (USDC, USDT) ; les autres jetons, souvent du spam, sont
-ignorés, et le SOL en staking n'est pas lu.
+ignorés, et le SOL en staking n'est pas lu. **ATOM** (Cosmos Hub, adresse `cosmos1…`) : par l'API REST publique
+(`cosmos_rest_url`), l'ATOM disponible, mis en jeu, en cours de retrait et les récompenses à
+réclamer, le tout compté comme ATOM. Son historique vient des transactions envoyées et reçues
+(`/cosmos/tx/v1beta1/txs`), variation lue dans les événements `coin_received`/`coin_spent`,
+frais compris (mémoire `<compte>@cosmos`) ; une mise en jeu y est un envoi vers le staking. Les
+nœuds publics élaguent leur index des transactions : s'ils n'en rendent aucune, c'est signalé
+(`partial history.<nom>.cosmos:pruned`) et relu au passage suivant ; un historique complet
+demande un indexeur (Mintscan, nœud d'archive), à brancher sur `cosmos_rest_url`.
 
 **Historique ETH et SOL.** Leurs transactions partent aussi dans `transactions`, pour le
-registre : ETH par l'API publique de Blockscout (`blockscout_url`, compatible Etherscan, sans
-clé) — envois et arrivées d'ETH, transferts internes de contrats et jetons suivis, les frais de
+registre : ETH par l'API de Routescan (`eth_history_url`, compatible Etherscan, sans clé) — envois et arrivées d'ETH, transferts internes de contrats et jetons suivis, les frais de
 gaz payés par mes adresses — et SOL par le RPC (`getSignaturesForAddress` puis
 `getTransaction`), SOL natif et jetons suivis. Tout au premier passage (jusqu'à
 `CHAIN_PAGES` pages par adresse, mémoire `chain_txs`), ensuite la dernière page. Un jeton et
 le gaz d'une même transaction donnent deux écritures. Le solde passé, lui, n'est pas
 reconstitué : la courbe de patrimoine de ces portefeuilles part du jour où ils sont branchés.
-Chaque réseau nommé a son historique sur son Blockscout ; une mise en staking y apparaît comme
+Arbitrum, Base, BNB Smart Chain et Polygon passent par l'API Etherscan V2 (`etherscan_url`, `chainid`), qui
+demande une clé gratuite (etherscan.io → API Keys), une seule pour tous les réseaux : le secret
+`etherscan_key` de « Cours et cryptos » (champ « Clé Etherscan » dans l'app). Sans elle, leur
+solde est lu mais pas leur historique (détail `partial history.<nom>.<réseau>:needs_key`) ; il
+est relu en entier dès que la clé arrive (mémoire `chain_txs` : `<compte>@<réseau>`). Un réseau hors de l'offre gratuite d'Etherscan est signalé (`:unsupported`) sans bloquer les autres. Blockscout,
+essayé d'abord, coupe après dix appels sans clé et protège ses couches 2 derrière Cloudflare.
+Les sources publiques limitent le débit : une pause avant chaque page d'historique
+(`chain_pause_seconds`) et chaque cours CoinGecko sans clé (`coingecko_pause_seconds`), et sur
+un refus (429, « rate limit ») une attente de 10, 30 puis 60 secondes avant de réessayer.
+Une mise en staking apparaît comme
 l'envoi d'ETH et l'arrivée des parts, comptées comme de l'ETH. Les autres jetons de staking
 liquide (stETH, rETH…) ne sont pas lus : à ajouter à `staking_tokens` ou `erc20_tokens`.
 

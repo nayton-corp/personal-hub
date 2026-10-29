@@ -2,6 +2,20 @@
 
 ## [Non publié]
 
+### Historique des wallets ETH malgré les limites des sources publiques
+
+- Ethereum : historique par Routescan (sans clé) au lieu de Blockscout, qui coupe après dix
+  appels. Arbitrum, Base et Polygon : Etherscan V2 avec une clé gratuite (`etherscan_key`,
+  champ « Clé Etherscan » dans l'app) ; sans clé, `needs_key` dans le détail, sans échec.
+- Chaque réseau est relu en entier une fois (mémoire `<compte>@<réseau>`, `<compte>@solana`).
+- Pause entre deux pages d'historique et entre deux cours CoinGecko sans clé ; un refus (429,
+  « rate limit ») est réessayé après 10, 30 puis 60 secondes.
+- Coinbase : la conversion ETH2 → ETH (`retail_eth2_deprecation`) est interne.
+- Réseau BNB Smart Chain (`bsc` : BNB, USDC, USDT, ETH) ; un réseau refusé par l'offre gratuite
+  d'Etherscan est signalé (`unsupported`) sans bloquer les autres.
+- Portefeuille ATOM (Cosmos Hub) : disponible, staking, retraits en cours, récompenses, et
+  historique des transactions.
+
 ### Collectes en parallèle
 
 - Les services collecteurs lancent chaque run dans son fil : un run lent (market, 17 minutes

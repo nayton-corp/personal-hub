@@ -64,10 +64,11 @@ class RevolutConfig(BaseModel):
 
 
 class EvmNetwork(BaseModel):
-    """Un réseau compatible Ethereum (couche 2, Polygon) : nœud public et Blockscout."""
+    """Un réseau compatible Ethereum (couche 2, Polygon) : nœud public, et son historique par
+    l'API Etherscan V2 (`chain_id`), qui demande une clé gratuite (`etherscan_key`)."""
 
     rpc_url: str
-    blockscout_url: str
+    chain_id: int
     native: str = "ETH"  # crypto qui paie le gaz
     tokens: dict[str, str] = {}  # contrat → symbole (le WETH compte comme ETH)
 
@@ -85,6 +86,8 @@ class MarketConfig(BaseModel):
         "USDC": "usd-coin",
         "USDT": "tether",
         "POL": "polygon-ecosystem-token",
+        "BNB": "binancecoin",
+        "ATOM": "cosmos",
     }
     yahoo_url: str = "https://query1.finance.yahoo.com/v8/finance/chart"
     quotes: dict[str, str] = {}  # ISIN ou symbole → symbole Yahoo (par ex. « VWRL.SW »)
@@ -94,10 +97,17 @@ class MarketConfig(BaseModel):
     binance_url: str = "https://api.binance.com"  # clôtures publiques, pour l'historique
     mempool_pause_seconds: int = Field(default=1, ge=0, le=10)  # entre deux adresses BTC
     eth_rpc_url: str = "https://ethereum-rpc.publicnode.com"
-    # historique Ethereum : un nœud public ne liste pas les transactions d'une adresse, l'API
-    # publique de Blockscout (compatible Etherscan, sans clé) le fait
-    blockscout_url: str = "https://eth.blockscout.com/api"
+    # historique Ethereum : un nœud public ne liste pas les transactions d'une adresse ; l'API
+    # de Routescan (compatible Etherscan, sans clé) le fait. Blockscout sans clé coupe après
+    # dix appels et protège ses couches 2 derrière Cloudflare.
+    eth_history_url: str = "https://api.routescan.io/v2/network/mainnet/evm/1/etherscan/api"
+    # historique des autres réseaux : Etherscan V2, une clé pour tous (`etherscan_key`)
+    etherscan_url: str = "https://api.etherscan.io/v2/api"
+    chain_pause_seconds: int = Field(default=1, ge=0, le=10)  # entre deux pages d'historique
+    coingecko_pause_seconds: int = Field(default=3, ge=0, le=30)  # entre deux cours, sans clé
     solana_rpc_url: str = "https://api.mainnet-beta.solana.com"
+    # Cosmos Hub : API REST publique (soldes, staking, récompenses, transactions)
+    cosmos_rest_url: str = "https://cosmos-rest.publicnode.com"
     # jetons lus en plus de la crypto native ; les autres (souvent du spam) sont ignorés
     erc20_tokens: dict[str, str] = {  # symbole → contrat Ethereum
         "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
@@ -107,7 +117,7 @@ class MarketConfig(BaseModel):
     evm_networks: dict[str, EvmNetwork] = {
         "arbitrum": EvmNetwork(
             rpc_url="https://arbitrum-one-rpc.publicnode.com",
-            blockscout_url="https://arbitrum.blockscout.com/api",
+            chain_id=42161,
             tokens={
                 "0xaf88d065e77c8cC2239327C5EDb3A432268e5831": "USDC",
                 "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9": "USDT",
@@ -116,15 +126,25 @@ class MarketConfig(BaseModel):
         ),
         "base": EvmNetwork(
             rpc_url="https://base-rpc.publicnode.com",
-            blockscout_url="https://base.blockscout.com/api",
+            chain_id=8453,
             tokens={
                 "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": "USDC",
                 "0x4200000000000000000000000000000000000006": "ETH",
             },
         ),
+        "bsc": EvmNetwork(  # BNB Smart Chain (Trust Wallet, Binance)
+            rpc_url="https://bsc-rpc.publicnode.com",
+            chain_id=56,
+            native="BNB",
+            tokens={
+                "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d": "USDC",
+                "0x55d398326f99059fF775485246999027B3197955": "USDT",
+                "0x2170Ed0880ac9A755fd29B2688956BD959F933F8": "ETH",
+            },
+        ),
         "polygon": EvmNetwork(
             rpc_url="https://polygon-bor-rpc.publicnode.com",
-            blockscout_url="https://polygon.blockscout.com/api",
+            chain_id=137,
             native="POL",
             tokens={
                 "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359": "USDC",

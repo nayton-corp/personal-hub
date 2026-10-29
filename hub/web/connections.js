@@ -51,6 +51,7 @@ const FIELD_LABEL = {
   flex_token: "Jeton Flex", query_id: "Numéro de la requête Flex", api_key: "Clé API",
   api_secret: "Secret API", passphrase: "Passphrase", key_name: "Nom de la clé",
   coingecko_key: "Clé CoinGecko (facultative)",
+  etherscan_key: "Clé Etherscan (historique Arbitrum, Base, Polygon)",
   aspsp_name: "Banque (nom chez Enable Banking)", aspsp_country: "Pays de la banque (ISO)",
   psu_type: "Type de compte (personal ou business)", consent_days: "Durée du consentement (jours)",
   max_syncs_per_day: "Synchronisations par jour au plus", currencies: "Devises suivies",
@@ -407,7 +408,7 @@ function buildEdit(box, c, spec, newWallet = false) {
   }));
 
   // identifiants : remplacés en bloc, jamais relus
-  const fields = spec.secrets.length ? spec.secrets : (spec.name === "market" ? ["coingecko_key"] : []);
+  const fields = spec.secrets.length ? spec.secrets : (spec.name === "market" ? ["coingecko_key", "etherscan_key"] : []);
   if (fields.length) {
     box.append(el("h3", "", "Identifiants"));
     box.append(el("p", "hint", c.has_secrets
@@ -485,6 +486,8 @@ async function run(btn, msg, fn) {
 
 // --- portefeuilles (connecteur market) ------------------------------------------------------
 
+const NETWORK_LABEL = { ethereum: "Ethereum", arbitrum: "Arbitrum", base: "Base", bsc: "BNB Smart Chain", polygon: "Polygon" };
+
 function walletsEditor(box, initial, newWallet = false) {
   box.append(el("h3", "", "Portefeuilles"));
   box.append(el("p", "hint", "Adresses publiques, ou clé publique étendue (xpub, ypub, zpub) d'un compte BTC. Jamais de clé privée ni de phrase de récupération."));
@@ -499,7 +502,7 @@ function walletsEditor(box, initial, newWallet = false) {
     const i = rows.length;
     const account = field(wrap, `w-${i}-account`, "Compte (crypto:nom)", input(w.account || "crypto:"));
     const asset = el("select");
-    for (const a of ["BTC", "ETH", "SOL"]) {
+    for (const a of ["BTC", "ETH", "SOL", "ATOM"]) {
       const o = el("option", "", a);
       o.value = a;
       asset.append(o);
@@ -514,13 +517,13 @@ function walletsEditor(box, initial, newWallet = false) {
     const nets = el("div", "networks");
     const chosen = new Set(w.networks || ["ethereum"]);
     const boxes = {};
-    for (const n of ["ethereum", "arbitrum", "base", "polygon"]) {
+    for (const n of ["ethereum", "arbitrum", "base", "bsc", "polygon"]) {
       const lab = el("label", "check");
       const cb = el("input");
       cb.type = "checkbox";
       cb.checked = chosen.has(n);
       boxes[n] = cb;
-      lab.append(cb, document.createTextNode(` ${n[0].toUpperCase()}${n.slice(1)}`));
+      lab.append(cb, document.createTextNode(` ${NETWORK_LABEL[n]}`));
       nets.append(lab);
     }
     const netLabel = el("label", "", "Réseaux");

@@ -29,8 +29,14 @@ RESERVED = frozenset({"catalog", "connections", "refresh", "runner"})  # segment
 MAX_SETTINGS = 16_384
 MAX_SECRETS = 65_536
 MAX_WALLETS = 50
-WALLET_ASSETS = ("BTC", "ETH", "SOL")
-WALLET_NETWORKS = ("ethereum", "arbitrum", "base", "polygon")  # réseaux d'un portefeuille ETH
+WALLET_ASSETS = ("BTC", "ETH", "SOL", "ATOM")
+WALLET_NETWORKS = (
+    "ethereum",
+    "arbitrum",
+    "base",
+    "bsc",
+    "polygon",
+)  # réseaux d'un portefeuille ETH
 WALLET_ACCOUNT = re.compile(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$")
 _COLUMNS = "id, connector, label, schedule, settings, secrets, secrets_at, created_at, updated_at"
 
@@ -184,7 +190,7 @@ def clean_wallets(value: Any) -> list[dict[str, Any]]:
         if not WALLET_ACCOUNT.match(account):
             raise Problem("validation.params", "portefeuille : compte crypto:<nom>")
         if asset not in WALLET_ASSETS:
-            raise Problem("validation.params", "portefeuille : BTC, ETH ou SOL")
+            raise Problem("validation.params", "portefeuille : BTC, ETH, SOL ou ATOM")
         if not isinstance(addresses, list) or not all(isinstance(a, str) for a in addresses):
             raise Problem("validation.params", "portefeuille : adresses en liste de textes")
         if not isinstance(xpubs, list) or not all(isinstance(x, str) for x in xpubs):
