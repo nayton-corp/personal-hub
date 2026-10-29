@@ -10,8 +10,9 @@ import * as home from "./home.js";
 import * as journal from "./journal.js";
 import * as settings from "./settings.js";
 import { api, store } from "./store.js";
+import { freshLine } from "./format.js";
 import {
-  SH, announce, applyTheme, closeSheet, fill, ic, initToast, pref, renderSheet, setPref,
+  SH, announce, applyTheme, closeSheet, fill, ic, initSheetSwipe, initToast, pref, renderSheet, setPref, sheetEntryOpen, sheetPop,
 } from "./ui.js";
 import { initWelcome } from "./welcome.js";
 import * as wealth from "./wealth.js";
@@ -25,21 +26,51 @@ const ACTIONS = { ...accounts.actions, ...debts.actions, ...home.actions, ...wea
 const scrolls = {};
 let back = "accueil";
 let drawn = null;
+let depth = 0; // entrées ajoutées par l'app depuis son ouverture
 
 // --- navigation -------------------------------------------------------------------------------
 
+// Chaque écran (et chaque rubrique des réglages) a son entrée d'historique : le geste retour
+// d'iOS revient à l'écran d'avant, comme un lien. state = { tab, rubric, link }.
+const entry = () => ({ tab: P.tab, rubric: P.rubric || null, link: P.jlink || null });
+
+function remember(replace) {
+  const s = entry();
+  if (replace || sheetEntryOpen()) history.replaceState(s, "");
+  else {
+    history.pushState(s, "");
+    depth += 1;
+  }
+}
+
 export function go(tab, opts = {}) {
   if (!VIEWS[tab]) tab = "accueil";
-  closeSheet(true);
-  if (tab === P.tab) {
+  const inSheet = sheetEntryOpen();
+  closeSheet(true, false, true);
+  const rubric = tab === "sources" ? (opts.rubric ?? null) : null;
+  if (tab === P.tab && rubric === (P.rubric || null)) {
+    if (inSheet) history.replaceState(entry(), "");
     if (opts.top) window.scrollTo({ top: 0, behavior: reduced() ? "auto" : "smooth" });
     return;
   }
-  scrolls[P.tab] = window.scrollY;
-  if (tab === "sources") back = P.tab;
-  store.set({ tab });
-  if (opts.top) scrolls[tab] = 0;
-  announce(LABEL[tab]);
+  scrolls[P.tab + (P.rubric || "")] = window.scrollY;
+  if (tab === "sources" && P.tab !== "sources") back = P.tab;
+  store.set({ tab, rubric, jlink: opts.link || null });
+  if (opts.top) scrolls[tab + (rubric || "")] = 0;
+  remember(inSheet || opts.replace);
+  announce(rubric ? settings.rubricLabel(rubric) : LABEL[tab]);
+}
+
+// retour du navigateur : l'écran de l'entrée revient ; un lien suivi depuis un autre écran
+// (Journal filtré) rend ses filtres en partant
+function popped(e) {
+  if (sheetPop()) return;
+  const s = e.state || { tab: "accueil" };
+  depth = Math.max(0, depth - 1);
+  if (P.jlink && s.link !== P.jlink) journal.unlink(P.jlink);
+  scrolls[P.tab + (P.rubric || "")] = window.scrollY;
+  store.set({ tab: VIEWS[s.tab] ? s.tab : "accueil", rubric: s.rubric || null, jlink: s.link || null });
+  announce(s.rubric ? settings.rubricLabel(s.rubric) : LABEL[P.tab]);
 }
 
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -57,7 +88,11 @@ export function reveal(node, extra = 0) {
 Object.assign(ACTIONS, {
   tab: (v) => go(v, { top: v === P.tab }),
   settings: () => go("sources"),
-  back: () => go(back || "accueil"),
+  rubric: (v) => go("sources", { rubric: v }),
+  back: () => {
+    if (depth > 0) history.back();
+    else go(P.rubric ? "sources" : back || "accueil", { replace: true });
+  },
   "sheet-close": () => closeSheet(),
   hide: () => {
     const on = !pref("hide", false);
@@ -78,6 +113,17 @@ function selectorFor(node) {
   if (node.id) return `#${CSS.escape(node.id)}`;
   const at = [...node.attributes].filter((a) => a.name.startsWith("data-") && a.name !== "data-css").map((a) => `[${a.name}="${CSS.escape(a.value)}"]`).join("");
   return at ? node.tagName.toLowerCase() + at : null;
+}
+
+// sous chaque titre : quand les chiffres ont été reçus, ou qu'ils sont ceux d'avant la coupure
+function freshness() {
+  const fe = store.use("/finance/freshness");
+  const line = freshLine(fe.data, store.offline, store.lastOk);
+  for (const n of document.querySelectorAll("[data-fresh]")) {
+    n.textContent = line.text;
+    n.classList.toggle("warn", line.warn);
+    n.classList.toggle("off", store.offline);
+  }
 }
 
 function shell() {
@@ -106,13 +152,41 @@ export function draw() {
   shell();
   VIEWS[P.tab]();
   if (SH.kind) renderSheet();
-  if (drawn !== P.tab) {
-    drawn = P.tab;
-    window.scrollTo(0, scrolls[P.tab] || 0);
+  freshness();
+  const key = P.tab + (P.rubric || "");
+  if (drawn !== key) {
+    drawn = key;
+    window.scrollTo(0, scrolls[key] || 0);
   }
   if (focus && !(active && document.body.contains(active))) {
     const n = document.querySelector(focus);
     if (n && (SH.kind ? $("sheet").contains(n) : !$("sheet").contains(n))) n.focus({ preventScroll: true });
+  }
+}
+
+// liens des notifications ntfy : #sources, #todo, #alert=<id opaque> ; le hash est effacé une
+// fois suivi, le retour revient à l'écran d'avant
+async function deeplink() {
+  const h = location.hash.slice(1);
+  if (!h) return;
+  history.replaceState(history.state, "", location.pathname + location.search);
+  if (h === "sources") return go("sources", { rubric: "conn" });
+  if (h === "todo") return go("accueil", { top: true });
+  const id = h.startsWith("alert=") ? h.slice(6) : null;
+  if (!id) return;
+  try {
+    const a = (await api("/finance/alerts")).items.find((x) => x.id === id);
+    if (!a) return go("accueil", { top: true });
+    if (a.kind === "recurring_up") return ACTIONS.subs();
+    if (a.kind === "pillar3a_margin") return go("sources", { rubric: "tax" });
+    if (a.detail && a.detail.category) {
+      store.set({ month: a.detail.month || store.today, period: "m" });
+      go("budget");
+      return ACTIONS.cat(a.detail.category);
+    }
+    go("budget");
+  } catch {
+    go("accueil");
   }
 }
 
@@ -151,6 +225,11 @@ export function start() {
     if (document.visibilityState === "visible") store.invalidate();
   });
   window.addEventListener("hub:changed", () => journal.reset());
+  window.addEventListener("popstate", popped);
+  window.addEventListener("hashchange", deeplink);
+  initSheetSwipe();
+  history.replaceState(entry(), "");
+  deeplink();
   store.on(draw);
   draw();
   // jour de début du mois budgétaire : le mois en cours en dépend

@@ -44,11 +44,11 @@
     <p id="message" class="message" role="status" aria-live="polite"></p>
   </main>
 
-  <div class="shell" id="shell" hidden>
+  <main class="shell" id="shell" hidden>
     <!-- ================= ACCUEIL ================= -->
     <section class="view" id="accueil" data-view="accueil" aria-labelledby="t-accueil" hidden>
       <header class="topbar"><div class="topbar-row">
-        <h1 class="topbar-title" id="t-accueil">Accueil<span class="topbar-sub" id="home-sub"></span></h1>
+        <h1 class="topbar-title" id="t-accueil">Accueil<span class="topbar-sub" data-fresh></span></h1>
         <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
         <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
       </div></header>
@@ -65,7 +65,7 @@
     <section class="view" id="patrimoine" data-view="patrimoine" aria-labelledby="t-patrimoine" hidden>
       <header class="topbar" id="pat-top">
         <div class="topbar-row">
-          <h1 class="topbar-title" id="t-patrimoine">Patrimoine<span class="topbar-mini num" id="miniTotal"></span></h1>
+          <h1 class="topbar-title" id="t-patrimoine">Patrimoine<span class="topbar-sub" data-fresh></span><span class="topbar-mini num" id="miniTotal"></span></h1>
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
           <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
         </div>
@@ -78,7 +78,7 @@
     <section class="view" id="budget" data-view="budget" aria-labelledby="t-budget" hidden>
       <header class="topbar">
         <div class="topbar-row">
-          <h1 class="topbar-title" id="t-budget">Budget</h1>
+          <h1 class="topbar-title" id="t-budget">Budget<span class="topbar-sub" data-fresh></span></h1>
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
           <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
         </div>
@@ -91,7 +91,7 @@
     <section class="view" id="journal" data-view="journal" aria-labelledby="t-journal" hidden>
       <header class="topbar">
         <div class="topbar-row">
-          <h1 class="topbar-title" id="t-journal">Journal</h1>
+          <h1 class="topbar-title" id="t-journal">Journal<span class="topbar-sub" data-fresh></span></h1>
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
           <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
         </div>
@@ -107,46 +107,52 @@
         <button class="back-btn" type="button" data-a="back" aria-label="Retour"></button>
         <h1 class="topbar-title" id="t-sources">Sources et réglages</h1>
       </div></header>
+      <div id="rubrics"></div>
 
-      <section class="card" aria-labelledby="t-conn">
+      <section class="card" data-rubric="conn" aria-labelledby="t-conn">
         <div class="head"><h2 id="t-conn">Connexions</h2><button class="link" id="conn-add" type="button">Ajouter</button></div>
         <p class="note">Banques, plateformes et cours que le hub collecte. Les identifiants sont chiffrés à la saisie et ne s'affichent plus jamais.</p>
         <div id="coll-list"></div>
         <p id="coll-msg" class="message" role="status"></p>
       </section>
-      <section class="card form" id="conn-editor" hidden></section>
+      <section class="card form" data-rubric="conn" id="conn-editor" hidden></section>
 
-      <section class="card" aria-labelledby="t-pending">
+      <section class="card" data-rubric="conn" aria-labelledby="t-pending">
         <div class="head"><h2 id="t-pending">Comptes en attente</h2><button class="link" id="acct-add" type="button">Ajouter</button></div>
         <p class="note">Les relevés d'un compte inconnu attendent sa création, validée avec Face ID.</p>
         <div id="acct-pending"></div>
         <p id="acct-msg" class="message" role="status"></p>
       </section>
-      <section class="card form" id="acct-editor" hidden></section>
+      <section class="card form" data-rubric="conn" id="acct-editor" hidden></section>
 
-      <section class="card" aria-labelledby="t-fresh">
+      <section class="card" data-rubric="accounts" aria-labelledby="t-fresh">
         <div class="head"><h2 id="t-fresh">Comptes</h2></div>
         <p class="note">Date de la dernière donnée reçue pour chaque compte : au-delà de 45 jours, il est à rafraîchir. Touche un compte pour le renommer, le classer ou le masquer.</p>
         <div id="fresh-list"></div>
       </section>
 
-      <section class="card" aria-labelledby="t-debts">
+      <section class="card" data-rubric="debts" aria-labelledby="t-debts">
         <div class="head"><h2 id="t-debts">Dettes</h2><button class="link" type="button" data-a="debt-add">Ajouter</button></div>
         <p class="note">Crédit, hypothèque, leasing, prêt étudiant : le solde est retranché du patrimoine et baisse avec chaque paiement de sa catégorie.</p>
         <div id="debt-list"></div>
       </section>
 
-      <section class="card" aria-labelledby="t-budget-set">
+      <section class="card" data-rubric="budget" aria-labelledby="t-budget-set">
         <h2 class="section-title" id="t-budget-set">Budget</h2>
         <div id="budget-rows"></div>
       </section>
 
-      <section class="card" aria-labelledby="t-display">
+      <section class="card" data-rubric="tax" aria-labelledby="t-tax-set">
+        <h2 class="section-title" id="t-tax-set">Impôts et 3a</h2>
+        <div id="tax-rows"></div>
+      </section>
+
+      <section class="card" data-rubric="display" aria-labelledby="t-display">
         <h2 class="section-title" id="t-display">Affichage</h2>
         <div id="display-rows"></div>
       </section>
 
-      <section class="card form" aria-labelledby="t-profile">
+      <section class="card form" data-rubric="profile" aria-labelledby="t-profile">
         <h2 class="section-title" id="t-profile">Profil</h2>
         <form id="form-profile">
           <label for="profile-name">Prénom</label>
@@ -159,7 +165,7 @@
         <p id="profile-info" class="hint"></p>
       </section>
 
-      <section class="card form" aria-labelledby="t-security">
+      <section class="card form" data-rubric="security" aria-labelledby="t-security">
         <div class="head"><h2 id="t-security">Sécurité</h2><span id="badge" class="badge" hidden></span></div>
         <p id="session-info" class="note"></p>
         <ul id="passkeys" class="plain"></ul>
@@ -168,19 +174,21 @@
           <input id="backup-name" maxlength="60" placeholder="Clé de secours">
           <button type="submit" class="btn secondary">Ajouter</button>
         </form>
-        <div class="stack-v"><button id="btn-logout" type="button" class="secondary danger">Se déconnecter</button></div>
       </section>
 
-      <section class="card" aria-labelledby="t-data">
-        <h2 class="section-title" id="t-data">Données</h2>
+      <section class="card" data-rubric="export" aria-labelledby="t-data">
+        <h2 class="section-title" id="t-data">Exporter</h2>
         <p class="note">Le journal complet en CSV, tel qu'il est au registre.</p>
         <a class="secondary" id="export-link" href="/api/finance/export.csv" download>Exporter le journal (CSV)</a>
-        <h3>État</h3>
+      </section>
+
+      <section class="card" data-rubric="health" aria-labelledby="t-health">
+        <h2 class="section-title" id="t-health">État du hub</h2>
         <dl id="health" class="grid"></dl>
       </section>
       <div class="endspace"></div>
     </section>
-  </div>
+  </main>
 
   <nav class="tabbar" id="tabbar" aria-label="Navigation principale" hidden><div class="in" id="tabs"></div></nav>
 

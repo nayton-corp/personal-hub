@@ -1,5 +1,5 @@
 // Libellés, pictogrammes et teintes des catégories, des facettes du patrimoine et des actifs.
-import { cv, esc, ibox, ic, monogram } from "./ui.js";
+import { cv, esc, ibox, ic, monogram, pref } from "./ui.js";
 
 // catégories du registre (base, packs) : pictogramme et teinte ; les autres prennent ceux de
 // leur groupe
@@ -58,11 +58,49 @@ export function facetIc(key, v) {
 
 // --- actifs ---------------------------------------------------------------------------------
 export const CCY_NAME = { CHF: "Franc suisse", EUR: "Euro", USD: "Dollar US", GBP: "Livre sterling", JPY: "Yen" };
-const GLYPH = { CHF: "Fr.", EUR: "€", USD: "$", GBP: "£", JPY: "¥", BTC: "₿", ETH: "Ξ", USDT: "₮", USDC: "$", SOL: "◎", LTC: "Ł", XRP: "✕", ADA: "₳", DOT: "●" };
-const CRYPTO_TINT = { BTC: "var(--s3)", ETH: "var(--s4)", USDT: "var(--s2)", USDC: "var(--s7)", SOL: "var(--s5)" };
+const GLYPH = { CHF: "Fr.", EUR: "€", USD: "$", GBP: "£", JPY: "¥", CAD: "C$", AUD: "A$", SEK: "kr", NOK: "kr", DKK: "kr", CNY: "¥", HKD: "HK$",
+  BTC: "₿", ETH: "Ξ", USDT: "₮", USDC: "$", SOL: "◎", LTC: "Ł", XRP: "✕", ADA: "₳", DOT: "●", DOGE: "Ð", BNB: "◆", XMR: "ɱ", ETC: "ξ", DAI: "◈" };
+const CRYPTO_TINT = { BTC: "var(--s3)", ETH: "var(--s4)", USDT: "var(--s2)", USDC: "var(--s7)", SOL: "var(--s5)", BNB: "var(--s3)", DOGE: "var(--s3)",
+  ADA: "var(--s1)", DOT: "var(--s5)", AVAX: "var(--s5)", LINK: "var(--s1)", MATIC: "var(--s4)", POL: "var(--s4)", NEAR: "var(--s6)", TAO: "var(--s6)",
+  XRP: "var(--s6)", LTC: "var(--s6)", ATOM: "var(--s6)", TRX: "var(--s5)", DAI: "var(--s3)", XMR: "var(--s3)" };
+const CCY_TINT = { CHF: "var(--neg)", EUR: "var(--s1)", USD: "var(--s2)", GBP: "var(--s4)", JPY: "var(--s5)" };
 
 export function assetMark(a, size = "") {
   const g = GLYPH[a.symbol] || monogram(a.name);
   const color = CRYPTO_TINT[a.symbol] || facetColor("cat", a.cat);
   return ibox(`<span class="${g.length === 1 ? "glyph" : ""}">${esc(g)}</span>`, color, size);
+}
+
+// Taux marginal d'impôt (estimation gardée sur l'appareil) : l'impôt économisé par le 3a.
+export const TAX_RATES = [0.15, 0.2, 0.25, 0.3, 0.35, 0.4];
+export const taxRate = () => {
+  const t = pref("tax", null);
+  if (typeof t === "number") return t;
+  const w = pref("wealth", {});
+  return typeof w.tax === "number" ? w.tax : 0.25;
+};
+
+// --- devises, régions et secteurs (contenu des fonds) -------------------------------------------
+export function ccyMark(code, size = "sm") {
+  if (code === "Crypto") return ibox(ic("coin"), "var(--s3)", size);
+  const g = GLYPH[code] || code.slice(0, 3);
+  return ibox(`<span class="${g.length === 1 ? "glyph" : ""}">${esc(g)}</span>`, CCY_TINT[code] || CRYPTO_TINT[code] || "var(--s6)", size);
+}
+const REGION_LOOK = {
+  Suisse: [ic("cross"), "var(--neg)"], "Europe (hors Suisse)": ["EU", "var(--s1)"], "Amérique du Nord": ["US", "var(--s2)"], Japon: ["JP", "var(--s5)"],
+  "Pacifique (hors Japon)": ["AP", "var(--s7)"], "Marchés émergents": ["ÉM", "var(--s3)"], Crypto: [ic("coin"), "var(--s3)"],
+};
+const SECTOR_LOOK = {
+  Technologie: "cpu", Finance: "landmark", "Santé": "heart", "Consommation discrétionnaire": "bag", "Consommation de base": "cart", Industrie: "factory",
+  Communication: "radio", "Énergie": "bolt", "Matériaux": "cube", "Services publics": "drop", Immobilier: "home", Obligations: "doc",
+  "Liquidités et dérivés": "banknote", Crypto: "coin",
+};
+export function lookMark(dim, bucket, color, size = "sm") {
+  if (dim === "currency") return ccyMark(bucket, size);
+  if (dim === "region") {
+    const r = REGION_LOOK[bucket];
+    if (r) return ibox(r[0].startsWith("<svg") ? r[0] : `<span>${esc(r[0])}</span>`, r[1], size);
+    return ibox(ic("globe"), color, size);
+  }
+  return ibox(ic(SECTOR_LOOK[bucket] || "dots"), color, size);
 }

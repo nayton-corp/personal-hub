@@ -1,17 +1,20 @@
-// Accueil : deux tuiles (patrimoine, reste à vivre), ce qui attend une action, puis ce qui est
-// bon à savoir. Chaque ligne mène à l'écran où l'on agit.
+// Accueil : le bilan du mois passé les premiers jours, deux tuiles (patrimoine, reste à vivre),
+// « À faire » (ce qui se règle d'un geste), puis « À savoir ». Chaque ligne mène à l'écran où
+// l'on agit.
 import { hiddenIds } from "./accounts.js";
 import { budgetPath, model } from "./budget.js";
 import { go } from "./finance.js";
 import { base, date, monthName } from "./format.js";
-import { catMark } from "./meta.js";
+import { catMark, taxRate } from "./meta.js";
 import { approve, outcome, pendingPath, propose } from "./proposals.js";
-import { api, store } from "./store.js";
-import { SHEETS, closeSheet, esc, failure, fill, ibox, ic, n0, n2, nf, openSheet, pctOnly, pf, sgn, toast } from "./ui.js";
+import { api, shiftMonth, store } from "./store.js";
+import { SHEETS, closeSheet, esc, failure, fill, ibox, ic, n0, n2, nf, openSheet, pctOnly, pf, pref, setPref, sgn, skel, toast } from "./ui.js";
 import * as wealth from "./wealth.js";
 
 const $ = (id) => document.getElementById(id);
 const STALE_DAYS = 45;
+const RESERVE_MONTHS = 6;
+const BILAN_DAYS = 7; // le bilan du mois passé reste sur l'accueil la première semaine
 const kpisPath = () => `/finance/kpis?month=${store.today}`;
 const alertsPath = "/finance/alerts";
 const connPath = "/collectors/connections";
@@ -38,33 +41,67 @@ function items() {
   const k = store.data(kpisPath());
   if (!k) return [];
   const out = [];
+  // à faire : ce qui se règle d'un geste
   const pending = store.data(pendingPath);
   const np = pending ? pending.items.length : 0;
   if (np) out.push({ ic: "faceid", c: "var(--accent)", t: `${np} proposition${np > 1 ? "s" : ""} à valider`, s: "Un seul Face ID pour tout le lot", a: "props" });
-  const b = store.data(budgetPath(store.today, "m"));
-  for (const l of b ? b.lines.filter((x) => x.over).sort((x, y) => Number(y.ratio) - Number(x.ratio)) : []) {
-    const y = l.yearly, spent = (y ? y.spent : l.spent).minor / 100, target = (y ? y.target : l.target).minor / 100;
-    out.push({ mark: catMark(l.category, l.group), t: `${l.name} : budget ${y ? "annuel " : ""}dépassé`, s: `${n0(spent)} sur ${n0(target)} ${base()}${y ? " depuis janvier" : ""}, dépassé de ${n0(spent - target)}`, a: "cat", v: l.category });
-  }
   if (k.to_categorize > 0) out.push({ ic: "help", c: "var(--accent)", t: `${k.to_categorize} écriture${k.to_categorize > 1 ? "s" : ""} à classer`, s: "Par contrepartie, en un Face ID", a: "gotodo" });
   const cs = store.data(connPath);
   const missing = cs ? cs.items.filter((c) => !c.ready) : [];
-  if (missing.length) out.push({ ic: "key", c: "var(--s3)", t: `${missing.length} connexion${missing.length > 1 ? "s" : ""} à régler`, s: `${missing.map((c) => c.label).join(", ")} : identifiants à donner`, a: "settings" });
-  if (k.stale_accounts > 0) out.push({ ic: "clock", c: "var(--s3)", t: `${k.stale_accounts} compte${k.stale_accounts > 1 ? "s" : ""} à rafraîchir`, s: `Dernier relevé de plus de ${STALE_DAYS} jours`, a: "settings" });
-  // bon à savoir
-  if (k.unmatched_transfers > 0) out.push({ info: true, ic: "swap", c: "var(--s6)", t: `${k.unmatched_transfers} virement${k.unmatched_transfers > 1 ? "s" : ""} sans autre côté`, s: "Un relevé manque peut-être sur l'autre compte", a: "settings" });
+  if (missing.length) out.push({ ic: "key", c: "var(--s3)", t: `${missing.length} connexion${missing.length > 1 ? "s" : ""} à régler`, s: `${missing.map((c) => c.label).join(", ")} : identifiants à donner`, a: "rubric", v: "conn" });
+  if (k.stale_accounts > 0) out.push({ ic: "clock", c: "var(--s3)", t: `${k.stale_accounts} compte${k.stale_accounts > 1 ? "s" : ""} à rafraîchir`, s: `Dernière donnée il y a plus de ${STALE_DAYS} jours`, a: "rubric", v: "accounts" });
+  // à savoir : dépassements, hausses, marge 3a, réserve
+  const b = store.data(budgetPath(store.today, "m"));
+  for (const l of b ? b.lines.filter((x) => x.over).sort((x, y) => Number(y.ratio) - Number(x.ratio)) : []) {
+    const y = l.yearly, spent = (y ? y.spent : l.spent).minor / 100, target = (y ? y.target : l.target).minor / 100;
+    out.push({ info: true, mark: catMark(l.category, l.group), t: `${l.name} dépasse de ${n0(spent - target)} ${base()}`, s: `${n0(spent)} sur ${n0(target)}${y ? " depuis janvier" : " ce mois"}`, a: "cat", v: l.category });
+  }
+  if (k.unmatched_transfers > 0) out.push({ info: true, ic: "swap", c: "var(--s6)", t: `${k.unmatched_transfers} virement${k.unmatched_transfers > 1 ? "s" : ""} sans autre côté`, s: "Un relevé manque peut-être sur l'autre compte", a: "rubric", v: "accounts" });
   const alerts = store.data(alertsPath);
   for (const a of alerts ? alerts.items : []) {
-    if (a.kind === "pillar3a_margin") continue;
+    // les dépassements viennent déjà du budget ci-dessus, la marge 3a des chiffres clés
+    if (a.kind === "pillar3a_margin" || a.kind === "budget_over") continue;
     const d = a.detail;
     const s = a.kind === "recurring_up"
       ? `${amount2Text(d.usual)} → ${amount2Text(d.last)} ${d.last.currency} · le ${date(a.on_date)}`
       : `${n0(d.spent.minor / 100)} sur ${n0(d.target.minor / 100)} ${base()}${a.kind === "budget_likely" ? ` · ${n0(d.projected.minor / 100)} projetés` : ""}`;
-    out.push({ info: true, ic: a.kind === "recurring_up" ? "repeat" : "alert", c: a.kind === "recurring_up" ? "var(--s4)" : "var(--s3)", t: a.title, s, a: a.kind === "recurring_up" ? "subs" : "tab", v: "budget" });
+    const cat = a.kind === "recurring_up" ? null : d.category;
+    out.push({ info: true, ic: a.kind === "recurring_up" ? "repeat" : "alert", c: a.kind === "recurring_up" ? "var(--s4)" : "var(--s3)", mark: cat ? catMark(cat) : null, t: a.title, s, a: a.kind === "recurring_up" ? "subs" : cat ? "cat" : "tab", v: cat || "budget" });
   }
   const p3 = k.pillar3a;
-  if (p3 && p3.margin.minor > 0) out.push({ info: true, ic: "piggy", c: "var(--s1)", t: `Marge 3a ${p3.year} : ${n0(p3.margin.minor / 100)} ${base()}`, s: `Versé ${n0(p3.paid.minor / 100)} sur ${n0(p3.cap.minor / 100)} ${base()}, jusqu'au 31 décembre`, a: "ret3a" });
+  if (p3 && p3.margin.minor > 0) {
+    const m = p3.margin.minor / 100;
+    out.push({ info: true, ic: "piggy", c: "var(--s1)", t: `Marge 3a ${p3.year} : ${n0(m)} ${base()}`, s: `Jusqu'au 31 décembre · environ ${n0(m * taxRate())} ${base()} d'impôt en moins`, a: "ret3a" });
+  }
+  const cover = k.months_covered == null ? null : Number(k.months_covered);
+  if (cover != null) {
+    const liquid = k.liquid.minor / 100, avg = cover > 0 ? liquid / cover : 0, extra = liquid - RESERVE_MONTHS * avg;
+    const s = cover < 3 ? `Moins de 3 mois : à renforcer avant d'investir` : extra > 0 && cover > RESERVE_MONTHS ? `Environ ${n0(extra)} ${base()} au-delà de ${RESERVE_MONTHS} mois, sur des comptes à presque 0 %` : `Entre 3 et ${RESERVE_MONTHS} mois : la zone conseillée`;
+    out.push({ info: true, ic: "shield", c: cover < 3 ? "var(--neg)" : "var(--s2)", t: `Réserve : ${cover.toFixed(1).replace(".", ",")} mois de dépenses`, s, a: "w-only", v: "cat|cash" });
+  }
   return out;
+}
+
+// premiers jours du mois budgétaire : le mois d'avant en trois chiffres, une fois par mois
+function bilan(cur) {
+  if (!cur || cur.days_left == null) return "";
+  const days = Math.round((Date.parse(`${cur.end}T00:00:00Z`) - Date.parse(`${cur.start}T00:00:00Z`)) / 864e5);
+  if (days - cur.days_left > BILAN_DAYS) return "";
+  const prev = shiftMonth(store.today, -1);
+  if (pref(`bilan-${prev}`, false)) return "";
+  const pb = store.use(budgetPath(prev, "m")).data;
+  const pf2 = store.use(`/finance/flows?month=${prev}&period=m`).data;
+  if (!pb || !pf2) return "";
+  const m = model(pb, false);
+  const I = pf2.income.minor / 100, S = (pf2.groups.find((x) => x.group === "savings")?.total.minor || 0) / 100;
+  const over = m.lines.filter((l) => l.over).length;
+  const name = monthName(prev).split(" ")[0];
+  const res = m.T == null ? `${n0(m.spent)} ${base()} dépensés` : m.rest >= 0 ? `${n0(m.rest)} ${base()} sous le budget` : `${n0(-m.rest)} ${base()} au-dessus du budget`;
+  return `<section class="card bilan" aria-labelledby="t-bilan">
+    <div class="section-head"><h2 class="section-title" id="t-bilan">Bilan ${name.startsWith("a") || name.startsWith("o") ? "d'" : "de "}${esc(name)}</h2><button class="icon-btn" type="button" data-a="bilan-x" data-v="${prev}" aria-label="Masquer le bilan">${ic("close")}</button></div>
+    <div class="strip three"><div><span>Budget</span><b class="${m.T != null && m.rest < 0 ? "neg" : "pos"}">${esc(res)}</b></div><div><span>Épargné</span><b class="num"><span class="money">${n0(S)}</span>${I > 0 ? ` · ${pf(S / I, 0)} %` : ""}</b></div><div><span>Dépassements</span><b>${over ? `${over} catégorie${over > 1 ? "s" : ""}` : "aucun"}</b></div></div>
+    <button class="link-row" type="button" data-a="bilan-go" data-v="${prev}">Revoir ${esc(name)} dans le budget${ic("chev")}</button>
+  </section>`;
 }
 
 const amount2Text = (m) => Math.abs(m.minor / 100).toFixed(2);
@@ -82,19 +119,12 @@ export function render() {
   const be = store.use(budgetPath(store.today, "m"));
   const sp = sparkPath(k);
   const se = sp ? store.use(sp) : null;
-  const sub = $("home-sub");
-  sub.classList.remove("warn");
-  if (k) {
-    const age = k.last_statement ? Math.floor((Date.now() - Date.parse(`${k.last_statement}T00:00:00Z`)) / 864e5) : null;
-    sub.textContent = k.last_statement ? `${monthName(store.today).replace(/^./, (c) => c.toUpperCase())} · relevé du ${date(k.last_statement)}` : "Aucun relevé importé";
-    if (age == null || age > STALE_DAYS) sub.classList.add("warn");
-  }
   if (ke.status === "error") {
     fill($("homeBody"), `<div class="err-box" role="alert">Impossible de charger l'accueil : ${esc(ke.error.message)}</div>`);
     return;
   }
   if (!k) {
-    fill($("homeBody"), '<div class="loading">Chargement…</div>');
+    fill($("homeBody"), skel());
     return;
   }
   // un compte masqué sort aussi du patrimoine de l'accueil
@@ -109,12 +139,12 @@ export function render() {
   const m = be.data ? model(be.data, true) : null;
   const all = items();
   const acts = all.filter((x) => !x.info), infos = all.filter((x) => x.info);
-  const row = (x) => `<button class="trow" type="button" data-a="${x.a}" ${x.v ? `data-v="${esc(x.v)}"` : ""}>
+  const row = (x) => `<button class="trow press" type="button" data-a="${x.a}" ${x.v ? `data-v="${esc(x.v)}"` : ""}>
       ${x.mark || ibox(ic(x.ic), x.c)}
       <span class="row-main"><span class="row-title">${esc(x.t)}</span><span class="row-sub">${esc(x.s)}</span></span>
       <span class="chev-r">${ic("chev")}</span></button>`;
   let budgetTile;
-  if (!m) budgetTile = '<span class="tile-lbl">' + ic("wallet") + "Reste à vivre</span><span class=\"tile-sub\">Chargement…</span>";
+  if (!m) budgetTile = `<span class="tile-lbl">${ic("wallet")}Reste à vivre</span>${skel("block")}`;
   else if (m.T == null) {
     budgetTile = `<span class="tile-lbl">${ic("wallet")}Dépensé ce mois</span>
       <span class="tile-amt num"><span class="money">${n0(m.spent)}</span></span>
@@ -127,7 +157,7 @@ export function render() {
       <span class="pbar thin" data-css="--c:${st.color};margin-top:12px"><i data-css="width:${Math.min(100, m.ratio * 100).toFixed(1)}%"></i>${m.expected != null ? `<span class="pace" data-css="left:${(m.expected * 100).toFixed(1)}%"></span>` : ""}</span>`;
   }
   const budgetLabel = m && m.T != null ? `Reste à vivre ce mois ${nf(m.rest)} ${base()}, ${m.state.short}, ${m.daysLeft} jours restants. Ouvrir le budget` : "Ouvrir le budget";
-  fill($("homeBody"), `
+  fill($("homeBody"), `${bilan(be.data)}
     <div class="tiles">
       <button class="tile" type="button" data-a="tab" data-v="patrimoine" aria-label="Patrimoine ${n0(net)} ${base()}${g30 != null ? `, gain ${sgn(g30)}${n0(g30)} ${base()}${p30 != null ? `, rendement ${sgn(p30)}${pf(Math.abs(p30))} %` : ""} sur 30 jours` : ""}. Ouvrir le patrimoine">
         <span class="tile-lbl">${ic("trend")}Patrimoine</span>
@@ -138,8 +168,8 @@ export function render() {
       <button class="tile" type="button" data-a="tab" data-v="budget" aria-label="${budgetLabel}">${budgetTile}</button>
     </div>
     <section class="card" aria-labelledby="t-todo">
-      <div class="section-head"><h2 class="section-title" id="t-todo">À traiter</h2>${acts.length ? `<span class="pill info">${acts.length}</span>` : ""}</div>
-      ${acts.length ? acts.map(row).join("") : `<div class="status good">${ic("check")}<span>Rien à traiter, tout est à jour.</span></div>`}
+      <div class="section-head"><h2 class="section-title" id="t-todo">À faire</h2>${acts.length ? `<span class="pill info">${acts.length}</span>` : ""}</div>
+      ${acts.length ? acts.map(row).join("") : `<div class="status good">${ic("check")}<span>Rien à faire, tout est à jour.</span></div>`}
     </section>
     ${infos.length ? `<section class="card" aria-labelledby="t-info"><h2 class="section-title" id="t-info">À savoir</h2>${infos.map(row).join("")}</section>` : ""}
     <div class="endspace"></div>`);
@@ -253,6 +283,14 @@ export const actions = {
   gotodo: () => {
     store.set({ tx: "todo", q: "", txcat: null });
     go("journal", { top: true });
+  },
+  "bilan-x": (m) => {
+    setPref(`bilan-${m}`, true);
+    store.notify();
+  },
+  "bilan-go": (m) => {
+    store.set({ month: m, period: "m" });
+    go("budget", { top: true });
   },
   ret3a: () => {
     wealth.only("goal", "retirement");

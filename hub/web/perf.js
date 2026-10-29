@@ -1,10 +1,10 @@
-// Patrimoine, section Performance : rendement, revenus et frais, risque, trajectoire. Les chiffres
-// viennent de /finance/performance (agrégats par compte, par actif, par mois, par année), de
-// /finance/kpis, /finance/budget/months et /finance/lookthrough : aucune écriture n'est lue ici.
-// La période et les filtres de l'écran s'appliquent partout, sauf deux exceptions écrites à
-// l'écran : Revenus et frais portent sur 12 mois, Trajectoire sur tout le patrimoine.
+// Patrimoine, section Performance : rendement (avec revenus et frais) et risque. Les chiffres
+// viennent de /finance/performance (agrégats par compte, par actif, par mois, par année) : aucune
+// écriture n'est lue ici. La période et les filtres de l'écran s'appliquent partout. La réserve
+// et la marge 3a sont sur l'Accueil, le taux d'épargne dans le Budget, la composition par
+// devise dans la Répartition.
 import { MOIS, base, date } from "./format.js";
-import { cv, esc, ic, money, n0, pf, sgn } from "./ui.js";
+import { esc, ic, money, n0, pf, sgn, skel } from "./ui.js";
 
 export const units = (m) => (m ? m.minor / 100 : 0);
 export const rate = (s) => (s == null ? null : Number(s));
@@ -15,13 +15,7 @@ export const tone = (v) => (v == null ? "" : v >= 0 ? "pos" : "neg");
 export const gainSpan = (g, r) => `<span class="delta ${tone(g)} num">${signedMoney(g)} ${base()}${r == null ? "" : ` · ${ratePct(r)}`}</span>`;
 
 const MOIS1 = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
-const TAX_RATES = [0.15, 0.2, 0.25, 0.3, 0.35, 0.4];
-const SAFE_WITHDRAWAL = 0.035;
-const RESERVE_MONTHS = 6;
-const YEARS_AHEAD = 20;
-const FAN = [0.01, 0.04, 0.065]; // bas, milieu, haut de la projection, par an
 const amt = (v) => `${money(v)} ${base()}`;
-const months1 = (x) => `${x.toFixed(1).replace(".", ",")} mois`;
 
 // tuile comme sur l'Accueil ; `go` : attributs d'action quand elle mène au détail
 function tile(icn, lbl, value, sub, cls = "", go = "") {
@@ -70,9 +64,9 @@ export function perfSection(ctx) {
   const { src, perf } = ctx;
   if (src && src.status === "error") return `<div class="err-box" role="alert">Performance indisponible : ${esc(src.error.message)}</div>`;
   if (!ctx.sel.length) return '<div class="empty">Aucun élément ne correspond à ces filtres.</div>';
-  if (!perf) return '<div class="loading">Chargement…</div>';
+  if (!perf) return skel("block");
   if (!perf.summary || ctx.pts.length < 2) return '<div class="empty">Pas encore assez d\'historique pour mesurer la performance.</div>';
-  return { rend: tabRend, rev: tabRev, risk: tabRisk, traj: tabTraj }[ctx.S.tab](ctx);
+  return (ctx.S.tab === "risk" ? tabRisk : tabRend)(ctx);
 }
 
 // --- Rendement --------------------------------------------------------------------------------
@@ -87,7 +81,8 @@ function heatCell(r, title) {
 function tabRend(ctx) {
   const { perf, n, S, all } = ctx;
   const s = perf.summary;
-  const twr = rate(s.twr), mwr = rate(s.mwr), g = units(s.gain), flows = units(s.net_flows);
+  const twr = rate(s.twr), mwr = rate(s.mwr);
+  const fees = units(s.end) > 0 ? -units(s.fees) / units(s.end) : 0;
   const acc = S.view === "acc";
   const groups = acc ? perf.by_account : perf.by_asset;
   const contrib = Object.entries(groups)
@@ -121,52 +116,13 @@ function tabRend(ctx) {
     <div class="tiles ptiles">
       ${tile("trend", "Rendement", ratePct(twr), "pondéré dans le temps", tone(twr))}
       ${tile("clock", "Par an, pour toi", mwr == null ? "—" : ratePct(mwr), mwr == null ? "dès 1 an de recul" : "selon tes dates de versement", tone(mwr))}
-      ${tile("coin", "Gain", signedMoney(g), `dont revenus ${amt(units(s.income))}`, tone(g))}
-      ${tile("piggy", n ? "Apports nets" : "Épargne", signedMoney(flows), "versements moins retraits")}
+      ${tile("coin", "Revenus", amt(units(s.income)), "dividendes et intérêts", units(s.income) > 0 ? "pos" : "")}
+      ${tile("alert", "Frais", amt(-units(s.fees)), fees ? `${pf(fees, 2)} % de la valeur` : "prélevés sur tes relevés", units(s.fees) < 0 ? "neg" : "")}
     </div>
     ${h3("Qui a fait la performance", "toucher pour voir la ligne")}
     ${contrib.length ? divBars(contrib) : note("Rien sur la période.")}
     ${heat}${years}
     ${note("Rendement pondéré : celui des placements, sans l'effet de tes versements (comme VIAC). Par an, pour toi : le taux qui tient compte de tes dates de versement.")}`;
-}
-
-// --- Revenus et frais (12 mois) ---------------------------------------------------------------
-
-function tabRev(ctx) {
-  const { year, kpis, all, S } = ctx;
-  const head = note("Ces chiffres portent toujours sur les 12 derniers mois, quelle que soit la période choisie.");
-  if (!year || year.status === "error") return `${head}<div class="err-box" role="alert">Indisponible${year ? ` : ${esc(year.error.message)}` : ""}</div>`;
-  if (!year.data) return `${head}<div class="loading">Chargement…</div>`;
-  const y = year.data.summary;
-  if (!y) return `${head}${note("Rien sur les 12 derniers mois.")}`;
-  const inc = units(y.income), fees = -units(y.fees), value = units(y.end);
-  const byAcc = Object.entries(year.data.by_account);
-  const feeRows = byAcc.map(([id, x]) => ({ id, v: -units(x.fees), end: units(x.end) })).filter((r) => r.v >= 1).sort((a, b) => b.v - a.v)
-    .map((r) => ({ n: accName(all, r.id), v: r.v, jump: `a:${r.id}`, label: `${n0(r.v)} ${base()} de frais`, vl: `${money(r.v)}${r.end > 0 ? ` · ${pf(r.v / r.end, 2)} %` : ""}` }));
-  const incRows = byAcc.map(([id, x]) => ({ id, v: units(x.income) })).filter((r) => r.v >= 1).sort((a, b) => b.v - a.v)
-    .map((r) => ({ n: accName(all, r.id), v: r.v, jump: `a:${r.id}`, label: `${n0(r.v)} ${base()} de revenus`, vl: money(r.v) }));
-  const p3 = kpis && kpis.data ? kpis.data.pillar3a : null;
-  let pillar = "";
-  if (p3) {
-    const paid = units(p3.paid), saved = paid * S.tax;
-    pillar = `${h3(`Pilier 3a ${p3.year}, avec l'impôt`)}
-      <div class="tiles ptiles">
-        ${tile("shield", "Impôt économisé", amt(saved), `<span class="money">${n0(paid)}</span> versés × ${pf(S.tax, 0)} %`, "pos")}
-        ${tile("piggy", "Marge 3a restante", amt(units(p3.margin)), `plafond <span class="money">${n0(units(p3.cap))}</span>`)}
-      </div>
-      <div class="setline"><span>Ton taux marginal d'impôt</span><div class="scroll-x"><div class="seg small" role="group" aria-label="Taux marginal d'impôt">${TAX_RATES.map((t) => `<button type="button" data-a="w-tax" data-v="${t}" aria-pressed="${Math.abs(S.tax - t) < 1e-9}">${pf(t, 0)} %</button>`).join("")}</div></div></div>
-      ${note("Estimation gardée sur cet appareil : l'impôt économisé dépend de ton revenu et de ta commune.")}`;
-  }
-  return `${head}
-    <div class="tiles ptiles">
-      ${tile("coin", "Revenus", amt(inc), `<span class="money">${n0(inc / 12)}</span> par mois${value > 0 ? ` · ${pf(inc / value)} %` : ""}`, inc > 0 ? "pos" : "")}
-      ${tile("alert", "Frais", amt(fees), value > 0 ? `${pf(fees / value, 2)} % de la valeur` : "", fees > 0 ? "neg" : "")}
-    </div>
-    ${incRows.length ? `${h3("Revenus par compte", "intérêts, dividendes, rendements")}${plainBars(incRows, "pos")}` : ""}
-    ${h3("Frais par compte", "toucher pour voir le compte")}
-    ${feeRows.length ? plainBars(feeRows, "neg") : note("Aucun frais relevé sur cette sélection.")}
-    ${note("Frais prélevés sur tes relevés (catégorie « frais de placement »). Les frais internes des fonds ne sont pas comptés : ils sont déjà dans les cours.")}
-    ${pillar}`;
 }
 
 // --- Risque -----------------------------------------------------------------------------------
@@ -177,27 +133,6 @@ function underwater(ctx) {
   const mn = Math.min(...pts.map((p) => p.dd), -0.01);
   const X = (k) => 2 + (336 * k) / (pts.length - 1), Y = (v) => 4 + 58 * (v / mn);
   return `${h3("Recul depuis le dernier sommet")}<svg class="chart uw" viewBox="0 0 340 78" role="img" aria-label="Recul depuis le dernier sommet, au plus ${ratePct(mn)}"><path d="M2,4${pts.map((p, k) => `L${X(k).toFixed(1)},${Y(p.dd).toFixed(1)}`).join("")}L338,4Z"/><text x="2" y="76">${ctx.fmtDate(pts[0].d)}</text><text x="338" y="76" text-anchor="end">${ctx.fmtDate(pts[pts.length - 1].d)}</text></svg>`;
-}
-
-// exposition aux devises : liquidités par devise, crypto à part, fonds selon leur composition
-function currencies(ctx) {
-  const ex = {};
-  const look = ctx.look && ctx.look.data ? ctx.look.data.items.filter((x) => x.weight != null) : [];
-  const add = (k, v) => { ex[k] = (ex[k] || 0) + v; };
-  for (const l of ctx.sel) {
-    if (l.kind === "debt" || l.value <= 0) continue;
-    if (l.asset.startsWith("ccy:")) add(l.unit, l.value);
-    else if (l.cat === "crypto") add("Crypto", l.value);
-    else if (look.length) for (const x of look) add(x.bucket, l.value * Number(x.weight));
-    else add(l.priceCcy || "Autres", l.value);
-  }
-  const tot = Object.values(ex).reduce((t, v) => t + v, 0);
-  if (tot <= 0) return "";
-  let rows = Object.entries(ex).sort((a, b) => b[1] - a[1]);
-  if (rows.length > 5) rows = [...rows.slice(0, 4), ["Autres", rows.slice(4).reduce((t, [, v]) => t + v, 0)]];
-  return `${h3("Exposition aux devises", look.length ? "fonds selon leur composition" : "devise de cotation")}
-    <div class="stackbar" aria-hidden="true">${rows.map(([, v], i) => `<i data-css="--f:${(v / tot).toFixed(4)};--c:${cv(i)}"></i>`).join("")}</div>
-    <div class="leg2">${rows.map(([k, v], i) => `<span><i data-css="--c:${cv(i)}"></i>${esc(k)} ${pf(v / tot, 0)} %</span>`).join("")}</div>`;
 }
 
 function tabRisk(ctx) {
@@ -224,54 +159,5 @@ function tabRisk(ctx) {
     </div>
     ${underwater(ctx)}
     ${big.length && tot > 0 ? `${h3("Plus grosses lignes", "part de la sélection")}${plainBars(big, "acc")}` : ""}
-    ${currencies(ctx)}
     ${note("Baisse maximale et volatilité sur le rendement pondéré : tes versements ne les faussent pas. Mauvaise année : ordre de grandeur sur la part placée, pas une prévision.")}`;
-}
-
-// --- Trajectoire (tout le patrimoine) ---------------------------------------------------------
-
-function fan(start, yearly, from) {
-  const proj = (r) => Array.from({ length: YEARS_AHEAD + 1 }, (_, y) => {
-    let v = start;
-    for (let k = 0; k < y; k++) v = v * (1 + r) + yearly;
-    return v;
-  });
-  const [lo, mid, hi] = FAN.map(proj);
-  const mx = Math.max(...hi, 1), mn = Math.min(0, ...lo);
-  const X = (y) => 4 + (332 * y) / YEARS_AHEAD, Y = (v) => 8 + 112 * (1 - (v - mn) / (mx - mn));
-  const line = (vs) => vs.map((v, y) => `${y ? "L" : "M"}${X(y).toFixed(1)},${Y(v).toFixed(1)}`).join("");
-  const band = `${line(hi)}${lo.slice().reverse().map((v, k) => `L${X(YEARS_AHEAD - k).toFixed(1)},${Y(v).toFixed(1)}`).join("")}Z`;
-  const end = mid[YEARS_AHEAD];
-  return `<svg class="chart fan" viewBox="0 0 340 140" role="img" aria-label="Projection sur ${YEARS_AHEAD} ans : environ ${n0(end / 1000)} mille ${base()} au milieu de la bande">
-    <path class="band" d="${band}"/><path class="line" d="${line(mid)}"/>
-    <text x="4" y="136">${from}</text><text x="170" y="136" text-anchor="middle">${from + YEARS_AHEAD / 2}</text><text x="336" y="136" text-anchor="end">${from + YEARS_AHEAD}</text>
-    <text class="money val" x="336" y="${(Y(end) - 6).toFixed(1)}" text-anchor="end">${n0(end / 1000)}k</text></svg>`;
-}
-
-function tabTraj(ctx) {
-  const { n, all, kpis, months, asOf } = ctx;
-  const head = n ? '<div class="callout">Cet onglet porte sur tout le patrimoine : les filtres ne s\'y appliquent pas.</div>' : "";
-  if ([kpis, months].some((e) => e && e.status === "error")) return `${head}<div class="err-box" role="alert">Indisponible : ${esc((kpis.error || months.error).message)}</div>`;
-  if (!kpis.data || !months.data) return `${head}<div class="loading">Chargement…</div>`;
-  const k = kpis.data, ms = months.data.series;
-  const income = ms.reduce((t, m) => t + units(m.income), 0), saved = ms.reduce((t, m) => t + units(m.savings), 0);
-  const spentMonths = ms.filter((m) => Math.abs(units(m.expenses)) > 0);
-  const spend = spentMonths.length ? spentMonths.reduce((t, m) => t + Math.abs(units(m.expenses)), 0) / spentMonths.length : 0;
-  const liquid = units(k.liquid), cover = rate(k.months_covered);
-  const invested = all.filter((l) => l.cat === "funds" || l.cat === "crypto").reduce((t, l) => t + Math.max(0, l.value), 0);
-  const net = all.reduce((t, l) => t + l.value, 0);
-  const fi = spend > 0 ? (invested * SAFE_WITHDRAWAL) / (spend * 12) : null;
-  const dormant = spend > 0 ? liquid - RESERVE_MONTHS * spend : 0;
-  return `${head}
-    <div class="tiles ptiles">
-      ${tile("piggy", "Taux d'épargne", income > 0 ? `${pf(saved / income, 0)} %` : "—", `${signedMoney(saved)} sur 12 mois`)}
-      ${tile("shield", "Réserve", cover == null ? "—" : months1(cover), "de dépenses en liquidités", cover != null && cover < 3 ? "neg" : "", 'data-a="w-only" data-v="cat|cash" aria-label="Réserve : voir les liquidités"')}
-    </div>
-    ${cover != null && cover > RESERVE_MONTHS && dormant > 0 ? `<div class="callout">Ta réserve dépasse ${RESERVE_MONTHS} mois de dépenses : environ <b>${amt(dormant)}</b> restent sur des comptes à presque 0 %. À 4 % par an, cela ferait de l'ordre de ${amt(dormant * 0.04)} par an.</div>` : ""}
-    ${fi == null ? "" : `${h3("Indépendance financière", `retrait de ${pf(SAFE_WITHDRAWAL)} % par an`)}
-    <div class="gauge" role="img" aria-label="${pf(Math.min(fi, 9.99), 0)} % de tes dépenses couvertes"><b data-css="width:${pctw(fi * 100)}%"></b></div>
-    ${note(`Tes placements (<span class="money">${n0(invested)}</span> ${base()}) couvriraient <b>${pf(fi, 0)} %</b> de tes dépenses moyennes (<span class="money">${n0(spend)}</span> ${base()} par mois).`)}`}
-    ${h3(`Dans ${YEARS_AHEAD} ans`, saved > 0 ? "à ton rythme d'épargne actuel" : "sans nouvelle épargne")}
-    ${fan(net, Math.max(0, saved), Number(asOf.slice(0, 4)))}
-    ${note(`Bande entre ${pf(FAN[0], 0)} % et ${pf(FAN[2])} % par an, ligne à ${pf(FAN[1], 0)} %. Une illustration, pas une prévision.`)}`;
 }

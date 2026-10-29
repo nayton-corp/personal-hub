@@ -28,7 +28,19 @@ function say(text, error = false) {
   el.classList.toggle("error", error);
 }
 
-const fmt = (iso) => (iso ? new Date(iso).toLocaleString("fr-CH", { timeZone: timeZone() }) : "—");
+// « 2026-10-28 09:12:03 » (SQLite) n'est pas lu par Safari : il faut le T et le fuseau
+function when(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return new Date(v < 1e12 ? v * 1000 : v);
+  let s = String(v).trim().replace(" ", "T");
+  if (/T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s)) s += "Z";
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+const fmt = (v) => {
+  const d = when(v);
+  return d ? d.toLocaleString("fr-CH", { timeZone: timeZone(), day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+};
 
 function row(dl, label, value, ok) {
   const dt = document.createElement("dt");
@@ -151,10 +163,6 @@ $("form-profile").addEventListener("submit", guard(async () => {
   });
   store.invalidate(); // le pays ouvre ou ferme le pilier 3a des chiffres clés
   say("Profil enregistré.");
-}));
-$("btn-logout").addEventListener("click", guard(async () => {
-  await api("/auth/logout", {});
-  location.reload();
 }));
 window.addEventListener("hub:auth", () => refresh());
 
