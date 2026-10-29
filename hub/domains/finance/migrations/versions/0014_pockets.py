@@ -13,7 +13,7 @@ par une règle précise reste la sienne. `v_entry_allocation` (budget, flux) sui
 motif vide, « tout débit de la poche Vacances → Vacances ». Elle reste une règle « tout le
 reste » : un virement apparié de la poche reste un virement.
 
-**Catégories.** « Voiture : crédit » (fixe) et « Voiture : entretien » (variable), si absentes.
+**Catégories.** « Voiture : crédit » (fixe) et « Voiture : frais » (variable : entretien, assurance, impôt et vignette), si absentes.
 
 **Budget annuel.** `budget_cadence` marque une catégorie suivie à l'année : sa cible mensuelle
 (table `budgets`, inchangée) est le douzième de la cible annuelle, et le budget la compare au
@@ -36,7 +36,7 @@ STATEMENTS = [
     """
     INSERT OR IGNORE INTO categories (id, name, grp) VALUES
       ('voiture-credit', 'Voiture : crédit', 'fixed'),
-      ('voiture-entretien', 'Voiture : entretien', 'variable')
+      ('voiture-frais', 'Voiture : frais', 'variable')
     """,
     """
     CREATE TABLE budget_cadence (                    -- réglage : absent = suivi au mois

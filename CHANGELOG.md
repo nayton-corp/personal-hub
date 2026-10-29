@@ -19,7 +19,7 @@
   Une catégorie suivie à l'année est comparée au cumul depuis janvier (`yearly` dans les lignes
   du budget), sort du budget et du reste à vivre du mois (`budgeted_expenses`) et n'alerte
   qu'au dépassement annuel. Dans l'app : « Par mois / Par an » dans la fiche d'une catégorie.
-- Catégories « Voiture : crédit » (fixe) et « Voiture : entretien » (variable).
+- Catégories « Voiture : crédit » (fixe) et « Voiture : frais » (variable : entretien, assurance, impôt et vignette).
 
 ### Mois budgétaire, création du budget et journal revu
 

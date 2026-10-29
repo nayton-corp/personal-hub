@@ -5,7 +5,7 @@ import { cv, esc, ibox, ic, monogram } from "./ui.js";
 // leur groupe
 const CAT_LOOK = {
   logement: ["home", 0], assurances: ["shield", 1], impots: ["landmark", 5], telecom: ["wifi", 3],
-  abonnements: ["repeat", 4], transports: ["train", 6], "voiture-credit": ["car", 5], "voiture-entretien": ["car", 6], alimentation: ["cart", 1], restaurants: ["utensils", 2],
+  abonnements: ["repeat", 4], transports: ["train", 6], "voiture-credit": ["car", 5], "voiture-frais": ["car", 6], alimentation: ["cart", 1], restaurants: ["utensils", 2],
   sante: ["heart", 4], loisirs: ["ticket", 3], shopping: ["bag", 4], voyages: ["plane", 6], divers: ["dots", 5],
   retraits: ["banknote", 5], "twint-particuliers": ["swap", 6], salaire: ["briefcase", 1], remboursements: ["arrowin", 6],
   "autres-revenus": ["arrowin", 1], rendement: ["trend", 1], "epargne-3a": ["piggy", 0], investissements: ["trend", 0],
