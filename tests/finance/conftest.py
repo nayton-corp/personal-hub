@@ -9,10 +9,10 @@ import pyrage
 import pytest
 from sqlalchemy import text
 
-from hub.core.db import begin_immediate
-from hub.core.settings import Paths, Secrets, Server, Settings
 from hub.domains.finance import catalog, importer
 from hub.domains.finance.domain import FinanceDomain
+from hub.platform.db import begin_immediate
+from hub.platform.settings import Paths, Secrets, Server, Settings
 from tests.factories.camt import IBAN, Stmt, Tx
 
 D = date(2026, 10, 1)

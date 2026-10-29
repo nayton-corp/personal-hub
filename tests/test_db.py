@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import event, text
 
-from hub.core.db import DatabaseBusy, backup, begin_immediate, integrity_check, make_engine
+from hub.platform.db import DatabaseBusy, backup, begin_immediate, integrity_check, make_engine
 
 
 def test_pragmas_on_every_connection(tmp_path: Path) -> None:

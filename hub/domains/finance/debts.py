@@ -24,8 +24,8 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core.clock import now_iso
-from hub.core.money import DECIMAL_CONTEXT, Money
+from hub.kernel.clock import now_iso
+from hub.kernel.money import DECIMAL_CONTEXT, Money
 
 KINDS = ("loan", "mortgage", "leasing", "student", "credit", "other")
 KIND_LABEL = {

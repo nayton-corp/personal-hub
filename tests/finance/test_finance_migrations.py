@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DatabaseError
 
-from hub.core.db import backup, begin_immediate, make_engine
 from hub.domains.finance import hashing, ledger, packs
 from hub.domains.finance.domain import FinanceDomain
+from hub.platform.db import backup, begin_immediate, make_engine
 from tests.finance.conftest import ready_account
 
 pytestmark = pytest.mark.migrations
@@ -244,8 +244,8 @@ def test_hash_fields_match_columns(finance: FinanceDomain) -> None:
 
 def test_upgrade_on_reference_base_keeps_ledger_valid(tmp_path: Path) -> None:
     """Base fictive à la version précédente (0001), montée à head : verify-ledger passe."""
-    from hub.core.migrations import runner
     from hub.domains.finance.domain import MIGRATIONS
+    from hub.platform import migrations as runner
     from tests.finance.conftest import finance_settings
 
     settings = finance_settings(tmp_path)

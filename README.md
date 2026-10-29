@@ -20,8 +20,10 @@ registre en ajout seul ; voir [docs/finance.md](docs/finance.md).
 ## Arborescence
 
 ```
-hub/core/           cœur : réglages, Money, journaux filtrés, erreurs problem+json, base core.db,
-                    jetons, passkeys, propositions, contrat de domaine, registre, tâches de fond
+hub/kernel/         noyau pur : Money, URN, horloge, JSON canonique, texte (ni base ni réseau)
+hub/platform/       plateforme : SQLite, migrations, réglages, secrets, journaux filtrés, cron
+hub/core/           cœur : erreurs problem+json, base core.db, jetons, passkeys, propositions,
+                    contrat de domaine, registre, connexions, tâches de fond
 hub/core/migrations Alembic de core.db (SQL explicite, pas de downgrade)
 hub/api/            application FastAPI et routes du cœur
 hub/domains/        domaines, isolés par import-linter ; finance/ : registre, camt.053, API

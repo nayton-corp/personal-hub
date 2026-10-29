@@ -14,9 +14,9 @@ from typing import Literal
 
 from sqlalchemy import Connection, text
 
-from hub.core.clock import now_iso
-from hub.core.text import compact_iban, normalize
 from hub.domains.finance import ledger
+from hub.kernel.clock import now_iso
+from hub.kernel.text import compact_iban, normalize
 
 Field = Literal["search_text", "counterparty_iban", "bank_tx_code", "own_account"]
 Direction = Literal["any", "debit", "credit"]

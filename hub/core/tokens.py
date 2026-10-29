@@ -10,9 +10,9 @@ from typing import Any
 
 from sqlalchemy import Connection, Row, text
 
-from hub.core.clock import now_iso
 from hub.core.coredb import audit
-from hub.core.ids import actor, new_id
+from hub.kernel.clock import now_iso
+from hub.kernel.ids import actor, new_id
 
 TOKEN_PREFIX = "hub_"  # noqa: S105 - préfixe, pas un secret
 

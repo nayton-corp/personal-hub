@@ -1,7 +1,7 @@
 import pytest
 
-from hub.core.ids import Urn, actor, is_actor, new_id, urn
-from hub.core.text import is_iban, mask_iban, normalize
+from hub.kernel.ids import Urn, actor, is_actor, new_id, urn
+from hub.kernel.text import is_iban, mask_iban, normalize
 
 
 def test_normalize() -> None:

@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from hub.core.db import begin_immediate
 from hub.domains.finance import catalog, importer
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
@@ -18,6 +17,7 @@ from hub.domains.finance.viac import notice as viac_notice
 from hub.domains.finance.viac import report as viac_report
 from hub.domains.finance.viac import text as viac_text
 from hub.domains.finance.viac.apply import cash_ref, titles_ref
+from hub.platform.db import begin_immediate
 from tests.factories import viac as f
 from tests.finance.conftest import rows
 

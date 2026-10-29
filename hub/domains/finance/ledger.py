@@ -1,7 +1,7 @@
 """Écriture au registre et vérification de la chaîne (tickets L1-01 et L1-02).
 
 Toute ligne d'une table protégée passe par `append()`, appelé dans une transaction
-`BEGIN IMMEDIATE` (`hub.core.db.begin_immediate`) : la tête du journal lue ici ne peut plus
+`BEGIN IMMEDIATE` (`hub.platform.db.begin_immediate`) : la tête du journal lue ici ne peut plus
 changer avant le COMMIT.
 """
 
@@ -15,10 +15,10 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core import canonical
-from hub.core.clock import now_iso
-from hub.core.text import normalize
 from hub.domains.finance import hashing
+from hub.kernel import canonical
+from hub.kernel.clock import now_iso
+from hub.kernel.text import normalize
 
 DEDUP_VERSION = "v1"
 

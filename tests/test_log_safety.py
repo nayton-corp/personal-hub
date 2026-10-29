@@ -1,6 +1,6 @@
 """Conventions : un journal ne porte ni montant, ni libellé, ni texte venu de l'extérieur.
 
-Le filtre de `hub.core.logging` rejette à l'exécution un événement qui porte une clé interdite.
+Le filtre de `hub.platform.logging` rejette à l'exécution un événement qui porte une clé interdite.
 Ce test le complète à la lecture du code : le nom d'un événement est un texte fixe (jamais une
 f-string ni une concaténation), aucune clé interdite n'est écrite, et le texte d'une exception
 (`str(exc)`, qui peut reprendre une page ou une réponse d'un tiers) n'est pas journalisé : on
@@ -10,7 +10,7 @@ garde `type(exc).__name__`.
 import ast
 from pathlib import Path
 
-from hub.core.logging import FORBIDDEN_KEYS
+from hub.platform.logging import FORBIDDEN_KEYS
 
 ROOT = Path(__file__).resolve().parents[1] / "hub"
 LEVELS = frozenset({"debug", "info", "warning", "error", "exception", "critical"})

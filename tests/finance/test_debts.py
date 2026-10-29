@@ -12,10 +12,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from hub.core.context import HubContext
-from hub.core.db import begin_immediate
 from hub.core.errors import Problem
 from hub.domains.finance import debts, ledger, valuation
 from hub.domains.finance.domain import FinanceDomain
+from hub.platform.db import begin_immediate
 from tests.factories.camt import Tx
 from tests.finance.conftest import ready_account, rows
 from tests.finance.test_double_sas import accept, client, create, ctx, fin, load

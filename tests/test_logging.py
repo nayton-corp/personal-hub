@@ -3,8 +3,8 @@ import json
 
 import structlog
 
-from hub.core import logging as hub_logging
-from hub.core.money import Money
+from hub.kernel.money import Money
+from hub.platform import logging as hub_logging
 
 
 def _capture() -> io.StringIO:

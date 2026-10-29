@@ -12,9 +12,9 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Sequence
 
-from hub.core.text import normalize
 from hub.domains.finance.camt.models import ParsedEntry
 from hub.domains.finance.ledger import dedup_hash
+from hub.kernel.text import normalize
 
 
 def base(iban: str, e: ParsedEntry) -> str:

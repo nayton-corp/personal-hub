@@ -34,7 +34,7 @@ from hub.collectors.base import Failure, Kind, Result
 from hub.collectors.dropbox import is_market_json
 from hub.collectors.http import Http
 from hub.collectors.runtime import Env
-from hub.core.money import base_currency
+from hub.kernel.money import base_currency
 
 OVERLAP_DAYS = 7
 WEI = Decimal(10) ** 18

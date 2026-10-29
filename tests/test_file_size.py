@@ -16,10 +16,10 @@ TOO_LONG: dict[str, int] = {
     "domains/finance/rebuild.py": 412,
     "domains/finance/market.py": 432,
     "core/collectors.py": 460,
-    "core/connections.py": 470,
+    "core/connections.py": 465,
     "domains/finance/api.py": 472,
     "domains/finance/lookthrough.py": 510,
-    "cli.py": 560,
+    "cli.py": 558,
     "collectors/exchanges/binance_history.py": 583,
     "web/budget.js": 600,
     "domains/finance/performance.py": 648,
@@ -34,7 +34,7 @@ TOO_LONG: dict[str, int] = {
     "core/proposals.py": 833,
     "collectors/market/flow.py": 1047,
     "domains/finance/handlers.py": 1281,
-    "domains/finance/importer.py": 1424,
+    "domains/finance/importer.py": 1422,
 }
 
 

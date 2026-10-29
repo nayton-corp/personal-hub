@@ -10,10 +10,10 @@ from typer.testing import CliRunner
 
 from hub.core import profile
 from hub.core.coredb import CoreDB
-from hub.core.db import begin_immediate
-from hub.core.settings import Settings
 from hub.domains.finance import packs, rules
 from hub.domains.finance.domain import FinanceDomain
+from hub.platform.db import begin_immediate
+from hub.platform.settings import Settings
 from tests.finance.conftest import rows
 
 # lieux et comptes de l'ancien script personnel : jamais dans un pack livré

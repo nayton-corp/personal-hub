@@ -7,9 +7,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
-from hub.core.db import make_engine
-
-CORE_MIGRATIONS = Path(__file__).parent
+from hub.platform.db import make_engine
 
 
 def url_to_path(url: str) -> Path:

@@ -19,7 +19,7 @@ Create Date: 2026-10-28
 import sqlalchemy as sa
 from alembic import op
 
-from hub.core.clock import now_iso
+from hub.kernel.clock import now_iso
 
 revision = "0004_connections"
 down_revision = "0003_profile"

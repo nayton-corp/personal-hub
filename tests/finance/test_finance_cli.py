@@ -14,8 +14,8 @@ from typer.testing import CliRunner
 
 from hub import cli as hub_cli
 from hub.core.coredb import CoreDB
-from hub.core.settings import get_settings
 from hub.domains.finance.domain import FinanceDomain
+from hub.platform.settings import get_settings
 from tests.factories.camt import IBAN, camt053
 from tests.finance.conftest import simple_stmt
 from tests.finance.test_importer import _folder, _months

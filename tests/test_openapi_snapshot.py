@@ -11,7 +11,7 @@ from pathlib import Path
 from hub.api.app import create_app
 from hub.core.context import HubContext
 from hub.core.registry import Registry
-from hub.core.settings import Settings
+from hub.platform.settings import Settings
 
 SNAPSHOT = Path(__file__).parent / "openapi.snapshot.json"
 

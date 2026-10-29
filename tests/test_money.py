@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from hub.core.money import CurrencyError, Money, quantize
+from hub.kernel.money import CurrencyError, Money, quantize
 
 
 def test_display_and_api() -> None:

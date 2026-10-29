@@ -322,7 +322,7 @@ def test_suggest_stops_cleanly(
     report = suggest(box_for(client, ctx, "brain"), Scripted(down), Memory(tmp_path))
     assert report.stopped == "modèle injoignable"
     assert report.proposals == 0
-    from hub.core.settings import Auth
+    from hub.platform.settings import Auth
 
     ctx.settings = ctx.settings.model_copy(update={"auth": Auth(token_proposals_per_hour=1)})
     box = box_for(client, ctx, "brain")

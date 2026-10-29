@@ -28,10 +28,10 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core.money import DECIMAL_CONTEXT, Money, base_currency
-from hub.core.text import normalize
 from hub.domains.finance import assets, valuation
 from hub.domains.finance.assets import AssetError, DocumentError, Result
+from hub.kernel.money import DECIMAL_CONTEXT, Money, base_currency
+from hub.kernel.text import normalize
 
 SOURCE = "lookthrough"
 DIMENSIONS = ("region", "sector", "currency", "holding")

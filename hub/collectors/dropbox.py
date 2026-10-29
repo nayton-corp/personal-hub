@@ -22,7 +22,7 @@ from pathlib import Path
 from lxml import etree
 
 from hub.collectors.base import Failure, Memory
-from hub.core.clock import utcnow
+from hub.kernel.clock import utcnow
 
 CAMT053 = "urn:iso:std:iso:20022:tech:xsd:camt.053.001."
 MAX_BYTES = 50 * 1024 * 1024

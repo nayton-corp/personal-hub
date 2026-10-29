@@ -51,10 +51,12 @@ Un nom qui n'est pas un tag git `vX.Y.Z` du clone (`dev`, `essai`, ou une versio
 taguée comme les v0.11.x d'avant S13), ou `HUB_BUILD=1`, construit les images sur le Mac depuis
 le clone, comme avant.
 
-## Une fois sur le Mac : accès à GHCR
+## Accès à GHCR depuis le Mac
 
-Le dépôt est privé, ses images aussi. Crée un jeton GitHub *classic* limité à
-`read:packages` (Settings → Developer settings → Personal access tokens), puis :
+Le dépôt est public (décision du 29.10.2026), ses images aussi : `docker pull` n'a besoin
+d'aucune connexion. Elles ne contiennent que le code, jamais une donnée. Si le dépôt devient
+privé, crée un jeton GitHub *classic* limité à `read:packages` (Settings → Developer settings →
+Personal access tokens), puis, une fois :
 
 ```
 docker login ghcr.io -u <ton-compte-github>

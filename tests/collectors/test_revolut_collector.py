@@ -19,7 +19,7 @@ from hub.collectors.base import Failure
 from hub.collectors.revolut import flow
 from hub.collectors.revolut.enable_banking import EnableBanking, jwt
 from hub.collectors.runtime import execute
-from hub.core.clock import iso, utcnow
+from hub.kernel.clock import iso, utcnow
 from tests.collectors.conftest import FakeHub
 
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)

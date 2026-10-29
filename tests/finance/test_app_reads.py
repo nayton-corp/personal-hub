@@ -15,11 +15,11 @@ from sqlalchemy import text
 
 from hub.api.app import create_app
 from hub.core.context import HubContext
-from hub.core.db import begin_immediate
 from hub.core.registry import Registry
 from hub.domains.finance import catalog, importer, insights, ledger, period, snapshots, valuation
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
+from hub.platform.db import begin_immediate
 from tests.factories.camt import IBAN, IBAN_2, OTHER_IBAN, Stmt, Tx, camt053
 from tests.finance.conftest import finance_settings, rows, without_seed_rules
 from tests.finance.test_finance_api import app_session, token

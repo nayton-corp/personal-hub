@@ -16,11 +16,11 @@ from typing import Any
 from sqlalchemy import Connection, text
 from sqlalchemy.exc import OperationalError
 
-from hub.core.clock import local_tz, now_iso
 from hub.core.coredb import audit
-from hub.core.db import make_engine
-from hub.core.money import base_currency
-from hub.core.settings import Settings
+from hub.kernel.clock import local_tz, now_iso
+from hub.kernel.money import base_currency
+from hub.platform.db import make_engine
+from hub.platform.settings import Settings
 
 _COUNTRY = re.compile(r"^[A-Z]{2}$")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")

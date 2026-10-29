@@ -12,9 +12,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Connection, text
 
 from hub.core.context import HubContext
-from hub.core.db import begin_immediate
 from hub.domains.finance import assets, catalog, debts, ledger, performance, valuation
 from hub.domains.finance.domain import FinanceDomain
+from hub.platform.db import begin_immediate
 from tests.finance.conftest import add_account, open_account
 from tests.finance.test_double_sas import client, ctx, fin
 from tests.finance.test_finance_api import token

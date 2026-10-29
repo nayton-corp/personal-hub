@@ -32,11 +32,11 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core import canonical
-from hub.core.ids import urn
-from hub.core.money import DECIMAL_CONTEXT, base_currency
 from hub.domains.finance import assets, catalog, exchange, ledger, links
 from hub.domains.finance.assets import AssetError, DocumentError, Result
+from hub.kernel import canonical
+from hub.kernel.ids import urn
+from hub.kernel.money import DECIMAL_CONTEXT, base_currency
 
 FORMAT = "hub.market.v1"
 SOURCE = "market"

@@ -7,11 +7,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from hub.api.app import create_app
-from hub.core import logging as hub_logging
 from hub.core import tokens
 from hub.core.context import HubContext
 from hub.core.registry import Registry
-from hub.core.settings import Paths, Server, Settings
+from hub.platform import logging as hub_logging
+from hub.platform.settings import Paths, Server, Settings
 from tests.support.demo_domain import DemoDomain
 
 

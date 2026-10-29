@@ -16,7 +16,6 @@ from sqlalchemy import Connection, text
 from hub.api.app import create_app
 from hub.core import tokens
 from hub.core.context import HubContext
-from hub.core.db import begin_immediate
 from hub.core.registry import Registry
 from hub.domains.finance import (
     catalog,
@@ -32,6 +31,7 @@ from hub.domains.finance import (
 )
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
+from hub.platform.db import begin_immediate
 from tests.factories.camt import IBAN, Stmt, Tx, camt053
 from tests.finance.conftest import (
     add_account,

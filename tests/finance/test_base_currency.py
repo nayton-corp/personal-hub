@@ -11,12 +11,12 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy import text
 
-from hub.core.db import begin_immediate
-from hub.core.migrations import runner
-from hub.core.money import CurrencyError, base_currency
 from hub.domains.finance import catalog, handlers, insights, market, valuation
 from hub.domains.finance.domain import MIGRATIONS, CurrencyMismatch, FinanceDomain
 from hub.domains.finance.importer import Incoming
+from hub.kernel.money import CurrencyError, base_currency
+from hub.platform import migrations as runner
+from hub.platform.db import begin_immediate
 from tests.finance.conftest import finance_settings, open_account
 
 

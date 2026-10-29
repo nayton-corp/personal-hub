@@ -40,9 +40,9 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core.money import DECIMAL_CONTEXT, base_currency
 from hub.domains.finance import debts, institutions, valuation
 from hub.domains.finance.reads import money
+from hub.kernel.money import DECIMAL_CONTEXT, base_currency
 
 INCOME_CATEGORIES = ("rendement", "interets-dividendes")
 FEE_CATEGORIES = ("frais-placement",)

@@ -23,9 +23,9 @@ from hub.collectors.base import (
 from hub.collectors.browser import Browser, Selectors, open_browser, purge_diag
 from hub.collectors.client import HubClient, HubUnavailable
 from hub.collectors.dropbox import Inbox
-from hub.core import cron
-from hub.core.clock import local_today, local_tz, now_iso
-from hub.core.logging import get_logger
+from hub.kernel.clock import local_today, local_tz, now_iso
+from hub.platform import cron
+from hub.platform.logging import get_logger
 
 log = get_logger("hub.collector")
 

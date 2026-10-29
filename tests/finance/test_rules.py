@@ -12,10 +12,10 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from sqlalchemy import text
 
-from hub.core.db import begin_immediate
 from hub.domains.finance import catalog, legacy, rules
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
+from hub.platform.db import begin_immediate
 from tests.factories.camt import IBAN, IBAN_2, Stmt, Tx, camt053
 from tests.finance.conftest import (
     add_account,

@@ -22,10 +22,10 @@ from decimal import Decimal, localcontext
 
 from sqlalchemy import Connection
 
-from hub.core.ids import urn
-from hub.core.money import DECIMAL_CONTEXT, base_currency
 from hub.domains.finance import assets, catalog, ledger
 from hub.domains.finance.assets import AssetError, DocumentError, Result
+from hub.kernel.ids import urn
+from hub.kernel.money import DECIMAL_CONTEXT, base_currency
 
 SOURCE = "positions_csv"
 HEADER = ("date", "account", "instrument", "name", "kind", "quantity", "price", "currency")

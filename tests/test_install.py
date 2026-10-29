@@ -10,7 +10,8 @@ import pytest
 from typer.testing import CliRunner
 
 from hub import cli
-from hub.core import install, profile, secrets
+from hub.core import install, profile
+from hub.platform import secrets
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "deploy" / ".env.example"

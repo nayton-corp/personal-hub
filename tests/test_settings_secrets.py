@@ -3,8 +3,8 @@ from pathlib import Path
 import pyrage
 import pytest
 
-from hub.core import secrets
-from hub.core.settings import Server, Settings
+from hub.platform import secrets
+from hub.platform.settings import Server, Settings
 
 
 def test_toml_then_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

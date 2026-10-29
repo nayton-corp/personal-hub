@@ -17,7 +17,6 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core.money import DECIMAL_CONTEXT, Money, base_currency, quantize
 from hub.domains.finance import institutions, transfers, valuation
 from hub.domains.finance.reads import (
     MIN_COUNT_FOR_AGGREGATES,
@@ -33,6 +32,7 @@ from hub.domains.finance.reads import (
     period_lines,
     shift_month,
 )
+from hub.kernel.money import DECIMAL_CONTEXT, Money, base_currency, quantize
 
 STALE_DAYS = 45
 QTY_QUANTUM = Decimal("1e-12")  # quantités crypto des relevés, arrondies à 12 décimales

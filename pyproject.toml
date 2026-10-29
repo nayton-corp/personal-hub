@@ -117,14 +117,14 @@ root_package = "hub"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "Le cœur ne dépend d'aucun domaine (couches core → domains)"
+name = "Étages : domaines → cœur → plateforme → noyau, jamais vers le haut"
 type = "layers"
-layers = ["hub.domains", "hub.core"]
+layers = ["hub.domains", "hub.core", "hub.platform", "hub.kernel"]
 
 [[tool.importlinter.contracts]]
 name = "Ni l'API ni la CLI n'importent un domaine : elles passent par le registre"
 type = "forbidden"
-source_modules = ["hub.core", "hub.api", "hub.cli"]
+source_modules = ["hub.kernel", "hub.platform", "hub.core", "hub.api", "hub.cli"]
 forbidden_modules = ["hub.domains", "hub.collectors", "hub.brain"]
 
 [[tool.importlinter.contracts]]
@@ -137,7 +137,7 @@ forbidden_modules = ["hub.domains", "hub.api", "hub.cli"]
 name = "Le brain ne voit le hub que par son API : ni domaine, ni base, ni route"
 type = "forbidden"
 source_modules = ["hub.brain"]
-forbidden_modules = ["hub.domains", "hub.api", "hub.cli", "hub.collectors", "hub.core.db", "hub.core.coredb", "hub.core.proposals"]
+forbidden_modules = ["hub.domains", "hub.api", "hub.cli", "hub.collectors", "hub.platform.db", "hub.core.coredb", "hub.core.proposals"]
 
 [[tool.importlinter.contracts]]
 name = "Les domaines sont indépendants entre eux (lecture croisée par public.py)"
@@ -153,16 +153,16 @@ unmatched_ignore_imports_alerting = "none"
 # ajoute jamais une ligne : un nouvel écart se corrige dans le code.
 
 [[tool.importlinter.contracts]]
-name = "Noyau (futur hub.kernel) : pur, sans E/S ni autre module du hub"
+name = "Noyau (hub.kernel) : pur, sans E/S ni autre module du hub"
 type = "forbidden"
-source_modules = ["hub.core.money", "hub.core.canonical", "hub.core.clock", "hub.core.ids", "hub.core.text"]
-forbidden_modules = ["sqlalchemy", "fastapi", "starlette", "typer", "httpx", "structlog", "pydantic", "hub.api", "hub.cli", "hub.domains", "hub.core.db", "hub.core.coredb", "hub.core.settings", "hub.core.logging"]
+source_modules = ["hub.kernel"]
+forbidden_modules = ["sqlalchemy", "alembic", "fastapi", "starlette", "typer", "httpx", "structlog", "pydantic", "pydantic_settings", "hub.platform", "hub.core", "hub.api", "hub.cli", "hub.domains", "hub.collectors", "hub.brain"]
 
 [[tool.importlinter.contracts]]
-name = "Plateforme (futur hub.platform) : bases, réglages, secrets, journaux, sans le métier du cœur"
+name = "Plateforme (hub.platform) : bases, migrations, réglages, secrets, journaux, sans métier"
 type = "forbidden"
-source_modules = ["hub.core.db", "hub.core.coredb", "hub.core.settings", "hub.core.secrets", "hub.core.logging", "hub.core.cron"]
-forbidden_modules = ["hub.core.proposals", "hub.core.tokens", "hub.core.auth", "hub.core.passkeys", "hub.core.sessions", "hub.core.registry", "hub.core.domain", "hub.core.tools", "hub.core.profile", "hub.core.connectors", "hub.core.connections", "hub.core.collectors", "hub.core.install", "hub.core.notify", "hub.core.maintenance", "hub.core.context"]
+source_modules = ["hub.platform"]
+forbidden_modules = ["fastapi", "starlette", "typer", "hub.core", "hub.api", "hub.cli", "hub.domains", "hub.collectors", "hub.brain"]
 
 [[tool.importlinter.contracts]]
 name = "Le cœur n'importe ni FastAPI ni Typer : HTTP et ligne de commande sont des bords"
@@ -182,7 +182,7 @@ unmatched_ignore_imports_alerting = "error"
 name = "Finance : les modules purs (futur model) ne touchent ni SQL, ni HTTP, ni le cœur"
 type = "forbidden"
 source_modules = ["hub.domains.finance.hashing", "hub.domains.finance.period", "hub.domains.finance.merchant", "hub.domains.finance.institutions", "hub.domains.finance.camt", "hub.domains.finance.viac.models", "hub.domains.finance.viac.notice", "hub.domains.finance.viac.report", "hub.domains.finance.viac.text", "hub.domains.finance.xlsx", "hub.domains.finance.dedup", "hub.domains.finance.revolut"]
-forbidden_modules = ["sqlalchemy", "fastapi", "typer", "httpx", "hub.core.db", "hub.core.coredb", "hub.core.proposals"]
+forbidden_modules = ["sqlalchemy", "fastapi", "typer", "httpx", "hub.platform.db", "hub.core.coredb", "hub.core.proposals"]
 ignore_imports = ["hub.domains.finance.dedup -> hub.domains.finance.ledger"]
 unmatched_ignore_imports_alerting = "error"
 

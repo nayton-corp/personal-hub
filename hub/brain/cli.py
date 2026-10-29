@@ -33,11 +33,11 @@ from hub.brain.suggest import (
     suggest,
 )
 from hub.brain.toolbox import Toolbox
-from hub.core import cron
-from hub.core import logging as hub_logging
-from hub.core.clock import local_tz
-from hub.core.logging import get_logger
-from hub.core.settings import get_settings
+from hub.kernel.clock import local_tz
+from hub.platform import cron
+from hub.platform import logging as hub_logging
+from hub.platform.logging import get_logger
+from hub.platform.settings import get_settings
 
 CRONTAB = Path("/srv/hub/app/deploy/brain-crontab")
 CHECK_QUESTION = "Combien ai-je dépensé en restaurants ce mois-ci ?"

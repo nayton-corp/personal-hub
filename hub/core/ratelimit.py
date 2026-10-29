@@ -6,8 +6,8 @@ from datetime import timedelta
 
 from sqlalchemy import Connection, Engine, text
 
-from hub.core.clock import iso, utcnow
 from hub.core.errors import Problem
+from hub.kernel.clock import iso, utcnow
 
 
 def hit(conn: Connection, key: str) -> int:

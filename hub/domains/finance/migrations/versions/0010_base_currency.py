@@ -13,7 +13,7 @@ Create Date: 2026-10-28
 import sqlalchemy as sa
 from alembic import op
 
-from hub.core.money import DEFAULT_BASE, base_currency
+from hub.kernel.money import DEFAULT_BASE, base_currency
 
 revision = "0010_base_currency"
 down_revision = "0009_rule_packs"

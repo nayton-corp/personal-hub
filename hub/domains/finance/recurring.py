@@ -26,10 +26,10 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.core.clock import now_iso
-from hub.core.money import DECIMAL_CONTEXT, Money
-from hub.core.text import normalize
 from hub.domains.finance.reads import money
+from hub.kernel.clock import now_iso
+from hub.kernel.money import DECIMAL_CONTEXT, Money
+from hub.kernel.text import normalize
 
 WINDOW = 12
 MIN_FOR_AGGREGATES = 3  # comme les résumés : moins de 3, regroupé dans « Autres »

@@ -6,12 +6,12 @@ from pathlib import Path
 
 from sqlalchemy import Connection, Engine, text
 
-from hub.core.clock import now_iso
-from hub.core.db import make_engine
-from hub.core.migrations import runner
-from hub.core.settings import Settings
+from hub.kernel.clock import now_iso
+from hub.platform import migrations as runner
+from hub.platform.db import make_engine
+from hub.platform.settings import Settings
 
-CORE_SCRIPT_LOCATION = runner.CORE_MIGRATIONS
+CORE_SCRIPT_LOCATION = Path(__file__).parent / "migrations"
 
 
 class CoreDB:

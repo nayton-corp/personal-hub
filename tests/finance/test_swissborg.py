@@ -10,10 +10,10 @@ from xml.sax.saxutils import escape
 
 import pytest
 
-from hub.core.db import begin_immediate
 from hub.domains.finance import catalog, insights, market, swissborg, transfers, valuation, xlsx
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import ImportRefused, Incoming
+from hub.platform.db import begin_immediate
 from tests.finance.conftest import rows
 
 NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'

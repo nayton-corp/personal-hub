@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from hub.core.cron import parse, tick
+from hub.platform.cron import parse, tick
 
 CRONTAB = """
 # commentaire

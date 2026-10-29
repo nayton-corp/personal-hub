@@ -26,9 +26,9 @@ from hub.collectors import base
 from hub.collectors.base import Failure
 from hub.collectors.client import HubClient
 from hub.collectors.runtime import Assigned, Env, execute, run_forever, start_link
-from hub.core import logging as hub_logging
-from hub.core.clock import now_iso
-from hub.core.settings import get_settings
+from hub.kernel.clock import now_iso
+from hub.platform import logging as hub_logging
+from hub.platform.settings import get_settings
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, help="Collecteurs du Personal Hub")
 revolut_app = typer.Typer(no_args_is_help=True, help="Connexion « revolut » (anciens noms)")

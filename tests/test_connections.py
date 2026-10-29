@@ -19,13 +19,14 @@ from hub import cli
 from hub.api.app import create_app
 from hub.collectors import base
 from hub.collectors.runtime import Assigned
-from hub.core import collectors, connections, secrets
-from hub.core.clock import now_iso
+from hub.core import collectors, connections
 from hub.core.context import HubContext
+from hub.core.coredb import CORE_SCRIPT_LOCATION
 from hub.core.errors import Problem
-from hub.core.migrations import runner as migrations
 from hub.core.registry import Registry
-from hub.core.settings import Secrets, Settings, get_settings
+from hub.kernel.clock import now_iso
+from hub.platform import migrations, secrets
+from hub.platform.settings import Secrets, Settings, get_settings
 from tests.conftest import bearer, make_settings
 from tests.finance.test_finance_api import app_session
 from tests.support.demo_domain import DemoDomain
@@ -70,7 +71,7 @@ def _token(hub: HubContext, *scopes: str) -> str:
 
 def test_migration_turns_known_collectors_into_connections(tmp_path: Path) -> None:
     db = tmp_path / "core.db"
-    migrations.upgrade(migrations.CORE_MIGRATIONS, db, "0003_profile")
+    migrations.upgrade(CORE_SCRIPT_LOCATION, db, "0003_profile")
     engine = create_engine(f"sqlite:///{db}")
     with engine.begin() as conn:
         for name in ("bcf", "revolut", "ancien"):
@@ -82,7 +83,7 @@ def test_migration_turns_known_collectors_into_connections(tmp_path: Path) -> No
                 {"n": name},
             )
     engine.dispose()
-    migrations.upgrade(migrations.CORE_MIGRATIONS, db)
+    migrations.upgrade(CORE_SCRIPT_LOCATION, db)
     engine = create_engine(f"sqlite:///{db}")
     with engine.connect() as conn:
         found = {c.id: c for c in connections.list_all(conn)}

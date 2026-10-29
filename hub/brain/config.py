@@ -8,8 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from hub.core import secrets
-from hub.core.settings import Settings
+from hub.platform import secrets
+from hub.platform.settings import Settings
 
 TokenName = Literal["brain", "aggregates"]
 

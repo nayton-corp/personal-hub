@@ -13,11 +13,12 @@ from typing import Any
 
 from sqlalchemy import Engine
 
-from hub.core import collectors, passkeys, proposals, ratelimit, secrets, sessions
-from hub.core.clock import utcnow
+from hub.core import collectors, passkeys, proposals, ratelimit, sessions
 from hub.core.context import HubContext
-from hub.core.db import backup, integrity_check
-from hub.core.logging import get_logger
+from hub.kernel.clock import utcnow
+from hub.platform import secrets
+from hub.platform.db import backup, integrity_check
+from hub.platform.logging import get_logger
 
 log = get_logger("hub.maintenance")
 
