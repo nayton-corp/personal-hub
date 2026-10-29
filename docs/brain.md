@@ -30,7 +30,7 @@ téléphone ──► hub (api) ◄── brain ──► Ollama (macOS, GPU)
 
 | Jeton | Portées | Pour | Voit |
 |---|---|---|---|
-| `brain` | `finance:read finance:propose` | le modèle local | les 15 outils : totaux, écritures, recherche, propositions |
+| `brain` | `finance:read finance:propose` | le modèle local | les 16 outils : totaux, écritures, recherche, propositions |
 | `aggregates` | `*:aggregates` | un client externe (Claude Desktop, si tu le veux un jour) | 7 outils de totaux, jamais une écriture |
 
 Avec le jeton `aggregates`, une catégorie ou un mois qui compte moins de 3 écritures est fondu
@@ -94,11 +94,20 @@ hubc exec brain hub-brain suggest --dry-run      # voir les suggestions sans cr�
 hubc exec brain hub-brain suggest                # créer les cartes maintenant
 hubc exec brain hub-brain catchup --dry-run      # rattrapage : la règle qu'il proposerait par commerçant
 hubc exec brain hub-brain catchup                # jusqu'à 50 règles, à valider ensemble (« À valider »)
+hubc exec brain hub-brain direct --dry-run       # achats uniques : la catégorie qu'il choisirait
+hubc exec brain hub-brain direct                 # une carte par catégorie, sans règle
 ```
 
 `catchup` sert à vider une longue file « À classer » : une règle par commerçant (le motif est le
 nom du groupe, le sens celui du groupe), qui classe le passé et les imports suivants. Un
 commerçant déjà proposé ne revient pas ; relance-le une heure plus tard pour les 50 suivants.
+
+`direct` finit la file quand il n'y reste que des achats uniques (un commerçant vu une seule
+fois ; `--max-count 2` pour deux) : une règle n'y servirait à rien. Le modèle choisit une
+catégorie par commerçant, puis une carte par catégorie réunit les écritures (30 au plus). Dans
+« À valider », « Voir les écritures » déplie la carte : décoche celles qui ne vont pas, le reste
+se valide du même Face ID. Un commerçant dont le modèle n'est pas sûr reste à classer à la main
+et n'est plus redemandé.
 
 Le Mac éteint ou Ollama arrêté, le passage de 8 h 30 échoue sans rien casser ; il reprend le
 lendemain.

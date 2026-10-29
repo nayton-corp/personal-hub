@@ -382,6 +382,11 @@ button:disabled { cursor: default; }
 .prop b { display: block; font-size: 14px; }
 .prop span span { font-size: 12.5px; color: var(--muted); display: block; }
 .prop .reject { margin-left: auto; color: var(--muted); font-size: 12.5px; font-weight: 600; min-height: 36px; text-decoration: underline; text-underline-offset: 3px; flex: none; }
+.prop-more { margin: -4px 0 6px 30px; font-size: 13px; }
+.prop-more summary { color: var(--accent); font-weight: 600; cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.prop-more .check-in { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.prop-more .check-in span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prop-more .check-in .num { color: var(--muted); font-size: 12.5px; flex: none; }
 .err { color: var(--neg); font-size: 12.5px; margin-top: 6px; }
 
 /* message éphémère */

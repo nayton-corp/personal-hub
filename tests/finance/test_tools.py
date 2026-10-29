@@ -1,4 +1,4 @@
-"""Lot 7 : les quinze outils Finance de l'assistant, par les routes `/api/tools`.
+"""Lot 7 : les seize outils Finance de l'assistant, par les routes `/api/tools`.
 
 Le jeton « brain » lit tout et propose ; le jeton « agrégats » ne voit que des totaux.
 """
@@ -46,7 +46,7 @@ def call(client: TestClient, headers: dict[str, str], name: str, **args: Any) ->
 def test_capabilities_by_token(client: TestClient, ctx: HubContext) -> None:
     brain = client.get("/api/tools", headers=token(ctx, "brain")).json()["domains"]
     assert [d["domain"] for d in brain] == ["finance"]
-    assert len(brain[0]["tools"]) == 15
+    assert len(brain[0]["tools"]) == 16
     assert brain[0]["aggregates_only"] is False
     agg = client.get("/api/tools", headers=token(ctx, "aggregates")).json()["domains"]
     assert set(agg[0]["tools"]) == AGGREGATE_TOOLS
@@ -197,6 +197,15 @@ def test_proposals_need_a_card(client: TestClient, ctx: HubContext, year: Financ
         json={"category": "salaire", "amount": "10"},
     )
     assert r.status_code == 422
+    many = call(
+        client, brain, "finance_propose_categories", entry_ids=[entry], category="alimentation"
+    )
+    with ctx.core.engine.connect() as conn:
+        p = proposals.get(conn, many["proposal_id"])
+    assert p.kind == "categorize_entries"
+    assert p.params == {"entry_ids": [entry], "category_id": "alimentation", "suggested": True}
+    page = call(client, brain, "finance_to_review", limit=1, offset=1)
+    assert len(page["groups"]) <= 1
     rule = call(client, brain, "finance_propose_rule", keyword="Kiosque", category="loisirs")
     with ctx.core.engine.connect() as conn:
         assert proposals.get(conn, rule["proposal_id"]).params["pattern"] == "kiosque"

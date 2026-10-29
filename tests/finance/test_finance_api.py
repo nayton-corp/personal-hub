@@ -364,7 +364,7 @@ def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceD
     (acc,) = client.get("/api/finance/accounts", headers=token(ctx, "brain")).json()["items"]
     assert loaded.resolve(f"hub:finance:account:{acc['id']}") is not None
     assert loaded.resolve(events[1].urn) is not None
-    assert len(loaded.mcp_tools()) == 15  # lot 7
+    assert len(loaded.mcp_tools()) == 16  # lot 7, puis la catégorisation par lot
 
 
 def test_viac_pdf_upload_and_holdings(

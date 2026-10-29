@@ -23,7 +23,15 @@ from hub.brain.config import BrainConfig, TokenMissing, TokenName, config, token
 from hub.brain.hubapi import HubApi, HubError
 from hub.brain.llm import LlmError, OpenAICompatible
 from hub.brain.mcp import McpServer
-from hub.brain.suggest import CATCHUP_MAX, Memory, Report, catchup, suggest
+from hub.brain.suggest import (
+    CATCHUP_MAX,
+    DIRECT_MAX,
+    Memory,
+    Report,
+    catchup,
+    direct,
+    suggest,
+)
 from hub.brain.toolbox import Toolbox
 from hub.core import cron
 from hub.core import logging as hub_logging
@@ -130,6 +138,26 @@ def catchup_cmd(
         _toolbox(cfg, "brain"), _model(cfg), Memory(cfg.state_dir), limit=limit, dry_run=dry_run
     )
     _report("brain.catchup", report, dry_run)
+
+
+@app.command("direct")
+def direct_cmd(
+    limit: Annotated[int, typer.Option(min=1, max=1000, help="commerçants")] = DIRECT_MAX,
+    max_count: Annotated[int, typer.Option(min=1, max=5, help="vu au plus N fois")] = 1,
+    dry_run: Annotated[bool, typer.Option(help="affiche sans créer de carte")] = False,
+) -> None:
+    """Fin de « À classer » : les achats uniques, une carte par catégorie, sans règle."""
+    hub_logging.configure(get_settings().log_level, stream=sys.stderr)
+    cfg = _cfg()
+    report = direct(
+        _toolbox(cfg, "brain"),
+        _model(cfg),
+        Memory(cfg.state_dir),
+        limit=limit,
+        max_count=max_count,
+        dry_run=dry_run,
+    )
+    _report("brain.direct", report, dry_run)
 
 
 def _report(event: str, report: Report, dry_run: bool) -> None:

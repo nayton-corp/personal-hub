@@ -341,6 +341,36 @@ def test_rules_for_different_merchants_validate_together(
     assert current(fin, "Bidule Fictif")[0] == "cadeaux"
 
 
+def test_categorize_entries_in_one_card(ctx: HubContext, fin: FinanceDomain) -> None:
+    """Achats uniques : une carte pour plusieurs écritures, périmée si l'une d'elles change."""
+    ready_account(fin)
+    load(
+        fin,
+        [
+            Tx("10.00", True, D, counterparty="Zorglub Fictif"),
+            Tx("12.50", True, D, counterparty="Bidule Fictif"),
+        ],
+    )
+    ids = [entry_id(fin, "Zorglub Fictif"), entry_id(fin, "Bidule Fictif")]
+    p = create(ctx, "categorize_entries", {"entry_ids": ids, "category_id": "loisirs"})
+    assert p.preview["details"]["count"] == 2
+    assert p.preview["summary"].startswith("2 écritures → ")
+    stale = create(
+        ctx,
+        "categorize_entries",
+        {"entry_ids": ids[:1], "category_id": "divers", "suggested": True},
+    )
+    out = accept(ctx, p)
+    assert out.result == {"changed": 2}
+    assert current(fin, "Bidule Fictif") == ("loisirs", "user")
+    with pytest.raises(Problem, match="conflict"):  # l'écriture a changé depuis l'aperçu
+        accept(ctx, stale)
+    with pytest.raises(Problem):
+        create(ctx, "categorize_entries", {"entry_ids": [ids[0], ids[0]], "category_id": "divers"})
+    with pytest.raises(Problem):
+        create(ctx, "categorize_entries", {"entry_ids": ["e0fff"], "category_id": "divers"})
+
+
 def test_rule_never_takes_a_human_decision(ctx: HubContext, fin: FinanceDomain) -> None:
     ready_account(fin)
     load(fin, [Tx("10.00", True, D, counterparty="Zorglub Fictif")])

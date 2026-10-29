@@ -5,9 +5,9 @@ import { budgetPath, model } from "./budget.js";
 import { go } from "./finance.js";
 import { base, date, monthName } from "./format.js";
 import { catMark } from "./meta.js";
-import { approve, outcome, pendingPath } from "./proposals.js";
+import { approve, outcome, pendingPath, propose } from "./proposals.js";
 import { api, store } from "./store.js";
-import { SHEETS, closeSheet, esc, failure, fill, ibox, ic, n0, nf, openSheet, pctOnly, pf, sgn, toast } from "./ui.js";
+import { SHEETS, closeSheet, esc, failure, fill, ibox, ic, n0, n2, nf, openSheet, pctOnly, pf, sgn, toast } from "./ui.js";
 import * as wealth from "./wealth.js";
 
 const $ = (id) => document.getElementById(id);
@@ -16,6 +16,7 @@ const kpisPath = () => `/finance/kpis?month=${store.today}`;
 const alertsPath = "/finance/alerts";
 const connPath = "/collectors/connections";
 const unchecked = new Set(); // propositions décochées dans le panneau « À valider »
+const dropped = new Map(); // carte à plusieurs écritures → écritures décochées
 let busy = false;
 
 function sparkPath(k) {
@@ -150,6 +151,18 @@ function by(principal) {
   return "proposée depuis l'app";
 }
 
+// carte « plusieurs écritures, une catégorie » : la liste se déplie, chaque écriture se décoche
+const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+function entriesOf(p) {
+  if (p.kind !== "categorize_entries") return "";
+  const off = dropped.get(p.id) || new Set();
+  const list = p.preview.details.entries || [];
+  return `<details class="prop-more"${off.size ? " open" : ""}><summary>Voir les ${list.length} écritures${off.size ? ` · ${off.size} retirée${off.size > 1 ? "s" : ""}` : ""}</summary>
+    ${list.map((e) => `<label class="check-in"><input type="checkbox" data-pentry="${esc(p.id)}" data-eid="${esc(e.id)}" ${off.has(e.id) ? "" : "checked"}>
+      <span>${esc(e.merchant ? capital(e.merchant) : e.counterparty || "Écriture")}</span><span class="num">${date(e.booking_date)} · ${n2(e.amount.minor / 100)}</span></label>`).join("")}
+  </details>`;
+}
+
 SHEETS.props = () => {
   const pe = store.data(pendingPath);
   const list = pe ? pe.items : [];
@@ -160,12 +173,21 @@ SHEETS.props = () => {
     body: `<p class="hint">Rien ne change au registre sans ton Face ID. Décoche ce que tu veux garder pour plus tard.</p>` + list.map((p) => `
       <div class="prop"><input type="checkbox" id="prop-${esc(p.id)}" data-prop="${esc(p.id)}" ${unchecked.has(p.id) ? "" : "checked"}>
         <label for="prop-${esc(p.id)}"><b>${esc(p.preview.summary)}</b><span><span>${p.revision > 1 ? `révision ${p.revision} · a changé, relis-la` : by(p.created_by)}</span>${p.reason && p.created_by.startsWith("token:") ? `<span>« ${esc(p.reason)} »</span>` : ""}</span></label>
-        <button class="reject" type="button" data-a="prop-reject" data-v="${esc(p.id)}">Refuser</button></div>`).join(""),
+        <button class="reject" type="button" data-a="prop-reject" data-v="${esc(p.id)}">Refuser</button></div>${entriesOf(p)}`).join(""),
     foot: `<button class="primary" type="button" data-a="props-ok" ${ids.length && !busy ? "" : "disabled"}>${ic("faceid")}${busy ? "Validation…" : ids.length ? `Valider ${ids.length} avec Face ID` : "Rien de coché"}</button>`,
   };
 };
 
 document.addEventListener("change", (e) => {
+  const pid = e.target.dataset && e.target.dataset.pentry;
+  if (pid) {
+    const off = dropped.get(pid) || new Set();
+    if (e.target.checked) off.delete(e.target.dataset.eid);
+    else off.add(e.target.dataset.eid);
+    dropped.set(pid, off);
+    store.notify();
+    return;
+  }
   const id = e.target.dataset && e.target.dataset.prop;
   if (!id) return;
   if (e.target.checked) unchecked.delete(id);
@@ -173,11 +195,32 @@ document.addEventListener("change", (e) => {
   store.notify();
 });
 
+// une carte dont on a retiré des écritures est remplacée par une carte sans elles, validée du
+// même Face ID ; toutes retirées, elle est refusée
+async function trimmed(ids) {
+  const pe = store.data(pendingPath);
+  const byId = new Map((pe ? pe.items : []).map((p) => [p.id, p]));
+  const out = [];
+  for (const id of ids) {
+    const p = byId.get(id);
+    const off = dropped.get(id);
+    if (!p || !off || !off.size) {
+      out.push(id);
+      continue;
+    }
+    const keep = p.params.entry_ids.filter((e) => !off.has(e));
+    if (keep.length) out.push((await propose(p.kind, { ...p.params, entry_ids: keep }, `app-${Date.now()}`)).id);
+    await api(`/proposals/${id}/reject`, {});
+    dropped.delete(id);
+  }
+  return out;
+}
+
 async function validate(ids) {
   busy = true;
   store.notify();
   try {
-    const [text, bad] = outcome(await approve(ids));
+    const [text, bad] = outcome(await approve(await trimmed(ids)));
     toast(text, { error: bad });
     if (!bad) closeSheet();
   } catch (e) {
