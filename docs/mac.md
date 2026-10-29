@@ -31,8 +31,9 @@ Les mêmes images et le même `deploy/compose.yaml` serviront sur le Pi 5.
    `age -d -i ~/.config/hub/age.key ~/.config/hub/secrets.enc.yaml`.
 7. **Dossiers :** `mkdir -p ~/PersonalHub/inbox`, et sur le disque externe
    `/Volumes/<disque>/litestream` et `/Volumes/<disque>/restic`.
-8. **Tailscale :** dans la console, ajoute le tag `tag:hub` (ACL de la spécification, section
-   10) et crée une clé d'authentification à usage unique, étiquetée `tag:hub`.
+8. **Tailscale :** dans la console, colle la politique de `deploy/tailscale-acl.hujson` (tag
+   `tag:hub`, seul le propriétaire atteint le port 443) et crée une clé d'authentification à
+   usage unique, étiquetée `tag:hub`.
 9. **Réglages :** `cp deploy/.env.example deploy/.env`, puis remplis les chemins et
    `TS_AUTHKEY`. `HUB_PUBLIC_ORIGIN` se connaît après le premier démarrage (nom MagicDNS du
    nœud `hub`) ; les passkeys en dépendent, donc on la fixe avant d'inscrire la première.

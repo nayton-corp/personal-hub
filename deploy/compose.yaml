@@ -83,14 +83,15 @@ services:
     secrets: [age_key]
     networks: [hub]
 
-  litestream:                            # réplication continue de core.db et finance.db
+  litestream:                            # réplication continue de core.db et des bases des domaines
     <<: *hardening
     image: litestream/litestream:0.5.2@sha256:e4fd484cb1cd9d6fa58fff7127d551118e150ab75b389cf868a053152ba6c9c0
     command: ["replicate", "-config", "/etc/litestream.yml"]
     volumes:
       - data:/srv/hub/data
       - ${HUB_REPLICA}:/replica
-      - ./litestream.yml:/etc/litestream.yml:ro
+      # écrit par deploy.sh depuis le registre (hub ops litestream) ; le fichier du dépôt sinon
+      - ${HUB_LITESTREAM_CONFIG:-./litestream.yml}:/etc/litestream.yml:ro
     network_mode: none
 
   web:                                   # Caddy : fichiers de l'app, CSP, proxy /api

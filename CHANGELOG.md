@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+### Sauvegarde et exploitation sans liste en dur (chantier S7)
+
+- `hub ops databases` et `hub ops litestream` : les bases (core, puis chaque domaine monté)
+  viennent du registre. `deploy.sh` écrit `deploy/litestream.local.yml` à chaque déploiement
+  et le monte dans Litestream ; `deploy/litestream.yml` (le défaut) est vérifié par la CI.
+- `restore-test.sh` restaure chaque base de la liste, et plus seulement `core.db`.
+- Le contrôle de santé de `deploy.sh` exige `"status":"ok"` (core et chaque domaine monté),
+  plus seulement une réponse.
+- `deploy/tailscale-acl.hujson` : la politique Tailscale versionnée (seul le propriétaire
+  atteint le port 443 du hub).
+
 ### Boîte d'entrée par domaine (chantier S4)
 
 - `hub watch-inbox` (service `importer`) confie chaque fichier posé à la racine de `inbox/` au

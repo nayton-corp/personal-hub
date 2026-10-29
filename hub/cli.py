@@ -11,7 +11,7 @@ from typing import Annotated, Any
 import typer
 import yaml
 
-from hub import cli_inbox, cli_tokens
+from hub import cli_inbox, cli_ops, cli_tokens
 from hub.core import connections, connectors, profile, proposals, sessions, tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
@@ -53,6 +53,7 @@ def _ready() -> HubContext:
 
 app.add_typer(cli_tokens.build(_ready, CLI_ACTOR), name="token")
 app.command("watch-inbox")(cli_inbox.watch(_ready))
+app.add_typer(cli_ops.build(_ctx), name="ops")
 
 
 @app.command()
@@ -232,8 +233,7 @@ def connections_secrets(
         typer.Option(help="YAML des secrets (ex. wallets), `-` pour l'entrée standard"),
     ] = None,
 ) -> None:
-    """Remplace les secrets d'une connexion : tapés masqués (ou lus d'un YAML), chiffrés vers la
-    clé de la machine. Ils ne sont plus jamais affichés."""
+    """Remplace les secrets d'une connexion (tapés masqués ou YAML), chiffrés, jamais réaffichés."""
     hub = _ready()
     try:
         with hub.core.engine.connect() as conn:

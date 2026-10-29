@@ -47,8 +47,9 @@ les sauvegardes restic ; sans elle, une sauvegarde est perdue. Le reste du kit :
 
 ## 2. Tailscale
 
-Dans la console Tailscale, ajoute le tag `tag:hub` aux ACL et crée une clé d'authentification
-à usage unique étiquetée `tag:hub`. Colle-la dans `deploy/.env` (`TS_AUTHKEY=`). Après le
+Dans la console Tailscale (Access controls), colle la politique versionnée dans
+`deploy/tailscale-acl.hujson` : le tag `tag:hub`, et seul le propriétaire du tailnet atteint
+le port 443 du hub. Crée ensuite une clé d'authentification à usage unique étiquetée `tag:hub`. Colle-la dans `deploy/.env` (`TS_AUTHKEY=`). Après le
 premier démarrage, vide-la : l'état du nœud reste dans le volume `ts-state`.
 
 ## 3. Premier déploiement
