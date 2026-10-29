@@ -120,6 +120,7 @@ button:disabled { cursor: default; }
 
 /* segments */
 .seg { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg.rview b { font-weight: 600; color: var(--muted); margin-left: 4px; }
 .seg button { flex: 1; height: 34px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; padding: 0 8px; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
 .seg.small button { font-size: 12.5px; }
@@ -500,3 +501,5 @@ code { font-family: var(--mono); font-size: .9em; }
 #jBody > .section-title + .hint { margin: 4px 16px 0; }
 .primary.small { width: auto; min-height: 40px; font-size: 13.5px; border-radius: 12px; flex: none; }
 #jBody > .hint:first-child { margin: 10px 16px 0; }
+#jBody > .seg.rview { margin: 10px 16px 0; }
+#jBody > .seg.rview + .hint { margin: 10px 16px 0; }
