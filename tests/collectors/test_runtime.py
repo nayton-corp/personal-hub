@@ -388,8 +388,12 @@ def test_link_now_posts_the_url_then_clears_it(
     monkeypatch.setattr(flow, "link", refused)
     thread = runtime.start_link(env, "https://hub.example/cb")
     assert thread is not None
-    assert runtime.start_link(env, "https://hub.example/cb") is None or not thread.is_alive()
+    # une seule liaison à la fois ; si la première a déjà fini, la seconde part et on l'attend
+    second = runtime.start_link(env, "https://hub.example/cb")
+    assert second is None or not thread.is_alive()
     thread.join(5)
+    if second is not None:
+        second.join(5)
     assert "revolut" not in runtime.LINKING
     assert hub.runs[-1] == ("revolut", "check", "auth_pending_timeout")
     assert hub.link_urls[-1] is None
