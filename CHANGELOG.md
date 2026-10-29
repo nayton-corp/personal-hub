@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.12.0] · 2026-10-29
+
 ### Le cœur ne nomme plus aucune source (chantier S1, seconde partie)
 
 - Le catalogue des connecteurs, les modules par pays (3e pilier en Suisse) et la reprise des
