@@ -191,6 +191,13 @@ def test_proposals_need_a_card(client: TestClient, ctx: HubContext, year: Financ
     budget = call(client, brain, "finance_propose_budget", category="restaurants", amount="120.5")
     with ctx.core.engine.connect() as conn:
         assert proposals.get(conn, budget["proposal_id"]).params["monthly_minor"] == 12050
+    yearly = call(
+        client, brain, "finance_propose_budget", category="voyages", amount="1200", cadence="year"
+    )
+    with ctx.core.engine.connect() as conn:
+        p = proposals.get(conn, yearly["proposal_id"])
+    assert (p.params["monthly_minor"], p.params["cadence"]) == (10000, "year")
+    assert "par an" in p.preview["summary"]
     r = client.post(
         "/api/tools/finance/finance_propose_budget",
         headers=brain,
