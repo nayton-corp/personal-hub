@@ -24,7 +24,7 @@ from hub.core.domain import McpTool, ToolCaller
 from hub.core.errors import Problem
 from hub.core.money import Money, base_currency
 from hub.core.text import normalize
-from hub.domains.finance import insights, ledger, reads, recurring, sentinels
+from hub.domains.finance import insights, ledger, period, reads, recurring, sentinels
 from hub.domains.finance.reads import MIN_COUNT_FOR_AGGREGATES
 
 if TYPE_CHECKING:
@@ -144,7 +144,7 @@ class FinanceTools:
     # --- briques ------------------------------------------------------------------------------
 
     def _month(self, value: str | None) -> str:
-        month = value or self.domain.today().strftime("%Y-%m")
+        month = value or period.month_of(self.domain.today())
         try:
             insights.as_of(month, self.domain.today())
         except insights.FutureMonth:
@@ -302,8 +302,8 @@ class FinanceTools:
 
     def networth(self, _a: NoArgs, caller: ToolCaller) -> dict[str, Any]:
         today = self.domain.today()
-        month = today.strftime("%Y-%m")
         with self.engine.connect() as conn:
+            month = period.month_of(today)
             k = insights.kpis(conn, month, today, **self.domain.pillar3a())
             p3 = k["pillar3a"]
             return self._wrap(

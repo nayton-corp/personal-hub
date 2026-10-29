@@ -5,6 +5,7 @@ sentinelles (lot 7)."""
 from __future__ import annotations
 
 import json
+import sqlite3
 from collections.abc import Mapping, Sequence
 from datetime import date
 from pathlib import Path
@@ -12,7 +13,7 @@ from typing import Any
 
 import typer
 from fastapi import APIRouter
-from sqlalchemy import Connection, Engine, text
+from sqlalchemy import Connection, Engine, event, text
 
 from hub.core import canonical, profile
 from hub.core.clock import local_today, now_iso
@@ -27,6 +28,7 @@ from hub.domains.finance import (
     importer,
     ledger,
     packs,
+    period,
     reads,
     recurring,
     sentinels,
@@ -39,6 +41,16 @@ from hub.domains.finance.importer import Archiver, ImportService, recipient_from
 MIGRATIONS = Path(__file__).parent / "migrations"
 SCHEMA_VERSION = 13  # 0013_account_settings
 log = get_logger("hub.finance")
+
+
+def _read_period(dbapi_conn: sqlite3.Connection, _record: Any, _proxy: Any) -> None:
+    """Chaque connexion relit le début du mois budgétaire : un réglage changé par l'app vaut
+    aussitôt pour le planificateur et le CLI, qui tournent dans d'autres processus."""
+    try:
+        row = dbapi_conn.execute("SELECT start_day FROM budget_period").fetchone()
+    except sqlite3.OperationalError:  # base pas encore migrée
+        row = None
+    period.set_start_day(int(row[0]) if row else 1)
 
 
 class CurrencyMismatch(RuntimeError):
@@ -58,6 +70,7 @@ class FinanceDomain:
         self.settings = settings
         self.path = settings.db_path("finance")
         self._engine = make_engine(self.path)
+        event.listen(self._engine, "checkout", _read_period)
         section = settings.domain("finance")
         key_file = settings.secrets.age_key_file
         recipient = section.get("archive_recipient") or recipient_from_key(key_file)

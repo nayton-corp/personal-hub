@@ -8,7 +8,7 @@ import { initConnections } from "./connections.js";
 import * as home from "./home.js";
 import * as journal from "./journal.js";
 import * as settings from "./settings.js";
-import { store } from "./store.js";
+import { api, store } from "./store.js";
 import {
   SH, announce, applyTheme, closeSheet, fill, ic, initToast, pref, renderSheet, setPref,
 } from "./ui.js";
@@ -152,4 +152,6 @@ export function start() {
   window.addEventListener("hub:changed", () => journal.reset());
   store.on(draw);
   draw();
+  // jour de début du mois budgétaire : le mois en cours en dépend
+  api("/finance/settings").then((s) => store.setMonthStart(s.month_start_day)).catch(() => {});
 }

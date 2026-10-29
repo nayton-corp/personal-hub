@@ -557,6 +557,8 @@ def budget(
         "budget": in_base(total_budget) if total_budget is not None else None,
         "rest_to_live": (in_base(total_budget - t.expenses) if total_budget is not None else None),
         "days_left": days_left(month, today) if period == "m" else 0,
+        "start": span(months)[0],
+        "end": span(months)[1],
         "over_count": sum(1 for i in out if i.get("over")),
     }
 
@@ -570,6 +572,8 @@ def budget_totals(conn: Connection, month: str, period: str) -> dict[str, Any]:
         "month": month,
         "period": period,
         "months": months,
+        "start": span(months)[0],
+        "end": span(months)[1],
         "currency": base_currency(),
         **totals_json(t),
         "budget": in_base(total_budget) if total_budget is not None else None,

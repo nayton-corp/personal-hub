@@ -22,7 +22,7 @@ from hub.core.errors import Problem
 from hub.core.ids import new_id
 from hub.core.money import Money, base_currency
 from hub.core.text import mask_iban, normalize
-from hub.domains.finance import catalog, importer, ledger, packs, rules
+from hub.domains.finance import catalog, importer, ledger, packs, period, rules
 
 if TYPE_CHECKING:
     from hub.domains.finance.domain import FinanceDomain
@@ -341,7 +341,7 @@ class SetBudgetHandler:
         self.domain = domain
 
     def _from(self, params: SetBudget) -> str:
-        return params.valid_from or self.domain.today().replace(day=1).isoformat()
+        return params.valid_from or f"{period.month_of(self.domain.today())}-01"
 
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, SetBudget)  # noqa: S101

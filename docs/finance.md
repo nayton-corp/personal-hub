@@ -36,13 +36,16 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
 | `networth/history?from=&to=&step=` | instantanés : patrimoine, versements cumulés, valeur par enveloppe et par compte ; `step=day\|week` calcule un point par jour ou par semaine à la demande (400 points au plus, `from` requis) |
 | `flows?month=&period=m\|q` | revenus → fixe, variable, épargne → catégories, et le reste sur compte |
 | `accounts` | comptes, solde, valeur, disponibilité (`immediate`, `days`, `locked`, déduite du type) et objectif (`current`, `safety`, `projects`, `long_term`, `retirement`, déduit du type tant qu'il n'est pas choisi) |
-| `entries?direction=in\|out` | le journal, filtré aussi sur les crédits ou les débits |
+| `entries?account=&category=&from=&to=&direction=in\|out&min_minor=&max_minor=&q=&sort=date\|amount` | le journal filtré : compte, catégorie, dates, sens, montant absolu en centimes, texte (3 lettres au moins) ; tri par date ou par plus gros montant |
+| `review` | écritures sans catégorie groupées par contrepartie : nombre, total, sens, comptes, première et dernière date, plus petit et plus gros montant, libellés, communications, codes bancaires et les 10 dernières écritures |
+| `settings` | `month_start_day` (1 à 28), mois budgétaire en cours et ses dates ; `POST` (session passkey) change le jour |
 | `budget?month=&period=m\|q` | réel et cible par catégorie de dépense, dépassements, reste à vivre |
 | `budget/totals?month=&period=m\|q` | revenus, dépenses fixes et variables, épargne, placements, taux |
 | `budget/months?month=&months=6` | les mêmes totaux, mois par mois (graphique Tendance) |
 | `export.csv?from=&to=` | journal complet en CSV (session passkey seulement) |
 
-- **Mois.** Le mois affiché est toujours un paramètre ; l'app part du mois civil dans le fuseau de l'instance (`HUB_TZ`, Zurich par défaut).
+- **Mois.** Le mois affiché est toujours un paramètre ; l'app part du mois budgétaire en cours dans le fuseau de l'instance (`HUB_TZ`, Zurich par défaut).
+  Le mois budgétaire commence le jour choisi dans les réglages (1 par défaut, table `budget_period`). Après le 15, il porte le nom du mois où il finit : début le 25, « novembre » va du 25 octobre au 24 novembre. Budget, flux, tendance, sentinelles et outils suivent tous ce découpage.
   `period=q` couvre les trois mois complets avant le mois choisi. Un mois futur est refusé.
 - **Sans catégorie.** Les règles (lot 3) catégorisent à l'import ; ce qui reste sans
   catégorie compte en dépense variable si c'est négatif, en revenu sinon, sous le nom

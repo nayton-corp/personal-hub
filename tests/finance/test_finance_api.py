@@ -196,14 +196,19 @@ def test_review_and_search(client: TestClient, ctx: HubContext, fin: FinanceDoma
     fin.importer.process([Incoming("a.xml", camt053(simple_stmt("1000.00")))])
     h = token(ctx, "brain")
     groups = client.get("/api/finance/review", headers=h).json()["groups"]
-    ids = groups[0].pop("entry_ids")
-    assert groups[0] == {
+    g = groups[0]
+    assert {k: g[k] for k in ("counterparty", "count", "total", "direction")} == {
         "counterparty": "jean exemple",
         "count": 2,
         "total": {"minor": -4000, "currency": "CHF", "display": "-40.00"},
         "direction": "debit",
     }
-    assert len(ids) == 2  # de quoi proposer une recatégorisation par écriture
+    assert len(g["entry_ids"]) == 2  # de quoi proposer une recatégorisation par écriture
+    # de quoi décider sans ouvrir chaque écriture : comptes, période, fourchette, échantillon
+    assert len(g["accounts"]) == 1
+    assert g["first_date"] <= g["last_date"]
+    assert abs(g["min"]["minor"]) <= abs(g["max"]["minor"])
+    assert [s["id"] for s in g["samples"]] == g["entry_ids"]
     hits = client.get("/api/finance/search?q=EMPLOYEUR", headers=h).json()["items"]
     assert [x["counterparty"] for x in hits] == ["Employeur Fictif SA"]
     assert client.get("/api/finance/search?q=%20%20a%20%20", headers=h).status_code == 422

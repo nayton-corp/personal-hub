@@ -17,7 +17,7 @@ from hub.api.app import create_app
 from hub.core.context import HubContext
 from hub.core.db import begin_immediate
 from hub.core.registry import Registry
-from hub.domains.finance import catalog, importer, insights, ledger, snapshots, valuation
+from hub.domains.finance import catalog, importer, insights, ledger, period, snapshots, valuation
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.importer import Incoming
 from tests.factories.camt import IBAN, IBAN_2, OTHER_IBAN, Stmt, Tx, camt053
@@ -435,3 +435,25 @@ def test_freshness_without_closing_balance(
     (f,) = client.get("/api/finance/freshness").json()["items"]
     assert (f["last_clbd"], f["last_data"], f["hidden"]) == (None, "2026-10-20", False)
     assert f["last_import"] is not None
+
+
+def test_month_start_day(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
+    app_session(ctx, client)
+    s = client.get("/api/finance/settings").json()
+    assert (s["month_start_day"], s["current_month"]) == (1, "2026-10")
+    s = client.post("/api/finance/settings", json={"month_start_day": 25}).json()
+    # après le 15 : le mois porte le nom de sa fin ; le 27 octobre est déjà en novembre
+    assert s["current_month"] == "2026-11"
+    assert s["current_period"] == {"start": "2026-10-25", "end": "2026-11-25"}
+    b = client.get("/api/finance/budget?month=2026-10").json()
+    assert (b["start"], b["end"]) == ("2026-09-25", "2026-10-25")
+    # le salaire du 25 septembre ouvre le mois d'octobre, celui du 25 octobre ouvre novembre
+    oct_ = client.get("/api/finance/summary?month=2026-10").json()
+    nov = client.get("/api/finance/summary?month=2026-11").json()
+    assert (oct_["income"]["minor"], nov["income"]["minor"]) == (502_000, 500_000)
+    # un autre processus relit le réglage à sa première connexion
+    period.set_start_day(1)
+    with year.engine().connect():
+        assert period.start_day() == 25
+    assert client.post("/api/finance/settings", json={"month_start_day": 29}).status_code == 422
+    client.post("/api/finance/settings", json={"month_start_day": 1})

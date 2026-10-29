@@ -23,7 +23,7 @@ from sqlalchemy import Connection, text
 from hub.core import canonical
 from hub.core.clock import now_iso
 from hub.core.ids import urn
-from hub.domains.finance import insights, ledger
+from hub.domains.finance import insights, ledger, period
 from hub.domains.finance.reads import money
 
 MIN_DAY_FOR_PROJECTION = 7  # avant le 7, une projection linéaire ne dit rien
@@ -55,8 +55,9 @@ def budget_projection(conn: Connection, month: str, today: date) -> list[Project
     for x in insights.lines_for(conn, [month]):
         if x.group in insights.EXPENSE_GROUPS:
             spent[x.category] = spent.get(x.category, 0) - x.minor
-    end = insights.month_end(month)
-    current = today.strftime("%Y-%m") == month
+    start, after = period.bounds(month)
+    current = period.month_of(today) == month
+    elapsed, length = (today - start).days + 1, (after - start).days
     out = []
     for cat, target in sorted(goal.items()):
         group = groups.get(cat)
@@ -64,8 +65,8 @@ def budget_projection(conn: Connection, month: str, today: date) -> list[Project
             continue
         value = max(0, spent.get(cat, 0))
         projected = value
-        if current and group == "variable" and today.day >= MIN_DAY_FOR_PROJECTION:
-            projected = value * end.day // today.day
+        if current and group == "variable" and elapsed >= MIN_DAY_FOR_PROJECTION:
+            projected = value * length // elapsed
         over = value > target
         likely = not over and current and projected * 100 > target * (100 + LIKELY_MARGIN_PCT)
         out.append(
@@ -84,7 +85,7 @@ class Alert:
 
 
 def _budget(conn: Connection, today: date) -> list[Alert]:
-    month = today.strftime("%Y-%m")
+    month = period.month_of(today)
     out = []
     for p in budget_projection(conn, month, today):
         detail = {

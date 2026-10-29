@@ -7,15 +7,20 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import text
 
 from hub.core import profile, proposals
 from hub.core.auth import AppSession, Ctx, Principal, require
+from hub.core.clock import now_iso
+from hub.core.db import begin_immediate
 from hub.core.errors import Problem
 from hub.domains.finance import (
     catalog,
     insights,
     lookthrough,
     packs,
+    period,
     reads,
     recurring,
     rules,
@@ -36,6 +41,12 @@ _NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip|pdf|json|csv|xlsx)$", re.
 DIMENSION = r"^(region|sector|currency|holding)$"
 _REVOLUT_REF = re.compile(r"revolut:([A-Z]{3})(:[a-z0-9-]+)?")
 
+
+class FinanceSettingsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    month_start_day: int = Field(ge=1, le=period.MAX_DAY)
+
+
 Reader = Annotated[Principal, Depends(require("app", "finance:read"))]
 AnyReader = Annotated[Principal, Depends(require("app", "finance:read", "finance:aggregates"))]
 
@@ -49,7 +60,7 @@ def build_router(domain: FinanceDomain) -> APIRouter:
     engine = domain.engine()
 
     def _this_month() -> str:
-        return domain.today().strftime("%Y-%m")
+        return period.month_of(domain.today())
 
     def _month(month: str | None) -> str:
         """Mois demandé (mois en cours par défaut) ; un mois futur n'a pas encore de chiffres."""
@@ -75,10 +86,17 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         category: str | None = None,
         uncategorized: bool = False,
         direction: Annotated[str | None, Query(pattern=r"^(in|out)$")] = None,
+        min_minor: Annotated[int | None, Query(ge=0)] = None,
+        max_minor: Annotated[int | None, Query(ge=0)] = None,
+        q: Annotated[str | None, Query(max_length=100)] = None,
+        sort: Annotated[str, Query(pattern=r"^(date|amount)$")] = "date",
         cursor: Annotated[str | None, Query(max_length=40)] = None,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> dict[str, Any]:
-        f = reads.EntryFilter(account, from_, to, category, uncategorized, direction)
+        """Écritures filtrées ; montants en centimes, comparés en valeur absolue."""
+        f = reads.EntryFilter(
+            account, from_, to, category, uncategorized, direction, min_minor, max_minor, q, sort
+        )
         try:
             with engine.connect() as conn:
                 items, next_cursor = reads.entries(conn, f, cursor, limit)
@@ -326,6 +344,38 @@ def build_router(domain: FinanceDomain) -> APIRouter:
                 }
             )
         return {"items": out}
+
+    def _settings() -> dict[str, Any]:
+        with engine.connect():  # relit le réglage (FinanceDomain)
+            pass
+        today = domain.today()
+        month = period.month_of(today)
+        start, end = period.bounds(month)
+        return {
+            "month_start_day": period.start_day(),
+            "current_month": month,
+            "current_period": {"start": start.isoformat(), "end": end.isoformat()},
+        }
+
+    @r.get("/settings")
+    def get_settings(_p: AnyReader) -> dict[str, Any]:
+        """Réglages du budget : jour où commence le mois, mois en cours et ses dates."""
+        return _settings()
+
+    @r.post("/settings")
+    def update_settings(body: FinanceSettingsIn, session: AppSession) -> dict[str, Any]:
+        with begin_immediate(engine) as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO budget_period (id, start_day, updated_at, actor) "
+                    "VALUES (1, :d, :t, :a) ON CONFLICT (id) DO UPDATE SET "
+                    "start_day = excluded.start_day, updated_at = excluded.updated_at, "
+                    "actor = excluded.actor"
+                ),
+                {"d": body.month_start_day, "t": now_iso(), "a": session.actor},
+            )
+        period.set_start_day(body.month_start_day)
+        return _settings()
 
     @r.get("/freshness")
     def freshness(_p: AnyReader) -> dict[str, Any]:

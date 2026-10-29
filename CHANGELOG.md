@@ -2,6 +2,20 @@
 
 ## [Non publié]
 
+### Mois budgétaire, création du budget et journal revu
+
+- Réglage « Le mois commence le » (1 à 28, `GET/POST /finance/settings`, table
+  `budget_period` dans la migration 0013) : budget, flux, tendance, projection, sentinelles et
+  outils découpent les mois à partir de ce jour. Après le 15, le mois porte le nom de sa fin.
+  Le Budget affiche alors les dates exactes sous le mois.
+- « Créer mon budget » : une cible par catégorie de dépense, proposée d'après la moyenne des
+  3 derniers mois et arrondie à la dizaine, modifiable, validée en une fois avec Face ID.
+- Journal : panneau de filtres (compte, catégorie, période, montant), tri par plus gros
+  montant, puces des filtres actifs ; la recherche se combine aux filtres et se pagine
+  (`/finance/entries` accepte `min_minor`, `max_minor`, `q`, `sort`).
+- « À classer » : chaque groupe montre ses comptes, ses dates, la fourchette des montants et
+  les libellés bancaires, et se déplie sur ses dernières écritures.
+
 ### Comptes : fraîcheur juste et réglages dans l'app
 
 - La fraîcheur d'un compte vient de sa dernière donnée (écriture, position, ordre ou solde de
