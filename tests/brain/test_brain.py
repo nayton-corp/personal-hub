@@ -18,7 +18,7 @@ from hub.brain import agent
 from hub.brain.hubapi import HubApi, HubError
 from hub.brain.llm import LlmError, OpenAICompatible, Reply, ToolCall, clean
 from hub.brain.mcp import McpServer
-from hub.brain.suggest import Memory, catchup, parse_choice, suggest
+from hub.brain.suggest import Memory, catchup, for_merchant, listing, parse_choice, suggest
 from hub.brain.toolbox import CAPABILITIES, LOAD, Toolbox
 from hub.core import proposals
 from hub.core.context import HubContext
@@ -255,6 +255,27 @@ def test_parse_choice() -> None:
     assert parse_choice("rien", allowed) == (None, "")
     assert parse_choice("{pas json}", allowed) == (None, "")
     assert parse_choice("[1]", allowed) == (None, "")
+    # pas sûr : rien, même avec une catégorie de la liste
+    assert parse_choice('{"category": "loisirs", "sure": false, "reason": "x"}', allowed) == (
+        None,
+        "x",
+    )
+
+
+def test_prompt_guides_the_model() -> None:
+    cats = [
+        {"id": "transports", "name": "Transports", "group": "variable"},
+        {"id": "twint-particuliers", "name": "TWINT entre particuliers", "group": "variable"},
+    ]
+    assert "pas les commerces" not in listing(cats)
+    assert "carburant" in listing(cats)
+    shop = [c["id"] for c in for_merchant(cats, "debit twint zorglub shop")]
+    assert shop == ["transports"]
+    assert len(for_merchant(cats, "debit twint dupont, jean")) == 2
+
+
+def merchant(prompt: str) -> str:
+    return prompt.split("<commercant>")[1].split("</commercant>")[0]
 
 
 def test_suggest_for_unknown_merchants(
@@ -264,7 +285,7 @@ def test_suggest_for_unknown_merchants(
         prompt = messages[0]["content"]
         assert "<commercant>" in prompt
         assert "loisirs" in prompt
-        if "kiosque" in prompt:
+        if "kiosque" in merchant(prompt):
             return Reply('{"category": "loisirs", "reason": "Un kiosque."}')
         return Reply('{"category": null, "reason": "incertain"}')
 
@@ -326,7 +347,7 @@ def test_catchup_proposes_one_rule_per_merchant(
     client: TestClient, ctx: HubContext, year: FinanceDomain, tmp_path: Path
 ) -> None:
     def choose(messages: list[dict[str, Any]]) -> Reply:
-        if "kiosque" in messages[0]["content"]:
+        if "kiosque" in merchant(messages[0]["content"]):
             return Reply('{"category": "loisirs", "reason": "Un kiosque."}')
         return Reply('{"category": null, "reason": "incertain"}')
 
@@ -345,7 +366,7 @@ def test_catchup_proposes_one_rule_per_merchant(
     # proposée une fois : le passage suivant ne la redemande pas
     again = Every(choose)
     catchup(box, again, Memory(tmp_path / "brain"))
-    assert not [x for x in again.prompts if "kiosque" in x]
+    assert not [x for x in again.prompts if "kiosque" in merchant(x)]
     dry = catchup(box, Every(choose), Memory(tmp_path / "dry"), dry_run=True, limit=1)
     assert (dry.merchants, dry.proposals) == (1, 0)
 
