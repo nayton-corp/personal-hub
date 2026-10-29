@@ -107,6 +107,11 @@ class ExchangesConfig(BaseModel):
     kucoin_url: str = "https://api.kucoin.com"
     coinbase_url: str = "https://api.coinbase.com"
     aliases: dict[str, str] = {"ETH2": "ETH"}  # symbole de la plateforme → symbole suivi
+    # historique Binance : premier jour cherché (le secret `since` le remplace) et pauses
+    # entre deux appels (l'historique des retraits est limité à dix appels par minute)
+    binance_since: str = "2017-07-01"
+    history_pause_ms: int = Field(default=250, ge=0, le=10_000)
+    withdraw_pause_ms: int = Field(default=6_000, ge=0, le=60_000)
 
 
 class CollectorConfig(BaseModel):

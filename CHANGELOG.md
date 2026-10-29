@@ -2,6 +2,19 @@
 
 ## [Non publié]
 
+### Historique Binance dans le Journal, mouvements crypto reliés entre mes comptes
+
+- Le collecteur Binance lit, en plus des soldes, les dépôts et retraits crypto (txId, adresse),
+  les virements en monnaie, les achats par carte, les ordres exécutés, les conversions, les
+  récompenses Simple Earn, les distributions et les petits soldes convertis en BNB
+  (`binance_history.py`). Premier passage complet ou rien, ensuite trois jours de recouvrement.
+- Ces opérations deviennent des écritures du compte `crypto:binance` en devise de base, codes
+  `EXCHANGE/…` (règles système, migration `0015_exchange_journal`), et des mouvements de parts
+  (`exchange.py`). Clôtures Binance et change BCE déposés avec l'historique.
+- Un envoi ou une arrivée crypto est relié à l'autre côté sur un autre de mes comptes (Ledger,
+  Binance, SwissBorg) par le txId, sinon la quantité, à cinq jours près (`links.py`) : le second
+  prend la valeur du premier et la paire passe avant les autres virements.
+
 ### Classer plus vite : commerçant lu dans le libellé, revenus à confirmer, rattrapage par l'IA
 
 - Les paiements par carte BCF (« Paiement jj.mm.aaaa hh:mm COMMERÇANTVILLE Numéro de carte… »,

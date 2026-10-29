@@ -12,9 +12,11 @@ sait que c'est un virement, par ordre de confiance :
    le même établissement à un jour d'écart au plus (le compte Revolut et ses poches, dont les
    mouvements n'ont ni IBAN ni code de virement).
 
-Chaque écriture n'a qu'un seul partenaire. La table est dérivée : recalculée en entier avec les
-instantanés. Une écriture appariée sans catégorie compte comme un virement entre mes comptes
-dans le budget (vue `v_entry_allocation`) ; une catégorie posée reste la sienne.
+Un mouvement crypto relié à l'import à l'autre côté (`peer`, même txId ou même quantité) passe
+avant tout le reste. Chaque écriture n'a qu'un seul partenaire. La table est dérivée :
+recalculée en entier avec les instantanés. Une écriture appariée sans catégorie compte comme un
+virement entre mes comptes dans le budget (vue `v_entry_allocation`) ; une catégorie posée
+reste la sienne.
 """
 
 from __future__ import annotations
@@ -50,6 +52,7 @@ class Move:
     counterparty_iban: str | None
     code: str
     group: str | None  # groupe de la catégorie courante
+    peer: int | None = None  # l'autre côté relevé à l'import (mouvement crypto : `links`)
 
     def transfer_like(self, own: frozenset[str]) -> bool:
         return (
@@ -64,6 +67,7 @@ class Link:
     debit: Move
     credit: Move
     method: str
+    explicit: bool = False  # relié à l'import (même txId ou même quantité) : avant tout le reste
 
     @property
     def days(self) -> int:
@@ -75,7 +79,8 @@ def _moves(conn: Connection) -> list[Move]:
         text(
             "SELECT e.seq, e.id, e.account_id, a.iban, a.institution, e.booking_date, "  # noqa: S608 - codes déclarés
             "e.amount_minor, e.currency, "
-            "e.counterparty_iban, coalesce(e.bank_tx_code, ''), c.grp "
+            "e.counterparty_iban, coalesce(e.bank_tx_code, ''), c.grp, "
+            "CAST(json_extract(e.fx_json, '$.peer') AS INTEGER) "
             "FROM entries e JOIN accounts a ON a.id = e.account_id "
             "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
             "LEFT JOIN categories c ON c.id = vc.category_id "
@@ -96,6 +101,7 @@ def _moves(conn: Connection) -> list[Move]:
             r[8],
             r[9],
             r[10],
+            int(r[11]) if r[11] is not None else None,
         )
         for r in rows
     ]
@@ -174,7 +180,15 @@ def match(moves: list[Move], own: frozenset[str]) -> list[Link]:
                 ]
                 if not rivals:
                     candidates.append(Link(d, c, "amount"))
-    candidates.sort(key=lambda x: (METHOD_RANK[x.method], x.days, x.debit.seq, x.credit.seq))
+    by_seq = {m.seq: m for m in moves}
+    for m in moves:
+        other = by_seq.get(m.peer) if m.peer is not None else None
+        if other is not None and other.amount == -m.amount and other.account_id != m.account_id:
+            d, c = (m, other) if m.amount < 0 else (other, m)
+            candidates.append(Link(d, c, "code", explicit=True))
+    candidates.sort(
+        key=lambda x: (not x.explicit, METHOD_RANK[x.method], x.days, x.debit.seq, x.credit.seq)
+    )
     used: set[int] = set()
     out = []
     for link in candidates:

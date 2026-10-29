@@ -1,7 +1,7 @@
 """Cours du marché et soldes des portefeuilles crypto (lot 6) : fichier `hub.market.v1` déposé
 par le collecteur « market ».
 
-Le fichier porte trois listes, chacune facultative :
+Le fichier porte ces listes, chacune facultative :
 
 - `fx` : cours de change de la BCE (1 devise = rate dans la devise de base), vers `fx_rates` ;
 - `prices` : cours quotidiens (cryptos, titres cotés), vers `prices` ;
@@ -9,10 +9,13 @@ Le fichier porte trois listes, chacune facultative :
   devient un relevé de positions du compte `crypto:<nom>` à cette date ;
 - `transactions` : une transaction du portefeuille sur la chaîne (net reçu ou envoyé, frais
   payés), qui devient une opération au registre du compte, en devise de base, et un mouvement
-  de parts. Une arrivée appariée à un retrait d'une plateforme (même quantité, même crypto,
-  au plus 5 jours avant) prend la valeur du retrait : c'est un virement entre mes comptes.
+  de parts. Un envoi ou une arrivée relié à l'autre côté sur un autre de mes comptes (même
+  txId, sinon même quantité, à quelques jours près : `links`) en prend la valeur : c'est un
+  virement entre mes comptes ;
+- `operations` : une opération d'une plateforme (dépôt, retrait, échange, récompense), au
+  registre de son compte (`exchange`).
 
-Relevé 0 : les cours ; puis un relevé par portefeuille, puis un par transaction. Un
+Relevé 0 : les cours ; puis un relevé par portefeuille, un par transaction, un par opération. Un
 portefeuille dont le compte n'est pas encore déclaré (`hub finance crypto add-wallet`) attend,
 le reste s'applique.
 Montants et cours sont des textes décimaux : jamais de flottant.
@@ -23,7 +26,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal, localcontext
 from typing import Any
 
@@ -32,7 +35,7 @@ from sqlalchemy import Connection, text
 from hub.core import canonical
 from hub.core.ids import urn
 from hub.core.money import DECIMAL_CONTEXT, base_currency
-from hub.domains.finance import assets, catalog, institutions, ledger
+from hub.domains.finance import assets, catalog, exchange, ledger, links
 from hub.domains.finance.assets import AssetError, DocumentError, Result
 
 FORMAT = "hub.market.v1"
@@ -92,6 +95,7 @@ class MarketFile:
     prices: list[Price] = field(default_factory=list)
     balances: list[Balance] = field(default_factory=list)
     transactions: list[Transaction] = field(default_factory=list)
+    operations: list[exchange.Operation] = field(default_factory=list)
 
     @property
     def on_date(self) -> str:
@@ -103,6 +107,8 @@ class MarketFile:
         out += [(i + 1, None, b.on_date) for i, b in enumerate(self.balances)]
         first = len(self.balances) + 1
         out += [(first + i, None, t.on_date) for i, t in enumerate(self.transactions)]
+        first += len(self.transactions)
+        out += [(first + i, None, o.on_date) for i, o in enumerate(self.operations)]
         return out
 
 
@@ -226,7 +232,11 @@ def parse(data: bytes) -> MarketFile:
             )
         )
     txs.sort(key=lambda t: (t.on_date, t.txid))
-    return MarketFile(_iso(doc.get("fetched_at")), fx, prices, balances, txs)
+    try:
+        ops = exchange.parse(doc.get("operations") or [], _dec, _iso)
+    except exchange.ExchangeError as exc:
+        raise MarketError(str(exc)) from None
+    return MarketFile(_iso(doc.get("fetched_at")), fx, prices, balances, txs, ops)
 
 
 def _apply_rates(conn: Connection, import_id: str, doc: MarketFile) -> Result:
@@ -252,15 +262,7 @@ def _apply_rates(conn: Connection, import_id: str, doc: MarketFile) -> Result:
     return result
 
 
-def price_at(conn: Connection, key: str, on_date: str) -> tuple[Decimal, str] | None:
-    row = conn.execute(
-        text(
-            "SELECT price, currency FROM prices WHERE isin = :i AND on_date <= :d "
-            "ORDER BY on_date DESC, source DESC LIMIT 1"
-        ),
-        {"i": key, "d": on_date},
-    ).first()
-    return (Decimal(row[0]), str(row[1])) if row else None
+price_at = assets.price_at
 
 
 def apply_balance(conn: Connection, import_id: str, b: Balance) -> Result:
@@ -290,36 +292,6 @@ def apply_balance(conn: Connection, import_id: str, b: Balance) -> Result:
     return result
 
 
-WINDOW_DAYS = 5  # un retrait de plateforme arrive sur le portefeuille dans ce délai
-
-
-def _peer(conn: Connection, t: Transaction) -> tuple[int, int] | None:
-    """Le retrait d'un autre compte de la même quantité de la même crypto, au plus
-    WINDOW_DAYS jours avant l'arrivée, pas encore apparié : (seq, montant)."""
-    start = (date.fromisoformat(t.on_date) - timedelta(days=WINDOW_DAYS)).isoformat()
-    codes = institutions.like_any("e.bank_tx_code", institutions.prefixes(transfer=True))
-    rows = conn.execute(
-        text(
-            "SELECT e.seq, e.amount_minor, json_extract(e.fx_json, '$.quantity') "  # noqa: S608 - codes déclarés
-            "FROM entries e JOIN accounts a ON a.id = e.account_id "
-            f"WHERE ({codes}) AND e.amount_minor < 0 AND a.external_ref != :acc "
-            "AND e.booking_date BETWEEN :s AND :d "
-            "AND json_extract(e.fx_json, '$.currency') = :c "
-            "AND NOT EXISTS (SELECT 1 FROM entries x WHERE x.bank_tx_code LIKE 'CRYPTO/%' "
-            "  AND json_extract(x.fx_json, '$.peer') = e.seq) "
-            "ORDER BY e.booking_date DESC, e.seq"
-        ),
-        {"acc": t.account, "s": start, "d": t.on_date, "c": t.symbol},
-    ).fetchall()
-    for seq, amount, qty in rows:
-        try:
-            if qty is not None and -Decimal(str(qty)) == t.quantity:
-                return int(seq), int(amount)
-        except ArithmeticError:
-            continue
-    return None
-
-
 class _Chain:
     """Écritures des transactions d'un fichier : un écrivain, le change, les comptes ouverts."""
 
@@ -340,17 +312,9 @@ class _Chain:
             return self.fx.convert(quantity * known[0], known[1], t.on_date)
 
     def open(self, account: catalog.Account, first: str) -> None:
-        if account.id in self.opened:
-            return
-        self.opened.add(account.id)
-        if self.conn.execute(
-            text("SELECT 1 FROM entries WHERE account_id = :a LIMIT 1"), {"a": account.id}
-        ).first():
-            return
-        from hub.domains.finance.importer import open_account  # import circulaire
-
-        day = (date.fromisoformat(first) - timedelta(days=1)).isoformat()
-        open_account(self.conn, account.id, day, 0, account.currency)
+        if account.id not in self.opened:
+            self.opened.add(account.id)
+            exchange.open_empty(self.conn, account, first)
 
     def apply(self, t: Transaction, first: str) -> Result:
         result = Result()
@@ -362,22 +326,24 @@ class _Chain:
             return result.review("currency_mismatch")
         self.open(account, first)
         self.writer.result = result
-        detail = {"txid": t.txid, "currency": t.symbol}
+        detail: dict[str, str | int] = {"txid": t.txid, "currency": t.symbol}
         sent = t.quantity + t.fee  # hors frais : ce qui quitte le portefeuille (négatif)
+        moved = t.quantity if t.quantity > 0 else sent
+        peer = links.counterpart(self.conn, t.account, t.symbol, t.on_date, moved, t.txid)
+        if peer:
+            detail["peer"] = peer[0]
         if t.quantity > 0:
-            peer = _peer(self.conn, t)
             amount = -peer[1] if peer else self.value(t, t.quantity)
             legs = [("receive", "CRYPTO/RECEIVE", f"Réception {t.symbol}", t.quantity, amount)]
-            if peer:
-                detail["peer"] = str(peer[0])
             cost = amount
         else:
             fee = self.value(t, -t.fee) if t.fee else 0
+            amount = -peer[1] if peer else self.value(t, sent)
             legs = [
-                ("send", "CRYPTO/SEND", f"Envoi {t.symbol}", sent, self.value(t, sent)),
+                ("send", "CRYPTO/SEND", f"Envoi {t.symbol}", sent, amount),
                 ("fee", "CRYPTO/FEE", f"Frais de réseau {t.symbol}", -t.fee, fee),
             ]
-            cost = self.value(t, t.quantity)
+            cost = None if amount is None or fee is None else amount + fee
         if cost is None or any(v is None for *_x, v in legs):
             return result.review("missing_price")
         for leg, code, label, qty, amount in legs:
@@ -438,11 +404,25 @@ def apply(
         for i, t in enumerate(doc.transactions, start=len(doc.balances) + 1):
             if indexes is None or i in indexes:
                 out.append((i, chain.apply(t, firsts[t.account])))
-        for account_id, count in sorted(chain.writer.touched.items()):
-            ledger.append_event(
-                conn,
-                "entries.appended",
-                urn("finance", "account", account_id),
-                {"import_id": import_id, "count": count},
-            )
+        _appended(conn, import_id, chain.writer.touched)
+    if doc.operations:
+        journal = exchange.Journal(conn, import_id)
+        starts: dict[str, str] = {}
+        for o in doc.operations:
+            starts.setdefault(o.account, o.on_date)
+        first = len(doc.balances) + len(doc.transactions) + 1
+        for i, o in enumerate(doc.operations, start=first):
+            if indexes is None or i in indexes:
+                out.append((i, journal.apply(o, starts[o.account])))
+        _appended(conn, import_id, journal.writer.touched)
     return out
+
+
+def _appended(conn: Connection, import_id: str, touched: dict[str, int]) -> None:
+    for account_id, count in sorted(touched.items()):
+        ledger.append_event(
+            conn,
+            "entries.appended",
+            urn("finance", "account", account_id),
+            {"import_id": import_id, "count": count},
+        )

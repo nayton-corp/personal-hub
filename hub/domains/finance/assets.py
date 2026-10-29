@@ -249,6 +249,18 @@ class Result:
         return self
 
 
+def price_at(conn: Connection, key: str, on_date: str) -> tuple[Decimal, str] | None:
+    """Dernier cours connu d'un instrument à cette date : (cours, devise)."""
+    row = conn.execute(
+        text(
+            "SELECT price, currency FROM prices WHERE isin = :i AND on_date <= :d "
+            "ORDER BY on_date DESC, source DESC LIMIT 1"
+        ),
+        {"i": key, "d": on_date},
+    ).first()
+    return (Decimal(row[0]), str(row[1])) if row else None
+
+
 def positions_account(conn: Connection, ref: str) -> catalog.Account | None:
     return catalog.account_by_ref(conn, ref)
 

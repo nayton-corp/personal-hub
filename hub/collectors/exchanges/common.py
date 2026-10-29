@@ -1,5 +1,6 @@
 """Ce que les collecteurs de plateformes crypto partagent : un run qui lit les soldes par l'API
-officielle (clé en lecture seule) et dépose un `hub.market.v1` avec ces soldes seulement.
+officielle (clé en lecture seule) et dépose un `hub.market.v1` avec ces soldes, et, pour une
+plateforme qui sait lire son historique (Binance), ses opérations et leurs cours.
 
 Les soldes deviennent un relevé de positions du compte `crypto:<plateforme>` (à déclarer avec
 `fin crypto add-wallet <plateforme>`, ou le champ `account` des secrets). La valeur, dans la
@@ -23,6 +24,8 @@ from hub.collectors.market.flow import holdings
 from hub.collectors.runtime import Env
 
 Fetch = Callable[[Env, Http], Iterable[tuple[str, Any]]]
+# (env, http, compte, actifs détenus) → opérations, cours, flux en échec, mémoire à garder
+History = Callable[[Env, Http, str, set[str]], Any]
 _ACCOUNT = re.compile(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$")
 _SYMBOL = re.compile(r"^[A-Z0-9]{1,20}$")
 
@@ -53,7 +56,7 @@ def totals(env: Env, items: Iterable[tuple[str, Any]], step: str) -> dict[str, D
     return out
 
 
-def runner(fetch: Fetch) -> Callable[..., Result]:
+def runner(fetch: Fetch, history: History | None = None) -> Callable[..., Result]:
     def run(env: Env, kind: Kind, http: Http | None = None) -> Result:
         http = http or Http()
         account = str(env.creds.get("account") or f"crypto:{env.name}")
@@ -62,13 +65,20 @@ def runner(fetch: Fetch) -> Callable[..., Result]:
         held = totals(env, fetch(env, http), f"{env.name}.balances")
         if kind == "check":
             return Result("ok")
-        doc = {
+        doc: dict[str, Any] = {
             "format": "hub.market.v1",
             "fetched_at": env.today.isoformat(),
             "balances": holdings(account, env.today, held, "BTC"),
         }
+        past = history(env, http, account, set(held)) if history else None
+        if past is not None:
+            doc.update(operations=past.operations, prices=past.prices, fx=past.fx)
         data = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
         dropped = env.inbox.drop(f"{env.name}.json", data, is_market_json, step=f"{env.name}.file")
-        return Result("ok" if dropped else "nothing_new", int(dropped))
+        detail = None
+        if past is not None:
+            past.commit()
+            detail = "partial " + " ".join(past.failed) if past.failed else None
+        return Result("ok" if dropped else "nothing_new", int(dropped), detail)
 
     return run

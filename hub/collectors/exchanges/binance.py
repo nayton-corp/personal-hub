@@ -1,5 +1,6 @@
 """Collecteur Binance : comptes Spot et Funding, Simple Earn (flexible et bloqué), par l'API
-officielle signée HMAC-SHA256. Clé avec « Enable Reading » seulement."""
+officielle signée HMAC-SHA256, et l'historique des opérations (`binance_history`). Clé avec
+« Enable Reading » seulement."""
 
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from hub.collectors.base import Failure
+from hub.collectors.exchanges import binance_history
 from hub.collectors.exchanges.common import now_ms, runner
 from hub.collectors.http import Http
 from hub.collectors.runtime import Env
@@ -74,4 +76,8 @@ def fetch(env: Env, http: Http) -> list[tuple[str, Any]]:
     return out
 
 
-run = runner(fetch)
+def history(env: Env, http: Http, account: str, held: set[str]) -> binance_history.History:
+    return binance_history.collect(env, http, signed, account, held)
+
+
+run = runner(fetch, history)

@@ -25,7 +25,7 @@ from sqlalchemy import Connection, text
 from hub.core import canonical
 from hub.core.ids import urn
 from hub.core.money import DECIMAL_CONTEXT, Money, base_currency
-from hub.domains.finance import assets, catalog, ibkr, ledger, manual, valuation, xlsx
+from hub.domains.finance import assets, catalog, ibkr, ledger, links, manual, valuation, xlsx
 from hub.domains.finance.assets import AssetError, DocumentError, Result
 
 SOURCE = "swissborg"
@@ -320,6 +320,15 @@ def _write_move(
         (leg, code, label, q, usd, values.of(m, q, usd)) for leg, code, label, q, usd in _legs(m)
     ]
     cost = values.of(m, m.delta, _delta_usd(m))
+    peer = None
+    if m.kind in ("Deposit", "Withdrawal") and not assets.known_currency(m.currency):
+        # l'autre côté sur un autre de mes comptes (Binance, Ledger) : sa valeur
+        leg, code, label, q, usd, _v = legs[0]
+        peer = links.counterpart(conn, ACCOUNT, m.currency, m.day, q)
+        if peer:
+            legs[0] = (leg, code, label, q, usd, -peer[1])
+            if cost is not None and all(v is not None for *_x, v in legs):
+                cost = sum(int(v or 0) for *_x, v in legs)
     if cost is None or any(v is None for *_x, v in legs):
         writer.result.review("missing_fx")
         return
@@ -327,7 +336,13 @@ def _write_move(
         if amount:
             # quantité de la jambe (le net d'un retrait : ce qui arrive sur le portefeuille),
             # pour l'apparier à son arrivée sur un autre compte
-            detail = {"quantity": assets.qty_text(qty), "currency": m.currency, "usd": str(usd)}
+            detail: dict[str, str | int] = {
+                "quantity": assets.qty_text(qty),
+                "currency": m.currency,
+                "usd": str(usd),
+            }
+            if peer and leg == "main":
+                detail["peer"] = peer[0]
             writer.entry(
                 account,
                 f"{m.key}|{leg}",
