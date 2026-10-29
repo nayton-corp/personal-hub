@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+### Un portefeuille crypto s'ajoute dans « Cours et cryptos »
+
+- « Cours et cryptos » (`market`) est une connexion unique (`single`) : en créer une deuxième
+  est refusé (`connection.single`), car un portefeuille ajouté ainsi restait sans adresse. Dans
+  l'app, choisir ce connecteur quand il existe ouvre ses réglages avec un nouveau portefeuille à
+  remplir (« Ajouter un portefeuille »).
+- « Nom affiché de la connexion » : le nom de la connexion, pas celui d'un portefeuille.
+
 ### Actualiser une connexion depuis l'app
 
 - « Actualiser » sur chaque connexion et « Tout actualiser » (Réglages › Connexions) : un run

@@ -46,6 +46,10 @@ retour. La carte **Comptes** liste les comptes que des relevés attendent (Revol
 Banking, portefeuilles, plateformes) et les crée par une proposition validée avec Face ID ;
 un compte Revolut s'ouvre au solde déduit de sa reprise, comme `fin revolut add-account`.
 
+Un portefeuille crypto (Ledger, MetaMask, Coinbase Wallet…) n'est pas une connexion : il
+s'ajoute dans les réglages de « Cours et cryptos », section Portefeuilles. Cette connexion est
+unique ; « Ajouter » sur ce connecteur ouvre ses réglages avec un portefeuille à remplir.
+
 **Actualiser** : hors de son horaire, « Actualiser » sur une connexion (ou « Tout actualiser »
 en tête de la carte) demande un run complet que le service lance dans la minute (`POST
 /api/collectors/<id>/refresh`, `POST /api/collectors/refresh`). Seule une connexion prête et

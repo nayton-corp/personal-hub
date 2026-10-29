@@ -231,6 +231,7 @@ class ConnectorOut(BaseModel):
     settings: list[str]
     required_settings: list[str]
     runner: Literal["api", "browser"]
+    single: bool = False
 
 
 class ConnectorListOut(BaseModel):

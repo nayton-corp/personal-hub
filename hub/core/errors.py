@@ -44,6 +44,7 @@ PROBLEM_TYPES: dict[str, tuple[int, str]] = {
     "collector.not_enabled": (409, "Connexion suspendue ou désactivée : la réactiver d'abord"),
     "collector.link_unknown": (404, "Liaison inconnue ou expirée"),
     "connection.exists": (409, "Connexion déjà présente"),
+    "connection.single": (409, "Une seule connexion de ce type"),
     "rate_limited": (429, "Trop de tentatives"),
     "busy.retry": (503, "Base occupée, réessayer"),
     "internal": (500, "Erreur interne"),
