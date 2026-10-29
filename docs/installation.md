@@ -37,7 +37,8 @@ que Docker n'est requis. Il demande, avec une valeur proposée à chaque fois :
 Il écrit ensuite la clé age (0400), `secrets.enc.yaml` (mot de passe restic tiré au hasard,
 jamais affiché), les dossiers et `deploy/.env`. Relancé, il ne remplace rien : il complète ce
 qui manque. Sans question, par variables : `HUB_CONFIG`, `HUB_HOME`, `HUB_TZ`, `HUB_COUNTRY`,
-`HUB_CURRENCY`, `HUB_PUBLIC_ORIGIN`.
+`HUB_CURRENCY`, `HUB_PUBLIC_ORIGIN`. `HUB_DOMAINS` (dans `deploy/.env`, `*` par défaut)
+choisit les domaines montés.
 
 **Kit de secours, tout de suite :** une copie de `age.key` et de `secrets.enc.yaml` hors de la
 machine (clé USB au coffre, gestionnaire de mots de passe). La clé seule rouvre les secrets et

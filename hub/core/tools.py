@@ -38,7 +38,8 @@ def capabilities(hub: HubContext, principal: Principal) -> list[dict[str, Any]]:
             out.append(
                 {
                     "domain": d.name,
-                    "description": getattr(d, "description", d.name),
+                    "description": d.description,
+                    "instructions": d.manifest().assistant,
                     "tools": names,
                     "aggregates_only": not principal.allows_any(
                         f"{d.name}:read", f"{d.name}:propose"

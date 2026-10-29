@@ -15,6 +15,7 @@ from sqlalchemy import Engine
 
 from hub.core import collectors, passkeys, proposals, ratelimit, sessions
 from hub.core.context import HubContext
+from hub.core.manifest import unguarded
 from hub.kernel.clock import utcnow
 from hub.platform import secrets
 from hub.platform.db import backup, integrity_check
@@ -65,7 +66,7 @@ class VerifyReport:
 
 def verify(hub: HubContext) -> VerifyReport:
     """Intégrité SQLite de chaque base, puis contrôle profond de chaque domaine (verify-ledger
-    pour Finance)."""
+    pour Finance) et triggers d'ajout seul de ses tables protégées (manifeste)."""
     report = VerifyReport(ok=True)
     for name, (_engine, path) in databases(hub).items():
         if not path.exists():
@@ -82,6 +83,14 @@ def verify(hub: HubContext) -> VerifyReport:
         health = d.verify()
         report.checks[f"{d.name}.verify"] = "ok" if health.ok else "failed"
         report.ok &= health.ok
+        protected = d.manifest().protected_tables
+        if protected and health.db != "missing":
+            with d.engine().connect() as conn:
+                open_tables = unguarded(conn, protected)
+            report.checks[f"{d.name}.protected"] = (
+                "ok" if not open_tables else f"sans trigger : {', '.join(open_tables)}"
+            )
+            report.ok &= not open_tables
     return report
 
 

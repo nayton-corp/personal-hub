@@ -14,7 +14,8 @@ quels, en français. Un mot nouveau entre ici dans la même PR que le code qui l
 | **Cœur** | Ce que tous les domaines partagent : identité et accès, validation (Double Sas), intégration (URN, liens, recherche), sources, profil. Il ne cite aucun domaine. | `hub.core` |
 | **Domaine** | Un pan de la vie (finance, puis agenda, documents, maison). Sa base, ses migrations, ses outils, ses propositions. | `hub.domains.<nom>`, protocole `Domain` |
 | **Contribution** | Ce qu'un domaine apporte au cœur sans que le cœur l'importe (connecteurs, modules par pays, reprise d'anciennes connexions), déclaré comme point d'entrée du paquet. | `hub.core.registry.contributions`, `[project.entry-points."hub.…"]` |
-| **Manifeste** | Ce qu'un domaine déclare au cœur : sortes de propositions, outils, routes, tâches de nuit. | `hub.core.domain` |
+| **Manifeste** | Ce qu'un domaine déclare au cœur : onglets, cartes d'accueil et rubriques de l'app, fichiers qu'il réclame, connecteurs, tables protégées, consignes pour l'assistant ; avec ses sortes de propositions, outils, routes et tâches de nuit. | `hub.core.manifest`, `Domain.manifest()`, `GET /api/domains` |
+| **Constat** | Ce qu'un domaine remarque seul (budget dépassé, abonnement en hausse) : un titre sans montant, une gravité. | `Domain.observations()`, `Observation` |
 | **Porte publique** | Le seul module qu'un autre domaine peut lire. | `hub.domains.<nom>.public` |
 | **Bord** | Ce qui parle au monde : API HTTP, ligne de commande, app web, collecteurs, assistant. | `hub.api`, `hub.cli`, `hub/web`, `hub.collectors`, `hub.brain` |
 | **Couches d'un domaine** | `model` (pur), `app` (cas d'usage), `infra` (SQL, fichiers), `interface` (routes, CLI, outils). Les dépendances descendent. | à venir (S6) |

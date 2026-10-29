@@ -1,5 +1,6 @@
-"""Domaine factice monté par les tests : il doit apparaître dans l'API, la recherche, la santé
-et la tâche de nuit sans qu'une ligne du cœur change."""
+"""Domaine factice monté par les tests : il doit apparaître dans l'API, la recherche, la santé,
+la tâche de nuit, l'app (onglet, carte d'accueil, rubrique), la boîte d'entrée, les constats et
+l'assistant sans qu'une ligne du cœur change. Son manifeste remplit chaque champ du contrat."""
 
 from __future__ import annotations
 
@@ -24,6 +25,15 @@ from hub.core.domain import (
     ProposalKind,
     Ref,
 )
+from hub.core.manifest import (
+    AppModule,
+    HomeCard,
+    Importer,
+    Manifest,
+    Observation,
+    SettingsSection,
+    Tab,
+)
 from hub.kernel import canonical
 from hub.kernel.clock import now_iso
 from hub.kernel.ids import urn
@@ -36,7 +46,31 @@ CREATE TABLE IF NOT EXISTS applied_proposals (
   applied_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY, type TEXT NOT NULL,
   urn TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL);
+CREATE TRIGGER IF NOT EXISTS events_no_update BEFORE UPDATE ON events
+  BEGIN SELECT RAISE(ABORT, 'ledger.append_only'); END;
+CREATE TRIGGER IF NOT EXISTS events_no_delete BEFORE DELETE ON events
+  BEGIN SELECT RAISE(ABORT, 'ledger.append_only'); END;
 """
+
+MANIFEST = Manifest(
+    description="Domaine factice des tests : des éléments nommés.",
+    app=AppModule(
+        tabs=(Tab("demo", "Démo", "list", "demo.js", order=60),),
+        home_cards=(HomeCard("compte", "Éléments", "/summary"),),
+        settings=(SettingsSection("demo-prefs", "Démo", "gear", "Préférences", "demo.js"),),
+        cards="demo.js",
+    ),
+    importers=(
+        Importer(
+            "notes",
+            "Notes de démo",
+            frozenset({".demo", ".txt"}),
+            claims=lambda name, head: not name.endswith(".txt") or head.startswith(b"DEMO"),
+        ),
+    ),
+    protected_tables=frozenset({"events"}),
+    assistant="Ne jamais citer un élément sans son numéro.",
+)
 
 
 class AddItem(BaseModel):
@@ -80,6 +114,7 @@ class FakeThirdParty:
 
 class DemoDomain:
     name = "demo"
+    description = MANIFEST.description
     schema_version = 1
     scopes = frozenset({"demo:read", "demo:propose", "demo:aggregates"})
 
@@ -95,6 +130,15 @@ class DemoDomain:
             "add_item_human_only": ProposalKind(params_model=AddItem, handler=AddItemHandler()),
             "notify": ProposalKind(params_model=AddItem, handler=self.third_party, external=True),
         }
+
+    def manifest(self) -> Manifest:
+        return MANIFEST
+
+    def observations(self, limit: int) -> list[Observation]:
+        with self._engine.connect() as conn:
+            n = conn.execute(text("SELECT count(*) FROM items")).scalar_one()
+        found = [Observation("demo-empty", "empty", "info", "Aucun élément", "2026-10-29")]
+        return found[:limit] if n == 0 else []
 
     def engine(self) -> Engine:
         return self._engine

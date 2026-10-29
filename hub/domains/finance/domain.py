@@ -17,9 +17,11 @@ from sqlalchemy import Connection, Engine, event, text
 
 from hub.core import profile
 from hub.core.domain import Event, Health, Hit, McpTool, ProposalKind, Ref
+from hub.core.manifest import Manifest, Observation, Severity
 from hub.domains.finance import (
     importer,
     ledger,
+    manifest,
     packs,
     period,
     reads,
@@ -42,6 +44,7 @@ from hub.platform.settings import Settings
 MIGRATIONS = Path(__file__).parent / "migrations"
 SCHEMA_VERSION = 17  # 0017_snapshot_categories
 log = get_logger("hub.finance")
+SEVERITY: dict[str, Severity] = {"budget_over": "alert", "budget_likely": "warning"}
 
 
 def _read_period(dbapi_conn: sqlite3.Connection, _record: Any, _proxy: Any) -> None:
@@ -60,10 +63,7 @@ class CurrencyMismatch(RuntimeError):
 
 class FinanceDomain:
     name = "finance"
-    description = (
-        "Finances personnelles : comptes, dépenses par catégorie, budget, patrimoine, "
-        "abonnements ; propositions de catégorie, de règle, de budget et de note."
-    )
+    description = manifest.DESCRIPTION
     schema_version = SCHEMA_VERSION
     scopes = frozenset({"finance:read", "finance:propose", "finance:aggregates"})
 
@@ -93,6 +93,25 @@ class FinanceDomain:
             "pillar3a": profile.load(self.settings).has("pillar3a"),
             "pillar3a_cap": self.pillar3a_cap,
         }
+
+    def manifest(self) -> Manifest:
+        return manifest.MANIFEST
+
+    def observations(self, limit: int) -> list[Observation]:
+        """Les alertes des sentinelles des 31 derniers jours, en constats."""
+        with self._engine.connect() as conn:
+            alerts = sentinels.recent(conn, self.today())[:limit]
+        return [
+            Observation(
+                a["key"],
+                a["kind"],
+                SEVERITY.get(a["kind"], "info"),
+                a["title"],
+                a["on_date"],
+                detail=a["detail"],
+            )
+            for a in alerts
+        ]
 
     def engine(self) -> Engine:
         return self._engine

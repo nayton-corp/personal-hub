@@ -12,7 +12,6 @@ LIMIT = 400
 
 # chemin relatif à hub/ → taille maximale tolérée, en attendant le découpage (S5, S6)
 TOO_LONG: dict[str, int] = {
-    "api/schemas.py": 402,
     "domains/finance/rebuild.py": 412,
     "domains/finance/market.py": 432,
     "core/collectors.py": 460,

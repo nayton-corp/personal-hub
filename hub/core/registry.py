@@ -1,5 +1,6 @@
-"""Registre des domaines, alimenté par le point d'entrée `hub.domains` ; les autres points
-d'entrée (`hub.connectors`, `hub.country_modules`) portent ce qu'un domaine apporte au cœur."""
+"""Registre des domaines, alimenté par le point d'entrée `hub.domains` et filtré par
+`HUB_DOMAINS` ; les autres points d'entrée (`hub.connectors`, `hub.country_modules`,
+`hub.connection_imports`) portent ce qu'un domaine apporte au cœur sans être monté."""
 
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ from typing import Any
 
 from hub.core.domain import Domain
 from hub.core.errors import Problem
-from hub.platform.settings import Settings
+from hub.platform.settings import Settings, env_domains
 
 ENTRY_POINT_GROUP = "hub.domains"
 DomainFactory = Callable[[Settings], Domain]
@@ -29,6 +30,9 @@ class Registry:
         for scope in domain.scopes:
             if not scope.startswith(f"{domain.name}:"):
                 raise ValueError(f"portée {scope!r} hors du domaine {domain.name}")
+        problems = domain.manifest().problems()
+        if problems:
+            raise ValueError(f"manifeste de {domain.name} : {', '.join(problems)}")
         self._domains[domain.name] = domain
 
     def __iter__(self) -> Iterator[Domain]:
@@ -49,16 +53,35 @@ class Registry:
     def all_scopes(self) -> frozenset[str]:
         return frozenset(s for d in self for s in d.scopes)
 
+    def claimant(self, name: str, head: bytes) -> str | None:
+        """Le domaine qui réclame un fichier de la boîte d'entrée ; aucun, ou plusieurs : None
+        (le fichier attend qu'on le range)."""
+        found = {d.name for d in self for i in d.manifest().importers if i.wants(name, head)}
+        return found.pop() if len(found) == 1 else None
+
     @classmethod
     def discover(cls, settings: Settings) -> Registry:
+        """Les domaines installés que `HUB_DOMAINS` retient ; un nom sans domaine installé est
+        une faute de frappe, refusée au démarrage."""
+        wanted = settings.active_domains()
+        found = sorted(entry_points(group=ENTRY_POINT_GROUP), key=lambda e: e.name)
+        unknown = sorted((wanted or set()) - {ep.name for ep in found})
+        if unknown:
+            raise ValueError(f"HUB_DOMAINS : domaine non installé : {', '.join(unknown)}")
         registry = cls()
-        for ep in sorted(entry_points(group=ENTRY_POINT_GROUP), key=lambda e: e.name):
-            factory: DomainFactory = ep.load()
-            registry.add(factory(settings))
+        for ep in found:
+            if wanted is None or ep.name in wanted:
+                factory: DomainFactory = ep.load()
+                registry.add(factory(settings))
         return registry
 
 
 def contributions(group: str) -> list[Any]:
-    """Les valeurs déclarées au point d'entrée `group`, par nom de domaine : le cœur les lit sans
-    importer un domaine."""
-    return [ep.load() for ep in sorted(entry_points(group=group), key=lambda e: e.name)]
+    """Les valeurs déclarées au point d'entrée `group` par les domaines que `HUB_DOMAINS`
+    retient, par nom de domaine : le cœur les lit sans importer un domaine."""
+    wanted = env_domains()
+    return [
+        ep.load()
+        for ep in sorted(entry_points(group=group), key=lambda e: e.name)
+        if wanted is None or ep.name in wanted
+    ]

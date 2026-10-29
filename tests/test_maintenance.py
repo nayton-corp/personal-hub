@@ -16,7 +16,12 @@ from tests.conftest import make_settings
 def test_verify_and_backup_include_domains(hub: HubContext, tmp_path: Path) -> None:
     report = verify(hub)
     assert report.ok
-    assert report.checks == {"core": "ok", "demo": "ok", "demo.verify": "ok"}
+    assert report.checks == {
+        "core": "ok",
+        "demo": "ok",
+        "demo.verify": "ok",
+        "demo.protected": "ok",
+    }
     files = backup_all(hub, tmp_path / "b", "s")
     assert sorted(f.name for f in files) == ["core-s.db", "demo-s.db"]
 
