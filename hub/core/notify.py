@@ -11,7 +11,7 @@ import base64
 import time
 import urllib.request
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 from hub.core import secrets
@@ -29,6 +29,9 @@ class Message:
     body: str
     priority: Priority = "default"
     tags: str = ""
+    # écran de l'app ouvert en touchant la notification : chemin générique (« /#sources »,
+    # « /#alert=<id> »), jamais un nom de catégorie ni un montant ; complété par l'origine du hub
+    click: str = ""
 
 
 Sender = Callable[[str, Message], None]
@@ -63,6 +66,7 @@ def _post(url: str, msg: Message) -> None:  # pragma: no cover - réseau
             "Title": "=?UTF-8?B?" + _b64(msg.title) + "?=",
             "Priority": msg.priority,
             "Tags": msg.tags,
+            **({"Click": msg.click} if msg.click else {}),
         },
     )
     with urllib.request.urlopen(request, timeout=10):  # noqa: S310
@@ -86,6 +90,8 @@ class Notifier:
             log.info("notify.skipped", reason="no_topic", title=msg.title)
             return False
         url = f"{self.settings.notify.ntfy_url.rstrip('/')}/{target}"
+        if msg.click.startswith("/"):
+            msg = replace(msg, click=self.settings.server.public_origin.rstrip("/") + msg.click)
         for pause in (*RETRY_PAUSES, None):
             try:
                 self.sender(url, msg)

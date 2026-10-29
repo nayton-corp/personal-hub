@@ -253,6 +253,16 @@ def test_notifier_retries_a_passing_network_failure(
     assert not hub.notifier.send(Message("Personal Hub", "test"))
 
 
+def test_notification_click_opens_the_app(hub: HubContext, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("hub.core.notify.topic", lambda _s: "topic-test")
+    got: list[Message] = []
+    monkeypatch.setattr(hub.notifier, "sender", lambda _u, m: got.append(m))
+    assert hub.notifier.send(Message("Personal Hub", "test", click="/#sources"))
+    assert hub.notifier.send(Message("Personal Hub", "test"))
+    origin = hub.settings.server.public_origin.rstrip("/")
+    assert [m.click for m in got] == [f"{origin}/#sources", ""]
+
+
 def test_simultaneous_collectors_do_not_lock_the_database(client: TestClient, make_token) -> None:  # type: ignore[no-untyped-def]
     # les démons des collecteurs appellent l'API dans la même milliseconde, chaque minute pile ;
     # la vérification du jeton écrit last_used_at et ne doit pas finir en « database is locked »

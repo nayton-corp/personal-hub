@@ -37,7 +37,28 @@ export const ICON = {
   briefcase: "M3 7h18v13H3zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18", arrowin: "M12 3v12M7 10l5 5 5-5M4 21h16",
   swap: "M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7",
   help: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4v.3M12 17h.01",
-  dots: "M5 12h.01M12 12h.01M19 12h.01", cash: "M12 3v18M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6",
+  dots: "M5 12h.01M12 12h.01M19 12h.01",
+  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18",
+  cpu: "M7 7h10v10H7zM10 10h4v4h-4zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4",
+  factory: "M3 21V10l6 4V10l6 4V6h6v15zM7 17h.01M12 17h.01M17 17h.01",
+  cube: "M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5",
+  doc: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6",
+  radio: "M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M12 12h.01",
+  cross: "M9 4h6v5h5v6h-5v5H9v-5H4V9h5z", drop: "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z",
+  calendar: "M4 6h16v15H4zM4 10h16M8 3v4M16 3v4", sun: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4",
+  receipt: "M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6M9 16h4",
+  gift: "M3 8h18v4H3zM5 12v9h14v-9M12 8v13M12 8S10 3 7.5 4.5 9 8 12 8zM12 8s2-5 4.5-3.5S15 8 12 8z",
+  book: "M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4zM20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z",
+  fuel: "M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h12M4 10h10M14 8h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3",
+  music: "M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z",
+  play: "M3 5h18v14H3zM10 9v6l5-3z", phone: "M7 2h10v20H7zM11 18h2",
+  box: "M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10", tag: "M3 3h8l10 10-8 8L3 11zM7.5 7.5h.01",
+  sparkle: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 17v4M17 19h4",
+  percent: "M19 5L5 19M7 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
+  users: "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 12 0v1M16 3.5a4 4 0 0 1 0 7.5M22 21v-1a6 6 0 0 0-4-5.6",
+  coffee: "M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 2v3M12 2v3",
+  dumbbell: "M6 6v12M18 6v12M3 9v6M21 9v6M6 12h12", parking: "M5 3h14v18H5zM10 17V7h3a3 3 0 0 1 0 6h-3",
+  paw: "M12 13c-3 0-5 3-5 5s2 3 5 3 5-1 5-3-2-5-5-5zM6 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM10 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM14 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", cash: "M12 3v18M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6",
 };
 
 export const ic = (n, cls = "") =>
@@ -135,10 +156,40 @@ export function failure(e) {
 export const SHEETS = {};
 export const SH = { kind: null, arg: null, opener: null, tmp: null };
 
+// Le panneau a sa propre entrée d'historique : le geste retour (ou le bouton du navigateur) le
+// ferme au lieu de quitter l'écran.
+let popsToSkip = 0;
+let repush = false;
+const sheetEntry = () => history.pushState({ ...(history.state || {}), sheet: true }, "");
+
+// popstate : true quand l'événement venait de closeSheet ou fermait le panneau
+export function sheetPop() {
+  if (popsToSkip > 0) {
+    popsToSkip -= 1;
+    if (repush && SH.kind) sheetEntry();
+    repush = false;
+    return true;
+  }
+  if (!SH.kind) return false;
+  closeSheet(false, true);
+  return true;
+}
+
+// un changement d'écran remplace l'entrée du panneau au lieu de s'ajouter derrière
+export function sheetEntryOpen() {
+  return Boolean(history.state && history.state.sheet);
+}
+
 export function openSheet(kind, arg, tmp = null) {
   const wasOpen = Boolean(SH.kind);
   Object.assign(SH, { kind, arg, tmp, err: "", cad: null });
-  if (!wasOpen) SH.opener = document.activeElement;
+  if (!wasOpen) {
+    SH.opener = document.activeElement;
+    if (popsToSkip > 0) repush = true;
+    else sheetEntry();
+  }
+  $("sheet").classList.remove("dragging");
+  $("sheet").style.removeProperty("transform");
   document.documentElement.classList.add("sheet-open");
   $("shell").inert = true;
   $("tabbar").inert = true;
@@ -150,9 +201,17 @@ export function openSheet(kind, arg, tmp = null) {
   }, 80);
 }
 
-export function closeSheet(silent = false) {
+// keepEntry : l'appelant remplace lui-même l'entrée d'historique (changement d'écran)
+export function closeSheet(silent = false, fromPop = false, keepEntry = false) {
   if (!SH.kind) return;
   SH.kind = null;
+  if (!fromPop && !keepEntry && sheetEntryOpen()) {
+    popsToSkip += 1;
+    history.back();
+  }
+  const sh = $("sheet");
+  sh.classList.remove("dragging");
+  sh.style.removeProperty("transform");
   document.documentElement.classList.remove("sheet-open");
   $("shell").inert = false;
   $("tabbar").inert = false;
@@ -180,6 +239,33 @@ export function renderSheet() {
   fill($("sheet-foot"), s.foot || "");
 }
 
+// glisser le haut du panneau vers le bas le ferme (l'app installée n'a pas toujours le geste
+// retour) ; en dessous de 90 px, il revient en place
+export function initSheetSwipe() {
+  const sh = $("sheet");
+  let y0 = null, dy = 0;
+  sh.addEventListener("touchstart", (e) => {
+    if (!e.target.closest(".grab, .sheet-head") || e.target.closest("button")) return;
+    y0 = e.touches[0].clientY;
+    dy = 0;
+    sh.classList.add("dragging");
+  }, { passive: true });
+  sh.addEventListener("touchmove", (e) => {
+    if (y0 == null) return;
+    dy = Math.max(0, e.touches[0].clientY - y0);
+    sh.style.transform = `translateY(${dy}px)`;
+  }, { passive: true });
+  const end = () => {
+    if (y0 == null) return;
+    y0 = null;
+    sh.classList.remove("dragging");
+    sh.style.removeProperty("transform");
+    if (dy > 90) closeSheet();
+  };
+  sh.addEventListener("touchend", end);
+  sh.addEventListener("touchcancel", end);
+}
+
 // --- préférences de l'appareil -----------------------------------------------------------------
 export function pref(key, fallback) {
   try {
@@ -202,3 +288,9 @@ export function applyTheme(theme) {
   if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
   else delete document.documentElement.dataset.theme;
 }
+
+// squelette d'écran ou de bloc pendant la première lecture (annoncé « Chargement »)
+export const skel = (kind = "screen") =>
+  kind === "screen"
+    ? '<div class="skel" role="status" aria-label="Chargement"><i class="short"></i><i class="big"></i><i class="blk"></i><i></i><i></i><i class="short"></i></div>'
+    : '<div class="skel" role="status" aria-label="Chargement"><i></i><i></i><i class="short"></i></div>';

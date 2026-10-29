@@ -15,12 +15,14 @@ from hub.core.auth import AppSession, Ctx, Principal, require
 from hub.core.clock import now_iso
 from hub.core.db import begin_immediate
 from hub.core.errors import Problem
+from hub.core.money import base_currency
 from hub.domains.finance import (
     catalog,
     debts,
     insights,
     lookthrough,
     packs,
+    performance,
     period,
     reads,
     recurring,
@@ -104,6 +106,14 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         except ValueError:
             raise Problem("validation.params", "curseur invalide") from None
         return {"items": items, "next_cursor": next_cursor}
+
+    @r.get("/trades")
+    def trades_route(
+        _p: Reader, isin: Annotated[str, Query(max_length=40)], account: str | None = None
+    ) -> dict[str, Any]:
+        """Achats et ventes d'un actif (ordres), pour le journal d'un actif dans l'app."""
+        with engine.connect() as conn:
+            return {"items": reads.trades(conn, isin, account)}
 
     @r.get("/entries/{entry_id}")
     def entry(_p: Reader, entry_id: str) -> dict[str, Any]:
@@ -226,6 +236,27 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         domain.refresh_snapshots()
         with engine.connect() as conn:
             return snapshots.history(conn, from_, to)
+
+    @r.get("/performance")
+    def performance_route(
+        _p: AnyReader,
+        from_: Annotated[str | None, Query(alias="from", pattern=DATE)] = None,
+        to: Annotated[str | None, Query(pattern=DATE)] = None,
+        step: Annotated[str, Query(pattern=r"^(day|week|month)$")] = "week",
+        line: Annotated[list[str] | None, Query(max_length=300)] = None,
+    ) -> dict[str, Any]:
+        """Performance d'une sélection de lignes (`line=<compte>|<instrument>`, `<compte>|cash`,
+        `debt:<id>` ; par défaut, celles de l'app) : courbe de la valeur, des apports nets, du
+        gain et du rendement pondéré dans le temps ; résumé (gain, revenus, frais, rendement,
+        rendement personnel annuel) ; le même par compte, par actif, par ligne ; par mois et par
+        année ; risque. Des agrégats seulement."""
+        if line is not None and len(line) > 500:
+            raise Problem("validation.params", "trop de lignes")
+        with engine.connect() as conn:
+            eng = performance.engine_for(conn, domain.today().isoformat())
+        if eng is None:
+            return performance.empty(base_currency())
+        return performance.report(eng, line, from_, to, step)
 
     @r.get("/flows")
     def flows(

@@ -201,6 +201,12 @@ def _pillar3a(conn: Connection, today: date, cap: int | None) -> list[Alert]:
     ]
 
 
+def alert_id(key: str) -> str:
+    """Identifiant opaque d'une alerte : la clé nomme la catégorie, l'identifiant non (il passe
+    par ntfy, un service tiers)."""
+    return hashlib.sha256(key.encode()).hexdigest()[:20]
+
+
 def evaluate(
     conn: Connection, today: date, *, pillar3a: bool = True, pillar3a_cap: int | None = None
 ) -> list[Alert]:
@@ -235,8 +241,14 @@ def run(
         ledger.append_event(
             conn,
             "notify.request",
-            urn("finance", "alert", hashlib.sha256(a.key.encode()).hexdigest()[:20]),
-            {"title": a.notice, "body": "Le détail est dans l'app.", "tags": "bell"},
+            urn("finance", "alert", alert_id(a.key)),
+            {
+                "title": a.notice,
+                "body": "Le détail est dans l'app.",
+                "tags": "bell",
+                # toucher la notification ouvre l'alerte dans l'app : identifiant opaque
+                "click": f"/#alert={alert_id(a.key)}",
+            },
         )
         raised.append(a)
     return raised
@@ -252,6 +264,13 @@ def recent(conn: Connection, today: date, days: int = ALERT_DAYS) -> list[dict[s
         {"s": since},
     ).fetchall()
     return [
-        {"key": r[0], "kind": r[1], "title": r[2], "detail": json.loads(r[3]), "on_date": r[4]}
+        {
+            "key": r[0],
+            "id": alert_id(r[0]),
+            "kind": r[1],
+            "title": r[2],
+            "detail": json.loads(r[3]),
+            "on_date": r[4],
+        }
         for r in rows
     ]

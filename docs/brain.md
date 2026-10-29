@@ -24,7 +24,8 @@ téléphone ──► hub (api) ◄── brain ──► Ollama (macOS, GPU)
 - **Sentinelles** (dans le hub, pas dans le brain, sans modèle) : chaque nuit, budget dépassé ou
   qui va l'être, abonnement en hausse, marge 3a pas encore versée en novembre et décembre. Elles
   apparaissent dans « À traiter » et arrivent par ntfy avec un texte générique (ni montant, ni nom
-  de commerçant).
+  de commerçant). Toucher l'alerte ouvre l'app sur l'écran concerné (`/#alert=<id>`, un
+  identifiant opaque : l'URL ne dit rien de l'alerte).
 
 ## Deux jetons
 

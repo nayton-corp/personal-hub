@@ -25,7 +25,7 @@ from hub.core.clock import iso, local_tz, now_iso, parse_iso, utcnow
 from hub.core.coredb import audit
 from hub.core.errors import Problem
 from hub.core.ids import new_id
-from hub.core.notify import Message
+from hub.core.notify import Message, Priority
 
 Outcome = Literal[
     "ok",
@@ -233,7 +233,11 @@ def _first_today(conn: Connection, name: str, outcome: str, run_id: str) -> bool
     return True
 
 
-TEXTS: dict[str, tuple[str, str]] = {
+# les notifications des collecteurs ouvrent la page des sources dans l'app
+SOURCES_CLICK = "/#sources"
+
+
+TEXTS: dict[str, tuple[Priority, str]] = {
     "auth_error": ("urgent", "Connexion refusée."),
     "selector_missing": ("high", "Écran inattendu ({detail})."),
     "unknown": ("high", "Erreur inattendue ({detail})."),
@@ -248,7 +252,7 @@ def _alert(name_label: str, outcome: str, detail: str | None, degraded: bool) ->
     body = body.format(detail=detail or "?")
     if degraded:
         body += " Collecte suspendue : import manuel en attendant, puis contrôle depuis l'app."
-    return Message(f"Collecte {name_label} : action requise", body, priority)  # type: ignore[arg-type]
+    return Message(f"Collecte {name_label} : action requise", body, priority, click=SOURCES_CLICK)
 
 
 def record(conn: Connection, name: str, run: Run, by: str) -> Recorded:
@@ -358,6 +362,7 @@ def auth_pending(name_label: str) -> Message:
         f"Collecte {name_label} : connexion à valider",
         "Valide la connexion sur ton téléphone (3 minutes).",
         "high",
+        click=SOURCES_CLICK,
     )
 
 

@@ -34,6 +34,7 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
 |---|---|
 | `kpis?month=` | patrimoine net et variations (1 mois, depuis le 31 décembre), revenus, dépenses, épargne, reste à vivre, jours restants, liquidités, mois couverts, taux d'épargne 3 mois, comptes périmés, à catégoriser, marge 3a |
 | `networth/history?from=&to=&step=` | instantanés : patrimoine, versements cumulés, valeur par enveloppe et par compte ; `step=day\|week` calcule un point par jour ou par semaine à la demande (400 points au plus, `from` requis) |
+| `performance?from=&to=&step=&line=` | performance d'une sélection de lignes (`compte\|ISIN`, `compte\|cash`, `debt:…` ; celles de l'app par défaut) : valeur, apports nets, gain, rendement pondéré dans le temps, rendement personnel (TRI, dès un an), revenus, frais, par compte, par actif, par ligne, par mois et par année, baisse maximale et volatilité. Les virements entre mes comptes s'annulent sur le total ; une ligne qui reçoit son premier cours y entre comme un versement |
 | `flows?month=&period=m\|q` | revenus → fixe, variable, épargne → catégories, et le reste sur compte |
 | `accounts` | comptes, solde, valeur, disponibilité (`immediate`, `days`, `locked`, déduite du type) et objectif (`current`, `safety`, `projects`, `long_term`, `retirement`, déduit du type tant qu'il n'est pas choisi) |
 | `entries?account=&category=&from=&to=&direction=in\|out&min_minor=&max_minor=&q=&sort=date\|amount` | le journal filtré : compte, catégorie, dates, sens, montant absolu en centimes, texte (3 lettres au moins) ; tri par date ou par plus gros montant |
@@ -186,7 +187,9 @@ ventes des avis postérieurs) fois le dernier cours connu. Les versements nets s
 donc la hausse des cours, les dividendes, les intérêts et les commissions. La marge 3a compte
 les versements reçus par VIAC (ou, s'ils sont plus élevés, les paiements « Épargne 3a » des
 comptes BCF). `GET /api/finance/holdings?on=` donne les positions (valeur, prix de revient au
-coût moyen, plus-value, poids) ; l'onglet Patrimoine les affiche.
+coût moyen, plus-value, poids) ; l'onglet Patrimoine les affiche. `GET /api/finance/trades?isin=`
+donne les achats et ventes d'un actif, affichés quand on ouvre ses écritures
+depuis le Patrimoine.
 
 **Reprendre tes PDF VIAC (sur le Mac).**
 
@@ -344,7 +347,8 @@ ventile les positions selon ce que les fonds détiennent. Deux fichiers sont rec
 des lignes publiée par l'émetteur (iShares, Vanguard… : le fichier doit avoir l'ISIN du fonds
 dans son nom, par ex. `IE00B3RBWM25_holdings.csv`), ou un CSV générique
 `isin,dimension,bucket,weight_pct,on_date`. Sans composition, un fonds est classé d'après
-lui-même (catégorie VIAC, crypto), sinon « Non ventilé ».
+lui-même (catégorie VIAC, crypto), sinon « Non ventilé ». Chaque poche liste aussi les actifs qui
+la composent et leur part (touche une case de la carte de répartition).
 
 **Virements appariés.** Un débit et un crédit de mes comptes à 5 jours au plus s'apparient, par
 ordre de confiance : IBAN de contrepartie, référence commune, puis montant seul quand il est
