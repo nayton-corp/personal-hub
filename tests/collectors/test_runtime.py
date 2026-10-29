@@ -14,11 +14,11 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from hub.collectors import dropbox
+from hub.collectors import dropbox, runtime
 from hub.collectors.base import CollectorConfig, Failure, Kind, Memory, Result
 from hub.collectors.browser import Selectors, purge_diag
 from hub.collectors.client import HubClient, HubUnavailable
-from hub.collectors.runtime import Assigned, Env, assigned, due, execute, tick
+from hub.collectors.runtime import Assigned, Env, assigned, due, execute, in_background, tick
 from hub.core import connectors
 from tests.collectors.conftest import FakeHub
 from tests.collectors.fakebank import camt_file
@@ -99,6 +99,39 @@ def test_tick(
         runner=_runner(log),
     )
     assert log == expected
+
+
+def test_runs_go_in_parallel_and_never_twice(tmp_path: Path) -> None:
+    """Un run lent ne bloque pas la boucle ; tant qu'il tourne, sa connexion n'est pas relancée
+    (l'actualisation demandée attend), les autres partent."""
+    import threading
+
+    gate = threading.Event()
+    log: list[tuple[str, Kind]] = []
+
+    def slow(env: Env, kind: Kind) -> Result:
+        log.append((env.name, kind))
+        gate.wait(5)
+        return Result("ok")
+
+    hub = FakeHub(run_requested=True)
+    viac = Assigned("viac", "viac", "VIAC", None, {}, None)
+    start = in_background(slow)
+    first = tick(
+        lambda i: _env(tmp_path, hub, i.id), [BCF], hub, LATER, poll_checks=True, runner=start
+    )  # type: ignore[arg-type]
+    again = tick(
+        lambda i: _env(tmp_path, hub, i.id), [BCF, viac], hub, LATER, poll_checks=True, runner=start
+    )  # type: ignore[arg-type]
+    assert first == [("bcf", "run", "started")]
+    assert again == [("viac", "run", "started")]
+    gate.set()
+    for _ in range(100):
+        if not runtime.RUNNING:
+            break
+        time.sleep(0.02)
+    assert not runtime.RUNNING
+    assert sorted(log) == [("bcf", "run"), ("viac", "run")]
 
 
 def test_tick_without_hub_runs_nothing(tmp_path: Path) -> None:
