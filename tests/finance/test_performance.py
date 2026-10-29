@@ -319,7 +319,7 @@ def test_route(
     r = client.get(
         "/api/finance/performance",
         params={"from": "2026-01-01", "step": "week", "line": [f"{bcf.id}|cash"]},
-        headers=token(ctx, "brain"),
+        headers=token(ctx, "brain=finance"),
     )
     assert r.status_code == 200, r.text
     body = r.json()

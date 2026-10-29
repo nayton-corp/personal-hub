@@ -56,7 +56,7 @@ Un changement voulu du contrat d'API se valide avec `make openapi`, puis relectu
 |---|---|
 | `hub init --config DIR --home DIR` | première installation : clé age, secrets, dossiers, `deploy/.env` (`make init`) |
 | `hub db upgrade` · `hub db status` | migrations de `core.db` puis des domaines |
-| `hub token create NOM -s brain` · `list` · `revoke ID` | jetons à portée, montrés une seule fois |
+| `hub token create NOM -s brain=finance --days 90` · `list` · `rotate ID` · `revoke ID` | jetons à portée et à date de fin, montrés une seule fois |
 | `hub auth bootstrap-code` | code à usage unique pour inscrire la première passkey |
 | `hub serve` | API, un seul worker |
 | `hub verify` | `integrity_check` de chaque base, puis `verify-ledger` |

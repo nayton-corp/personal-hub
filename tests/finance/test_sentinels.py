@@ -111,7 +111,7 @@ def test_pillar3a_in_november(year: FinanceDomain) -> None:
 def test_alerts_route(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
     year.nightly()
     assert client.get("/api/finance/alerts", headers=token(ctx, "aggregates")).status_code == 403
-    items = client.get("/api/finance/alerts", headers=token(ctx, "brain")).json()["items"]
+    items = client.get("/api/finance/alerts", headers=token(ctx, "brain=finance")).json()["items"]
     assert [i["kind"] for i in items] == ["budget_over"]
     assert items[0]["title"] == "Budget Alimentation dépassé"
     assert items[0]["detail"]["spent"]["display"] == "300.00"

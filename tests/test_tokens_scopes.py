@@ -11,13 +11,23 @@ from tests.conftest import bearer
 
 
 def test_expand_shortcuts() -> None:
-    assert set(tokens.expand_scopes(["brain"])) == {"finance:read", "finance:propose"}
+    assert tokens.expand_scopes(["brain"]) == ["*:aggregates"]  # sans liste : aucun détail
+    assert tokens.expand_scopes(["brain=finance, agenda"]) == [
+        "*:aggregates",
+        "agenda:propose",
+        "agenda:read",
+        "finance:propose",
+        "finance:read",
+    ]
     assert tokens.expand_scopes(["aggregates"]) == ["*:aggregates"]
     assert tokens.expand_scopes(["collector"]) == ["core:collector"]
     assert tokens.expand_scopes(["demo:read", "demo:read"]) == ["demo:read"]
 
 
-@pytest.mark.parametrize("bad", [["app"], ["*:read"], ["finance:write"], ["root"], []])
+@pytest.mark.parametrize(
+    "bad",
+    [["app"], ["*:read"], ["finance:write"], ["root"], [], ["brain="], ["x=finance"], ["brain=A"]],
+)
 def test_invalid_scopes(bad: list[str]) -> None:
     with pytest.raises(tokens.ScopeError):
         tokens.expand_scopes(bad)
@@ -32,7 +42,7 @@ def test_principal_wildcard() -> None:
 
 def test_token_is_stored_as_hash_and_revocable(hub: HubContext) -> None:
     with hub.core.engine.begin() as conn:
-        info, secret = tokens.create(conn, "brain-mac", ["brain"], "system:test")
+        info, secret = tokens.create(conn, "brain-mac", ["brain"], "system:test", days=30)
     assert secret.startswith("hub_")
     assert len(secret) > 40
     with hub.core.engine.connect() as conn:

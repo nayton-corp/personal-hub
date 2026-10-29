@@ -42,5 +42,5 @@ def test_pillar3a_follows_the_country(
         profile.update(conn, "system:test", country="FR")
     assert year.pillar3a()["pillar3a"] is False
     assert client.get(kpis, headers=token(ctx, "aggregates")).json()["pillar3a"] is None
-    assert call(client, token(ctx, "brain"), "finance_networth")["pillar3a"] is None
+    assert call(client, token(ctx, "brain=finance"), "finance_networth")["pillar3a"] is None
     assert margin_alerts(year, **year.pillar3a()) == 0

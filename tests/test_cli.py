@@ -32,21 +32,28 @@ def test_full_cycle(tmp_path: Path) -> None:
     assert run("verify")[0] == 1
     code, out = run("db", "upgrade")
     assert code == 0
-    assert json.loads(out)["core"] == "0006_collector_refresh"
+    assert json.loads(out)["core"] == "0007_token_expiry"
     assert json.loads(run("db", "status")[1])["core"]["current"] is True
 
-    code, out = run("token", "create", "brain-mac", "--scope", "brain")
+    code, out = run("token", "create", "brain-mac", "--scope", "brain=finance", "--days", "30")
     assert code == 0
     secret = out.strip().splitlines()[-1]
     assert secret.startswith("hub_")
     code, out = run("token", "list")
     assert "brain-mac" in out
     assert "finance:propose" in out
+    assert "actif    fin " in out
     assert secret not in out
     token_id = out.split()[0]
+    code, out = run("token", "rotate", token_id)
+    assert code == 0
+    assert out.strip().splitlines()[-1] != secret
+    assert run("token", "rotate", token_id)[0] == 1  # l'ancien est révoqué
+    token_id = run("token", "list")[1].splitlines()[-1].split()[0]
     assert run("token", "revoke", token_id)[0] == 0
     assert run("token", "revoke", token_id)[0] == 1
     assert run("token", "create", "x", "--scope", "app")[0] == 1
+    assert run("token", "create", "x", "--scope", "brain", "--days", "400")[0] != 0
 
     code, out = run("auth", "bootstrap-code")
     assert code == 0

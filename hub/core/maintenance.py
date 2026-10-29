@@ -13,9 +13,10 @@ from typing import Any
 
 from sqlalchemy import Engine
 
-from hub.core import collectors, passkeys, proposals, ratelimit, sessions
+from hub.core import collectors, passkeys, proposals, ratelimit, sessions, tokens
 from hub.core.context import HubContext
 from hub.core.manifest import unguarded
+from hub.core.notify import Message
 from hub.kernel.clock import utcnow
 from hub.platform import secrets
 from hub.platform.db import backup, integrity_check
@@ -31,6 +32,17 @@ def databases(hub: HubContext) -> dict[str, tuple[Engine, Path]]:
     return out
 
 
+def warn_token(hub: HubContext, token: tokens.TokenInfo) -> bool:
+    """Alerte ntfy avant la fin d'un jeton : son nom et la commande qui le renouvelle."""
+    end = token.expires_at[:10]
+    if token.name.startswith("collector-"):  # jeton d'un service : make deploy en recrée un
+        how = f"supprimer secrets/{token.name}.enc.yaml puis make deploy"
+    else:
+        how = f"hub token rotate {token.id}"
+    title = f"Jeton « {token.name} » : {'fini' if token.expired else 'fin'} le {end}"
+    return hub.notifier.send(Message(title[:120], how, tags="key"))
+
+
 def nightly(hub: HubContext) -> dict[str, Any]:
     with hub.core.engine.begin() as conn:
         expired = proposals.expire(conn)
@@ -40,6 +52,8 @@ def nightly(hub: HubContext) -> dict[str, Any]:
             + ratelimit.purge(conn)
             + collectors.purge_links(conn)
         )
+        ending = tokens.expiring(conn)
+    warned = sum(warn_token(hub, t) for t in ending)
     report = proposals.reconcile(hub)
     for d in hub.registry:
         d.nightly()
@@ -50,6 +64,7 @@ def nightly(hub: HubContext) -> dict[str, Any]:
         "obsoleted": synced["obsoleted"],
         "notified": synced["notified"],
         "purged": purged,
+        "tokens_warned": warned,
         "reconciled_applied": report.marked_applied,
         "reconciled_released": report.released,
         "domains": hub.registry.names(),

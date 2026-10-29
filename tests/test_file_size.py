@@ -17,7 +17,7 @@ TOO_LONG: dict[str, int] = {
     "core/collectors.py": 460,
     "domains/finance/api.py": 472,
     "domains/finance/lookthrough.py": 510,
-    "cli.py": 558,
+    "cli.py": 522,
     "collectors/exchanges/binance_history.py": 583,
     "web/budget.js": 600,
     "domains/finance/performance.py": 648,

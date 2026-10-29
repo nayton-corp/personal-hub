@@ -281,13 +281,18 @@ def test_kpis(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
     assert minor(k["pillar3a"]["paid"]) == 600_000
     assert minor(k["pillar3a"]["margin"]) == 125_800
     assert k["last_statement"] == "2026-10-25"
-    past = client.get("/api/finance/kpis?month=2026-09", headers=token(ctx, "brain")).json()
+    past = client.get("/api/finance/kpis?month=2026-09", headers=token(ctx, "brain=finance")).json()
     assert (past["as_of"], past["days_left"]) == ("2026-09-30", 0)
     assert (
-        client.get("/api/finance/kpis?month=2026-11", headers=token(ctx, "brain")).status_code
+        client.get(
+            "/api/finance/kpis?month=2026-11", headers=token(ctx, "brain=finance")
+        ).status_code
         == 422
     )
-    assert client.get("/api/finance/kpis", headers=token(ctx, "brain")).json()["month"] == "2026-10"
+    assert (
+        client.get("/api/finance/kpis", headers=token(ctx, "brain=finance")).json()["month"]
+        == "2026-10"
+    )
 
 
 def test_networth_history(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
@@ -320,7 +325,9 @@ def test_networth_history(client: TestClient, ctx: HubContext, year: FinanceDoma
 
 
 def test_flows_and_rule_of_three(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
-    full = client.get("/api/finance/flows?month=2026-10", headers=token(ctx, "brain")).json()
+    full = client.get(
+        "/api/finance/flows?month=2026-10", headers=token(ctx, "brain=finance")
+    ).json()
     groups = {g["group"]: g for g in full["groups"]}
     assert minor(full["income"]) == 502_000
     assert minor(groups["fixed"]["total"]) == 150_000
@@ -335,13 +342,15 @@ def test_flows_and_rule_of_three(client: TestClient, ctx: HubContext, year: Fina
     assert {i["category"] for i in agg_variable} == {"alimentation", "autres"}
     assert {i["category"] for i in agg["sources"]} == {"autres"}
     # trois mois complets avant octobre : juillet à septembre, sans les écritures d'octobre
-    q = client.get("/api/finance/flows?month=2026-10&period=q", headers=token(ctx, "brain")).json()
+    q = client.get(
+        "/api/finance/flows?month=2026-10&period=q", headers=token(ctx, "brain=finance")
+    ).json()
     assert q["months"] == ["2026-07", "2026-08", "2026-09"]
     assert minor(q["income"]) == 3 * 500_000
 
 
 def test_budget_and_totals(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
-    brain, agg = token(ctx, "brain"), token(ctx, "aggregates")
+    brain, agg = token(ctx, "brain=finance"), token(ctx, "aggregates")
     b = client.get("/api/finance/budget?month=2026-10", headers=brain).json()
     lines = {line["category"]: line for line in b["lines"]}
     assert lines["alimentation"]["over"] is True
@@ -373,7 +382,7 @@ def test_budget_and_totals(client: TestClient, ctx: HubContext, year: FinanceDom
 def test_summary_counts_uncategorized(
     client: TestClient, ctx: HubContext, year: FinanceDomain
 ) -> None:
-    s = client.get("/api/finance/summary?month=2026-10", headers=token(ctx, "brain")).json()
+    s = client.get("/api/finance/summary?month=2026-10", headers=token(ctx, "brain=finance")).json()
     assert (minor(s["income"]), minor(s["expenses"]), minor(s["uncategorized"])) == (
         502_000,
         193_000,
@@ -382,7 +391,10 @@ def test_summary_counts_uncategorized(
 
 
 def test_export_csv(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
-    assert client.get("/api/finance/export.csv", headers=token(ctx, "brain")).status_code == 403
+    assert (
+        client.get("/api/finance/export.csv", headers=token(ctx, "brain=finance")).status_code
+        == 403
+    )
     app_session(ctx, client)
     r = client.get("/api/finance/export.csv?from=2026-10-01")
     assert r.status_code == 200

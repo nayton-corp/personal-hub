@@ -74,7 +74,7 @@ def save(ctx: HubContext, params: dict[str, Any]) -> dict[str, Any]:
 
 
 def listed(client: TestClient, ctx: HubContext) -> list[dict[str, Any]]:
-    r = client.get("/api/finance/debts", headers=token(ctx, "brain"))
+    r = client.get("/api/finance/debts", headers=token(ctx, "brain=finance"))
     assert r.status_code == 200
     return list(r.json()["items"])
 
@@ -116,7 +116,7 @@ def test_debt_from_the_received_payment(
     assert v.net_worth == 541_000 - 445_000
     assert v.net_worth - v.deposits == before.net_worth - before.deposits
     # les instantanés suivent : une dette créée relance le calcul
-    hist = client.get("/api/finance/networth/history", headers=token(ctx, "brain")).json()
+    hist = client.get("/api/finance/networth/history", headers=token(ctx, "brain=finance")).json()
     assert hist["items"][-1]["by_envelope"]["dettes"]["minor"] == -445_000
 
 
@@ -238,7 +238,7 @@ def test_recategorized_payment_reaches_the_history(
             "category_id": "voiture-credit",
         },
     )
-    h = token(ctx, "brain")
+    h = token(ctx, "brain=finance")
 
     def owed() -> int:
         items = client.get("/api/finance/networth/history", headers=h).json()["items"]

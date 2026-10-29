@@ -56,7 +56,7 @@ def client(ctx: HubContext) -> Iterator[TestClient]:
 
 def token(ctx: HubContext, *scopes: str) -> dict[str, str]:
     with ctx.core.engine.begin() as conn:
-        _info, secret = tokens.create(conn, "t", list(scopes), "system:test")
+        _info, secret = tokens.create(conn, "t", list(scopes), "system:test", days=30)
     return {"Authorization": f"Bearer {secret}"}
 
 
@@ -104,7 +104,7 @@ def loaded(fin: FinanceDomain) -> FinanceDomain:
 
 
 def test_scopes(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
-    brain = token(ctx, "brain")
+    brain = token(ctx, "brain=finance")
     agg = token(ctx, "aggregates")
     other = token(ctx, "core:collector")
     for path in ("/accounts", "/summary?month=2026-10", "/categories", "/freshness", "/budget"):
@@ -118,7 +118,7 @@ def test_scopes(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> N
 
 
 def test_accounts_and_freshness(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
-    (a,) = client.get("/api/finance/accounts", headers=token(ctx, "brain")).json()["items"]
+    (a,) = client.get("/api/finance/accounts", headers=token(ctx, "brain=finance")).json()["items"]
     assert a["iban"] == "CH93…957"
     assert a["balance"] == {"minor": 307470, "currency": "CHF", "display": "3074.70"}
     assert a["last_clbd"]["gap"]["minor"] == 0
@@ -131,7 +131,7 @@ def test_accounts_and_freshness(client: TestClient, ctx: HubContext, loaded: Fin
 def test_entries_pagination_and_detail(
     client: TestClient, ctx: HubContext, loaded: FinanceDomain
 ) -> None:
-    h = token(ctx, "brain")
+    h = token(ctx, "brain=finance")
     page = client.get("/api/finance/entries?limit=2", headers=h).json()
     assert [e["booking_date"] for e in page["items"]] == ["2026-10-04", "2026-10-03"]
     seen = [e["id"] for e in page["items"]]
@@ -162,7 +162,9 @@ def test_entries_pagination_and_detail(
 
 
 def test_summary_budget_trend(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
-    brain = client.get("/api/finance/summary?month=2026-10", headers=token(ctx, "brain")).json()
+    brain = client.get(
+        "/api/finance/summary?month=2026-10", headers=token(ctx, "brain=finance")
+    ).json()
     assert brain["income"]["minor"] == 250_000
     assert brain["expenses"]["minor"] == 4_000 + 8_530 + 30_000
     by_cat = {c["category"]: c["count"] for c in brain["by_category"]}
@@ -171,7 +173,9 @@ def test_summary_budget_trend(client: TestClient, ctx: HubContext, loaded: Finan
     # moins de 3 écritures : regroupé dans « Autres » pour la portée aggregates
     assert {c["category"] for c in agg["by_category"]} == {"alimentation", "autres"}
     assert (
-        client.get("/api/finance/summary?month=2026-13", headers=token(ctx, "brain")).status_code
+        client.get(
+            "/api/finance/summary?month=2026-13", headers=token(ctx, "brain=finance")
+        ).status_code
         == 422
     )
     t = client.get(
@@ -184,17 +188,17 @@ def test_summary_budget_trend(client: TestClient, ctx: HubContext, loaded: Finan
         ("2026-11", 0),
     ]
     all_expenses = client.get(
-        "/api/finance/trend?months=1&month=2026-10", headers=token(ctx, "brain")
+        "/api/finance/trend?months=1&month=2026-10", headers=token(ctx, "brain=finance")
     )
     assert all_expenses.json()["series"][0]["total"]["minor"] == -42_530
-    b = client.get("/api/finance/budget?month=2026-10", headers=token(ctx, "brain")).json()
+    b = client.get("/api/finance/budget?month=2026-10", headers=token(ctx, "brain=finance")).json()
     assert {line["category"]: line["target"] for line in b["lines"]}["alimentation"] is None
 
 
 def test_review_and_search(client: TestClient, ctx: HubContext, fin: FinanceDomain) -> None:
     ready_account(fin, 100_000)
     fin.importer.process([Incoming("a.xml", camt053(simple_stmt("1000.00")))])
-    h = token(ctx, "brain")
+    h = token(ctx, "brain=finance")
     groups = client.get("/api/finance/review", headers=h).json()["groups"]
     g = groups[0]
     assert {k: g[k] for k in ("counterparty", "count", "total", "direction")} == {
@@ -251,7 +255,7 @@ def test_placeholder_counterparty_is_hidden(
     # le registre garde la valeur de la banque : elle entre dans la clé de dédoublonnage
     stored = rows(fin, "SELECT DISTINCT counterparty FROM entries WHERE kind = 'movement'")
     assert sorted(str(r[0]) for r in stored) == ["NOTPROVIDED", "Not Provided"]
-    h = token(ctx, "brain")
+    h = token(ctx, "brain=finance")
     items = client.get("/api/finance/entries", headers=h).json()["items"]
     assert {e["counterparty"] for e in items if e["kind"] == "movement"} == {None}
     groups = client.get("/api/finance/review", headers=h).json()["groups"]
@@ -302,7 +306,7 @@ def test_review_groups_card_payments_by_merchant(
         ],
     )
     fin.importer.process([Incoming("a.xml", camt053(stmt))])
-    h = token(ctx, "brain")
+    h = token(ctx, "brain=finance")
     groups = {
         g["counterparty"]: g for g in client.get("/api/finance/review", headers=h).json()["groups"]
     }
@@ -374,7 +378,9 @@ def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceD
     assert loaded.applied([]) == {}
     assert loaded.applied(["p"]) == {}
     assert loaded.resolve("hub:finance:nothing:1") is None
-    (acc,) = client.get("/api/finance/accounts", headers=token(ctx, "brain")).json()["items"]
+    (acc,) = client.get("/api/finance/accounts", headers=token(ctx, "brain=finance")).json()[
+        "items"
+    ]
     assert loaded.resolve(f"hub:finance:account:{acc['id']}") is not None
     assert loaded.resolve(events[1].urn) is not None
     assert len(loaded.mcp_tools()) == 16  # lot 7, puis la catégorisation par lot
@@ -402,7 +408,9 @@ def test_viac_pdf_upload_and_holdings(
     assert h.status_code == 200
     assert h.json()["value"]["minor"] == 95000
     assert (
-        client.get("/api/finance/holdings?on=31.03.2026", headers=token(ctx, "brain")).status_code
+        client.get(
+            "/api/finance/holdings?on=31.03.2026", headers=token(ctx, "brain=finance")
+        ).status_code
         == 422
     )
 

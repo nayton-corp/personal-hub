@@ -134,7 +134,7 @@ layers = ["hub.domains", "hub.core", "hub.platform", "hub.kernel"]
 [[tool.importlinter.contracts]]
 name = "Ni l'API ni la CLI n'importent un domaine : elles passent par le registre"
 type = "forbidden"
-source_modules = ["hub.kernel", "hub.platform", "hub.core", "hub.api", "hub.cli"]
+source_modules = ["hub.kernel", "hub.platform", "hub.core", "hub.api", "hub.cli", "hub.cli_tokens"]
 forbidden_modules = ["hub.domains", "hub.collectors", "hub.brain"]
 
 [[tool.importlinter.contracts]]

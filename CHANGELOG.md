@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+### Jetons à date de fin, par domaine (chantier S8)
+
+- Chaque jeton a une date de fin (`--days`, 90 par défaut, 366 au plus) ; un jeton fini est
+  refusé. Migration `core` 0007 : les jetons existants reçoivent un an depuis leur création.
+- `hub token rotate ID` : nouveau secret, mêmes portées, l'ancien révoqué.
+- La tâche de nuit prévient par ntfy 14 jours avant la fin, une fois par jeton, avec la
+  commande à lancer (pour un service collecteur : recréer son fichier de secrets).
+- Le raccourci `brain` n'ouvre plus que les agrégats ; `brain=finance` ajoute lecture et
+  propositions des domaines nommés. Les jetons déjà créés gardent leurs portées.
+- Les commandes `hub token …` passent dans `hub/cli_tokens.py`.
+
 ### Contrat de domaine v2 (chantier S2)
 
 - Manifeste d'un domaine (`hub.core.manifest`) : onglets, cartes d'accueil, rubriques de

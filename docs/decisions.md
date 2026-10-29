@@ -7,6 +7,17 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-017 · Un jeton a toujours une date de fin (29.10.2026)
+
+- **Contexte** : un jeton de l'assistant volé lisait la finance sans limite de temps, et le
+  raccourci `brain` ouvrait le détail de la finance par défaut.
+- **Décision** : date de fin obligatoire (1 à 366 jours, 90 par défaut ; un an pour les jetons
+  d'avant et ceux des services collecteurs), alerte ntfy 14 jours avant, `hub token rotate`.
+  `brain` n'ouvre que `*:aggregates` ; `brain=finance,agenda` ajoute lecture et propositions des
+  domaines nommés.
+- **Conséquence** : un jeton fini est refusé (401) ; renouveler le jeton du brain fait partie
+  de l'exploitation, et l'alerte dit quelle commande lancer.
+
 ## D-016 · Le manifeste d'un domaine, v2 (29.10.2026)
 
 - **Contexte** : l'app, la boîte d'entrée et l'assistant connaissaient la finance par son nom.

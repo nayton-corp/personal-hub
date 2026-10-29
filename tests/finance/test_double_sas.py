@@ -125,7 +125,7 @@ def test_suggested_recategorization_updates_totals(
     before = client.get("/api/finance/summary?month=2026-10").json()
     assert before["uncategorized"]["minor"] == -12_000
     # le « brain » propose, l'iPhone valide
-    brain = token(ctx, "brain")
+    brain = token(ctx, "brain=finance")
     r = client.post(
         "/api/proposals",
         json={
@@ -422,7 +422,7 @@ def test_set_budget_and_inverse(client: TestClient, ctx: HubContext, fin: Financ
 
 def test_set_account_goal(client: TestClient, ctx: HubContext, fin: FinanceDomain) -> None:
     a = ready_account(fin)
-    h = token(ctx, "brain")
+    h = token(ctx, "brain=finance")
     (before,) = client.get("/api/finance/accounts", headers=h).json()["items"]
     # sans objectif enregistré : déduit du type de compte
     assert (before["goal"], before["goal_set"], before["availability"]) == (
@@ -443,7 +443,7 @@ def test_set_account_goal(client: TestClient, ctx: HubContext, fin: FinanceDomai
 
 def test_edit_account(client: TestClient, ctx: HubContext, fin: FinanceDomain) -> None:
     a = ready_account(fin)
-    h = token(ctx, "brain")
+    h = token(ctx, "brain=finance")
     p = create(
         ctx,
         "edit_account",
@@ -502,7 +502,9 @@ def test_create_category_and_account_kinds(
         create(ctx, "create_category", {"id": "voiture", "name": "Encore", "grp": "variable"})
     assert "voiture" in {
         c["id"]
-        for c in client.get("/api/finance/categories", headers=token(ctx, "brain")).json()["items"]
+        for c in client.get("/api/finance/categories", headers=token(ctx, "brain=finance")).json()[
+            "items"
+        ]
     }
     # un modèle ne crée ni compte ni catégorie
     r = client.post(
@@ -512,7 +514,7 @@ def test_create_category_and_account_kinds(
             "kind": "create_account",
             "params": {"institution": "BCF", "name": "x", "iban": IBAN},
         },
-        headers=token(ctx, "brain"),
+        headers=token(ctx, "brain=finance"),
     )
     assert (r.status_code, r.json()["type"]) == (403, "proposal.kind_not_allowed")
     with pytest.raises(Problem):
@@ -689,7 +691,7 @@ def test_yearly_budget_and_account_rule(
     )
     assert p.preview["summary"].startswith("Budget Vacances : 600.00 CHF par an")
     accept(ctx, p)
-    h = token(ctx, "brain")
+    h = token(ctx, "brain=finance")
     b = client.get("/api/finance/budget?month=2026-10", headers=h).json()
     line = {x["category"]: x for x in b["lines"]}["voyages"]
     assert (line["target"], line["over"]) == (None, True)

@@ -760,8 +760,8 @@ def ctx(tmp_path: Path) -> Iterator[HubContext]:
 
 def test_routes(ctx: HubContext) -> None:
     with ctx.core.engine.begin() as conn:
-        _i, app_secret = tokens.create(conn, "t", ["finance:read"], "system:test")
-        _i, agg_secret = tokens.create(conn, "a", ["finance:aggregates"], "system:test")
+        _i, app_secret = tokens.create(conn, "t", ["finance:read"], "system:test", days=30)
+        _i, agg_secret = tokens.create(conn, "a", ["finance:aggregates"], "system:test", days=30)
     read = {"Authorization": f"Bearer {app_secret}"}
     agg = {"Authorization": f"Bearer {agg_secret}"}
     with TestClient(create_app(ctx), base_url="https://hub.example.ts.net") as client:

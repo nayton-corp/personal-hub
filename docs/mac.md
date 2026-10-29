@@ -90,7 +90,7 @@ Les bases ne s'ouvrent jamais depuis macOS ; toute commande passe par un contene
 
 ```
 alias hubc='HUB_TAG=$(cat deploy/.current-tag) docker compose --env-file deploy/.env -f deploy/compose.yaml'
-hubc run --rm --no-deps scheduler hub token create brain-mac -s brain
+hubc run --rm --no-deps scheduler hub token create brain-mac -s brain=finance --days 180
 hubc run --rm --no-deps scheduler hub verify
 hubc logs -f api
 ```

@@ -62,7 +62,7 @@ def client(hub: HubContext) -> Iterator[TestClient]:
 def make_token(hub: HubContext):  # type: ignore[no-untyped-def]
     def _make(*scopes: str, name: str = "test") -> str:
         with hub.core.engine.begin() as conn:
-            _info, secret = tokens.create(conn, name, list(scopes), "system:test")
+            _info, secret = tokens.create(conn, name, list(scopes), "system:test", days=30)
         return secret
 
     return _make

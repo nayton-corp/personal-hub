@@ -61,11 +61,16 @@ Depuis le clone du dépôt (`~/personal-hub/personal-hub`), avec l'alias `hubc` 
    ```
    Laisse Ollama écouter sur `127.0.0.1` : Docker Desktop (comme OrbStack) fait suivre
    `host.docker.internal` vers le Mac, et rien d'autre sur le réseau ne doit joindre le modèle.
-2. **Deux jetons** (affichés une seule fois) :
+2. **Deux jetons** (affichés une seule fois, chacun avec sa date de fin : 90 jours par défaut,
+   `--days` jusqu'à 366) :
    ```
-   hubc run --rm --no-deps scheduler hub token create brain-mac -s brain
+   hubc run --rm --no-deps scheduler hub token create brain-mac -s brain=finance --days 180
    hubc run --rm --no-deps scheduler hub token create claude-aggregates -s aggregates
    ```
+   `brain` seul n'ouvre que les agrégats ; `brain=finance` (ou `brain=finance,agenda`) ajoute la
+   lecture et les propositions des domaines nommés. Quatorze jours avant la fin, ntfy prévient ;
+   `hub token rotate ID` donne un nouveau secret (mêmes portées, l'ancien révoqué) à remettre
+   dans `brain.enc.yaml`.
 3. **Le fichier de secrets du brain**, chiffré, comme pour les collecteurs :
    ```
    age -r "$(age-keygen -y ~/.config/hub/age.key)" -o ~/.config/hub/brain.enc.yaml

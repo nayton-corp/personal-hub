@@ -11,6 +11,7 @@ from typing import Annotated, Any
 import typer
 import yaml
 
+from hub import cli_tokens
 from hub.core import connections, connectors, profile, proposals, sessions, tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
@@ -22,10 +23,8 @@ from hub.platform.settings import get_settings
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, help="Personal Hub")
 db_app = typer.Typer(no_args_is_help=True, help="Bases et migrations")
-token_app = typer.Typer(no_args_is_help=True, help="Jetons à portée")
 auth_app = typer.Typer(no_args_is_help=True, help="Passkeys")
 app.add_typer(db_app, name="db")
-app.add_typer(token_app, name="token")
 app.add_typer(auth_app, name="auth")
 proposals_app = typer.Typer(no_args_is_help=True, help="Propositions (Double Sas)")
 app.add_typer(proposals_app, name="proposals")
@@ -35,6 +34,7 @@ connections_app = typer.Typer(no_args_is_help=True, help="Connexions des collect
 app.add_typer(connections_app, name="connections")
 
 CLI_ACTOR = "system:cli"
+SERVICE_TOKEN_DAYS = 365  # jeton d'un service collecteur : make deploy en recrée un
 
 
 def _ctx() -> HubContext:
@@ -49,6 +49,9 @@ def _ready() -> HubContext:
         typer.echo("core.db n'est pas à jour : lancer `hub db upgrade`.", err=True)
         raise typer.Exit(2)
     return hub
+
+
+app.add_typer(cli_tokens.build(_ready, CLI_ACTOR), name="token")
 
 
 @app.command()
@@ -99,48 +102,6 @@ def db_status() -> None:
             }
         )
     )
-
-
-@token_app.command("create")
-def token_create(
-    name: Annotated[str, typer.Argument(help="ex. brain-mac, collector-api")],
-    scope: Annotated[
-        list[str], typer.Option("--scope", "-s", help="brain, aggregates, collector, finance:read…")
-    ],
-) -> None:
-    """Crée un jeton. Il n'est affiché qu'une fois : seule son empreinte est gardée."""
-    hub = _ready()
-    try:
-        with hub.core.engine.begin() as conn:
-            info, secret = tokens.create(conn, name, scope, CLI_ACTOR)
-    except tokens.ScopeError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(1) from exc
-    typer.echo(f"id      : {info.id}\nportées : {' '.join(info.scopes)}", err=True)
-    typer.echo("jeton (affiché une seule fois) :", err=True)
-    typer.echo(secret)
-
-
-@token_app.command("list")
-def token_list() -> None:
-    hub = _ready()
-    with hub.core.engine.connect() as conn:
-        for t in tokens.list_all(conn):
-            state = "révoqué" if t.revoked_at else "actif"
-            typer.echo(
-                f"{t.id}  {t.name:<20} {state:<8} {' '.join(t.scopes)}  "
-                f"dernier usage : {t.last_used_at or 'jamais'}"
-            )
-
-
-@token_app.command("revoke")
-def token_revoke(token_id: str) -> None:
-    hub = _ready()
-    with hub.core.engine.begin() as conn:
-        done = tokens.revoke(conn, token_id, CLI_ACTOR)
-    typer.echo("révoqué" if done else "inconnu ou déjà révoqué")
-    if not done:
-        raise typer.Exit(1)
 
 
 @auth_app.command("bootstrap-code")
@@ -318,8 +279,11 @@ def _service_files(hub: HubContext, folder: Path) -> list[str]:
         if path.exists():
             continue
         with hub.core.engine.begin() as conn:
-            _info, secret = tokens.create(conn, f"collector-{runner}", ["collector"], CLI_ACTOR)
-            plain = yaml.safe_dump({f"collector-{runner}": {"token": secret}}).encode()
+            name = f"collector-{runner}"
+            _info, secret = tokens.create(
+                conn, name, ["collector"], CLI_ACTOR, days=SERVICE_TOKEN_DAYS
+            )
+            plain = yaml.safe_dump({name: {"token": secret}}).encode()
             tmp = path.with_suffix(".tmp")
             tmp.write_bytes(secrets.encrypt_for(recipient, plain))
             os.chmod(tmp, 0o600)

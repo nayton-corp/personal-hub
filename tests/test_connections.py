@@ -66,7 +66,7 @@ def _token(hub: HubContext, *scopes: str) -> str:
     from hub.core import tokens
 
     with hub.core.engine.begin() as conn:
-        return tokens.create(conn, "test", list(scopes), "system:test")[1]
+        return tokens.create(conn, "test", list(scopes), "system:test", days=30)[1]
 
 
 def test_migration_turns_known_collectors_into_connections(tmp_path: Path) -> None:

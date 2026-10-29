@@ -61,7 +61,8 @@ def wired(
         def toolbox(_cfg: BrainConfig, which: str) -> Any:
             if which_seen is not None:
                 which_seen.append(which)
-            return box_for(client, ctx, which)
+            # le jeton « brain » de la passerelle lit la finance (raccourci brain=finance)
+            return box_for(client, ctx, "brain=finance" if which == "brain" else which)
 
         monkeypatch.setattr(cli, "_toolbox", toolbox)
         monkeypatch.setattr(cli, "_model", lambda _cfg: model)
