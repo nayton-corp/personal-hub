@@ -30,7 +30,7 @@ TOO_LONG: dict[str, int] = {
     "web/connections.js": 730,
     "domains/finance/reads.py": 744,
     "domains/finance/ibkr.py": 750,
-    "web/wealth.js": 831,
+    "web/wealth.js": 827,
     "core/proposals.py": 833,
     "collectors/market/flow.py": 1047,
     "domains/finance/handlers.py": 1281,

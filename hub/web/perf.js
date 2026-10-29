@@ -92,7 +92,10 @@ function tabRend(ctx) {
     .slice(0, 8);
   // rendement de chaque mois de la période, trois dernières années
   const byYear = {};
-  for (const m of perf.by_month) (byYear[m.period.slice(0, 4)] = byYear[m.period.slice(0, 4)] || {})[Number(m.period.slice(5, 7)) - 1] = rate(m.twr);
+  for (const m of perf.by_month) {
+    byYear[m.period.slice(0, 4)] ??= {};
+    byYear[m.period.slice(0, 4)][Number(m.period.slice(5, 7)) - 1] = rate(m.twr);
+  }
   const yearTwr = Object.fromEntries(perf.by_year.map((y) => [y.period, rate(y.twr)]));
   const yrs = Object.keys(byYear).sort().slice(-3);
   const heat = perf.by_month.length >= 2 && twr != null

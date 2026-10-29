@@ -50,6 +50,8 @@ quels, en français. Un mot nouveau entre ici dans la même PR que le code qui l
 | **Pack** | Un ensemble de règles prêtes à installer. | `packs` |
 | **Dérivé** | Ce qui se recalcule depuis le registre : virements appariés, récurrences, instantanés. | `rebuild`, `snapshots` |
 | **Sentinelle** | Une vérification de nuit, sans modèle, qui lève une alerte (budget dépassé, abonnement en hausse). | `sentinels` |
+| **Données fictives** | Un an de relevés inventés pour deux comptes, seules données des tests, de la CI et de l'instance d'essai. | `scripts/demo_data.py` |
+| **Instance d'essai** | Un hub jetable où l'image d'une version migre les données fictives et répond, avant tout déploiement. | `deploy/trial.sh` |
 | **Agrégat** | Un total qui ne révèle aucune transaction (moins de 3 écritures : fondu ou masqué). C'est tout ce que Claude voit. | portée `*:aggregates` |
 | **URN** | L'identifiant stable d'un objet, d'un domaine à l'autre : `hub:<domaine>:<sorte>:<id>`. | `hub.core.ids` |
 | **Lien** | Une relation entre deux URN, tenue par le cœur. | `links` |

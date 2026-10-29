@@ -51,8 +51,22 @@ jobs:
         run: uv run mypy
       - name: Isolation des domaines (import-linter)
         run: uv run lint-imports
-      - name: Tests et couverture
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: App web (lint Biome, tests des modules)
+        run: make web
+      - name: Tests et couverture (dont l'app à 375 px dans Chromium)
+        env:
+          HUB_SCREENSHOTS: ${{ runner.temp }}/screens
         run: uv run pytest -q --cov=hub --cov-report=term --cov-fail-under=85
+      - name: Captures de l'app (375 px, données fictives)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-375px
+          path: ${{ runner.temp }}/screens
+          if-no-files-found: ignore
       - name: Migrations
         run: uv run pytest -q -m migrations
       - name: Migration depuis la version précédente (bases et relevé fictifs)
@@ -77,9 +91,12 @@ jobs:
           target: hub
           platforms: linux/arm64
           push: false
+          load: true
           tags: hub:ci
           cache-from: type=gha,scope=hub
           cache-to: type=gha,mode=max,scope=hub
+      - name: Instance d'essai (données fictives, migration, verify, /api/health)
+        run: deploy/trial.sh ci ci
       - name: Image web (linux/arm64)
         uses: docker/build-push-action@v6
         with:

@@ -2,7 +2,8 @@
 # Déploiement phase 1 (spécification, section 10.0) : images au lieu d'un clone git.
 #   deploy/deploy.sh <tag>
 # 1. tire les images publiées d'un tag vX.Y.Z (GHCR, chantier S13), ou construit les images
-#    linux/arm64 d'un autre tag (ou avec HUB_BUILD=1) ; 2. verify dans un conteneur jetable (arrêt si échec) ;
+#    linux/arm64 d'un autre tag (ou avec HUB_BUILD=1), puis les essaie sur données fictives
+#    (deploy/trial.sh ; HUB_SKIP_TRIAL=1 pour sauter) ; 2. verify dans un conteneur jetable (arrêt si échec) ;
 # 3. copie .backup des bases ; 4. migrations ; 5. second verify, sinon restauration et retour
 # à l'image précédente ; 6. connexions des collecteurs (reprise d'avant G4, fichiers des deux
 # services) ; 7. compose up ; 8. /api/health dans les 30 s, sinon retour arrière.
@@ -64,6 +65,13 @@ image_version="$(docker run --rm --entrypoint python "hub:$TAG" -c 'import hub; 
 if [ "v$image_version" != "$TAG" ]; then
   if [ "$published" = 1 ]; then echo "l'image $TAG porte la version $image_version : arrêt"; exit 1; fi
   echo "(image construite en version $image_version, étiquetée $TAG)"
+fi
+
+if [ -z "${HUB_SKIP_TRIAL:-}" ]; then
+  say "Instance d'essai : données fictives créées par ${PREV:-$TAG}, migrées par $TAG"
+  trial_prev="$TAG"
+  if [ -n "$PREV" ] && docker image inspect "hub:$PREV" >/dev/null 2>&1; then trial_prev="$PREV"; fi
+  "$HERE/trial.sh" "$TAG" "$trial_prev" || { echo "instance d'essai en échec : arrêt, rien n'a changé"; exit 1; }
 fi
 
 first_deploy=0
