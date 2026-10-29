@@ -526,11 +526,7 @@ function drawList(all, sel) {
   const so = SORTS.find((s) => s.k === S.sort);
   fill($("sortBtn"), `Trier : ${so.label}${ic("sort")}`);
   $("sortBtn").setAttribute("aria-label", `Trier par ${so.label}, toucher pour changer`);
-  const groups = {};
-  for (const l of sel) {
-    const key = S.view === "acc" ? `a:${l.acc}` : `s:${l.asset}`;
-    (groups[key] = groups[key] || []).push(l);
-  }
+  const groups = Object.groupBy(sel, (l) => (S.view === "acc" ? `a:${l.acc}` : `s:${l.asset}`));
   let rows = Object.entries(groups).map(([key, ls]) => {
     const f = ls[0];
     const c = statsFor(S.view, ls);

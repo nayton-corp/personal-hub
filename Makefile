@@ -1,6 +1,6 @@
 # Raccourcis. Développement : make install / make check. Installation : docs/installation.md.
 .PHONY: init install check lint test migrations-test upgrade-test audit image deploy restore-test preflight dev openapi \
-	release tag
+	release tag web trial
 
 install:
 	uv sync --frozen
@@ -18,6 +18,14 @@ test:
 
 migrations-test:
 	uv run pytest -q -m migrations
+
+web:  # app web : lint (Biome) et tests des modules (node --test) ; Node 22
+	npx --yes @biomejs/biome@2.5.15 lint
+	node --test "tests/web/*.test.mjs"
+
+trial:  # instance d'essai jetable : l'image TAG migre des données fictives et répond
+	@test -n "$(TAG)" || (echo "usage : make trial TAG=v0.12.0" && exit 1)
+	deploy/trial.sh $(TAG)
 
 upgrade-test:  # bases de la dernière version taguée, migrées par le code courant
 	scripts/upgrade_from_previous.sh

@@ -9,8 +9,9 @@ par un tag `vX.Y.Z` ; le déploiement reste manuel, sur ce tag, après un « oui
 
 1. **Une PR** passe toute la CI (`.github/workflows/ci.yml`) : données fictives seulement,
    secrets (gitleaks), ruff, mypy strict, contrats import-linter, tests à 85 %, migrations de
-   zéro, **migration depuis la version précédente**, version cohérente, **pip-audit**, images
-   arm64 construites puis jetées. Fusion en squash.
+   zéro, **migration depuis la version précédente**, version cohérente, **pip-audit**, lint et
+   tests des modules de l'app web, **l'app à 375 px dans Chromium** sur un an de données
+   fictives, images arm64 construites puis **essayées** (instance d'essai). Fusion en squash.
 2. **La PR de version**, sur une branche à jour de main :
 
    ```
@@ -40,7 +41,8 @@ par un tag `vX.Y.Z` ; le déploiement reste manuel, sur ce tag, après un « oui
    ```
 
    `deploy/deploy.sh` exige que le clone soit sur le tag (compose, crontab et scripts du même
-   commit), tire les images, vérifie que l'image porte bien la version du tag, puis fait comme
+   commit), tire les images, vérifie que l'image porte bien la version du tag, lance
+   l'instance d'essai (ci-dessous) et s'arrête si elle échoue, puis fait comme
    avant : `verify`, copie des bases, migrations, second `verify`, démarrage, `/api/health`,
    retour arrière seul au moindre échec. Le clone reste sur le tag : `hubc` et les commandes à
    la main lisent le même `compose.yaml` que les conteneurs.
@@ -61,6 +63,29 @@ docker login ghcr.io -u <ton-compte-github>
 Colle le jeton quand le mot de passe est demandé. Docker Desktop le garde dans le Trousseau.
 `HUB_REGISTRY` dans `deploy/.env` change de registre (un autre hub, un fork).
 
+## Données fictives et instance d'essai
+
+`scripts/demo_data.py` écrit un an de relevés camt.053 inventés pour deux comptes (courant et
+épargne) : salaire, loyer, assurance, abonnements, courses, sorties, virement mensuel vers
+l'épargne. Bibliothèque standard seulement, il tourne dans le venv comme dans l'image.
+
+`deploy/trial.sh <tag> [précédent]` (`make trial TAG=…`) monte une instance jetable : l'image
+de la version en place crée les bases et importe ces relevés, celle du tag les migre, passe
+`hub verify` et `verify-ledger`, puis démarre l'API et attend `/api/health`. Volumes jetables,
+aucun réseau, ni secret ni dossier du Mac. `make deploy` la lance avant de toucher aux vraies
+bases (`HUB_SKIP_TRIAL=1` pour la sauter) ; la CI la lance sur l'image arm64 de chaque PR.
+
+## L'app web
+
+- **Lint** : Biome 2.5.15 (`biome.json`), règles recommandées, variables non déclarées ou
+  inutilisées refusées. `make web` (Node 22).
+- **Modules** : `node --test tests/web/*.test.mjs` (montants, dates, mois budgétaire).
+- **Parcours** : `tests/web/test_app_mobile.py` sert l'app depuis l'API sur un an de données
+  fictives, crée la première passkey avec l'authentificateur virtuel de Chromium, puis ouvre
+  Accueil, Patrimoine, Budget, Journal et Sources à 375 px : aucune erreur JavaScript ni
+  réponse 5xx, aucun défilement horizontal, du contenu. La CI garde les captures (artefact
+  `captures-375px`).
+
 ## Mises à jour des dépendances
 
 Dependabot (`.github/dependabot.yml`) ouvre chaque lundi une PR groupée par écosystème :
@@ -72,6 +97,9 @@ CI comme les autres et ne se fusionnent jamais seules. Les images de base du `Do
 
 | Commande | Effet |
 | --- | --- |
+| `make web` | lint et tests des modules de l'app (Node 22) |
+| `make trial TAG=vX.Y.Z` | instance d'essai jetable de l'image du tag |
+| `python3 scripts/demo_data.py <dossier>` | un an de relevés fictifs et `accounts.tsv` |
 | `make audit` | pip-audit des dépendances livrées (images hub et collecteurs) |
 | `make upgrade-test` | bases et relevé fictifs créés par la dernière version taguée, migrés et vérifiés par le code courant |
 | `make release VERSION=X.Y.Z` | prépare la PR de version |

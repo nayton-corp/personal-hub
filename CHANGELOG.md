@@ -2,6 +2,19 @@
 
 ## [Non publié]
 
+### App web testée et instance d'essai (chantier S13, suite)
+
+- `scripts/demo_data.py` : un an de relevés camt.053 fictifs pour deux comptes, bibliothèque
+  standard seulement.
+- `tests/web/test_app_mobile.py` : l'app dans Chromium à 375 px, première passkey par un
+  authentificateur virtuel, cinq écrans sans erreur ni défilement horizontal ; captures en
+  artefact de la CI.
+- Lint de l'app par Biome (`biome.json`) et tests des modules par `node --test` (`make web`).
+  Deux affectations dans une expression corrigées (`perf.js`, `wealth.js`).
+- `deploy/trial.sh` (`make trial`) : instance d'essai jetable, données fictives créées par la
+  version en place puis migrées et vérifiées par la nouvelle. `make deploy` la lance avant de
+  toucher aux bases ; la CI la lance sur l'image arm64.
+
 ### Versions publiées et CI/CD (chantier S13)
 
 - Une seule version, celle de `pyproject.toml` : `hub.__version__` la lit, `/api/health` la
