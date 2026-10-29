@@ -29,8 +29,8 @@ hub/web/            coquille de l'app (PWA), servie par Caddy
 hub/brain/          IA locale : passerelle MCP, assistant et suggestions (`hub-brain`), sur le Mac
 hub/cli.py          commande `hub`
 deploy/             compose, Caddy, Tailscale, Litestream, crontab, deploy.sh
-docs/               installation, mise en route sur le Mac, domaine Finance, kit de secours,
-                    glossaire (les mots du hub) et décisions (les choix qui l'engagent)
+docs/               installation, mise en route sur le Mac, versions et publication, domaine
+                    Finance, kit de secours, glossaire (les mots du hub) et décisions
 tests/              pytest, Hypothesis ; domaine factice et authentificateur WebAuthn logiciel
 ```
 

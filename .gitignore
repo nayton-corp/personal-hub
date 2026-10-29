@@ -24,3 +24,4 @@ deploy/*.key
 tests/fixtures/generated/
 .DS_Store
 deploy/.current-tag
+.audit-requirements.txt

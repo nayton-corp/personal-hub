@@ -56,7 +56,8 @@ premier démarrage, vide-la : l'état du nœud reste dans le volume `ts-state`.
 make deploy TAG=v1
 ```
 
-`make deploy` contrôle la machine (`deploy/mac-preflight.sh`), construit les images, crée les
+`make deploy` contrôle la machine (`deploy/mac-preflight.sh`), construit les images (ou tire
+celles d'une version publiée, [versions.md](versions.md)), crée les
 bases, démarre les services et attend `/api/health`. Au premier déploiement, il affiche à la fin
 un **code d'inscription** valable quelques minutes. Sur le téléphone, ouvre l'adresse du hub,
 saisis le code et valide par Face ID : c'est la première passkey. Le code a expiré ?
@@ -91,8 +92,10 @@ La carte disparaît quand tout est fait, ou avec « Masquer ».
 
 ## 5. Ensuite
 
-- **Mettre à jour :** `git pull && make deploy TAG=v2`. Le déploiement copie les bases avant
-  de migrer et revient seul à la version précédente au moindre échec.
+- **Mettre à jour :** `git fetch --tags && git checkout vX.Y.Z && make deploy TAG=vX.Y.Z`. Les
+  images d'une version publiée se tirent de GHCR (une connexion `docker login ghcr.io` d'abord,
+  [versions.md](versions.md)) ; le déploiement copie les bases avant de migrer et revient seul à
+  la version précédente au moindre échec.
 - **Commandes à la main :** l'alias `hubc` de [mac.md](mac.md#5-commandes-utiles).
 - **Alertes sur le téléphone** (ntfy) et **IA locale** : [brain.md](brain.md).
 - **Sauvegardes :** la réplique Litestream et restic tournent seuls dans `backup/`. Une copie

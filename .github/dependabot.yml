@@ -1,0 +1,33 @@
+# Mises à jour proposées chaque semaine (chantier S13), regroupées en une PR par écosystème.
+# Elles passent la CI complète comme toute PR ; rien ne se fusionne seul. Les images de base du
+# Dockerfile (ARG épinglés par empreinte) restent à la main : Dependabot ne lit pas les ARG.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Europe/Zurich
+    open-pull-requests-limit: 2
+    groups:
+      python:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Europe/Zurich
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker-compose
+    directory: /deploy
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Europe/Zurich
+    groups:
+      compose:
+        patterns: ["*"]

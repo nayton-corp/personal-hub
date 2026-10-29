@@ -1,5 +1,6 @@
 # Raccourcis. Développement : make install / make check. Installation : docs/installation.md.
-.PHONY: init install check lint test migrations-test image deploy restore-test preflight dev openapi
+.PHONY: init install check lint test migrations-test upgrade-test audit image deploy restore-test preflight dev openapi \
+	release tag
 
 install:
 	uv sync --frozen
@@ -17,6 +18,14 @@ test:
 
 migrations-test:
 	uv run pytest -q -m migrations
+
+upgrade-test:  # bases de la dernière version taguée, migrées par le code courant
+	scripts/upgrade_from_previous.sh
+
+audit:  # vulnérabilités connues des dépendances livrées (images hub et collecteurs)
+	uv export --frozen --all-extras --no-dev --no-emit-project -q -o .audit-requirements.txt
+	uvx --quiet pip-audit==2.10.0 -r .audit-requirements.txt --require-hashes --disable-pip \
+	  --progress-spinner off; status=$$?; rm -f .audit-requirements.txt; exit $$status
 
 check: lint test migrations-test
 
@@ -43,6 +52,17 @@ deploy:
 	@test -n "$(TAG)" || (echo "usage : make deploy TAG=v0.1.0" && exit 1)
 	deploy/mac-preflight.sh
 	deploy/deploy.sh $(TAG)
+
+release:  # sur une branche : prépare la PR de version (pyproject, uv.lock, CHANGELOG)
+	@test -n "$(VERSION)" || (echo "usage : make release VERSION=0.12.0" && exit 1)
+	uv run python scripts/release.py prepare $(VERSION)
+
+tag:  # sur main à jour, après la fusion de la PR de version : le tag publie les images
+	@test "$$(git rev-parse --abbrev-ref HEAD)" = main || (echo "tag : se placer sur main" && exit 1)
+	@git diff --quiet HEAD && git fetch -q origin main && test "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/main)" \
+	  || (echo "tag : main doit être propre et à jour" && exit 1)
+	@uv run python scripts/release.py check v$$(uv run python -c 'import hub; print(hub.__version__)')
+	v=v$$(uv run python -c 'import hub; print(hub.__version__)'); git tag -a $$v -m $$v && git push origin $$v
 
 restore-test:
 	deploy/restore-test.sh $(TAG)
