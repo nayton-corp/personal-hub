@@ -23,7 +23,10 @@ Deux services les exécutent :
 
 Chaque minute, un service demande au hub ses connexions prêtes (`GET
 /api/collectors/runner/<service>`) : leurs secrets arrivent chiffrés et ne sont déchiffrés
-qu'au moment du run, dans le conteneur. L'API chiffre les secrets à la saisie et ne les relit
+qu'au moment du run, dans le conteneur. Chaque run tourne dans son propre fil : un run lent
+(le collecteur `market` peut dépasser un quart d'heure quand mempool.space traîne) ne retarde
+pas les autres connexions, et une connexion n'a jamais deux runs à la fois (son horaire ou
+son actualisation attend la fin du run en cours). L'API chiffre les secrets à la saisie et ne les relit
 jamais ; ni l'app ni `hub connections list` ne les affichent. Une connexion à qui il manque ses
 secrets n'est pas lancée.
 

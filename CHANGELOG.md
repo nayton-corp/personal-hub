@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### Collectes en parallèle
+
+- Les services collecteurs lancent chaque run dans son fil : un run lent (market, 17 minutes
+  le 29/10 à cause de mempool.space) ne retarde plus les autres connexions ni leurs
+  actualisations. Une connexion n'a jamais deux runs à la fois.
+
 ### Un portefeuille crypto s'ajoute dans « Cours et cryptos »
 
 - « Cours et cryptos » (`market`) est une connexion unique (`single`) : en créer une deuxième
