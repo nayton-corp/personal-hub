@@ -21,6 +21,7 @@ const tx = { key: null, items: [], cursor: null, loading: false, error: null };
 const picks = {}; // groupe (clé) → catégorie choisie
 const always = new Set();
 const opened = new Set(); // groupes « À classer » dépliés
+let rview = null; // « À classer » : "todo" (sans catégorie) ou "confirm" (classées d'office)
 let busy = false;
 // « Toujours » : ton choix passe avant les règles de départ et la règle d'une poche (5), par
 // exemple la mensualité du crédit dans la poche Voiture
@@ -203,16 +204,22 @@ function renderReview(cats) {
   const n = Object.keys(picks).length;
   if (!gs.length) return fill($("jBody"), `<div class="empty">${ic("check")}<br>Tout est classé.<br><button type="button" data-a="jmode" data-v="all">Voir le journal</button></div>`);
   const accName = accNames();
-  fill($("jBody"), '<p class="hint">Un choix par commerçant ou contrepartie. « Toujours » crée une règle qui servira aussi aux prochains imports.</p>' + packBanner() +
+  const nTodo = gs.filter((g) => !g.guess).length, nConf = gs.length - nTodo;
+  if (!rview || (rview === "todo" && !nTodo) || (rview === "confirm" && !nConf)) rview = nTodo ? "todo" : "confirm";
+  const seg = nTodo && nConf ? `<div class="seg rview" role="group" aria-label="Que montrer">${[["todo", "À classer", nTodo], ["confirm", "À confirmer", nConf]].map(([k, l, c]) => `<button type="button" data-a="rview" data-v="${k}" aria-pressed="${rview === k}">${l} <b class="num">${c}</b></button>`).join("")}</div>` : "";
+  const intro = rview === "confirm"
+    ? `<p class="hint">Classées d'office par la règle « tout le reste ». Confirme la catégorie ou corrige-la ; « Toujours » règle aussi les suivantes de cet expéditeur.</p>`
+    : '<p class="hint">Un choix par commerçant ou contrepartie. « Toujours » crée une règle qui servira aussi aux prochains imports.</p>';
+  fill($("jBody"), seg + intro + packBanner() +
     gs.map((g, i) => {
+      if (Boolean(g.guess) !== (rview === "confirm")) return "";
       const tot = u(g.total), ch = picks[g.key], open = opened.has(g.key);
       const when = g.first_date === g.last_date ? shortY(g.last_date) : `${g.first_date.slice(0, 4) === g.last_date.slice(0, 4) ? short(g.first_date) : shortY(g.first_date)} – ${shortY(g.last_date)}`;
       const lo = Math.abs(u(g.min)), hi = Math.abs(u(g.max));
       const range = g.count < 2 ? "" : lo === hi ? `${n2(hi)} chaque fois` : `de ${n2(lo)} à ${n2(hi)}`;
       const raw = [...g.labels.filter((l) => normal(l) !== g.counterparty), ...g.remittances];
       const accs = g.accounts.map((a) => accName[a] || a).join(", ");
-      const head = g.guess && !gs[i - 1]?.guess ? `<h2 class="section-title">À confirmer</h2><p class="hint">Classées d'office par la règle « tout le reste ». Confirme la catégorie ou corrige-la.</p>` : "";
-      return `${head}<section class="rgroup" aria-labelledby="rg-${i}">
+      return `<section class="rgroup" aria-labelledby="rg-${i}">
         <div class="ihead">${catMark(ch || null, cats[ch]?.group, "")}<span class="row-main"><span class="row-title" id="rg-${i}">${esc(capital(g.counterparty))}</span><span class="row-sub">${g.count} écriture${g.count > 1 ? "s" : ""} · ${esc(when)}${g.guess ? ` · d'office en ${esc(cats[g.guess]?.name || g.guess)}` : ""}</span></span><span class="row-val num ${tot > 0 ? "amt-in" : ""}">${tot > 0 ? "+" : "−"}${amount2(Math.abs(tot))}</span></div>
         <dl class="rfacts"><dt>Compte</dt><dd>${esc(accs)}</dd>${range ? `<dt>Montants</dt><dd class="num">${esc(range)}</dd>` : ""}${raw.length ? `<dt>Libellé</dt><dd class="mono">${raw.slice(0, 3).map(esc).join("<br>")}</dd>` : ""}</dl>
         <button class="link rtoggle" type="button" data-a="rgopen" data-v="${i}" aria-expanded="${open}" aria-controls="rg-tx-${i}">${ic("chev")}${open ? "Masquer" : g.count > 1 ? `Voir ${g.count > g.samples.length ? `les ${g.samples.length} dernières` : `les ${g.count}`} écritures` : "Voir l'écriture"}</button>
@@ -221,7 +228,7 @@ function renderReview(cats) {
         ${g.counterparty !== "(inconnu)" ? `<label class="check"><input type="checkbox" data-always="${i}" ${always.has(g.key) ? "checked" : ""}>Toujours classer « ${esc(capital(g.counterparty))} » ainsi</label>` : ""}
       </section>`;
     }).join("") +
-    `<button class="link rest-open" type="button" data-a="rest" aria-haspopup="dialog">${ic("clock")}Classer d'un coup tout l'ancien…</button>` +
+    (rview === "todo" ? `<button class="link rest-open" type="button" data-a="rest" aria-haspopup="dialog">${ic("clock")}Classer d'un coup tout l'ancien…</button>` : "") +
     `<div class="stickyfoot"><button class="primary" type="button" data-a="review-ok" ${n && !busy ? "" : "disabled"}>${ic("faceid")}${busy ? "Validation…" : n ? `Valider ${n} choix avec Face ID` : "Choisis au moins une catégorie"}</button></div><div class="endspace"></div>`);
 }
 
@@ -440,6 +447,11 @@ export const actions = {
     else if (k === "amount") { delete t.min; delete t.max; }
     else delete t[k];
     store.set({ jf: t });
+  },
+  rview: (v) => {
+    rview = v;
+    store.notify();
+    window.scrollTo({ top: 0 });
   },
   rgopen: (i) => {
     const g = groupAt(i);

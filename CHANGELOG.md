@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### « À classer » : dépenses et entrées à confirmer séparées
+
+- En tête de « À classer », un sélecteur « À classer / À confirmer » (avec leur nombre) montre
+  soit les écritures sans catégorie, soit celles classées d'office par la règle « tout le
+  reste », au lieu de les mettre bout à bout.
+
 ### Achats uniques : une carte par catégorie
 
 - `categorize_entries` : une catégorie pour quelques écritures choisies (30 au plus), une seule
