@@ -6,7 +6,7 @@
 // La liste se redessine à chaque réponse ; les formulaires, eux, ne sont construits qu'à
 // l'ouverture, pour ne jamais effacer une saisie en cours.
 import { base, date, el, initials } from "./format.js";
-import { instLook } from "./meta.js";
+import { brandColors, brandSvg, instLook } from "./meta.js";
 import { approve, propose } from "./proposals.js";
 import { api, store } from "./store.js";
 
@@ -24,6 +24,15 @@ export const paths = {
 function instAv(key, label, cls = "av") {
   const l = instLook(key) || instLook(label);
   if (!l) return el("div", cls, initials(label));
+  if (l.brand) {
+    const av = el("div", "ibox brand", "");
+    const { bg, fg } = brandColors(l.brand);
+    av.style.setProperty("--bg", bg);
+    av.style.setProperty("--fg", fg);
+    av.innerHTML = brandSvg(l.brand); // tracé embarqué, pas de donnée utilisateur
+    av.setAttribute("aria-hidden", "true");
+    return av;
+  }
   const av = el("div", `ibox tint${l.t.length > 2 ? " wm-box" : ""}`, l.t);
   av.style.setProperty("--c", l.c);
   av.setAttribute("aria-hidden", "true");

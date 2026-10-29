@@ -1,4 +1,5 @@
 // Libellés, pictogrammes et teintes des catégories, des facettes du patrimoine et des actifs.
+import { BRANDS } from "./brands.js";
 import { cv, esc, ibox, ic, monogram, pref } from "./ui.js";
 
 // catégories du registre (base, packs) : pictogramme et teinte ; les autres prennent ceux de
@@ -43,6 +44,37 @@ export function catMark(id, groupName, size = "sm") {
   return ibox(ic(l.icon), l.color, size);
 }
 
+// --- logos de marques ---------------------------------------------------------------------
+// pastille aux couleurs de la marque, logo blanc (ou sombre sur une couleur claire)
+const light = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 170;
+};
+export const brandSvg = (slug) => `<svg class="ic logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="${BRANDS[slug][2]}"/></svg>`;
+export const brandColors = (slug) => {
+  const hex = BRANDS[slug][1];
+  return { bg: hex, fg: light(hex) ? "#14161a" : "#fff" };
+};
+export function brandMark(slug, size = "sm") {
+  const { bg, fg } = brandColors(slug);
+  return `<span class="ibox brand ${size}" data-css="--bg:${bg};--fg:${fg}" aria-hidden="true">${brandSvg(slug)}</span>`;
+}
+const MERCHANT_BRANDS = [
+  [/uber ?eats/, "ubereats"], [/\buber\b/, "uber"], [/netflix/, "netflix"], [/spotify/, "spotify"], [/apple music/, "applemusic"],
+  [/icloud/, "icloud"], [/apple\.com|itunes|\bapple\b/, "apple"], [/youtube/, "youtube"], [/google/, "google"], [/galaxus/, "galaxus"],
+  [/zalando/, "zalando"], [/\blidl/, "lidl"], [/aldi/, "aldisud"], [/sunrise/, "sunrise"], [/\bshell\b/, "shell"], [/ikea/, "ikea"],
+  [/h&m|h & m|hennes/, "handm"], [/\bzara\b/, "zara"], [/easyjet/, "easyjet"], [/ryanair/, "ryanair"], [/lufthansa/, "lufthansa"],
+  [/airbnb/, "airbnb"], [/booking\.com/, "bookingdotcom"], [/mc ?donald/, "mcdonalds"], [/starbucks/, "starbucks"], [/burger king/, "burgerking"],
+  [/\bkfc\b/, "kfc"], [/steam(powered|games)?\b/, "steam"], [/playstation|sony interactive/, "playstation"], [/anthropic|claude\.ai/, "anthropic"],
+  [/github/, "github"], [/aliexpress/, "aliexpress"], [/deezer/, "deezer"], [/\bdazn/, "dazn"], [/twitch/, "twitch"], [/\bdhl\b/, "dhl"],
+  [/\bups\b/, "ups"], [/just ?eat/, "justeat"], [/deliveroo/, "deliveroo"], [/\bsncf/, "sncf"], [/dropbox/, "dropbox"], [/notion/, "notion"],
+  [/revolut/, "revolut"], [/binance/, "binance"], [/coinbase/, "coinbase"], [/kucoin/, "kucoin"], [/\bwise\b|transferwise/, "wise"],
+];
+export const merchantBrand = (name) => {
+  const s = (name || "").toLowerCase();
+  return s ? (MERCHANT_BRANDS.find(([re]) => re.test(s)) || [])[1] : undefined;
+};
+
 // commerçants connus : un pictogramme plus parlant que celui de la catégorie (la teinte reste
 // celle de la catégorie)
 const MERCHANT_WORDS = [
@@ -81,6 +113,8 @@ export const merchantIcon = (name) => {
 };
 // pictogramme d'une écriture : celui du commerçant s'il est connu, sinon celui de la catégorie
 export function txMark(name, id, groupName, size = "sm") {
+  const b = merchantBrand(name);
+  if (b) return brandMark(b, size);
   const m = merchantIcon(name);
   if (!m) return catMark(id, groupName, size);
   return ibox(ic(m), id ? look(id, groupName).color : "var(--accent)", size);
@@ -115,13 +149,16 @@ const INST_LOOK = {
   bitpanda: ["BP", "var(--s2)"], "trade republic": ["TR", "var(--ink)"], saxo: ["S", "var(--s1)"], bcv: ["BCV", "var(--s2)"], bcge: ["BCGE", "var(--neg)"],
 };
 const instKey = (v) => (v || "").toLowerCase().replace(/^crypto:/, "").replace(/[-_]/g, " ").trim();
+const INST_BRAND = { revolut: "revolut", binance: "binance", coinbase: "coinbase", kucoin: "kucoin", wise: "wise", neon: "neon" };
 export function instLook(v) {
   const k = instKey(v);
   const l = INST_LOOK[k] || INST_LOOK[k.split(" ")[0]];
-  return l ? { t: l[0], c: l[1] } : null;
+  const brand = INST_BRAND[k] || INST_BRAND[k.split(" ")[0]];
+  return l ? { t: l[0], c: brand ? BRANDS[brand][1] : l[1], brand } : null;
 }
 export function instMark(v, size = "sm") {
   const l = instLook(v);
+  if (l && l.brand) return brandMark(l.brand, size);
   const t = l ? l.t : monogram(v);
   return ibox(`<span class="${t.length > 2 ? "wm" : ""}">${esc(t)}</span>`, l ? l.c : facetColor("inst", v), size);
 }
@@ -148,7 +185,10 @@ const CRYPTO_TINT = { BTC: "var(--s3)", ETH: "var(--s4)", USDT: "var(--s2)", USD
   XRP: "var(--s6)", LTC: "var(--s6)", ATOM: "var(--s6)", TRX: "var(--s5)", DAI: "var(--s3)", XMR: "var(--s3)" };
 const CCY_TINT = { CHF: "var(--neg)", EUR: "var(--s1)", USD: "var(--s2)", GBP: "var(--s4)", JPY: "var(--s5)" };
 
+const COIN_BRAND = { BTC: "bitcoin", ETH: "ethereum", USDT: "tether", SOL: "solana", ADA: "cardano", DOT: "polkadot", DOGE: "dogecoin",
+  LTC: "litecoin", XRP: "xrp", XMR: "monero", LINK: "chainlink", NEAR: "near", POL: "polygon", MATIC: "polygon", BNB: "bnbchain" };
 export function assetMark(a, size = "") {
+  if (COIN_BRAND[a.symbol]) return brandMark(COIN_BRAND[a.symbol], size);
   const g = GLYPH[a.symbol] || monogram(a.name);
   const color = CRYPTO_TINT[a.symbol] || facetColor("cat", a.cat);
   return ibox(`<span class="${g.length === 1 ? "glyph" : ""}">${esc(g)}</span>`, color, size);
