@@ -90,6 +90,16 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
         )
     ).fetchall()
     positions = valuation.Positions(conn)
+    # « tout débit de ce compte → … » : la règle sans motif d'un compte, la plus prioritaire
+    spend = {}
+    for acc, rid, cat in conn.execute(
+        text(
+            "SELECT account_id, id, category_id FROM rules WHERE account_id IS NOT NULL "
+            "AND active = 1 AND trim(pattern) = '' AND direction = 'debit' "
+            "ORDER BY priority DESC, id DESC"
+        )
+    ):
+        spend[acc] = {"rule_id": rid, "category_id": cat}
     for r in rows:
         clbd = last_clbd(conn, r[0])
         value, missing = valuation.account_value(positions, r[0], int(r[8]), "9999-12-31")
@@ -111,6 +121,7 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
                 # catégorie imposée à toutes les lignes du compte ; NULL : déduite de chaque ligne
                 "category": r[13],
                 "hidden": bool(r[14]),
+                "spend_rule": spend.get(r[0]),
                 "balance": money(r[8], r[4]),
                 # valeur de marché pour un compte de titres (parts × dernier cours), sinon le solde
                 "value": money(value, r[4]),

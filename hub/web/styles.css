@@ -482,3 +482,6 @@ code { font-family: var(--mono); font-size: .9em; }
 .rtx { margin: 4px 0 0; border-top: 1px solid var(--line); }
 .rtx .row { grid-template-columns: minmax(0, 1fr) auto; }
 .rtx .row-sub.mono { white-space: normal; overflow-wrap: anywhere; }
+.select-full { display: block; width: 100%; min-height: 44px; margin-top: 6px; border-radius: 12px; border: 1px solid var(--line); padding: 8px 12px; font: inherit; font-size: 16px; font-weight: 400; background: var(--surface-2); color: var(--ink); }
+.cad-seg { margin: 4px 0 10px; }
+.crow-top b .pill { font-size: 10.5px; padding: 1px 6px; margin-left: 4px; vertical-align: 1px; }

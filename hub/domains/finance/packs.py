@@ -184,7 +184,9 @@ def install(conn: Connection, pack: Pack, *, dry_run: bool = False, run: bool = 
             known.add(c.id)
     existing = rules.list_rules(conn)
     by_id = {r.id: r for r in existing}
-    shapes = {(r.field, r.pattern, r.direction, r.category_id) for r in existing}
+    shapes = {
+        (r.field, r.pattern, r.direction, r.category_id) for r in existing if r.account_id is None
+    }
     wanted: set[str] = set()
     for fld, pattern, direction, category, priority in pack.specs():
         if category not in known:
@@ -246,6 +248,7 @@ def export(conn: Connection, name: str = "perso", *, origins: Iterable[str] = ()
         r
         for r in rules.list_rules(conn, active_only=True)
         if not r.id.startswith("system-")
+        and r.account_id is None  # une règle d'un compte ne vaut que dans ce hub
         and r.field in ("search_text", "counterparty_iban")
         and (not wanted or r.id.startswith(wanted))
     ]

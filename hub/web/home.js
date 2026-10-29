@@ -42,8 +42,8 @@ function items() {
   if (np) out.push({ ic: "faceid", c: "var(--accent)", t: `${np} proposition${np > 1 ? "s" : ""} à valider`, s: "Un seul Face ID pour tout le lot", a: "props" });
   const b = store.data(budgetPath(store.today, "m"));
   for (const l of b ? b.lines.filter((x) => x.over).sort((x, y) => Number(y.ratio) - Number(x.ratio)) : []) {
-    const spent = l.spent.minor / 100, target = l.target.minor / 100;
-    out.push({ mark: catMark(l.category, l.group), t: `${l.name} : budget dépassé`, s: `${n0(spent)} sur ${n0(target)} ${base()}, dépassé de ${n0(spent - target)}`, a: "cat", v: l.category });
+    const y = l.yearly, spent = (y ? y.spent : l.spent).minor / 100, target = (y ? y.target : l.target).minor / 100;
+    out.push({ mark: catMark(l.category, l.group), t: `${l.name} : budget ${y ? "annuel " : ""}dépassé`, s: `${n0(spent)} sur ${n0(target)} ${base()}${y ? " depuis janvier" : ""}, dépassé de ${n0(spent - target)}`, a: "cat", v: l.category });
   }
   if (k.to_categorize > 0) out.push({ ic: "help", c: "var(--accent)", t: `${k.to_categorize} écriture${k.to_categorize > 1 ? "s" : ""} à classer`, s: "Par contrepartie, en un Face ID", a: "gotodo" });
   const cs = store.data(connPath);

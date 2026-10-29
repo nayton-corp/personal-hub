@@ -28,7 +28,7 @@ export const ICON = {
   piggy: "M5 11a7 6 0 0 1 13-2h2v4h-2a7 6 0 0 1-3 4v3h-3v-2h-3v2H6v-3a6 6 0 0 1-1-6zM15 9.5h.01",
   wifi: "M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01",
   repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
-  train: "M6 3h12a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V5a2 2 0 0 1 2-2zM4 10h16M8 21l2-4M16 21l-2-4",
+  train: "M6 3h12a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V5a2 2 0 0 1 2-2zM4 10h16M8 21l2-4M16 21l-2-4", car: "M5 16V12l2-5h10l2 5v4zM5 16v2M19 16v2M8 13h.01M16 13h.01",
   landmark: "M3 21h18M5 21V10M19 21V10M9.5 21V10M14.5 21V10M2 10l10-6 10 6z",
   cart: "M3 4h2l2.4 11h11l2-8H6.2M9 20h.01M18 20h.01",
   utensils: "M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M17 3c-2 0-3 2-3 5v5h3M17 3v18",
@@ -137,7 +137,7 @@ export const SH = { kind: null, arg: null, opener: null, tmp: null };
 
 export function openSheet(kind, arg, tmp = null) {
   const wasOpen = Boolean(SH.kind);
-  Object.assign(SH, { kind, arg, tmp, err: "" });
+  Object.assign(SH, { kind, arg, tmp, err: "", cad: null });
   if (!wasOpen) SH.opener = document.activeElement;
   document.documentElement.classList.add("sheet-open");
   $("shell").inert = true;

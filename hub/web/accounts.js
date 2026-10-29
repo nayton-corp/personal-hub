@@ -1,14 +1,15 @@
-// Réglages d'un compte : nom, objectif, disponibilité, catégorie et masquage, enregistrés par une
-// seule proposition validée avec Face ID. Le panneau s'ouvre depuis le patrimoine (détail d'un
+// Réglages d'un compte : nom, objectif, disponibilité, catégorie, masquage et catégorie de toutes
+// ses dépenses (une poche Vacances), enregistrés par un seul Face ID. Le panneau s'ouvre depuis le patrimoine (détail d'un
 // compte) ou depuis la carte « Comptes » des réglages, qui montre aussi la fraîcheur.
 import { date, daysSince } from "./format.js";
-import { FACET, facetMark, facetName, setInstitutions } from "./meta.js";
+import { FACET, GROUP_LABEL, facetMark, facetName, setInstitutions } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { store } from "./store.js";
 import { SHEETS, SH, closeSheet, esc, failure, fill, ibox, ic, openSheet, renderSheet, toast } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
-const ACCOUNTS = "/finance/accounts", FRESH = "/finance/freshness";
+const ACCOUNTS = "/finance/accounts", FRESH = "/finance/freshness", CATS = "/finance/categories";
+const SPEND_PRIORITY = 5; // avant les règles par mot : tout débit du compte va dans la catégorie
 export const STALE_DAYS = 45;
 const KIND = { cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" };
 
@@ -20,7 +21,7 @@ export const hiddenIds = () => new Set(((store.data(ACCOUNTS) || {}).items || []
 
 // état saisi : ce que le compte vaut aujourd'hui, modifié par les choix du panneau
 function initial(a) {
-  return { name: a.name, goal: a.goal, availability: a.availability_set ? a.availability : "auto", category: a.category || "auto", hidden: a.hidden };
+  return { name: a.name, goal: a.goal, availability: a.availability_set ? a.availability : "auto", category: a.category || "auto", hidden: a.hidden, spend: a.spend_rule ? a.spend_rule.category_id : "" };
 }
 function changes(a, t) {
   const now = initial(a), out = {};
@@ -36,6 +37,11 @@ SHEETS.account = (id, sh) => {
   if (!a) return null;
   if (!sh.tmp) sh.tmp = initial(a);
   const t = sh.tmp, diff = changes(a, t);
+  const cats = (store.use(CATS).data || { items: [] }).items;
+  const spendOpts = ["fixed", "variable"].map((g) => {
+    const cs = cats.filter((c) => c.group === g && (c.active || c.id === t.spend));
+    return cs.length ? `<optgroup label="${esc(GROUP_LABEL[g])}">${cs.map((c) => `<option value="${esc(c.id)}" ${t.spend === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</optgroup>` : "";
+  }).join("");
   const facet = (key) => FACET[key].values.map((v) => [v, FACET[key].names[v], facetMark(key, v, "xs")]);
   const auto = (label) => ["auto", label, ibox(ic("refresh"), "var(--muted)", "xs")];
   return {
@@ -50,6 +56,8 @@ SHEETS.account = (id, sh) => {
       <h3 class="field">Catégorie</h3>
       ${radio("category", [auto("Selon chaque ligne"), ...facet("cat")], t.category)}
       <p class="hint">« Selon chaque ligne » range les liquidités, les fonds et les cryptos du compte chacun à sa place. Une catégorie choisie s'applique à tout le compte.</p>
+      <label class="field" for="acc-spend">Dépenses de ce compte<select id="acc-spend" class="select-full"><option value="" ${t.spend ? "" : "selected"}>Selon les règles habituelles</option>${spendOpts}</select></label>
+      <p class="hint">Pour une poche dédiée (vacances, voiture) : toutes ses sorties vont dans cette catégorie, celles déjà importées comme les prochaines. Les virements vers tes autres comptes restent des virements, et une catégorie choisie à la main reste la sienne.</p>
       <div class="setrow"><span id="acc-hide-lbl">Masquer ce compte<small>Il disparaît du patrimoine et de l'accueil. Ses relevés continuent d'arriver et rien n'est effacé.</small></span><button class="switch" type="button" role="switch" aria-checked="${t.hidden}" aria-labelledby="acc-hide-lbl" data-a="acc-pick" data-v="hidden|${!t.hidden}"></button></div>
       ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}`,
     foot: `<button class="primary" type="button" data-a="acc-save" ${diff && Object.keys(diff).length && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer avec Face ID"}</button>`,
@@ -59,6 +67,12 @@ SHEETS.account = (id, sh) => {
 document.addEventListener("input", (e) => {
   if (e.target.id !== "acc-name" || SH.kind !== "account" || !SH.tmp) return;
   SH.tmp.name = e.target.value;
+  renderSheet();
+});
+
+document.addEventListener("change", (e) => {
+  if (e.target.id !== "acc-spend" || SH.kind !== "account" || !SH.tmp) return;
+  SH.tmp.spend = e.target.value;
   renderSheet();
 });
 
@@ -103,11 +117,19 @@ export const actions = {
     const diff = changes(a, SH.tmp);
     if (!diff || !Object.keys(diff).length) return;
     if ("name" in diff) diff.name = diff.name.trim();
+    const items = [];
+    if ("spend" in diff) {
+      // une seule règle « tout débit » par compte : l'ancienne s'éteint, la nouvelle la remplace
+      if (a.spend_rule) items.push(["disable_rule", { rule_id: a.spend_rule.rule_id }]);
+      if (diff.spend) items.push(["create_rule", { pattern: "", direction: "debit", category_id: diff.spend, account_id: a.id, priority: SPEND_PRIORITY }]);
+      delete diff.spend;
+    }
+    if (Object.keys(diff).length) items.unshift(["edit_account", { account_id: a.id, ...diff }]);
     SH.busy = true;
     SH.err = "";
     renderSheet();
     try {
-      const [text, bad] = outcome(await proposeAndApprove([["edit_account", { account_id: a.id, ...diff }]]));
+      const [text, bad] = outcome(await proposeAndApprove(items));
       if (bad) SH.err = text;
       else {
         closeSheet();

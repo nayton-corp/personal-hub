@@ -590,3 +590,68 @@ def test_events_record_applied_proposals(ctx: HubContext, fin: FinanceDomain) ->
     with pytest.raises(Exception, match=r"ledger\.append_only"), fin.engine().begin() as conn:
         conn.execute(text("DELETE FROM applied_proposals"))
     assert ledger
+
+
+def test_yearly_budget_and_account_rule(
+    client: TestClient, ctx: HubContext, fin: FinanceDomain
+) -> None:
+    """Une poche Vacances : « tout débit de ce compte → Vacances », suivi à l'année."""
+    acc = ready_account(fin)
+    load(
+        fin,
+        [
+            Tx("900.00", True, D, counterparty="Zorglub Fictif"),
+            Tx("80.00", True, D, counterparty="Bistrot Fictif", label="restaurant"),
+            Tx("50.00", False, D, counterparty="Remboursement Fictif"),
+        ],
+    )
+    # le motif peut être vide pour une règle d'un compte, jamais sinon
+    with pytest.raises(Problem):
+        create(ctx, "create_rule", {"pattern": "", "direction": "debit", "category_id": "voyages"})
+    rule = create(
+        ctx,
+        "create_rule",
+        {
+            "pattern": "",
+            "direction": "debit",
+            "category_id": "voyages",
+            "account_id": acc.id,
+            "priority": 5,
+        },
+    )
+    assert rule.preview["summary"] == "Règle « Compte privé » : tout débit → Vacances : 2 écritures"
+    accept(ctx, rule)
+    assert current(fin, "Zorglub Fictif")[0] == "voyages"
+    assert current(fin, "Bistrot Fictif")[0] == "voyages"  # passe avant « restaurant »
+    assert current(fin, "Remboursement Fictif")[0] != "voyages"  # un crédit
+    with pytest.raises(Problem):
+        create(
+            ctx,
+            "create_rule",
+            {"pattern": "", "direction": "debit", "category_id": "voyages", "account_id": "x"},
+        )
+    # 600 par an, soit 50 par mois : le mois n'en tient pas compte, l'année oui
+    p = create(
+        ctx,
+        "set_budget",
+        {"category_id": "voyages", "monthly_minor": 5_000, "cadence": "year"},
+    )
+    assert p.preview["summary"].startswith("Budget Vacances : 600.00 CHF par an")
+    accept(ctx, p)
+    h = token(ctx, "brain")
+    b = client.get("/api/finance/budget?month=2026-10", headers=h).json()
+    line = {x["category"]: x for x in b["lines"]}["voyages"]
+    assert (line["target"], line["over"]) == (None, True)
+    assert line["yearly"]["target"]["minor"] == 60_000
+    assert line["yearly"]["spent"]["minor"] == 98_000
+    assert line["yearly"]["from"] == "2026-01"
+    assert b["budget"] is None  # aucune autre cible : pas de budget du mois
+    assert b["budgeted_expenses"]["minor"] == 0
+    alerts = {a.key for a in fin.run_sentinels()}
+    assert "budget-over-year:voyages:2026" in alerts
+    assert not any(k.startswith("budget-over:voyages") for k in alerts)
+    # la cadence revient au mois avec l'inverse
+    with ctx.core.engine.connect() as conn:
+        p = proposals.get(conn, p.id)
+    kind, params = proposals.inverse_of(ctx, p)
+    assert (kind, params["cadence"]) == ("set_budget", "month")
