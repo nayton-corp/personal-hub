@@ -1,18 +1,19 @@
-"""Empreintes versionnées des tables protégées et chaîne du journal (revue d'architecture).
+"""Champs hachés des tables protégées de la finance, par version (revue d'architecture).
 
-Une ligne se vérifie toujours avec la liste de champs de sa version (`hash_v`). Ajouter une
-colonne crée la version suivante ; une version existante ne change jamais.
+Le calcul (empreinte, maillon) vient du noyau (`hub.kernel.chain`, chantier S3) ; la finance ne
+déclare que ses champs. Une ligne se vérifie toujours avec la liste de champs de sa version
+(`hash_v`). Ajouter une colonne crée la version suivante ; une version existante ne change jamais.
 """
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping
 from typing import Any
 
-from hub.kernel import canonical
+from hub.kernel import chain
+from hub.kernel.chain import GENESIS, chain_hash
 
-GENESIS = "0" * 64
+__all__ = ["FIELDS", "GENESIS", "PROTECTED", "chain_hash", "current_version", "row_hash"]
 
 # champs du JSON canonique, par table puis par version
 FIELDS: dict[str, dict[int, tuple[str, ...]]] = {
@@ -93,7 +94,7 @@ PROTECTED = tuple(FIELDS)
 
 
 def current_version(table: str) -> int:
-    return max(FIELDS[table])
+    return chain.current_version(FIELDS, table)
 
 
 def not_hashed(table: str) -> frozenset[str]:
@@ -101,13 +102,4 @@ def not_hashed(table: str) -> frozenset[str]:
 
 
 def row_hash(table: str, row: Mapping[str, Any], version: int | None = None) -> str:
-    v = current_version(table) if version is None else version
-    try:
-        fields = FIELDS[table][v]
-    except KeyError:
-        raise ValueError(f"version d'empreinte inconnue : {table} v{v}") from None
-    return canonical.sha256_hex({f: row[f] for f in fields})
-
-
-def chain_hash(prev_hash: str, table: str, row_seq: int, row_digest: str) -> str:
-    return hashlib.sha256(f"{prev_hash}|{table}|{row_seq}|{row_digest}".encode()).hexdigest()
+    return chain.row_hash(FIELDS, table, row, version)

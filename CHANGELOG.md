@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+### Intégrité générique (chantier S3)
+
+- `hub.kernel.chain` (empreinte versionnée, maillon) et `hub.core.integrity` (`Ledger` :
+  ajout, vérification, `applied_proposals`, `events`, aides de migration `schema()` et
+  `append_only()`) : un domaine neuf a son registre d'ajout seul sans le réécrire.
+- La finance s'en sert : `ledger.append` et `ledger.verify` délèguent au cœur, ses champs
+  hachés restent dans `hashing.FIELDS`. Même tête de chaîne qu'avant (test de référence).
+- Le domaine factice tient ses propositions et événements dans le registre commun ; `hub
+  verify` le rejoue.
+
 ### Jetons à date de fin, par domaine (chantier S8)
 
 - Chaque jeton a une date de fin (`--days`, 90 par défaut, 366 au plus) ; un jeton fini est

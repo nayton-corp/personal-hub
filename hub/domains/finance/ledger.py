@@ -2,85 +2,46 @@
 
 Toute ligne d'une table protégée passe par `append()`, appelé dans une transaction
 `BEGIN IMMEDIATE` (`hub.platform.db.begin_immediate`) : la tête du journal lue ici ne peut plus
-changer avant le COMMIT.
+changer avant le COMMIT. Le mécanisme (empreinte, maillon, vérification) est celui du cœur
+(`hub.core.integrity`, chantier S3) ; la finance y ajoute ses écritures et leurs clés.
 """
 
 from __future__ import annotations
 
 import hashlib
-from collections import Counter
-from collections.abc import Mapping
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from sqlalchemy import Connection, text
 
+from hub.core.integrity import Ledger, LedgerError, VerifyResult
 from hub.domains.finance import hashing
-from hub.kernel import canonical
 from hub.kernel.clock import now_iso
 from hub.kernel.text import normalize
 
 DEDUP_VERSION = "v1"
+__all__ = ["LEDGER", "LedgerError", "VerifyResult", "append", "append_event", "verify"]
 
 
-class LedgerError(RuntimeError):
-    pass
-
-
-def _head(conn: Connection) -> tuple[str, int]:
-    row = conn.execute(
-        text("SELECT chain_hash, epoch FROM journal ORDER BY seq DESC LIMIT 1")
-    ).first()
-    if row:
-        return row[0], row[1]
-    # base reconstruite par rejeu : son journal ouvre l'époque inscrite dans `rebuild_meta`
-    # (journal vide seulement ; la table n'existe qu'à partir de 0005)
-    epoch = None
+def _epoch(conn: Connection) -> int:
+    """Base reconstruite par rejeu : son journal vide ouvre l'époque inscrite dans
+    `rebuild_meta` (la table n'existe qu'à partir de 0005)."""
     if conn.execute(
         text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'rebuild_meta'")
     ).first():
         epoch = conn.execute(
             text("SELECT epoch FROM rebuild_meta WHERE id = 1")
         ).scalar_one_or_none()
-    return hashing.GENESIS, int(epoch) if epoch is not None else 1
+        if epoch is not None:
+            return int(epoch)
+    return 1
 
 
-def append(conn: Connection, table: str, values: Mapping[str, Any]) -> int:
-    """Ajoute une ligne et son maillon de journal ; renvoie le rowid (le `seq`)."""
-    if table not in hashing.FIELDS:
-        raise LedgerError(f"table non protégée : {table}")
-    version = hashing.current_version(table)
-    missing = [f for f in hashing.FIELDS[table][version] if f not in values]
-    if missing:
-        raise LedgerError(f"{table} : champs absents {missing}")
-    row = {**values, "hash_v": version}
-    digest = hashing.row_hash(table, row, version)
-    if table == "entries":
-        row["row_hash"] = digest
-    cols = ", ".join(row)
-    marks = ", ".join(f":{c}" for c in row)
-    row_seq = int(
-        conn.execute(
-            text(f"INSERT INTO {table} ({cols}) VALUES ({marks}) RETURNING rowid"),
-            row,
-        ).scalar_one()
-    )
-    prev, epoch = _head(conn)
-    conn.execute(
-        text(
-            "INSERT INTO journal (tbl, row_seq, row_hash, epoch, prev_hash, chain_hash) "
-            "VALUES (:t, :s, :h, :e, :p, :c)"
-        ),
-        {
-            "t": table,
-            "s": row_seq,
-            "h": digest,
-            "e": epoch,
-            "p": prev,
-            "c": hashing.chain_hash(prev, table, row_seq, digest),
-        },
-    )
-    return row_seq
+# le registre de la finance : ses champs hachés, l'empreinte gardée aussi dans entries.row_hash
+LEDGER = Ledger(hashing.FIELDS, stored_hash=frozenset({"entries"}), epoch=_epoch)
+append = LEDGER.append
+append_event = LEDGER.append_event
+verify = LEDGER.verify
+_head = LEDGER.head
 
 
 def entry_id(dedup_key: str) -> str:
@@ -158,71 +119,3 @@ def append_entry(conn: Connection, e: NewEntry, created_at: str | None = None) -
         },
     )
     return seq, id_
-
-
-def append_event(
-    conn: Connection, type_: str, urn: str, payload: Mapping[str, Any] | None = None
-) -> int:
-    return append(
-        conn,
-        "events",
-        {
-            "type": type_,
-            "urn": urn,
-            "payload_json": canonical.dumps(dict(payload or {})),
-            "created_at": now_iso(),
-        },
-    )
-
-
-@dataclass
-class VerifyResult:
-    ok: bool
-    links: int = 0
-    rows: dict[str, int] = field(default_factory=dict)
-    errors: list[str] = field(default_factory=list)  # tables et numéros de ligne seulement
-
-    def public(self) -> dict[str, Any]:
-        return {"ok": self.ok, "links": self.links, "rows": self.rows, "errors": self.errors[:20]}
-
-
-def verify(conn: Connection) -> VerifyResult:
-    """Chaîne du journal, puis empreinte de chaque ligne selon sa version, puis complétude."""
-    result = VerifyResult(ok=True)
-    rows: dict[str, dict[int, Mapping[str, Any]]] = {}
-    for table in hashing.PROTECTED:
-        found = conn.execute(text(f"SELECT rowid AS _rowid, * FROM {table}")).mappings()
-        rows[table] = {int(r["_rowid"]): dict(r) for r in found}
-        result.rows[table] = len(rows[table])
-
-    prev = hashing.GENESIS
-    seen: Counter[str] = Counter()
-    for link in conn.execute(
-        text("SELECT seq, tbl, row_seq, row_hash, prev_hash, chain_hash FROM journal ORDER BY seq")
-    ):
-        result.links += 1
-        where = f"journal {link.seq} ({link.tbl} {link.row_seq})"
-        if link.prev_hash != prev:
-            result.errors.append(f"{where} : maillon précédent différent")
-        if hashing.chain_hash(link.prev_hash, link.tbl, link.row_seq, link.row_hash) != (
-            link.chain_hash
-        ):
-            result.errors.append(f"{where} : maillon altéré")
-        prev = link.chain_hash
-        row = rows.get(link.tbl, {}).get(link.row_seq)
-        if row is None:
-            result.errors.append(f"{where} : ligne absente")
-            continue
-        seen[link.tbl] += 1
-        try:
-            digest = hashing.row_hash(link.tbl, row, int(row["hash_v"]))
-        except ValueError:
-            result.errors.append(f"{where} : version d'empreinte inconnue")
-            continue
-        if digest != link.row_hash or (link.tbl == "entries" and row["row_hash"] != digest):
-            result.errors.append(f"{where} : ligne altérée")
-    for table, count in result.rows.items():
-        if seen[table] != count:
-            result.errors.append(f"{table} : {count - seen[table]} ligne(s) hors journal")
-    result.ok = not result.errors
-    return result

@@ -4,7 +4,6 @@ sentinelles (lot 7)."""
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from collections.abc import Mapping, Sequence
 from datetime import date
@@ -15,7 +14,7 @@ import typer
 from fastapi import APIRouter
 from sqlalchemy import Connection, Engine, event, text
 
-from hub.core import profile
+from hub.core import integrity, profile
 from hub.core.domain import Event, Health, Hit, McpTool, ProposalKind, Ref
 from hub.core.manifest import Manifest, Observation, Severity
 from hub.domains.finance import (
@@ -32,8 +31,7 @@ from hub.domains.finance import (
 )
 from hub.domains.finance.handlers import build_kinds
 from hub.domains.finance.importer import Archiver, ImportService, recipient_from_key
-from hub.kernel import canonical
-from hub.kernel.clock import local_today, now_iso
+from hub.kernel.clock import local_today
 from hub.kernel.ids import Urn, urn
 from hub.kernel.money import base_currency
 from hub.platform import migrations as runner
@@ -200,45 +198,16 @@ class FinanceDomain:
 
     def events_since(self, cursor: int, limit: int) -> list[Event]:
         with self._engine.connect() as conn:
-            rows = conn.execute(
-                text(
-                    "SELECT seq, type, urn, payload_json, created_at FROM events WHERE seq > :c "
-                    "ORDER BY seq LIMIT :n"
-                ),
-                {"c": cursor, "n": limit},
-            ).fetchall()
-        return [Event(r[0], r[1], r[2], json.loads(r[3]), r[4]) for r in rows]
+            return integrity.events_since(conn, cursor, limit)
 
     def applied(self, proposal_ids: Sequence[str]) -> Mapping[str, dict[str, Any]]:
-        if not proposal_ids:
-            return {}
-        marks = ",".join(f":p{i}" for i in range(len(proposal_ids)))
         with self._engine.connect() as conn:
-            rows = conn.execute(
-                text(
-                    "SELECT proposal_id, result_json FROM applied_proposals "
-                    f"WHERE proposal_id IN ({marks})"
-                ),
-                {f"p{i}": p for i, p in enumerate(proposal_ids)},
-            ).fetchall()
-        return {pid: json.loads(res) for pid, res in rows}
+            return integrity.applied(conn, proposal_ids)
 
     def record_applied(
         self, conn: Connection, proposal_id: str, kind: str, result: dict[str, Any]
     ) -> None:
-        ledger.append(
-            conn,
-            "applied_proposals",
-            {
-                "proposal_id": proposal_id,
-                "kind": kind,
-                "result_json": canonical.dumps(result),
-                "applied_at": now_iso(),
-            },
-        )
-        ledger.append_event(
-            conn, "proposal.applied", urn("core", "proposal", proposal_id), {"kind": kind}
-        )
+        ledger.LEDGER.record_applied(conn, proposal_id, kind, result)
 
     def request_reviews(self) -> int:
         """Redemande une carte `apply_import` pour chaque import en attente : une carte expirée

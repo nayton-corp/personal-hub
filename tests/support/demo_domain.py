@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, Engine, text
 
+from hub.core import integrity
 from hub.core.auth import require
 from hub.core.domain import (
     Event,
@@ -34,23 +35,16 @@ from hub.core.manifest import (
     SettingsSection,
     Tab,
 )
-from hub.kernel import canonical
 from hub.kernel.clock import now_iso
 from hub.kernel.ids import urn
 from hub.platform.db import make_engine
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS items (seq INTEGER PRIMARY KEY, name TEXT NOT NULL, created_at TEXT);
-CREATE TABLE IF NOT EXISTS applied_proposals (
-  proposal_id TEXT PRIMARY KEY, kind TEXT NOT NULL, result_json TEXT NOT NULL,
-  applied_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY, type TEXT NOT NULL,
-  urn TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL);
-CREATE TRIGGER IF NOT EXISTS events_no_update BEFORE UPDATE ON events
-  BEGIN SELECT RAISE(ABORT, 'ledger.append_only'); END;
-CREATE TRIGGER IF NOT EXISTS events_no_delete BEFORE DELETE ON events
-  BEGIN SELECT RAISE(ABORT, 'ledger.append_only'); END;
-"""
+# journal, applied_proposals et events viennent du cœur (chantier S3) ; items n'est pas chaîné
+SCHEMA = [
+    "CREATE TABLE items (seq INTEGER PRIMARY KEY, name TEXT NOT NULL, created_at TEXT)",
+    *integrity.schema(),
+]
+LEDGER = integrity.Ledger(integrity.COMMON_FIELDS)
 
 MANIFEST = Manifest(
     description="Domaine factice des tests : des éléments nommés.",
@@ -68,7 +62,7 @@ MANIFEST = Manifest(
             claims=lambda name, head: not name.endswith(".txt") or head.startswith(b"DEMO"),
         ),
     ),
-    protected_tables=frozenset({"events"}),
+    protected_tables=frozenset({"events", "applied_proposals"}),
     assistant="Ne jamais citer un élément sans son numéro.",
 )
 
@@ -144,11 +138,11 @@ class DemoDomain:
         return self._engine
 
     def migrate(self) -> None:
-        raw = self._engine.raw_connection()
-        try:
-            raw.driver_connection.executescript(SCHEMA)  # type: ignore[union-attr]
-        finally:
-            raw.close()
+        with self._engine.begin() as conn:
+            if conn.execute(text("SELECT 1 FROM sqlite_master WHERE name = 'journal'")).first():
+                return
+            for statement in SCHEMA:
+                conn.execute(text(statement))
 
     def router(self) -> APIRouter:
         r = APIRouter()
@@ -195,44 +189,33 @@ class DemoDomain:
         return Ref(value, row[0], None, f"/demo/items/{seq}") if row else None
 
     def events_since(self, cursor: int, limit: int) -> list[Event]:
-        return []
+        with self._engine.connect() as conn:
+            return integrity.events_since(conn, cursor, limit)
 
     def applied(self, proposal_ids: Sequence[str]) -> Mapping[str, dict[str, Any]]:
-        import json
-
-        if not proposal_ids:
-            return {}
-        marks = ",".join(f":p{i}" for i in range(len(proposal_ids)))
         with self._engine.connect() as conn:
-            rows = conn.execute(
-                text(
-                    f"SELECT proposal_id, result_json FROM applied_proposals "
-                    f"WHERE proposal_id IN ({marks})"
-                ),
-                {f"p{i}": p for i, p in enumerate(proposal_ids)},
-            ).fetchall()
-        return {pid: json.loads(res) for pid, res in rows}
+            return integrity.applied(conn, proposal_ids)
 
     def record_applied(
         self, conn: Connection, proposal_id: str, kind: str, result: dict[str, Any]
     ) -> None:
-        conn.execute(
-            text("INSERT INTO applied_proposals VALUES (:p, :k, :r, :at)"),
-            {"p": proposal_id, "k": kind, "r": canonical.dumps(result), "at": now_iso()},
-        )
+        LEDGER.record_applied(conn, proposal_id, kind, result)
 
     def mark_applied(self, proposal_id: str, result: dict[str, Any]) -> None:
         with self._engine.begin() as conn:
-            conn.execute(
-                text("INSERT INTO applied_proposals VALUES (:p, 'add_item', :r, :at)"),
-                {"p": proposal_id, "r": canonical.dumps(result), "at": now_iso()},
-            )
+            LEDGER.record_applied(conn, proposal_id, "add_item", result)
 
     def nightly(self) -> None:
         self.nightly_runs += 1
 
     def verify(self) -> Health:
-        return self.health()
+        """Le registre commun du cœur : journal, applied_proposals, events."""
+        health = self.health()
+        if not health.ok:
+            return health
+        with self._engine.connect() as conn:
+            result = LEDGER.verify(conn)
+        return Health(result.ok, health.db, self.schema_version, {"ledger": result.public()})
 
     def health(self) -> Health:
         return Health(
