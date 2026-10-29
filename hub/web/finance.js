@@ -4,6 +4,7 @@
 // inventé ici : tout vient de /api/finance, en centimes.
 import * as accounts from "./accounts.js";
 import * as budget from "./budget.js";
+import * as debts from "./debts.js";
 import { initConnections } from "./connections.js";
 import * as home from "./home.js";
 import * as journal from "./journal.js";
@@ -20,7 +21,7 @@ const P = store.params;
 const TABS = [["accueil", "Accueil", "home"], ["patrimoine", "Patrimoine", "trend"], ["budget", "Budget", "wallet"], ["journal", "Journal", "list"]];
 const VIEWS = { accueil: home.render, patrimoine: wealth.render, budget: budget.render, journal: journal.render, sources: settings.render };
 const LABEL = { accueil: "Accueil", patrimoine: "Patrimoine", budget: "Budget", journal: "Journal", sources: "Sources et réglages" };
-const ACTIONS = { ...accounts.actions, ...home.actions, ...wealth.actions, ...budget.actions, ...journal.actions, ...settings.actions };
+const ACTIONS = { ...accounts.actions, ...debts.actions, ...home.actions, ...wealth.actions, ...budget.actions, ...journal.actions, ...settings.actions };
 const scrolls = {};
 let back = "accueil";
 let drawn = null;

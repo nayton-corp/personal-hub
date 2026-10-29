@@ -299,7 +299,8 @@ SHEETS.tx = (id, sh) => {
       ${e.kind === "movement" ? `<h3>Catégorie</h3>${grid(cats, direction, sh.tmp, "txcat")}
       ${ruleKey(e) ? `<label class="check"><input type="checkbox" id="tx-always" ${sh.always ? "checked" : ""}>Toujours classer « ${esc(ruleKey(e))} » ainsi</label>` : ""}
       ${ruleKey(e) && sh.always ? `<label class="check check-in"><input type="checkbox" id="tx-only" ${sh.only ? "checked" : ""}>Seulement depuis ${esc(a ? a.name : "ce compte")}</label>` : ""}
-      ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}` : ""}`,
+      ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}` : ""}
+      ${e.kind === "movement" && amt > 0 && !internal(e) ? `<button class="link-row" type="button" data-a="debt-from" data-v="${esc([e.id, e.booking_date, amt, (e.counterparty || "").replace(/\|/g, " ")].join("|"))}">Créer une dette depuis ce versement${ic("chev")}</button>` : ""}`,
     foot: e.kind === "movement" ? `<button class="primary" type="button" data-a="tx-ok" ${changed && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer avec Face ID"}</button>` : "",
   };
 };

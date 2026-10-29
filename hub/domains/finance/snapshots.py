@@ -3,7 +3,8 @@
 Un instantané par fin de mois depuis la première écriture, plus un à la date du calcul. La
 série est toujours recalculée en entier, dans une seule transaction : un relevé ancien arrivé
 après coup (reprise d'historique) corrige donc aussi les mois passés. Le recalcul part de la
-tâche de nuit et de l'événement `import.applied`, lu par curseur dans la boîte de sortie.
+tâche de nuit et des événements `import.applied` et `debt.changed` (une dette créée, modifiée
+ou un solde constaté), lus par curseur dans la boîte de sortie.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from hub.domains.finance.reads import money
 
 log = get_logger("hub.finance.snapshots")
 TRIGGER = "import.applied"
+TRIGGERS = (TRIGGER, "debt.changed")
 
 
 def month_ends(first: date, as_of: date) -> list[date]:
@@ -90,15 +92,15 @@ def refresh(engine: Engine, as_of: date, *, force: bool = False) -> Refresh:
             conn.execute(text("SELECT coalesce(max(seq), 0) FROM entries")).scalar_one()
         )
         applied = conn.execute(
-            text("SELECT count(*) FROM events WHERE seq > :c AND type = :t"),
-            {"c": cursor, "t": TRIGGER},
+            text("SELECT count(*) FROM events WHERE seq > :c AND type IN (:t, :u)"),
+            {"c": cursor, "t": TRIGGERS[0], "u": TRIGGERS[1]},
         ).scalar_one()
         if force:
             reason = "forced"
         elif state is None:
             reason = "first"
         elif applied:
-            reason = TRIGGER
+            reason = "events"
         elif state[1] != entries_seq:
             reason = "entries"
         elif state[2] != as_of.isoformat():

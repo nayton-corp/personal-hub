@@ -295,7 +295,7 @@ def test_networth_history(client: TestClient, ctx: HubContext, year: FinanceDoma
     assert len(r["items"]) == 12
     last = r["items"][-1]
     assert minor(last["net_worth"]) == minor(last["deposits_cum"]) == 2_869_000
-    assert set(last["by_envelope"]) == {"cash", "pilier3a", "titres", "crypto"}
+    assert set(last["by_envelope"]) == {"cash", "pilier3a", "titres", "crypto", "dettes"}
     # la valeur par compte suit la courbe : ici un seul compte, qui porte tout le patrimoine
     assert [minor(v) for v in last["by_account"].values()] == [2_869_000]
     part = client.get(
