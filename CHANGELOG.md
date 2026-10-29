@@ -2,6 +2,19 @@
 
 ## [Non publié]
 
+### Actualiser une connexion depuis l'app
+
+- « Actualiser » sur chaque connexion et « Tout actualiser » (Réglages › Connexions) : un run
+  complet hors horaire, lancé dans la minute par le service collecteur (`POST
+  /api/collectors/<id>/refresh`, `POST /api/collectors/refresh`). Seulement pour une connexion
+  prête et active (`collector.not_enabled` sinon). La ligne montre « actualisation en cours »,
+  puis l'issue et l'heure du dernier passage ; l'app relit ses chiffres après l'import.
+- Les limites des sources restent dans les flux : push BCF à valider, quatre synchros par jour
+  pour Enable Banking (« quota du jour atteint »).
+- Horaires par défaut : cours, portefeuilles et plateformes crypto toutes les 4 heures de 06:15
+  à 22:15 (au lieu d'une fois par jour).
+- Migration core `0006_collector_refresh` (`collector_state.run_requested_at`).
+
 ### Écritures crypto natives pour chaque connecteur
 
 - Règle : un connecteur crypto apporte ses écritures, pas seulement ses soldes. `runner(fetch,

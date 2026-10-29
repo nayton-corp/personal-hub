@@ -19,6 +19,7 @@ class FakeHub:
 
     mode: str = "enabled"
     check_requested: bool = False
+    run_requested: bool = False
     runs: list[tuple[str, str, str]] = field(default_factory=list)
     notified: list[str] = field(default_factory=list)
     links: dict[str, str | None] = field(default_factory=dict)
@@ -31,6 +32,7 @@ class FakeHub:
             "name": name,
             "mode": self.mode,
             "check_requested": self.check_requested,
+            "run_requested": self.run_requested,
             "link_requested": self.link_requested,
         }
 

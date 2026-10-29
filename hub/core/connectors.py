@@ -109,7 +109,7 @@ CATALOG: tuple[Connector, ...] = (
         None,
         ("crypto",),
         (),  # portefeuilles publics et clé CoinGecko facultatifs
-        "15 6 * * *",  # cours de la veille, tous les jours
+        "15 6-22/4 * * *",  # cours et portefeuilles toutes les 4 h, de 06:15 à 22:15
         ("market",),
         ("currencies", "crypto", "quotes", "wallets"),
     ),
@@ -120,7 +120,7 @@ CATALOG: tuple[Connector, ...] = (
         None,
         ("crypto",),
         ("api_key", "api_secret"),
-        "20 6 * * *",  # soldes des plateformes, après les cours
+        "20 6-22/4 * * *",  # soldes et opérations des plateformes, après les cours
         ("market",),
     ),
     Connector(
@@ -130,7 +130,7 @@ CATALOG: tuple[Connector, ...] = (
         None,
         ("crypto",),
         ("api_key", "api_secret", "passphrase"),
-        "22 6 * * *",
+        "22 6-22/4 * * *",
         ("market",),
     ),
     Connector(
@@ -140,7 +140,7 @@ CATALOG: tuple[Connector, ...] = (
         None,
         ("crypto",),
         ("key_name", "private_key"),
-        "24 6 * * *",
+        "24 6-22/4 * * *",
         ("market",),
     ),
 )

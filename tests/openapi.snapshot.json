@@ -419,6 +419,10 @@
             "title": "Ready",
             "type": "boolean"
           },
+          "run_requested": {
+            "title": "Run Requested",
+            "type": "boolean"
+          },
           "since": {
             "title": "Since",
             "type": "string"
@@ -433,6 +437,7 @@
           "consecutive_failures",
           "since",
           "check_requested",
+          "run_requested",
           "last_run",
           "last_success_at",
           "can_enable",
@@ -2473,6 +2478,28 @@
         ]
       }
     },
+    "/api/collectors/refresh": {
+      "post": {
+        "description": "« Tout actualiser » : un run de chaque connexion prête et active, dans la minute.",
+        "operationId": "refresh_all_api_collectors_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectorListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Refresh All",
+        "tags": [
+          "collecteurs"
+        ]
+      }
+    },
     "/api/collectors/runner/{runner}": {
       "get": {
         "description": "Ce qu'un service collecteur exécute : connexions prêtes, secrets toujours chiffrés.",
@@ -2901,6 +2928,49 @@
           }
         },
         "summary": "Notify",
+        "tags": [
+          "collecteurs"
+        ]
+      }
+    },
+    "/api/collectors/{name}/refresh": {
+      "post": {
+        "description": "Actualiser maintenant : un run complet hors horaire, pris dans la minute par le service\ncollecteur ; les limites de la source (synchros par jour) restent celles du flux.",
+        "operationId": "request_refresh_api_collectors__name__refresh_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectorOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Refresh",
         "tags": [
           "collecteurs"
         ]

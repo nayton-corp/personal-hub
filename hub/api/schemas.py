@@ -207,6 +207,7 @@ class CollectorOut(BaseModel):
     consecutive_failures: int
     since: str
     check_requested: bool
+    run_requested: bool  # actualisation demandée depuis l'app, pas encore faite
     last_run: CollectorRunOut | None
     last_success_at: str | None
     can_enable: bool

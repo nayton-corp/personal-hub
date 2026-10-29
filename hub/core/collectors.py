@@ -71,6 +71,7 @@ class State:
     link_requested_at: str | None = None
     link_url: str | None = None
     link_url_at: str | None = None
+    run_requested_at: str | None = None
 
     @property
     def open_link(self) -> str | None:
@@ -91,6 +92,7 @@ class State:
             "consecutive_failures": self.consecutive_failures,
             "since": self.since,
             "check_requested": self.check_requested_at is not None,
+            "run_requested": self.run_requested_at is not None,
             "last_run": self.last_run,
             "last_success_at": self.last_success_at,
             "can_enable": self.mode != "enabled" and _clean(self.last_run),
@@ -162,7 +164,7 @@ def get(conn: Connection, name: str) -> State:
     row = conn.execute(
         text(
             "SELECT mode, consecutive_failures, since, check_requested_at, link_requested_at, "
-            "link_url, link_url_at FROM collector_state WHERE collector = :c"
+            "link_url, link_url_at, run_requested_at FROM collector_state WHERE collector = :c"
         ),
         {"c": name},
     ).one()
@@ -188,6 +190,7 @@ def get(conn: Connection, name: str) -> State:
         row.link_requested_at,
         row.link_url,
         row.link_url_at,
+        row.run_requested_at,
     )
 
 
@@ -280,6 +283,8 @@ def record(conn: Connection, name: str, run: Run, by: str) -> Recorded:
     changes: dict[str, Any] = {}
     if run.kind == "check":
         changes["check_requested_at"] = None
+    else:
+        changes["run_requested_at"] = None
     alerts: list[Message] = []
     if run.outcome in SUCCESS:
         changes["consecutive_failures"] = 0
@@ -326,6 +331,33 @@ def request_check(conn: Connection, name: str, by: str) -> State:
     _set(conn, name, check_requested_at=now_iso())
     audit(conn, by, "collector.check_requested", f"collector:{name}", "ok")
     return get(conn, name)
+
+
+def request_run(conn: Connection, name: str, by: str) -> State:
+    """Actualisation demandée depuis l'app : un run complet, hors horaire, que le service
+    collecteur prend dans la minute. Seulement pour une connexion prête et active : une
+    connexion suspendue repasse d'abord par un contrôle (risque de blocage de l'accès). Les
+    limites de la source restent celles du flux (synchros par jour d'Enable Banking)."""
+    connection = _ensure(conn, name)
+    if not connection.ready:
+        raise Problem("validation.params", "secrets de la connexion à donner d'abord")
+    state = get(conn, name)
+    if state.mode != "enabled":
+        raise Problem("collector.not_enabled")
+    if state.run_requested_at is None:
+        _set(conn, name, run_requested_at=now_iso())
+        audit(conn, by, "collector.run_requested", f"collector:{name}", "ok")
+    return get(conn, name)
+
+
+def request_run_all(conn: Connection, by: str) -> list[State]:
+    """« Tout actualiser » : chaque connexion prête et active ; les autres restent telles."""
+    out = []
+    for state in list_all(conn):
+        if state.ready and state.mode == "enabled":
+            state = request_run(conn, state.name, by)
+        out.append(state)
+    return out
 
 
 def request_link(conn: Connection, name: str, by: str) -> State:

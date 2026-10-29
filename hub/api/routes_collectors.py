@@ -67,6 +67,14 @@ def list_collectors(hub_ctx: Ctx, _principal: Viewer) -> CollectorListOut:
         return CollectorListOut(items=[_out(s) for s in collectors.list_all(conn)])
 
 
+@router.post("/refresh", response_model=CollectorListOut)
+def refresh_all(hub_ctx: Ctx, principal: AppSession) -> CollectorListOut:
+    """« Tout actualiser » : un run de chaque connexion prête et active, dans la minute."""
+    with hub_ctx.core.engine.begin() as conn:
+        states = collectors.request_run_all(conn, principal.actor)
+    return CollectorListOut(items=[_out(s) for s in states])
+
+
 @router.get("/catalog", response_model=ConnectorListOut)
 def catalog(_principal: AppSession) -> ConnectorListOut:
     """Les connecteurs que ce hub sait collecter (méthode, pays, secrets attendus)."""
@@ -211,6 +219,14 @@ def request_check(name: str, hub_ctx: Ctx, principal: AppSession) -> CollectorOu
     """Demande un run de contrôle (connexion et sélecteurs, sans téléchargement)."""
     with hub_ctx.core.engine.begin() as conn:
         return _out(collectors.request_check(conn, name, principal.actor))
+
+
+@router.post("/{name}/refresh", response_model=CollectorOut)
+def request_refresh(name: str, hub_ctx: Ctx, principal: AppSession) -> CollectorOut:
+    """Actualiser maintenant : un run complet hors horaire, pris dans la minute par le service
+    collecteur ; les limites de la source (synchros par jour) restent celles du flux."""
+    with hub_ctx.core.engine.begin() as conn:
+        return _out(collectors.request_run(conn, name, principal.actor))
 
 
 @router.post("/{name}/link", response_model=CollectorOut)

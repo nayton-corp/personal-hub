@@ -25,7 +25,7 @@ from hub.core.coredb import audit
 from hub.core.errors import Problem
 
 ID = re.compile(r"^[a-z][a-z0-9-]{1,39}$")
-RESERVED = frozenset({"catalog", "connections", "runner"})  # segments de route
+RESERVED = frozenset({"catalog", "connections", "refresh", "runner"})  # segments de route
 MAX_SETTINGS = 16_384
 MAX_SECRETS = 65_536
 MAX_WALLETS = 50
