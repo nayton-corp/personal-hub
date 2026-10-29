@@ -56,7 +56,10 @@ def totals(env: Env, items: Iterable[tuple[str, Any]], step: str) -> dict[str, D
     return out
 
 
-def runner(fetch: Fetch, history: History | None = None) -> Callable[..., Result]:
+def runner(fetch: Fetch, history: History) -> Callable[..., Result]:
+    """Le run d'une plateforme : ses soldes ET son historique (règle du hub : pas de connecteur
+    crypto sans écritures au Journal ; `tests/collectors/test_crypto_history_rule.py`)."""
+
     def run(env: Env, kind: Kind, http: Http | None = None) -> Result:
         http = http or Http()
         account = str(env.creds.get("account") or f"crypto:{env.name}")
@@ -70,15 +73,13 @@ def runner(fetch: Fetch, history: History | None = None) -> Callable[..., Result
             "fetched_at": env.today.isoformat(),
             "balances": holdings(account, env.today, held, "BTC"),
         }
-        past = history(env, http, account, set(held)) if history else None
-        if past is not None:
-            doc.update(operations=past.operations, prices=past.prices, fx=past.fx)
+        past = history(env, http, account, set(held))
+        doc.update(operations=past.operations, prices=past.prices, fx=past.fx)
         data = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
         dropped = env.inbox.drop(f"{env.name}.json", data, is_market_json, step=f"{env.name}.file")
-        detail = None
-        if past is not None:
-            past.commit()
-            detail = "partial " + " ".join(past.failed) if past.failed else None
+        past.commit()
+        detail = "partial " + " ".join(past.failed) if past.failed else None
         return Result("ok" if dropped else "nothing_new", int(dropped), detail)
 
+    run.history = history  # type: ignore[attr-defined]
     return run

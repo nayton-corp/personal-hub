@@ -72,9 +72,16 @@ def held(doc: finance_market.MarketFile) -> list[tuple[str, str, Decimal]]:
 
 
 def chain(
-    btc: dict[str, int] | None = None, broken: str | None = None, *, sol_owner: str = "Sol1"
+    btc: dict[str, int] | None = None,
+    broken: str | None = None,
+    *,
+    sol_owner: str = "Sol1",
+    eth_txs: dict[str, list[dict[str, Any]]] | None = None,
+    sol_txs: dict[str, dict[str, Any]] | None = None,
 ) -> Fake:
-    """mempool (satoshis par adresse utilisée), nœud Ethereum, RPC Solana, prix et change."""
+    """mempool (satoshis par adresse utilisée), nœud Ethereum, RPC Solana, prix et change,
+    historiques Blockscout (`eth_txs` : action → lignes) et Solana (`sol_txs` : signature →
+    transaction)."""
     btc = btc or {}
 
     def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
@@ -86,6 +93,14 @@ def chain(
             return 200, {"prices": []}
         if "/txs/chain" in url:
             return 200, []  # pas d'historique
+        if "blockscout" in url:
+            q = query(url)
+            rows = (eth_txs or {}).get(q["action"], []) if q["page"] == "1" else []
+            if not rows:
+                return 200, {"status": "0", "message": "No transactions found", "result": []}
+            return 200, {"status": "1", "message": "OK", "result": rows}
+        if "binance" in url:
+            return 200, []
         if "mempool" in url:
             sats = btc.get(url.rsplit("/", 1)[1])
             stats = {
@@ -106,6 +121,11 @@ def chain(
         if rpc.get("method") == "getBalance":
             assert params == [sol_owner]
             return 200, {"result": {"value": 2_500_000_000}}
+        if rpc.get("method") == "getSignaturesForAddress":
+            sigs = [{"signature": k} for k in (sol_txs or {})]
+            return 200, {"result": sigs}
+        if rpc.get("method") == "getTransaction":
+            return 200, {"result": (sol_txs or {})[params[0]]}
         if rpc.get("method") == "getTokenAccountsByOwner":
             items = [
                 {"mint": USDC_SOL, "tokenAmount": {"amount": "7500000", "decimals": 6}},
@@ -194,6 +214,114 @@ def test_eth_and_sol_wallets_read_native_coins_and_known_tokens(make_env: Any) -
         ("crypto:trust", "CRYPTO:SOL", Decimal("2.5")),
         ("crypto:trust", "CRYPTO:USDC", Decimal("1242.06")),
     ]
+
+
+ETH_ME = "0x" + "ab" * 20
+
+
+def test_eth_and_sol_wallets_read_their_history(make_env: Any) -> None:
+    """Règle du hub : un portefeuille ETH ou SOL amène aussi ses transactions au Journal."""
+    other = "0x" + "cd" * 20
+    eth_txs = {
+        "txlist": [  # un envoi de 0.2 ETH (gaz : 21 000 × 10 gwei), une réception
+            {
+                "hash": "0xs1",
+                "from": ETH_ME,
+                "to": other,
+                "value": str(2 * 10**17),
+                "gasUsed": "21000",
+                "gasPrice": str(10**10),
+                "isError": "0",
+                "timeStamp": "1772366400",
+            },
+            {
+                "hash": "0xr1",
+                "from": other,
+                "to": ETH_ME,
+                "value": str(10**18),
+                "gasUsed": "21000",
+                "gasPrice": str(10**10),
+                "isError": "0",
+                "timeStamp": "1772280000",
+            },
+        ],
+        "tokentx": [
+            {
+                "hash": "0xt1",
+                "from": other,
+                "to": ETH_ME,
+                "value": "5000000",
+                "tokenDecimal": "6",
+                "contractAddress": USDC_ETH.lower(),
+                "timeStamp": "1772452800",
+            },
+            {
+                "hash": "0xspam",
+                "from": other,
+                "to": ETH_ME,
+                "value": "1",
+                "tokenDecimal": "0",
+                "contractAddress": "0x" + "ee" * 20,
+                "timeStamp": "1772452800",
+            },
+        ],
+    }
+    sol_txs = {
+        "SigA": {
+            "blockTime": 1772539200,
+            "meta": {
+                "fee": 5000,
+                "preBalances": [3_000_005_000, 0],
+                "postBalances": [2_000_000_000, 1_000_000_000],
+                "preTokenBalances": [],
+                "postTokenBalances": [],
+            },
+            "transaction": {"message": {"accountKeys": [{"pubkey": "Sol1"}, {"pubkey": "X"}]}},
+        },
+        "SigB": {
+            "blockTime": 1772625600,
+            "meta": {
+                "fee": 5000,
+                "preBalances": [10, 5],
+                "postBalances": [5, 5],
+                "preTokenBalances": [
+                    {
+                        "mint": USDC_SOL,
+                        "owner": "Sol1",
+                        "uiTokenAmount": {"amount": "1000000", "decimals": 6},
+                    }
+                ],
+                "postTokenBalances": [
+                    {
+                        "mint": USDC_SOL,
+                        "owner": "Sol1",
+                        "uiTokenAmount": {"amount": "3000000", "decimals": 6},
+                    }
+                ],
+            },
+            "transaction": {"message": {"accountKeys": [{"pubkey": "Y"}, {"pubkey": "Sol1"}]}},
+        },
+    }
+    creds = {
+        "wallets": [
+            {"account": "crypto:metamask", "asset": "ETH", "addresses": [ETH_ME]},
+            {"account": "crypto:phantom", "asset": "SOL", "addresses": ["Sol1"]},
+        ]
+    }
+    env = make_env("market", creds=creds)
+    result = market.run(env, "run", Http(chain(eth_txs=eth_txs, sol_txs=sol_txs)))
+    assert result.detail is None
+    (doc,) = dropped(env)
+    got = [(t.account, t.on_date, t.txid, t.symbol, t.quantity, t.fee) for t in doc.transactions]
+    assert got == [
+        ("crypto:metamask", "2026-02-28", "0xr1", "ETH", Decimal(1), Decimal(0)),
+        # envoyé 0.2 et 0.00021 de gaz : le net compte les frais
+        ("crypto:metamask", "2026-03-01", "0xs1", "ETH", Decimal("-0.20021"), Decimal("0.00021")),
+        ("crypto:metamask", "2026-03-02", "0xt1", "USDC", Decimal(5), Decimal(0)),
+        ("crypto:phantom", "2026-03-03", "SigA", "SOL", Decimal("-1.000005"), Decimal("0.000005")),
+        ("crypto:phantom", "2026-03-04", "SigB", "USDC", Decimal(2), Decimal(0)),
+    ]
+    assert env.memory.get("chain_txs") == ["crypto:metamask", "crypto:phantom"]
 
 
 def test_a_wallet_down_is_left_out_whole_and_retried(make_env: Any) -> None:
@@ -657,8 +785,12 @@ def test_binance_first_history_is_all_or_nothing(make_env: Any) -> None:
     assert env.memory.get("history_since") == "2026-10-27"
 
 
-def kucoin_api(code: str = "200000") -> Fake:
+def kucoin_api(
+    code: str = "200000", ledger: Callable[[dict[str, str]], list[Any]] = lambda _q: []
+) -> Fake:
     def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if "kucoin" not in url:
+            return 200, [] if "binance" in url else {"rates": {}}
         path = url.split("api.kucoin.com", 1)[1]
         stamp = headers["KC-API-TIMESTAMP"]
 
@@ -680,6 +812,8 @@ def kucoin_api(code: str = "200000") -> Fake:
                     {"currency": "KCS", "type": "main", "balance": "0"},
                 ],
             }
+        if path.startswith("/api/v1/accounts/ledgers"):
+            return 200, {"code": "200000", "data": {"items": ledger(query(url)), "totalPage": 1}}
         page = query(url)["currentPage"]
         items = [{"currency": "USDT", "holdAmount": "100" if page == "1" else "5"}]
         return 200, {"code": "200000", "data": {"items": items, "totalPage": 2}}
@@ -706,8 +840,13 @@ def b64url_decode(part: str) -> bytes:
     return base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))
 
 
-def coinbase_api(verify: Callable[[bytes, bytes, dict[str, Any]], None]) -> Fake:
+def coinbase_api(
+    verify: Callable[[bytes, bytes, dict[str, Any]], None],
+    transactions: Callable[[str, dict[str, str]], list[Any]] = lambda _p, _q: [],
+) -> Fake:
     def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if "coinbase" not in url:
+            return 200, [] if "binance" in url else {"rates": {"2026-05-01": {"USD": "1.25"}}}
         token = headers["Authorization"].removeprefix("Bearer ")
         head, body, sig = token.split(".")
         claims = json.loads(b64url_decode(body))
@@ -721,14 +860,16 @@ def coinbase_api(verify: Callable[[bytes, bytes, dict[str, Any]], None]) -> Fake
         header = json.loads(b64url_decode(head))
         assert header["kid"] == "organizations/o/apiKeys/k"
         verify(f"{head}.{body}".encode(), b64url_decode(sig), header)
+        if path.endswith("/transactions"):
+            return 200, {"data": transactions(path, query(url)), "pagination": {}}
         if "starting_after" not in url:
             accounts = [
-                {"balance": {"amount": "0.5", "currency": "ETH"}},
-                {"balance": {"amount": "1.25", "currency": "ETH2"}},  # ETH en staking
+                {"id": "eth", "balance": {"amount": "0.5", "currency": "ETH"}},
+                {"id": "eth2", "balance": {"amount": "1.25", "currency": "ETH2"}},  # en staking
             ]
             next_uri = "/v2/accounts?limit=100&starting_after=abc"
             return 200, {"data": accounts, "pagination": {"next_uri": next_uri}}
-        accounts = [{"balance": {"amount": "20", "currency": "USDC"}}]
+        accounts = [{"id": "usdc", "balance": {"amount": "20", "currency": "USDC"}}]
         return 200, {"data": accounts, "pagination": {"next_uri": None}}
 
     return Fake(route)
@@ -752,7 +893,14 @@ def test_coinbase_signs_es256_jwt_and_follows_pages(make_env: Any) -> None:
     env = make_env("coinbase", creds=creds)
     fake = coinbase_api(verify)
     assert coinbase.run(env, "run", Http(fake)).outcome == "ok"
-    assert len(fake.calls) == 2
+    # les soldes (deux pages), puis l'historique : les portefeuilles et leurs transactions
+    paths = [urlsplit(u).path for _m, u, _h in fake.calls]
+    assert paths.count("/v2/accounts") == 4
+    assert sorted(p for p in paths if p.endswith("/transactions")) == [
+        "/v2/accounts/eth/transactions",
+        "/v2/accounts/eth2/transactions",
+        "/v2/accounts/usdc/transactions",
+    ]
     assert held(dropped(env)[0]) == [
         ("crypto:coinbase", "CRYPTO:ETH", Decimal("1.75")),
         ("crypto:coinbase", "CRYPTO:USDC", Decimal("20")),
@@ -785,6 +933,202 @@ def test_coinbase_ed25519_key_and_bad_key(make_env: Any) -> None:
     with pytest.raises(Failure) as exc:
         coinbase.run(make_env("coinbase", creds=bad), "run", Http(coinbase_api(verify)))
     assert (exc.value.outcome, exc.value.detail) == ("auth_error", "secret:private_key")
+
+
+COINBASE_TXS: dict[str, list[dict[str, Any]]] = {
+    "eth": [  # de la plus récente à la plus ancienne
+        {
+            "id": "t5",
+            "type": "weird_type",
+            "status": "completed",
+            "amount": {"amount": "1", "currency": "ETH"},
+            "created_at": "2026-08-01T10:00:00Z",
+        },
+        {
+            "id": "t4",
+            "type": "staking_transfer",
+            "status": "completed",
+            "amount": {"amount": "-0.2", "currency": "ETH"},
+            "created_at": "2026-07-15T10:00:00Z",
+        },
+        {
+            "id": "t2",
+            "type": "send",
+            "status": "completed",
+            "amount": {"amount": "-0.101", "currency": "ETH"},
+            "native_amount": {"amount": "-303.00", "currency": "CHF"},
+            "created_at": "2026-06-01T10:00:00Z",
+            "network": {
+                "hash": "0xabc",
+                "transaction_fee": {"amount": "0.001", "currency": "ETH"},
+                "transaction_amount": {"amount": "0.1", "currency": "ETH"},
+            },
+        },
+        {
+            "id": "t6",
+            "type": "send",
+            "status": "pending",
+            "amount": {"amount": "-1", "currency": "ETH"},
+            "created_at": "2026-05-20T10:00:00Z",
+        },
+        {
+            "id": "t1",
+            "type": "buy",
+            "status": "completed",
+            "amount": {"amount": "0.5", "currency": "ETH"},
+            "native_amount": {"amount": "1500.00", "currency": "CHF"},
+            "created_at": "2026-05-01T10:00:00Z",
+        },
+    ],
+    "eth2": [
+        {
+            "id": "t3",
+            "type": "staking_reward",
+            "status": "completed",
+            "amount": {"amount": "0.01", "currency": "ETH2"},
+            "native_amount": {"amount": "30.00", "currency": "CHF"},
+            "created_at": "2026-07-01T10:00:00Z",
+        },
+    ],
+}
+
+
+def coinbase_txs(path: str, _q: dict[str, str]) -> list[Any]:
+    return COINBASE_TXS.get(path.split("/")[3], [])
+
+
+def ed25519_creds() -> dict[str, str]:
+    key = ed25519.Ed25519PrivateKey.generate()
+    raw = key.private_bytes(
+        serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption()
+    )
+    return {"key_name": "organizations/o/apiKeys/k", "private_key": base64.b64encode(raw).decode()}
+
+
+def test_coinbase_history_reads_every_wallet(make_env: Any) -> None:
+    env = make_env("coinbase", creds=ed25519_creds())
+    fake = coinbase_api(lambda *_a: None, coinbase_txs)
+    result = coinbase.run(env, "run", Http(fake))
+    # un type inconnu est compté, pas importé
+    assert (result.outcome, result.detail) == ("ok", "partial type.weird_type:skipped=1")
+    (doc,) = dropped(env)
+    got = [
+        (o.on_date, o.id, o.kind, [(g.symbol, str(g.quantity), g.role, g.value) for g in o.legs])
+        for o in doc.operations
+    ]
+    assert got == [
+        ("2026-05-01", "tx:t1", "trade", [("ETH", "0.5", "trade", Decimal("1500.00"))]),
+        # un envoi : le montant parti et les frais de réseau, à leur cours
+        (
+            "2026-06-01",
+            "tx:t2",
+            "withdrawal",
+            [("ETH", "-0.1", "withdrawal", None), ("ETH", "-0.001", "fee", None)],
+        ),
+        ("2026-07-01", "tx:t3", "reward", [("ETH", "0.01", "income", Decimal("30.00"))]),
+    ]
+    assert doc.operations[1].txid == "0xabc"
+    assert env.memory.get("history_since") == "2026-10-27"
+    # ensuite : rien de plus vieux que trois jours avant le dernier passage
+    later = coinbase_api(lambda *_a: None, coinbase_txs)
+    coinbase.run(env, "run", Http(later))
+    assert [len(d.operations) for d in dropped(env)].count(0) == 1
+
+
+def ledger_rows(q: dict[str, str]) -> list[Any]:
+    start, end = int(q["startAt"]), int(q["endAt"])
+    rows = [
+        {
+            "id": "l1",
+            "currency": "BTC",
+            "amount": "0.1",
+            "fee": "0",
+            "direction": "in",
+            "bizType": "Deposit",
+            "createdAt": at("2026-09-01"),
+            "context": '{"txId":"kk1"}',
+        },
+        {
+            "id": "l2",
+            "currency": "BTC",
+            "amount": "0.05",
+            "fee": "0",
+            "direction": "out",
+            "bizType": "Exchange",
+            "createdAt": at("2026-09-02"),
+            "context": '{"orderId":"o1"}',
+        },
+        {
+            "id": "l3",
+            "currency": "USDT",
+            "amount": "3000",
+            "fee": "3",
+            "direction": "in",
+            "bizType": "Exchange",
+            "createdAt": at("2026-09-02"),
+            "context": '{"orderId":"o1"}',
+        },
+        {
+            "id": "l4",
+            "currency": "USDT",
+            "amount": "100",
+            "fee": "0",
+            "direction": "out",
+            "bizType": "Transfer",
+            "createdAt": at("2026-09-03"),
+            "context": "",
+        },
+        {
+            "id": "l5",
+            "currency": "KCS",
+            "amount": "1",
+            "fee": "0",
+            "direction": "in",
+            "bizType": "Mystery",
+            "createdAt": at("2026-09-04"),
+            "context": "",
+        },
+        {
+            "id": "l6",
+            "currency": "USDT",
+            "amount": "0.5",
+            "fee": "0",
+            "direction": "in",
+            "bizType": "Staking Rewards",
+            "createdAt": at("2026-09-05"),
+            "context": "",
+        },
+    ]
+    return [r for r in rows if start <= r["createdAt"] <= end]
+
+
+def test_kucoin_history_reads_the_ledger_day_by_day(make_env: Any) -> None:
+    env = make_env("kucoin")
+    fake = kucoin_api(ledger=ledger_rows)
+    result = kucoin.run(env, "run", Http(fake))
+    assert result.detail == "partial type.Mystery:skipped=1"
+    (doc,) = dropped(env)
+    got = [
+        (o.id, o.kind, [(g.symbol, str(g.quantity), g.role) for g in o.legs])
+        for o in doc.operations
+    ]
+    assert got == [
+        ("ledger:l1", "deposit", [("BTC", "0.1", "deposit")]),
+        (
+            "order:o1:l2",  # les deux côtés de l'ordre
+            "trade",
+            [("BTC", "-0.05", "trade"), ("USDT", "3000", "trade"), ("USDT", "-3", "fee")],
+        ),
+        ("ledger:l6", "reward", [("USDT", "0.5", "income")]),
+    ]
+    assert doc.operations[0].txid == "kk1"
+    days = [query(u) for _m, u, _h in fake.calls if "ledgers" in u]
+    assert len(days) == 365  # un an, par tranches de 24 heures
+    later = kucoin_api(ledger=ledger_rows)
+    kucoin.run(env, "run", Http(later))
+    assert (
+        len([u for _m, u, _h in later.calls if "ledgers" in u]) == 4
+    )  # trois jours de recouvrement
 
 
 def test_mempool_rate_limit_is_paced_and_retried(make_env: Any, pauses: list[int]) -> None:

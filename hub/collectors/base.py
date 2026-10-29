@@ -84,6 +84,9 @@ class MarketConfig(BaseModel):
     binance_url: str = "https://api.binance.com"  # clôtures publiques, pour l'historique
     mempool_pause_seconds: int = Field(default=1, ge=0, le=10)  # entre deux adresses BTC
     eth_rpc_url: str = "https://ethereum-rpc.publicnode.com"
+    # historique Ethereum : un nœud public ne liste pas les transactions d'une adresse, l'API
+    # publique de Blockscout (compatible Etherscan, sans clé) le fait
+    blockscout_url: str = "https://eth.blockscout.com/api"
     solana_rpc_url: str = "https://api.mainnet-beta.solana.com"
     # jetons lus en plus de la crypto native ; les autres (souvent du spam) sont ignorés
     erc20_tokens: dict[str, str] = {  # symbole → contrat Ethereum

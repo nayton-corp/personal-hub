@@ -89,19 +89,31 @@ class Op:
     txid: str = ""
     address: str = ""
     network: str = ""
+    # contre-valeur donnée par la plateforme (Coinbase : `native_amount`), par jambe
+    values: dict[int, tuple[Decimal, str]] = field(default_factory=dict)
 
-    def leg(self, asset: Any, quantity: Decimal, role: str) -> Op:
+    def leg(
+        self, asset: Any, quantity: Decimal, role: str, value: tuple[Decimal, str] | None = None
+    ) -> Op:
         if quantity:
+            if value is not None:
+                self.values[len(self.legs)] = value
             self.legs.append((str(asset).upper(), quantity, role))
         return self
 
     def doc(self, account: str) -> dict[str, Any]:
+        legs = []
+        for i, (a, q, r) in enumerate(self.legs):
+            leg: dict[str, str] = {"instrument": a, "quantity": _text(q), "role": r}
+            if i in self.values:
+                leg["value"], leg["value_currency"] = _text(self.values[i][0]), self.values[i][1]
+            legs.append(leg)
         out: dict[str, Any] = {
             "account": account,
             "id": self.id,
             "kind": self.kind,
             "on_date": self.on_date,
-            "legs": [{"instrument": a, "quantity": _text(q), "role": r} for a, q, r in self.legs],
+            "legs": legs,
         }
         for k in ("txid", "address", "network"):
             if getattr(self, k):

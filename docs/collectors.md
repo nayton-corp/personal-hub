@@ -305,9 +305,19 @@ fait une fois par compte (mémoire `btc_history`) ; en cas d'échec, le passage 
 Les transactions elles-mêmes partent aussi dans le fichier (`transactions` : txid, jour, net,
 frais payés), pour le registre : toutes au premier passage (mémoire `btc_txs`), ensuite la
 dernière page de chaque adresse utilisée, une requête par adresse et par jour.
-ETH et SOL partent du jour où ils sont branchés. **ETH** : le solde natif et les jetons de `erc20_tokens`
-(USDC et USDT par défaut). **SOL** : le solde natif et les jetons de `spl_tokens` (USDC, USDT) ;
-les autres jetons, souvent du spam, sont ignorés, et le SOL en staking n'est pas lu.
+**ETH** : le solde natif et les jetons de `erc20_tokens` (USDC et USDT par défaut). **SOL** : le
+solde natif et les jetons de `spl_tokens` (USDC, USDT) ; les autres jetons, souvent du spam, sont
+ignorés, et le SOL en staking n'est pas lu.
+
+**Historique ETH et SOL.** Leurs transactions partent aussi dans `transactions`, pour le
+registre : ETH par l'API publique de Blockscout (`blockscout_url`, compatible Etherscan, sans
+clé) — envois et arrivées d'ETH, transferts internes de contrats et jetons suivis, les frais de
+gaz payés par mes adresses — et SOL par le RPC (`getSignaturesForAddress` puis
+`getTransaction`), SOL natif et jetons suivis. Tout au premier passage (jusqu'à
+`CHAIN_PAGES` pages par adresse, mémoire `chain_txs`), ensuite la dernière page. Un jeton et
+le gaz d'une même transaction donnent deux écritures. Le solde passé, lui, n'est pas
+reconstitué : la courbe de patrimoine de ces portefeuilles part du jour où ils sont branchés.
+Les autres réseaux (Arbitrum, Base, Polygon…) et les jetons de staking liquide ne sont pas lus.
 
 Un compte est relevé en entier ou pas du tout : si une de ses adresses ne répond pas, il est
 laissé de côté ce jour-là (détail `partial wallet.<nom>:…`) plutôt que de perdre une crypto. Un
@@ -317,19 +327,25 @@ est `ok` avec le détail `partial …`, et le suivant reprend la même fenêtre.
 
 ## Plateformes crypto : Binance, KuCoin, Coinbase
 
+**Règle : un connecteur crypto apporte ses écritures.** Une plateforme ou un portefeuille ne
+dépose jamais que des soldes : chaque connecteur dont les comptes sont crypto a sa lecture
+d'historique (`runner(fetch, history)` exige les deux), et chaque crypto de portefeuille sa
+lecture de transactions. Un test (`tests/collectors/test_crypto_history_rule.py`) refuse un
+nouveau connecteur ou une nouvelle chaîne qui ne le fait pas.
+
 Une connexion par plateforme (`binance`, `kucoin`, `coinbase`), chacune avec sa clé API **en
 lecture seule** dans ses secrets (`hub connections add binance binance`, puis `hub connections
 secrets binance`). Tous les jours
-après les cours (06:20, 06:22, 06:24), il dépose un `<plateforme>.json` (`hub.market.v1`, soldes
-seulement) qui devient un relevé de positions du compte `crypto:<plateforme>`, valorisé avec les
+après les cours (06:20, 06:22, 06:24), il dépose un `<plateforme>.json` (`hub.market.v1`,
+soldes et opérations) dont les soldes deviennent un relevé de positions du compte `crypto:<plateforme>`, valorisé avec les
 cours CoinGecko du collecteur `market`. Une crypto sans cours garde sa quantité et attend son
 cours : ajoute-la à `crypto` dans `[collectors.market]` (symbole → id CoinGecko).
 
 | Plateforme | Ce qui est lu | Clé à créer |
 |---|---|---|
 | Binance | Spot, Funding, Simple Earn flexible et bloqué, et l'historique (ci-dessous) | Gestion des API → clé générée par le système, « Enable Reading » seul coché |
-| KuCoin | tous les comptes (principal, trading…) et Earn | API Management → permission « General » seule, une passphrase à toi |
-| Coinbase | tous les portefeuilles, ETH en staking compris (`ETH2` compté comme ETH) | portail CDP → clé API secrète, permission « View » seule |
+| KuCoin | tous les comptes (principal, trading…), Earn, et un an d'historique | API Management → permission « General » seule, une passphrase à toi |
+| Coinbase | tous les portefeuilles, ETH en staking compris (`ETH2` compté comme ETH), et l'historique | portail CDP → clé API secrète, permission « View » seule |
 
 | Plateforme | Secrets |
 |---|---|
@@ -382,6 +398,25 @@ entre mes comptes, apparié avant tout le reste.
 Hors API, donc absents : P2P, Binance Pay, contrats à terme et marge. Les paires lues sont celles
 dont les deux actifs sont connus du compte (soldes, opérations) ; un actif acheté puis revendu
 en entier sans jamais être déposé se liste dans le champ `assets` des secrets.
+
+### Historique KuCoin et Coinbase
+
+Même principe que Binance (premier passage complet ou rien, trois jours de recouvrement,
+clôtures Binance et change BCE déposés avec, mouvements reliés par txId), compte
+`crypto:kucoin` ou `crypto:coinbase` :
+
+- **Coinbase** : les transactions de chaque portefeuille (`/v2/accounts/{id}/transactions`) :
+  achats, ventes, conversions, envois et réceptions (txId, frais de réseau à part),
+  récompenses de staking et d'intérêts, virements en monnaie. La valeur donnée par Coinbase
+  (`native_amount`) l'emporte sur le cours du jour. Les mouvements vers Coinbase Pro/Advanced
+  ou entre portefeuilles Coinbase sont internes.
+- **KuCoin** : le grand livre (`/api/v1/accounts/ledgers`), lu par tranches de 24 heures :
+  dépôts, retraits, ordres (les deux côtés regroupés), conversions, récompenses. KuCoin ne garde
+  qu'**un an** : ce qui est plus ancien ne peut pas être repris. Les transferts entre comptes
+  KuCoin sont internes.
+
+Un type d'opération inconnu est compté dans le détail (`partial type.<nom>:skipped=n`) sans
+bloquer le reste.
 
 SwissBorg n'a pas d'API publique : l'argent qui y part se voit dans les virements BCF, ce qui
 arrive ensuite sur la Ledger est relevé par la xpub, et le solde gardé chez SwissBorg vient de

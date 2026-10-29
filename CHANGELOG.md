@@ -2,6 +2,19 @@
 
 ## [Non publié]
 
+### Écritures crypto natives pour chaque connecteur
+
+- Règle : un connecteur crypto apporte ses écritures, pas seulement ses soldes. `runner(fetch,
+  history)` exige une lecture d'historique et un test refuse un connecteur crypto ou une chaîne
+  de portefeuille qui n'en a pas.
+- Coinbase : transactions de tous les portefeuilles (achats, ventes, conversions, envois avec
+  frais de réseau, récompenses, virements), à la valeur donnée par Coinbase.
+- KuCoin : grand livre par tranches de 24 heures, un an (ce que KuCoin garde).
+- Portefeuilles ETH (Blockscout, jetons suivis et gaz) et SOL (RPC) : leurs transactions au
+  registre, reliées aux plateformes par le txId. Le solde passé n'est pas reconstitué.
+- Socle commun `exchanges/history.py` ; une jambe d'opération peut porter sa valeur
+  (`value`, `value_currency`).
+
 ### Binance : récompenses Earn relues
 
 - Les historiques de récompenses Simple Earn refusent une période de plus de 30 jours
