@@ -150,3 +150,82 @@ def suggest(
                 report.proposals += 1
         memory.save()
     return report
+
+
+CATCHUP_MAX = 50  # sous la limite de 60 propositions par heure et par jeton
+KEYWORD_MAX = 60
+
+
+def _done_key(g: dict[str, Any]) -> str:
+    return f"rule:{g['direction']}:{g['counterparty']}"
+
+
+def catchup(
+    toolbox: Toolbox,
+    model: ChatModel,
+    memory: Memory,
+    *,
+    limit: int = CATCHUP_MAX,
+    dry_run: bool = False,
+) -> Report:
+    """Rattrapage de la file « À classer » : une règle proposée par commerçant (motif = le
+    groupe, sens du groupe), plutôt qu'une carte par écriture. Les règles classent aussi le passé
+    et les imports suivants ; les cartes se valident ensemble, d'un seul Face ID. Les crédits
+    classés d'office par la règle « tout le reste » sont dans la file, à confirmer."""
+    report = Report()
+    toolbox.load("finance")
+    review = _tool(toolbox, "finance_to_review", {"limit": 100})
+    cats = _tool(toolbox, "finance_list_categories", {})["categories"]
+    allowed = {c["id"] for c in cats}
+    listing = "\n".join(f"- {c['id']} : {c['name']} ({c['group']})" for c in cats)
+    fresh = [
+        g
+        for g in review["groups"]
+        if not g["known_merchant"]
+        and g["counterparty"] != "(inconnu)"
+        and 3 <= len(g["counterparty"]) <= KEYWORD_MAX
+        and _done_key(g) not in memory.done
+    ]
+    for g in fresh[:limit]:
+        report.merchants += 1
+        prompt = PROMPT.format(
+            categories=listing,
+            merchant=g["counterparty"].replace("<", " ").replace(">", " "),
+            direction={"debit": "dépense", "credit": "revenu"}.get(g["direction"], "mixte"),
+            count=g["count"],
+            total=g["total"],
+            currency=review.get("currency") or "CHF",
+        )
+        try:
+            reply = model.chat([{"role": "user", "content": prompt}], json_mode=True)
+        except LlmError as exc:
+            report.stopped = str(exc)
+            break
+        category, reason = parse_choice(reply.content, allowed)
+        if category is None:
+            report.skipped += 1
+            report.items.append({"merchant": g["counterparty"], "category": None})
+            continue
+        report.suggested += 1
+        report.items.append({"merchant": g["counterparty"], "category": category, "reason": reason})
+        if dry_run:
+            continue
+        result = toolbox.call(
+            "finance_propose_rule",
+            {
+                "keyword": g["counterparty"],
+                "category": category,
+                "direction": g["direction"],
+                "reason": reason or None,
+            },
+        )
+        if result.is_error:
+            if "rate_limited" in result.text:
+                report.stopped = "limite de propositions par heure atteinte"
+                break
+            continue
+        memory.done.add(_done_key(g))
+        if isinstance(result.data, dict) and result.data.get("created"):
+            report.proposals += 1
+    memory.save()
+    return report

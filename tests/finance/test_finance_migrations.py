@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DatabaseError
 
 from hub.core.db import backup, begin_immediate, make_engine
-from hub.domains.finance import hashing, ledger
+from hub.domains.finance import hashing, ledger, packs
 from hub.domains.finance.domain import FinanceDomain
 from tests.finance.conftest import ready_account
 
@@ -65,8 +65,8 @@ def test_seed_data(finance: FinanceDomain) -> None:
         ).scalar() == ("transfer")
         # base neuve : packs « base » et « ch » (pays par défaut), plus de règles « seed- »
         assert dict(conn.execute(text("SELECT name, version FROM rule_packs")).fetchall()) == {
-            "base": 1,
-            "ch": 1,
+            "base": packs.available()["base"].version,
+            "ch": packs.available()["ch"].version,
         }
         crypto = {
             r[0] for r in conn.execute(text("SELECT pattern FROM rules WHERE category_id='crypto'"))

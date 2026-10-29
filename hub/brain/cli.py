@@ -3,6 +3,7 @@
 hub-brain mcp [--token brain|aggregates]   serveur MCP sur stdio (docker exec -i …)
 hub-brain ask "combien en restaurants ce mois ?"
 hub-brain suggest [--dry-run]              suggestions de catégorie (commerçants jamais vus)
+hub-brain catchup [--limit N] [--dry-run]  rattrapage : une règle proposée par commerçant à classer
 hub-brain check                            hub, modèle, et une question de contrôle
 hub-brain daemon                           tâches planifiées (deploy/brain-crontab)
 """
@@ -22,7 +23,7 @@ from hub.brain.config import BrainConfig, TokenMissing, TokenName, config, token
 from hub.brain.hubapi import HubApi, HubError
 from hub.brain.llm import LlmError, OpenAICompatible
 from hub.brain.mcp import McpServer
-from hub.brain.suggest import Memory, suggest
+from hub.brain.suggest import CATCHUP_MAX, Memory, Report, catchup, suggest
 from hub.brain.toolbox import Toolbox
 from hub.core import cron
 from hub.core import logging as hub_logging
@@ -113,6 +114,25 @@ def suggest_cmd(
         entries=cfg.suggest_entries,
         dry_run=dry_run,
     )
+    _report("brain.suggest", report, dry_run)
+
+
+@app.command("catchup")
+def catchup_cmd(
+    limit: Annotated[int, typer.Option(min=1, max=CATCHUP_MAX, help="commerçants")] = CATCHUP_MAX,
+    dry_run: Annotated[bool, typer.Option(help="affiche sans créer de carte")] = False,
+) -> None:
+    """Rattrapage de « À classer » : une règle proposée par commerçant, toutes validées d'un
+    coup dans l'app (« À valider »)."""
+    hub_logging.configure(get_settings().log_level, stream=sys.stderr)
+    cfg = _cfg()
+    report = catchup(
+        _toolbox(cfg, "brain"), _model(cfg), Memory(cfg.state_dir), limit=limit, dry_run=dry_run
+    )
+    _report("brain.catchup", report, dry_run)
+
+
+def _report(event: str, report: Report, dry_run: bool) -> None:
     if dry_run:
         for item in report.items:
             typer.echo(json.dumps(item, ensure_ascii=False))
@@ -123,7 +143,7 @@ def suggest_cmd(
         "skipped": report.skipped,
         "stopped": report.stopped,
     }
-    log.info("brain.suggest", **summary)
+    log.info(event, **summary)
     typer.echo(json.dumps(summary, ensure_ascii=False))
 
 

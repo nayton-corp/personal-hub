@@ -48,7 +48,7 @@ def test_fresh_base_follows_the_profile_country(fsettings: Settings) -> None:
     domain = FinanceDomain(fsettings)
     domain.migrate()
     with domain.engine().connect() as conn:
-        assert packs.installed(conn) == {"base": 1}
+        assert packs.installed(conn) == {"base": packs.available()["base"].version}
     # une base existante ne reçoit rien de plus à la migration suivante
     domain.migrate()
     assert rows(domain, "SELECT count(*) FROM rule_packs") == [(1,)]
@@ -66,21 +66,23 @@ def test_install_update_and_user_choices(finance: FinanceDomain) -> None:
     assert (again.added, again.kept, again.disabled) == (0, len(before), 0)
     assert rows(finance, f"SELECT active FROM rules WHERE id = '{some}'") == [(0,)]
 
-    # version 2 : un mot en moins, un mot en plus
+    # version suivante : un mot en moins, un mot en plus
     groups = list(ch.groups)
     first = groups[0]
     dropped = first.keywords[0]
     groups[0] = packs.Group(
         first.category, first.direction, first.priority, (*first.keywords[1:], "zorglub")
     )
-    v2 = packs.Pack(ch.name, 2, ch.label, ch.description, ch.country, ch.categories, tuple(groups))
+    v2 = packs.Pack(
+        ch.name, ch.version + 1, ch.label, ch.description, ch.country, ch.categories, tuple(groups)
+    )
     with begin_immediate(finance.engine()) as conn:
         dry = packs.install(conn, v2, dry_run=True)
         assert (dry.added, dry.disabled, dry.dry_run) == (1, 1, True)
-        assert packs.installed(conn)["ch"] == 1
+        assert packs.installed(conn)["ch"] == ch.version
         done = packs.install(conn, v2)
         assert (done.added, done.disabled) == (1, 1)
-        assert packs.installed(conn)["ch"] == 2
+        assert packs.installed(conn)["ch"] == ch.version + 1
     gone = ch.rule_id(
         "search_text",
         rules.normalize_pattern("search_text", dropped),
@@ -136,7 +138,7 @@ def test_cli(finance: FinanceDomain, tmp_path: Path) -> None:
     assert app is not None
     runner = CliRunner()
     listed = runner.invoke(app, ["rules", "packs", "list"]).stdout
-    assert "installé v1" in listed
+    assert f"installé v{packs.available()['ch'].version}" in listed
     out = runner.invoke(app, ["rules", "packs", "install", "ch", "--dry-run"])
     assert out.exit_code == 0, out.stdout
     assert json.loads(out.stdout)["packs"][0]["added"] == 0

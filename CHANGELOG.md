@@ -2,6 +2,27 @@
 
 ## [Non publié]
 
+### Classer plus vite : commerçant lu dans le libellé, revenus à confirmer, rattrapage par l'IA
+
+- Les paiements par carte BCF (« Paiement jj.mm.aaaa hh:mm COMMERÇANTVILLE Numéro de carte… »,
+  l'ancien format « Paiement - COMMERÇANT, VILLE - … », Maestro, remboursements), les retraits
+  et TWINT n'ont pas de vraie contrepartie : le commerçant est lu dans le libellé (ville et
+  numéro de magasin coupés, `merchant.py`). « À classer » groupe par commerçant au lieu d'un
+  groupe par achat, l'écriture le donne (`merchant`) comme titre et motif de « Toujours ».
+- Un crédit classé par la règle « tout le reste » (« Autres revenus ») revient dans « À classer »
+  sous « À confirmer » (`guess` dans `/finance/review`).
+- `categorize_rest` : les dépenses encore sans catégorie d'avant une date prennent une catégorie
+  d'un coup (« Classer d'un coup tout l'ancien… »).
+- « Toujours » peut se limiter au compte de l'écriture (« Seulement depuis ce compte ») ; la
+  règle seule est proposée quand elle classe aussi l'écriture, ce qui évitait « a changé
+  entre-temps ».
+- Packs v2 : `base` reconnaît le salaire par le code bancaire `PMNT/RCDT/SALA`, ajoute
+  « Intérêts et dividendes », « Ventes d'occasion », « Aides et allocations » et « Divers » ;
+  `ch` connaît plus d'enseignes. « À classer » propose la mise à jour (`install_pack`).
+- IA locale : `hub-brain catchup` propose une règle par commerçant de la file (50 au plus, sous
+  la limite de 60 propositions par heure), à valider ensemble dans « À valider ».
+  `finance_propose_rule` prend `direction` ; ses règles ont la priorité 10.
+
 ### Poches Revolut : virement reconnu après une recharge du même montant
 
 - Quand la BCF recharge le compte Revolut puis que l'argent part le jour même vers une poche,

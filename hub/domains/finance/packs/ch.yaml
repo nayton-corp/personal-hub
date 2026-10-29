@@ -1,6 +1,6 @@
 # Pack de règles de départ (chantier « hub générique », G2) : voir hub/domains/finance/packs.py.
 name: ch
-version: 1
+version: 2
 label: Suisse
 description: Commerces, transports, caisses maladie, opérateurs et prestataires 3a suisses.
 country: CH
@@ -107,6 +107,14 @@ rules:
   - mobility
   - fairtiq
   - publibike
+  - bls
+  - postauto
+  - carpostal
+  - agrola
+  - tcs
+  - easypark
+  - parkingpay
+  - e-vignette
 - category: abonnements
   direction: debit
   priority: 104
@@ -118,6 +126,14 @@ rules:
   - yallo
   - serafe
   - billag
+  - teleboy
+  - dazn
+  - blick
+  - le temps
+  - 24 heures
+  - netplus
+  - init7
+  - quickline
 - category: alimentation
   direction: debit
   priority: 105
@@ -132,18 +148,43 @@ rules:
   - kkiosk
   - selecta
   - 'avec '
+  - 'spar '
+  - aligro
+  - migrolino
+  - prodega
+  - topcc
+  - lidl schweiz
 - category: restaurants
   direction: debit
   priority: 106
   keywords:
   - smood
   - eat.ch
+  - tibits
+  - holy cow
+  - molino
+  - vapiano
+  - five guys
+  - kfc
+  - subway
+  - domino
+  - pizza
+  - tea room
 - category: loisirs
   direction: debit
   priority: 107
   keywords:
   - ochsner
   - ticketcorner
+  - pathe
+  - kitag
+  - cinemotion
+  - basic-fit
+  - update fitness
+  - let's go fitness
+  - bowling
+  - europa-park
+  - aquaparc
 - category: sante
   direction: debit
   priority: 108
@@ -152,6 +193,12 @@ rules:
   - sun store
   - sunstore
   - visilab
+  - dropa
+  - benu
+  - apotheke
+  - mcoptic
+  - medbase
+  - permanence
 - category: shopping
   direction: debit
   priority: 109
@@ -166,6 +213,27 @@ rules:
   - dosenbach
   - ricardo
   - tutti
+  - fust
+  - media markt
+  - mediamarkt
+  - pfister
+  - conforama
+  - ' obi '
+  - brack
+  - qoqa
+  - globus
+  - loeb
+  - athleticum
+  - sportx
+  - intersport
+  - snipes
+  - pull&bear
+  - bershka
+  - mango
+  - tally weijl
+  - coop city
+  - do it
+  - otto's
 - category: voyages
   direction: debit
   priority: 110
@@ -178,6 +246,7 @@ rules:
   keywords:
   - bancomat
   - postomat
+  - retrait bm
 - category: twint-particuliers
   direction: debit
   priority: 200

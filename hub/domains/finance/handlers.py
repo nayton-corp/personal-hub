@@ -9,7 +9,7 @@ la carte passe à la révision suivante au lieu de s'appliquer.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -176,6 +176,80 @@ def _recategorize_inverse(
     if previous is None:
         raise ValueError("l'écriture n'avait pas de catégorie")
     return "recategorize", {"entry_id": params["entry_id"], "category_id": previous}
+
+
+# --- tout le reste d'avant une date ---------------------------------------------------------
+
+REST_MAX = 5000
+
+
+class CategorizeRest(_Params):
+    """Classe d'un coup les écritures encore sans catégorie d'avant une date (le vieil
+    historique, souvent des achats uniques qu'on ne classera jamais un par un)."""
+
+    before: date
+    direction: Literal["debit", "credit"] = "debit"
+    category_id: Slug
+
+
+def _rest(conn: Connection, params: CategorizeRest) -> list[Any]:
+    sign = "<" if params.direction == "debit" else ">"
+    return list(
+        conn.execute(
+            text(
+                "SELECT e.seq, e.id, e.booking_date, e.amount_minor, e.currency, e.counterparty, "
+                "e.label FROM entries e LEFT JOIN v_entry_shown vc ON vc.entry_seq = e.seq "
+                "WHERE vc.category_id IS NULL AND e.kind = 'movement' AND e.booking_date < :d "
+                f"AND e.amount_minor {sign} 0 ORDER BY e.booking_date DESC, e.seq DESC LIMIT :n"
+            ),
+            {"d": params.before.isoformat(), "n": REST_MAX + 1},
+        ).fetchall()
+    )
+
+
+class CategorizeRestHandler:
+    def preview(self, conn: Connection, params: BaseModel) -> Preview:
+        assert isinstance(params, CategorizeRest)  # noqa: S101
+        name, _grp = _category(conn, params.category_id)
+        rows = _rest(conn, params)
+        if len(rows) > REST_MAX:
+            raise _bad(f"plus de {REST_MAX} écritures : choisis une date plus ancienne")
+        if not rows:
+            raise _bad("aucune écriture sans catégorie avant cette date")
+        sens = "dépense" if params.direction == "debit" else "entrée"
+        n = len(rows)
+        return Preview(
+            summary=(
+                f"{n} {sens}{'s' if n > 1 else ''} sans catégorie d'avant le "
+                f"{params.before.strftime('%d.%m.%Y')} → {name}"
+            ),
+            details={
+                "count": n,
+                "totals": _totals([(int(r.amount_minor), r.currency) for r in rows]),
+                "entries": [_entry_brief(r) for r in rows[:SAMPLE]],
+                "to_category": params.category_id,
+            },
+            fingerprint=_fp("categorize_rest", sorted(r.id for r in rows)),
+        )
+
+    def apply(self, conn: Connection, params: BaseModel, proposal_id: str) -> dict[str, Any]:
+        assert isinstance(params, CategorizeRest)  # noqa: S101
+        rows = _rest(conn, params)
+        at = now_iso()
+        for r in rows:
+            ledger.append(
+                conn,
+                "categorizations",
+                {
+                    "entry_seq": r.seq,
+                    "category_id": params.category_id,
+                    "source": "user",
+                    "rule_id": None,
+                    "proposal_id": proposal_id,
+                    "created_at": at,
+                },
+            )
+        return {"changed": len(rows)}
 
 
 # --- règles ---------------------------------------------------------------------------------
@@ -858,4 +932,5 @@ def build_kinds(domain: FinanceDomain) -> Mapping[str, ProposalKind]:
         "set_account_goal": ProposalKind(SetAccountGoal, SetAccountGoalHandler()),
         "edit_account": ProposalKind(EditAccount, EditAccountHandler()),
         "install_pack": ProposalKind(InstallPack, InstallPackHandler()),
+        "categorize_rest": ProposalKind(CategorizeRest, CategorizeRestHandler()),
     }
