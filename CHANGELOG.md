@@ -2,6 +2,13 @@
 
 ## [Non publié]
 
+### Poches Revolut : virement reconnu après une recharge du même montant
+
+- Quand la BCF recharge le compte Revolut puis que l'argent part le jour même vers une poche,
+  le même montant apparaît deux fois en débit et l'appariement renonçait. Les paires compte ↔
+  poche (même établissement, un jour d'écart, seuls candidats entre eux) sont maintenant
+  trouvées d'abord, et ce qu'elles expliquent ne rend plus la recharge BCF ambiguë.
+
 ### Poches et enveloppes : virements, règle d'un compte, budget annuel
 
 - Les mouvements entre deux comptes du même établissement (le compte Revolut et ses poches),

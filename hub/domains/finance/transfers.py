@@ -105,20 +105,54 @@ def _siblings(d: Move, c: Move) -> bool:
     return bool(d.institution) and d.institution == c.institution
 
 
+def _close(a: Move, b: Move) -> bool:
+    return _siblings(a, b) and abs((a.on - b.on).days) <= SIBLING_DAYS
+
+
+def _sibling_pair(
+    d: Move, c: Move, near: list[Move], debits: dict[tuple[str, int], list[Move]]
+) -> bool:
+    """Compte et poche du même établissement : seuls candidats l'un pour l'autre parmi les
+    comptes de cet établissement, à un jour près. Un mouvement ailleurs (la BCF qui vient de
+    recharger le compte du même montant) ne les rend pas ambigus."""
+    if not _close(d, c):
+        return False
+    if any(x.seq != c.seq and _close(d, x) for x in near):
+        return False
+    return not any(
+        x.seq != d.seq and x.account_id != c.account_id and _close(x, c)
+        for x in debits[(d.currency, d.amount)]
+    )
+
+
 def match(moves: list[Move], own: frozenset[str]) -> list[Link]:
     credits: dict[tuple[str, int], list[Move]] = defaultdict(list)
     debits: dict[tuple[str, int], list[Move]] = defaultdict(list)
     for m in moves:
         (credits if m.amount > 0 else debits)[(m.currency, m.amount)].append(m)
-    candidates: list[Link] = []
+    near_of: dict[int, list[Move]] = {}
+    for d in moves:
+        if d.amount < 0:
+            near_of[d.seq] = [
+                c
+                for c in credits.get((d.currency, -d.amount), [])
+                if c.account_id != d.account_id and abs((c.on - d.on).days) <= WINDOW_DAYS
+            ]
+    # compte et poche d'abord : un mouvement qu'ils expliquent ne rend pas un autre ambigu
+    # (BCF → compte Revolut → poche, le même montant le même jour)
+    candidates = [
+        Link(d, c, "amount")
+        for d in moves
+        if d.amount < 0
+        for c in near_of[d.seq]
+        if _sibling_pair(d, c, near_of[d.seq], debits)
+    ]
+    explained = {x.debit.seq for x in candidates} | {x.credit.seq for x in candidates}
     for d in moves:
         if d.amount >= 0:
             continue
-        near = [
-            c
-            for c in credits.get((d.currency, -d.amount), [])
-            if c.account_id != d.account_id and abs((c.on - d.on).days) <= WINDOW_DAYS
-        ]
+        near = near_of[d.seq]
+        open_near = [c for c in near if c.seq not in explained]
         for c in near:
             if (d.counterparty_iban and d.counterparty_iban == c.account_iban) or (
                 c.counterparty_iban and c.counterparty_iban == d.account_iban
@@ -126,15 +160,17 @@ def match(moves: list[Move], own: frozenset[str]) -> list[Link]:
                 candidates.append(Link(d, c, "iban"))
             elif d.transfer_like(own) and c.transfer_like(own):
                 candidates.append(Link(d, c, "code"))
-            elif len(near) == 1 and (
-                d.transfer_like(own)
-                or c.transfer_like(own)
-                or (_siblings(d, c) and abs((c.on - d.on).days) <= SIBLING_DAYS)
+            elif (
+                open_near == [c]
+                and d.seq not in explained
+                and (d.transfer_like(own) or c.transfer_like(own))
             ):
                 rivals = [
                     x
                     for x in debits[(d.currency, d.amount)]
-                    if x.seq != d.seq and abs((x.on - c.on).days) <= WINDOW_DAYS
+                    if x.seq != d.seq
+                    and x.seq not in explained
+                    and abs((x.on - c.on).days) <= WINDOW_DAYS
                 ]
                 if not rivals:
                     candidates.append(Link(d, c, "amount"))
