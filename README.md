@@ -1,40 +1,56 @@
 # Personal Hub
 
-Registre financier personnel, auto-hébergé. Le domaine Finance vient en premier ; le cœur
-(accès, propositions, trace) est commun à tous les domaines. Le plan de référence et la
-spécification d'implémentation vivent dans le document « Personal Hub — plan de
-développement » ; ce dépôt en suit les tickets, lot par lot.
+Un hub personnel, auto-hébergé : les données de sa vie (la finance d'abord, puis l'agenda, les
+documents, la maison) tenues sur sa propre machine, avec un assistant qui propose et ne fait
+jamais rien sans validation. Pourquoi et dans quel ordre : [vision.md](vision.md).
 
-État : **lot 1 (Registre BCF)**. Le domaine Finance importe les relevés camt.053 dans un
-registre en ajout seul ; voir [docs/finance.md](docs/finance.md).
+État : le domaine **Finance** tourne (comptes BCF, VIAC, Revolut, IBKR, cryptos, dettes,
+budget, patrimoine) sur le Mac ; le **socle** (contrat de domaine, app modulaire, finance en
+couches, intégrité et boîte d'entrée génériques) est en place pour accueillir les domaines
+suivants. Les changements : [CHANGELOG.md](CHANGELOG.md).
+
+## Lire
+
+| Pour | Lire |
+|---|---|
+| comprendre comment c'est construit | [docs/architecture.md](docs/architecture.md) (avec les schémas) |
+| les mots du hub, les choix datés | [docs/glossaire.md](docs/glossaire.md), [docs/decisions.md](docs/decisions.md) |
+| ajouter un domaine | [docs/ajouter-un-domaine.md](docs/ajouter-un-domaine.md) |
+| la sécurité | [docs/securite.md](docs/securite.md) |
+| installer, déployer, sauvegarder | [docs/exploitation/](docs/exploitation/README.md) |
+| la finance (usage), et son code | [docs/finance.md](docs/finance.md), [hub/domains/finance/README.md](hub/domains/finance/README.md) |
+| les collecteurs, l'IA locale | [docs/collectors.md](docs/collectors.md), [docs/brain.md](docs/brain.md) |
+| routes, outils de l'assistant, connecteurs (générés) | [docs/reference/](docs/reference/) |
 
 ## Règles qui ne se discutent pas
 
-- Aucune donnée réelle dans le dépôt, dans la CI ni dans les tests : uniquement des fixtures
-  générées par du code. `scripts/check_no_data.sh` et gitleaks le vérifient à chaque commit.
-- Montants en entiers (unités mineures) + devise, jamais de flottant (test dédié).
-- Tables protégées en ajout seul : déclencheurs anti `UPDATE`/`DELETE`, `recursive_triggers`
-  actif, `INSERT OR REPLACE` interdit (lint des migrations et du code).
+- Aucune donnée réelle dans le dépôt, la CI ni les tests : des données fictives générées par
+  du code. `scripts/check_no_data.sh` et gitleaks le vérifient à chaque commit.
+- Montants en entiers (centimes) avec leur devise, jamais de flottant (test dédié).
+- Tables protégées en ajout seul, journal chaîné, `hub verify` chaque nuit.
 - Les journaux ne contiennent jamais de montant, libellé, IBAN, solde ni contrepartie.
+- Rien ne s'écrit sans proposition validée (Double Sas) ; Claude ne lit que des agrégats.
+- Les frontières des anneaux et les 400 lignes par fichier sont imposées par import-linter et
+  `tests/test_file_size.py` : une règle qui échoue se corrige dans le code.
 
 ## Arborescence
 
 ```
-hub/kernel/         noyau pur : Money, URN, horloge, JSON canonique, texte (ni base ni réseau)
+hub/kernel/         noyau pur : Money, URN, horloge, JSON canonique, chaîne (ni base ni réseau)
 hub/platform/       plateforme : SQLite, migrations, réglages, secrets, journaux filtrés, cron
-hub/core/           cœur : erreurs problem+json, base core.db, jetons, passkeys, propositions,
-                    contrat de domaine, registre, connexions, tâches de fond
-hub/core/migrations Alembic de core.db (SQL explicite, pas de downgrade)
+hub/core/           cœur : accès (passkeys, jetons), propositions, contrat de domaine et
+                    manifeste, registre, intégrité, boîte d'entrée, connexions, tâches de fond
 hub/api/            application FastAPI et routes du cœur
 hub/domains/        domaines, isolés par import-linter ; finance/ : registre, classement,
                     patrimoine, sources (chacun interface → app → infra → model)
 hub/web/            l'app (PWA) : coquille (shell.js) et modules des domaines
-hub/brain/          IA locale : passerelle MCP, assistant et suggestions (`hub-brain`), sur le Mac
-hub/cli.py          commande `hub`
+hub/collectors/     collecteurs : robots et clients d'API qui déposent des fichiers
+hub/brain/          IA locale : passerelle MCP, assistant et suggestions (`hub-brain`)
+hub/cli*.py         commande `hub`
 deploy/             compose, Caddy, Tailscale, Litestream, crontab, deploy.sh
-docs/               installation, mise en route sur le Mac, versions et publication, domaine
-                    Finance, kit de secours, glossaire (les mots du hub) et décisions
-tests/              pytest, Hypothesis ; domaine factice et authentificateur WebAuthn logiciel
+docs/               architecture, sécurité, exploitation, domaines, références générées
+scripts/            données fictives, références, publication
+tests/              pytest, Hypothesis, Playwright à 375 px ; domaine factice
 ```
 
 ## Développement
@@ -43,13 +59,13 @@ tests/              pytest, Hypothesis ; domaine factice et authentificateur Web
 uv sync --frozen && uv run pre-commit install   # ou : make install
 make check                                       # ruff, mypy --strict, import-linter, tests
 make dev                                         # API + app sur http://localhost:8710
+make web                                         # lint et tests des modules de l'app (Node 22)
 ```
 
 En développement, les passkeys exigent `localhost` ou HTTPS : `make dev` sert l'app sur
-`http://localhost:8710` (données dans `./var`, ignoré par git).
-
-Un changement voulu du contrat d'API se valide avec `make openapi`, puis relecture du diff de
-`tests/openapi.snapshot.json`.
+`http://localhost:8710` (données dans `./var`, ignoré par git). Un changement voulu du contrat
+d'API se valide avec `make openapi` ; une route, un outil ou un connecteur nouveau, avec
+`make reference`.
 
 ## Commande `hub`
 
@@ -60,20 +76,17 @@ Un changement voulu du contrat d'API se valide avec `make openapi`, puis relectu
 | `hub token create NOM -s brain=finance --days 90` · `list` · `rotate ID` · `revoke ID` | jetons à portée et à date de fin, montrés une seule fois |
 | `hub auth bootstrap-code` | code à usage unique pour inscrire la première passkey |
 | `hub serve` | API, un seul worker |
-| `hub verify` | `integrity_check` de chaque base, puis `verify-ledger` |
-| `hub finance …` | comptes, catégories, imports, reprise d'historique ([docs/finance.md](docs/finance.md)) |
+| `hub watch-inbox` | range `inbox/` par domaine, puis chaque domaine traite son dossier |
+| `hub verify` | intégrité de chaque base, triggers des tables protégées, chaîne du journal |
 | `hub backup [--restic]` · `hub restore STAMP` | copies `.backup` vérifiées, restic, restauration |
-| `hub nightly` · `hub reconcile` | expirations, purges, réconciliation des propositions |
+| `hub nightly` · `hub reconcile` | expirations, purges, réconciliation des propositions, nuit des domaines |
+| `hub connections …` · `hub profile …` · `hub proposals …` | connexions des collecteurs, profil, propositions |
+| `hub ops databases` · `hub ops litestream` | bases montées et configuration de la réplication |
 | `hub scheduler deploy/crontab` | tâches planifiées du conteneur `scheduler` |
-| `hub-brain mcp` · `ask` · `suggest` · `check` | IA locale, conteneur `brain` ([docs/brain.md](docs/brain.md)) |
+| `hub finance …` | comptes, catégories, règles, imports, reprises, reconstruction ([docs/finance.md](docs/finance.md)) |
+| `hub-brain mcp` · `ask` · `suggest` · `check` | IA locale ([docs/brain.md](docs/brain.md)) |
 
-Portées d'un jeton : `brain` (= `finance:read finance:propose`), `aggregates`
-(= `*:aggregates`), `collector` (= `core:collector`), ou une portée qualifiée. La portée `app`
-n'existe que par une session passkey.
-
-## Exploitation
-
-Installer son propre hub (un hub par personne) : [docs/installation.md](docs/installation.md),
-`make init` puis `make deploy`. Phase 1 : tout tourne sur le Mac en conteneurs, voir
-[docs/mac.md](docs/mac.md). Le Pi arrivera avec les mêmes images et le même
-`deploy/compose.yaml`.
+Portées d'un jeton : `brain` (= `*:aggregates`), `brain=finance,agenda` (en plus, lecture et
+propositions des domaines nommés), `aggregates` (= `*:aggregates`), `collector`
+(= `core:collector`), ou une portée qualifiée (`finance:read`). La portée `app` n'existe que
+par une session passkey.

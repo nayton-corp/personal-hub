@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+### Documentation (chantier S14)
+
+- `vision.md`, `docs/architecture.md` (anneaux, Double Sas, boîte d'entrée, finance en
+  sous-contextes, en schémas), `docs/ajouter-un-domaine.md`, `docs/securite.md`,
+  `docs/exploitation/` (installation, Mac, versions, kit de secours, gestes réguliers),
+  `hub/domains/finance/README.md` ; README réécrit en index.
+- Références générées depuis le code : routes de l'API, outils de l'assistant, connecteurs
+  (`docs/reference/`, `make reference`). Une référence périmée, un lien relatif cassé, ou une
+  recette d'ajout de domaine que le domaine factice ne suit plus font échouer la CI.
+
 ### Finance en couches (chantier S6)
 
 - La finance est rangée en quatre sous-contextes (registre, classement, patrimoine, sources),
@@ -128,7 +138,7 @@
 - CI : migration depuis la dernière version taguée sur bases et relevé fictifs
   (`make upgrade-test`), cohérence de la version, `pip-audit` (`make audit`).
 - Dependabot : une PR groupée par semaine pour Python, les actions et les images du compose.
-- `docs/versions.md`, décision D-015.
+- `docs/exploitation/versions.md`, décision D-015.
 
 ### Garde-fous du socle (chantier S0)
 
@@ -354,7 +364,7 @@
   connexion, premier compte), qui remplace le texte « Pas encore de données ». Les packs de
   règles du pays s'installent par une proposition `install_pack` validée avec Face ID ;
   `GET /api/finance/rules/packs` les liste.
-- Guide générique [docs/installation.md](docs/installation.md) ; `docs/mac.md` reste pour ce
+- Guide générique [docs/exploitation/installation.md](docs/exploitation/installation.md) ; `docs/exploitation/mac.md` reste pour ce
   qui est propre au Mac.
 
 ### Cryptos au registre — SwissBorg et portefeuille BTC

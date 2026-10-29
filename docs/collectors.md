@@ -76,7 +76,7 @@ opérations arrivent dans la journée. Un horaire réglé à la main reste celui
 
 **Depuis le terminal**, pour le dépannage :
 
-Les commandes supposent l'alias `hubc` de [mac.md](mac.md) et partent du clone du dépôt
+Les commandes supposent l'alias `hubc` de [mac.md](exploitation/mac.md) et partent du clone du dépôt
 (`~/personal-hub/personal-hub`). `hub` se lance dans le conteneur `scheduler`, qui a la clé age :
 
 ```
@@ -148,7 +148,7 @@ Si la banque a changé sa page, seul `hub/collectors/<banque>/selectors.toml` es
 
 ## Mise en place (une fois)
 
-Les commandes supposent l'alias `hubc` de [mac.md](mac.md) et partent du clone du dépôt
+Les commandes supposent l'alias `hubc` de [mac.md](exploitation/mac.md) et partent du clone du dépôt
 (`~/personal-hub/personal-hub`). Les étapes 3 et suivantes se font aussi dans l'app (carte
 Connexions), sauf les premiers passages qui demandent un code tapé au terminal.
 

@@ -1,5 +1,5 @@
 # deploy/compose.yaml — identique sur le Mac (phase 1) et sur le Pi (après migration).
-# Usage : make up / make deploy TAG=… (voir docs/mac.md). Variables : deploy/.env.
+# Usage : make up / make deploy TAG=… (voir docs/exploitation/mac.md). Variables : deploy/.env.
 #
 # Règles de la phase 1 (spécification, section 10.0) :
 # - les bases SQLite vivent dans le volume nommé « data », jamais dans un dossier du Mac ;

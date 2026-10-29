@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Première installation (docs/installation.md) : `make init`.
+# Première installation (docs/exploitation/installation.md) : `make init`.
 # Construit l'image du hub, puis lance `hub init` dans un conteneur jetable : clé age, secrets
 # chiffrés, dossiers et deploy/.env. Seul Docker est requis sur la machine ; rien de ce qui existe
 # n'est remplacé. Réglages par variables ou par questions :
@@ -39,7 +39,7 @@ docker run --rm --platform "$PLATFORM" --user "$(id -u):$(id -g)" --read-only --
 
 cat <<TXT
 
-Suite (docs/installation.md) :
+Suite (docs/exploitation/installation.md) :
   1. Copie dans ton kit de secours $HUB_CONFIG/age.key et secrets.enc.yaml : la clé seule
      rouvre les secrets (mot de passe restic) et les sauvegardes.
   2. Dans deploy/.env : TS_AUTHKEY (clé Tailscale à usage unique, tag:hub).

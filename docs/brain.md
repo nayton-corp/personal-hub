@@ -51,7 +51,7 @@ peu moins sûr : `qwen3:30b-a3b`. Tout modèle qui gère l'appel d'outils convie
 ## Mise en place (une fois)
 
 Depuis le clone du dépôt (`~/personal-hub/personal-hub`), avec l'alias `hubc` de
-[mac.md](mac.md).
+[mac.md](exploitation/mac.md).
 
 1. **Ollama** : installe l'app (ollama.com) ou `brew install ollama && brew services start
    ollama`, puis :
