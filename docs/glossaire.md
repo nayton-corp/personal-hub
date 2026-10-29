@@ -13,6 +13,7 @@ quels, en français. Un mot nouveau entre ici dans la même PR que le code qui l
 | **Plateforme** | La technique commune : SQLite, migrations, réglages, secrets, journaux, planificateur, sauvegarde. Elle ne connaît pas le métier. | `hub.platform` : `db`, `migrations`, `settings`, `secrets`, `logging`, `cron` |
 | **Cœur** | Ce que tous les domaines partagent : identité et accès, validation (Double Sas), intégration (URN, liens, recherche), sources, profil. Il ne cite aucun domaine. | `hub.core` |
 | **Domaine** | Un pan de la vie (finance, puis agenda, documents, maison). Sa base, ses migrations, ses outils, ses propositions. | `hub.domains.<nom>`, protocole `Domain` |
+| **Contribution** | Ce qu'un domaine apporte au cœur sans que le cœur l'importe (connecteurs, modules par pays, reprise d'anciennes connexions), déclaré comme point d'entrée du paquet. | `hub.core.registry.contributions`, `[project.entry-points."hub.…"]` |
 | **Manifeste** | Ce qu'un domaine déclare au cœur : sortes de propositions, outils, routes, tâches de nuit. | `hub.core.domain` |
 | **Porte publique** | Le seul module qu'un autre domaine peut lire. | `hub.domains.<nom>.public` |
 | **Bord** | Ce qui parle au monde : API HTTP, ligne de commande, app web, collecteurs, assistant. | `hub.api`, `hub.cli`, `hub/web`, `hub.collectors`, `hub.brain` |
@@ -44,7 +45,7 @@ quels, en français. Un mot nouveau entre ici dans la même PR que le code qui l
 | **Relevé** | Un fichier d'une source (camt.053, CSV, rapport) importé en une fois. | `import_statements` |
 | **Boîte d'entrée** | Le dossier où un collecteur dépose les fichiers d'un domaine. | `inbox/` |
 | **Collecteur** | Un programme qui télécharge les exports officiels d'une source. Il ne touche jamais une base. | `hub.collectors` |
-| **Connecteur** | Une sorte de source (BCF, VIAC, Enable Banking…), décrite au catalogue. | `hub.core.connectors` |
+| **Connecteur** | Une sorte de source (BCF, VIAC, Enable Banking…), décrite au catalogue que la finance déclare. | `hub.domains.finance.connectors`, lu par `hub.core.connectors.catalog()` |
 | **Connexion** | Un connecteur configuré pour une instance, avec ses secrets. | `connections` |
 | **Règle** | Un motif qui classe les écritures, passées et à venir. | `rules` |
 | **Pack** | Un ensemble de règles prêtes à installer. | `packs` |

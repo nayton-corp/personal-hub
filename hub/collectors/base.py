@@ -30,7 +30,7 @@ Outcome = Literal[
     "unknown",
 ]
 Kind = Literal["run", "check"]
-NAMES = connectors.NAMES  # connecteurs que ce code sait exécuter
+NAMES = connectors.names()  # connecteurs que ce code sait exécuter
 RUNNERS = connectors.RUNNERS
 
 

@@ -1,9 +1,11 @@
-"""Registre des domaines, alimenté par le point d'entrée `hub.domains`."""
+"""Registre des domaines, alimenté par le point d'entrée `hub.domains` ; les autres points
+d'entrée (`hub.connectors`, `hub.country_modules`) portent ce qu'un domaine apporte au cœur."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator
 from importlib.metadata import entry_points
+from typing import Any
 
 from hub.core.domain import Domain
 from hub.core.errors import Problem
@@ -54,3 +56,9 @@ class Registry:
             factory: DomainFactory = ep.load()
             registry.add(factory(settings))
         return registry
+
+
+def contributions(group: str) -> list[Any]:
+    """Les valeurs déclarées au point d'entrée `group`, par nom de domaine : le cœur les lit sans
+    importer un domaine."""
+    return [ep.load() for ep in sorted(entry_points(group=group), key=lambda e: e.name)]

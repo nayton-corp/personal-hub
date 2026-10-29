@@ -2,6 +2,18 @@
 
 ## [Non publié]
 
+### Le cœur ne nomme plus aucune source (chantier S1, seconde partie)
+
+- Le catalogue des connecteurs, les modules par pays (3e pilier en Suisse) et la reprise des
+  connexions d'avant G4 passent de `hub/core` à `hub/domains/finance` (`connectors.py`,
+  `legacy_connections.py`). Le cœur les lit par trois points d'entrée du paquet
+  (`hub.connectors`, `hub.country_modules`, `hub.connection_imports`) via
+  `registry.contributions`. Aucun changement de comportement ni de schéma.
+- La liaison d'un consentement vaut pour tout connecteur de méthode `open_banking`, plus
+  seulement `enable_banking`.
+- `tests/test_core_is_generic.py` : un nom de banque, de source ou de notion financière dans
+  `hub/core` fait échouer la CI.
+
 ### Noyau, plateforme et cœur séparés (chantier S1, première partie)
 
 - `hub/kernel` (argent, URN, horloge, JSON canonique, texte) et `hub/platform` (SQLite,

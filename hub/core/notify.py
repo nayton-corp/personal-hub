@@ -1,4 +1,4 @@
-"""Notifications ntfy : textes génériques (« Collecte BCF : action requise »), jamais un montant.
+"""Notifications ntfy : textes génériques (« Collecte X : action requise »), jamais un montant.
 
 Le sujet ntfy vaut un mot de passe (qui le connaît lit les messages) : il vit dans
 `secrets.enc.yaml` (section `ntfy`, clé `topic`), ou dans le fichier `notify.ntfy_topic_file`.

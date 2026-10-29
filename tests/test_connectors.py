@@ -22,14 +22,14 @@ SECRET = re.compile(r"env\.secret\(\"([a-z_]+)\"\)")
 
 
 def test_one_flow_per_connector() -> None:
-    assert connectors.NAMES == base.NAMES
-    assert set(runtime.flows()) == set(connectors.NAMES)
-    assert {c.runner for c in connectors.CATALOG} == set(connectors.RUNNERS)
-    assert [c.name for c in connectors.CATALOG if c.runner == "browser"] == ["bcf", "viac"]
+    assert connectors.names() == base.NAMES
+    assert set(runtime.flows()) == set(connectors.names())
+    assert {c.runner for c in connectors.catalog()} == set(connectors.RUNNERS)
+    assert [c.name for c in connectors.catalog() if c.runner == "browser"] == ["bcf", "viac"]
 
 
 def test_entries_are_well_formed() -> None:
-    for c in connectors.CATALOG:
+    for c in connectors.catalog():
         assert c.method in connectors.METHODS, c.name
         assert c.country is None or re.fullmatch(r"[A-Z]{2}", c.country), c.name
         assert set(c.accounts) <= {"cash", "pension", "securities", "crypto"}, c.name
@@ -48,7 +48,7 @@ def test_one_compose_service_per_runner() -> None:
 
 
 def test_declared_secrets_match_the_flows() -> None:
-    for c in connectors.CATALOG:
+    for c in connectors.catalog():
         folder = ROOT / "hub" / "collectors"
         package = {"enable_banking": "revolut"}.get(c.name, c.name)  # premier usage : Revolut
         code = folder / package if (folder / package).is_dir() else folder / "exchanges"
@@ -67,7 +67,7 @@ def test_connection_settings_complete_the_service_config() -> None:
     assert base.for_connection(cfg, "bcf", {}) is cfg
     with pytest.raises(ValidationError):
         base.for_connection(cfg, "enable_banking", {"max_syncs_per_day": 9})
-    for c in connectors.CATALOG:  # chaque réglage déclaré existe dans sa section
+    for c in connectors.catalog():  # chaque réglage déclaré existe dans sa section
         section = base.SECTIONS.get(c.name)
         fields = type(getattr(cfg, section)).model_fields if section else {}
         assert set(c.settings) <= set(fields), c.name
@@ -94,5 +94,5 @@ def test_catalog_route_is_for_the_app(client: TestClient, hub: HubContext, make_
     )
     app_session(hub, client)
     items = client.get(path).json()["items"]
-    assert [i["name"] for i in items] == list(connectors.NAMES)
-    assert items[0] == connectors.CATALOG[0].public()
+    assert [i["name"] for i in items] == list(connectors.names())
+    assert items[0] == connectors.catalog()[0].public()

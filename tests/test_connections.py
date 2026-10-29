@@ -132,7 +132,7 @@ def test_create_update_and_validation(khub: HubContext) -> None:
         with pytest.raises(Problem) as exc:
             connections.create(conn, "base-wallet", "market", "system:test")
         assert exc.value.type == "connection.single"
-        assert "Portefeuilles" in str(exc.value.detail)
+        assert "ses réglages" in str(exc.value.detail)
 
         c = connections.update(
             conn, "n26", "system:test", label=" N26  perso ", schedule="0 8 * * *"
