@@ -37,6 +37,7 @@ class Connector:
     formats: tuple[str, ...]  # sources d'import des fichiers qu'il dépose (`imports.source`)
     settings: tuple[str, ...] = ()  # réglages sans secret qu'une connexion peut donner
     required: tuple[str, ...] = ()  # réglages qu'une nouvelle connexion doit donner
+    single: bool = False  # une seule connexion possible (ses réglages portent tout)
 
     @property
     def runner(self) -> Runner:
@@ -56,6 +57,7 @@ class Connector:
             "settings": list(self.settings),
             "required_settings": list(self.required),
             "runner": self.runner,
+            "single": self.single,
         }
 
 
@@ -112,6 +114,7 @@ CATALOG: tuple[Connector, ...] = (
         "15 6-22/4 * * *",  # cours et portefeuilles toutes les 4 h, de 06:15 à 22:15
         ("market",),
         ("currencies", "crypto", "quotes", "wallets"),
+        single=True,  # tous les portefeuilles crypto dans la même connexion
     ),
     Connector(
         "binance",

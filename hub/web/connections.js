@@ -51,6 +51,7 @@ const FIELD_LABEL = {
   flex_token: "Jeton Flex", query_id: "Numéro de la requête Flex", api_key: "Clé API",
   api_secret: "Secret API", passphrase: "Passphrase", key_name: "Nom de la clé",
   coingecko_key: "Clé CoinGecko (facultative)",
+  etherscan_key: "Clé Etherscan (historique Arbitrum, Base, Polygon)",
   aspsp_name: "Banque (nom chez Enable Banking)", aspsp_country: "Pays de la banque (ISO)",
   psu_type: "Type de compte (personal ou business)", consent_days: "Durée du consentement (jours)",
   max_syncs_per_day: "Synchronisations par jour au plus", currencies: "Devises suivies",
@@ -245,12 +246,12 @@ function open(what) {
   Promise.all([api(paths.catalog), api(paths.connections)])
     .then(([cat, cs]) => {
       if (editing !== what) return;
-      if (what.create) buildCreate(box, cat.items);
+      if (what.create) buildCreate(box, cat.items, cs.items);
       else {
         const c = cs.items.find((x) => x.id === what.id);
         const spec = cat.items.find((x) => x.name === c?.connector);
         if (!c || !spec) return close();
-        buildEdit(box, c, spec);
+        buildEdit(box, c, spec, what.wallet);
       }
       box.scrollIntoView({ behavior: "smooth", block: "start" });
     })
@@ -287,11 +288,11 @@ function readSetting(key, node) {
   return raw;
 }
 
-function buildCreate(box, catalog) {
+function buildCreate(box, catalog, existing) {
   box.replaceChildren(el("h2", "", "Nouvelle connexion"));
   const pick = el("select");
   for (const c of catalog) {
-    const o = el("option", "", c.label);
+    const o = el("option", "", c.name === "market" ? `${c.label} (portefeuilles crypto : Ledger, MetaMask, Coinbase Wallet…)` : c.label);
     o.value = c.name;
     pick.append(o);
   }
@@ -303,8 +304,24 @@ function buildCreate(box, catalog) {
   box.append(extra);
   let touched = false;
   id.addEventListener("input", () => { touched = true; });
+  // connecteur unique déjà présent (Cours et cryptos) : on règle celui-là, sans doublon
+  const taken = () => {
+    const spec = catalog.find((c) => c.name === pick.value);
+    return spec.single ? existing.find((x) => x.connector === spec.name) : undefined;
+  };
   const fill = () => {
     const spec = catalog.find((c) => c.name === pick.value);
+    const already = taken();
+    for (const n of [label, id]) {
+      n.hidden = !!already;
+      n.labels.forEach((l) => { l.hidden = !!already; });
+    }
+    if (id.nextElementSibling?.classList.contains("hint")) id.nextElementSibling.hidden = !!already;
+    go.textContent = already ? "Ajouter un portefeuille" : "Créer";
+    if (already) {
+      extra.replaceChildren(el("p", "hint", `« ${already.label} » existe déjà : un portefeuille crypto s'ajoute dans ses réglages, section Portefeuilles.`));
+      return;
+    }
     if (!label.value || label.dataset.auto === "1") {
       label.value = spec.label;
       label.dataset.auto = "1";
@@ -320,16 +337,18 @@ function buildCreate(box, catalog) {
     }
   };
   label.addEventListener("input", () => { label.dataset.auto = "0"; if (!touched) id.value = slug(label.value); });
-  pick.addEventListener("change", fill);
-  fill();
   const msg = el("p", "message");
   const acts = el("div", "acts");
   const go = button("Créer");
   const cancel = button("Annuler", "btn secondary");
   acts.append(go, cancel);
   box.append(acts, msg);
+  pick.addEventListener("change", fill);
+  fill();
   cancel.addEventListener("click", close);
   go.addEventListener("click", async () => {
+    const already = taken();
+    if (already) return open({ id: already.id, wallet: true });
     go.disabled = true;
     msg.textContent = "";
     try {
@@ -352,13 +371,13 @@ function buildCreate(box, catalog) {
   });
 }
 
-function buildEdit(box, c, spec) {
+function buildEdit(box, c, spec, newWallet = false) {
   box.replaceChildren(el("h2", "", c.label));
   box.append(el("p", "note", `${spec.label} · ${c.runner === "browser" ? "navigateur" : "API"} · identifiant ${c.id}`));
   const msg = el("p", "message");
 
   // réglages : nom, horaire, réglages du connecteur, portefeuilles
-  const label = field(box, `ce-label`, "Nom affiché", input(c.label));
+  const label = field(box, `ce-label`, "Nom affiché de la connexion", input(c.label));
   const schedule = field(box, "ce-schedule", "Horaire (cron, fuseau de l'instance)", input(c.custom_schedule ? c.schedule : ""),
     `minute heure jour mois jour-de-semaine ; vide : horaire par défaut (${spec.schedule || "aucun"}).`);
   schedule.placeholder = spec.schedule || "";
@@ -369,7 +388,7 @@ function buildEdit(box, c, spec) {
     inputs[key] = field(box, `ce-${key}`, `${FIELD_LABEL[key] || key}${req ? " *" : ""}`, settingInput(key, c.settings[key]),
       JSON_SETTINGS.has(key) ? "JSON ; vide : la valeur du service (deploy/settings.toml)." : null);
   }
-  const wallets = spec.settings.includes("wallets") ? walletsEditor(box, c.settings.wallets || []) : null;
+  const wallets = spec.settings.includes("wallets") ? walletsEditor(box, c.settings.wallets || [], newWallet) : null;
   const save = button("Enregistrer les réglages");
   box.append(save);
   save.addEventListener("click", () => run(save, msg, async () => {
@@ -389,7 +408,7 @@ function buildEdit(box, c, spec) {
   }));
 
   // identifiants : remplacés en bloc, jamais relus
-  const fields = spec.secrets.length ? spec.secrets : (spec.name === "market" ? ["coingecko_key"] : []);
+  const fields = spec.secrets.length ? spec.secrets : (spec.name === "market" ? ["coingecko_key", "etherscan_key"] : []);
   if (fields.length) {
     box.append(el("h3", "", "Identifiants"));
     box.append(el("p", "hint", c.has_secrets
@@ -467,7 +486,9 @@ async function run(btn, msg, fn) {
 
 // --- portefeuilles (connecteur market) ------------------------------------------------------
 
-function walletsEditor(box, initial) {
+const NETWORK_LABEL = { ethereum: "Ethereum", arbitrum: "Arbitrum", base: "Base", bsc: "BNB Smart Chain", polygon: "Polygon" };
+
+function walletsEditor(box, initial, newWallet = false) {
   box.append(el("h3", "", "Portefeuilles"));
   box.append(el("p", "hint", "Adresses publiques, ou clé publique étendue (xpub, ypub, zpub) d'un compte BTC. Jamais de clé privée ni de phrase de récupération."));
   const list = el("div");
@@ -481,7 +502,7 @@ function walletsEditor(box, initial) {
     const i = rows.length;
     const account = field(wrap, `w-${i}-account`, "Compte (crypto:nom)", input(w.account || "crypto:"));
     const asset = el("select");
-    for (const a of ["BTC", "ETH", "SOL"]) {
+    for (const a of ["BTC", "ETH", "SOL", "ATOM"]) {
       const o = el("option", "", a);
       o.value = a;
       asset.append(o);
@@ -496,13 +517,13 @@ function walletsEditor(box, initial) {
     const nets = el("div", "networks");
     const chosen = new Set(w.networks || ["ethereum"]);
     const boxes = {};
-    for (const n of ["ethereum", "arbitrum", "base", "polygon"]) {
+    for (const n of ["ethereum", "arbitrum", "base", "bsc", "polygon"]) {
       const lab = el("label", "check");
       const cb = el("input");
       cb.type = "checkbox";
       cb.checked = chosen.has(n);
       boxes[n] = cb;
-      lab.append(cb, document.createTextNode(` ${n[0].toUpperCase()}${n.slice(1)}`));
+      lab.append(cb, document.createTextNode(` ${NETWORK_LABEL[n]}`));
       nets.append(lab);
     }
     const netLabel = el("label", "", "Réseaux");
@@ -518,6 +539,11 @@ function walletsEditor(box, initial) {
   };
   for (const w of initial) addRow(w);
   add.addEventListener("click", () => addRow());
+  if (newWallet) {
+    addRow({ asset: "ETH" });
+    const last = rows[rows.length - 1].account;
+    setTimeout(() => { last.scrollIntoView({ behavior: "smooth", block: "center" }); last.focus(); }, 0);
+  }
 
   return {
     read() {

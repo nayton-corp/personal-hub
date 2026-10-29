@@ -197,6 +197,37 @@ def start_link(env: Env, redirect_url: str) -> threading.Thread | None:
     return thread
 
 
+# --- runs en parallèle -------------------------------------------------------------------------
+
+# connexions dont un run tourne dans un fil : la boucle ne les relance pas, et un run lent
+# (market et mempool.space : plus d'un quart d'heure) ne retarde plus les autres connexions
+RUNNING: set[str] = set()
+_running = threading.Lock()
+
+
+def in_background(
+    runner: Callable[[Env, Kind], Result] = execute,
+) -> Callable[[Env, Kind], Result | None]:
+    """Chaque run dans son fil, une seule fois à la fois par connexion ; rend None (lancé)."""
+
+    def start(env: Env, kind: Kind) -> None:
+        with _running:
+            if env.name in RUNNING:
+                return
+            RUNNING.add(env.name)
+
+        def work() -> None:
+            try:
+                runner(env, kind)
+            finally:
+                with _running:
+                    RUNNING.discard(env.name)
+
+        threading.Thread(target=work, name=f"run-{env.name}", daemon=True).start()
+
+    return start
+
+
 # --- boucle du conteneur ---------------------------------------------------------------------
 
 
@@ -218,16 +249,17 @@ def tick(
     at: datetime,
     *,
     poll_checks: bool,
-    runner: Callable[[Env, Kind], Result] = execute,
+    runner: Callable[[Env, Kind], Result | None] = execute,
     linker: Callable[[Env], object] | None = None,
 ) -> list[tuple[str, str, str]]:
     """Une minute de la boucle : runs planifiés ou actualisations demandées depuis l'app si la
     connexion est `enabled`, contrôles et consentements demandés depuis l'app. Sans réponse du
     hub, rien ne part : un run doit pouvoir être déclaré. Les secrets d'une connexion ne sont
-    déchiffrés que si elle tourne maintenant."""
+    déchiffrés que si elle tourne maintenant. Une connexion dont un run tourne encore attend
+    qu'il finisse : sa demande d'actualisation reste posée jusque-là."""
     done: list[tuple[str, str, str]] = []
     for item in items:
-        if item.id in LINKING:
+        if item.id in LINKING or item.id in RUNNING:
             continue
         scheduled = bool(item.schedule) and due(str(item.schedule), at)
         if not scheduled and not poll_checks:
@@ -262,7 +294,8 @@ def tick(
         except Exception as exc:  # secrets illisibles, réglage invalide : déclaré, pas de run
             done.append((item.id, kind, _refused(client, item.id, kind, exc).outcome))
             continue
-        done.append((item.id, kind, runner(env, kind).outcome))
+        result = runner(env, kind)
+        done.append((item.id, kind, result.outcome if result else "started"))
     return done
 
 
@@ -307,4 +340,12 @@ def run_forever(
             last_poll = time.monotonic_ns()
         items = assigned(client, runner)
         if items is not None:
-            tick(make_env, items, client, at, poll_checks=poll, linker=linker)
+            tick(
+                make_env,
+                items,
+                client,
+                at,
+                poll_checks=poll,
+                runner=in_background(),
+                linker=linker,
+            )

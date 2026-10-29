@@ -14,11 +14,11 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from hub.collectors import dropbox
+from hub.collectors import dropbox, runtime
 from hub.collectors.base import CollectorConfig, Failure, Kind, Memory, Result
 from hub.collectors.browser import Selectors, purge_diag
 from hub.collectors.client import HubClient, HubUnavailable
-from hub.collectors.runtime import Assigned, Env, assigned, due, execute, tick
+from hub.collectors.runtime import Assigned, Env, assigned, due, execute, in_background, tick
 from hub.core import connectors
 from tests.collectors.conftest import FakeHub
 from tests.collectors.fakebank import camt_file
@@ -99,6 +99,39 @@ def test_tick(
         runner=_runner(log),
     )
     assert log == expected
+
+
+def test_runs_go_in_parallel_and_never_twice(tmp_path: Path) -> None:
+    """Un run lent ne bloque pas la boucle ; tant qu'il tourne, sa connexion n'est pas relancée
+    (l'actualisation demandée attend), les autres partent."""
+    import threading
+
+    gate = threading.Event()
+    log: list[tuple[str, Kind]] = []
+
+    def slow(env: Env, kind: Kind) -> Result:
+        log.append((env.name, kind))
+        gate.wait(5)
+        return Result("ok")
+
+    hub = FakeHub(run_requested=True)
+    viac = Assigned("viac", "viac", "VIAC", None, {}, None)
+    start = in_background(slow)
+    first = tick(
+        lambda i: _env(tmp_path, hub, i.id), [BCF], hub, LATER, poll_checks=True, runner=start
+    )  # type: ignore[arg-type]
+    again = tick(
+        lambda i: _env(tmp_path, hub, i.id), [BCF, viac], hub, LATER, poll_checks=True, runner=start
+    )  # type: ignore[arg-type]
+    assert first == [("bcf", "run", "started")]
+    assert again == [("viac", "run", "started")]
+    gate.set()
+    for _ in range(100):
+        if not runtime.RUNNING:
+            break
+        time.sleep(0.02)
+    assert not runtime.RUNNING
+    assert sorted(log) == [("bcf", "run"), ("viac", "run")]
 
 
 def test_tick_without_hub_runs_nothing(tmp_path: Path) -> None:
@@ -355,8 +388,12 @@ def test_link_now_posts_the_url_then_clears_it(
     monkeypatch.setattr(flow, "link", refused)
     thread = runtime.start_link(env, "https://hub.example/cb")
     assert thread is not None
-    assert runtime.start_link(env, "https://hub.example/cb") is None or not thread.is_alive()
+    # une seule liaison à la fois ; si la première a déjà fini, la seconde part et on l'attend
+    second = runtime.start_link(env, "https://hub.example/cb")
+    assert second is None or not thread.is_alive()
     thread.join(5)
+    if second is not None:
+        second.join(5)
     assert "revolut" not in runtime.LINKING
     assert hub.runs[-1] == ("revolut", "check", "auth_pending_timeout")
     assert hub.link_urls[-1] is None

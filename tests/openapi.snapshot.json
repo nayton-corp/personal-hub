@@ -909,6 +909,11 @@
             },
             "title": "Settings",
             "type": "array"
+          },
+          "single": {
+            "default": false,
+            "title": "Single",
+            "type": "boolean"
           }
         },
         "required": [

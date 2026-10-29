@@ -15,6 +15,34 @@
   `merchant`, `question`, `answer` et `prompt`.
 - `docs/glossaire.md` et `docs/decisions.md`.
 
+### Historique des wallets ETH malgré les limites des sources publiques
+
+- Ethereum : historique par Routescan (sans clé) au lieu de Blockscout, qui coupe après dix
+  appels. Arbitrum, Base et Polygon : Etherscan V2 avec une clé gratuite (`etherscan_key`,
+  champ « Clé Etherscan » dans l'app) ; sans clé, `needs_key` dans le détail, sans échec.
+- Chaque réseau est relu en entier une fois (mémoire `<compte>@<réseau>`, `<compte>@solana`).
+- Pause entre deux pages d'historique et entre deux cours CoinGecko sans clé ; un refus (429,
+  « rate limit ») est réessayé après 10, 30 puis 60 secondes.
+- Coinbase : la conversion ETH2 → ETH (`retail_eth2_deprecation`) est interne.
+- Réseau BNB Smart Chain (`bsc` : BNB, USDC, USDT, ETH) ; un réseau refusé par l'offre gratuite
+  d'Etherscan est signalé (`unsupported`) sans bloquer les autres.
+- Portefeuille ATOM (Cosmos Hub) : disponible, staking, retraits en cours, récompenses, et
+  historique des transactions.
+
+### Collectes en parallèle
+
+- Les services collecteurs lancent chaque run dans son fil : un run lent (market, 17 minutes
+  le 29/10 à cause de mempool.space) ne retarde plus les autres connexions ni leurs
+  actualisations. Une connexion n'a jamais deux runs à la fois.
+
+### Un portefeuille crypto s'ajoute dans « Cours et cryptos »
+
+- « Cours et cryptos » (`market`) est une connexion unique (`single`) : en créer une deuxième
+  est refusé (`connection.single`), car un portefeuille ajouté ainsi restait sans adresse. Dans
+  l'app, choisir ce connecteur quand il existe ouvre ses réglages avec un nouveau portefeuille à
+  remplir (« Ajouter un portefeuille »).
+- « Nom affiché de la connexion » : le nom de la connexion, pas celui d'un portefeuille.
+
 ### Actualiser une connexion depuis l'app
 
 - « Actualiser » sur chaque connexion et « Tout actualiser » (Réglages › Connexions) : un run
