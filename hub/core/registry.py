@@ -76,12 +76,17 @@ class Registry:
         return registry
 
 
-def contributions(group: str) -> list[Any]:
+def contributions_by_domain(group: str) -> dict[str, Any]:
     """Les valeurs déclarées au point d'entrée `group` par les domaines que `HUB_DOMAINS`
-    retient, par nom de domaine : le cœur les lit sans importer un domaine."""
+    retient, par nom de domaine (le nom du point d'entrée) : le cœur les lit sans importer un
+    domaine."""
     wanted = env_domains()
-    return [
-        ep.load()
+    return {
+        ep.name: ep.load()
         for ep in sorted(entry_points(group=group), key=lambda e: e.name)
         if wanted is None or ep.name in wanted
-    ]
+    }
+
+
+def contributions(group: str) -> list[Any]:
+    return list(contributions_by_domain(group).values())

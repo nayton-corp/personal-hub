@@ -160,6 +160,10 @@ class Domain(Protocol):
         """Constats récents, les plus récents d'abord (budget dépassé, abonnement en hausse)."""
         ...
 
+    def process_inbox(self) -> dict[str, int]:
+        """Traite ce qui attend dans `inbox/<domaine>/` (S4) ; compteurs seulement."""
+        ...
+
     def engine(self) -> Engine:
         """Base SQLite du domaine (les effets locaux s'y appliquent)."""
         ...

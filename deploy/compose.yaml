@@ -59,7 +59,7 @@ services:
   importer:                              # lot 1 : surveille la boîte d'entrée (scrutation 30 s)
     <<: *hardening
     image: hub:${HUB_TAG:-dev}
-    command: ["hub", "finance", "watch-inbox", "--poll", "30"]
+    command: ["hub", "watch-inbox", "--poll", "30"]
     environment: *hub-env
     volumes:
       - data:/srv/hub/data

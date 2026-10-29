@@ -112,8 +112,9 @@ class DemoDomain:
     schema_version = 1
     scopes = frozenset({"demo:read", "demo:propose", "demo:aggregates"})
 
-    def __init__(self, data_dir: Path) -> None:
+    def __init__(self, data_dir: Path, inbox: Path | None = None) -> None:
         self.path = data_dir / "demo.db"
+        self.inbox = inbox or data_dir.parent / "inbox" / "demo"
         self._engine = make_engine(self.path)
         self.nightly_runs = 0
         self.third_party = FakeThirdParty()
@@ -127,6 +128,20 @@ class DemoDomain:
 
     def manifest(self) -> Manifest:
         return MANIFEST
+
+    def process_inbox(self) -> dict[str, int]:
+        """Chaque fichier de son dossier devient un élément, puis s'efface."""
+        files = (
+            sorted(p for p in self.inbox.glob("*") if p.is_file()) if self.inbox.is_dir() else []
+        )
+        with self._engine.begin() as conn:
+            for p in files:
+                conn.execute(
+                    text("INSERT INTO items (name, created_at) VALUES (:n, :at)"),
+                    {"n": p.name, "at": now_iso()},
+                )
+                p.unlink()
+        return {"files": len(files)}
 
     def observations(self, limit: int) -> list[Observation]:
         with self._engine.connect() as conn:

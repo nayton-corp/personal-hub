@@ -4,6 +4,7 @@ sentinelles (lot 7)."""
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Mapping, Sequence
 from datetime import date
@@ -14,7 +15,7 @@ import typer
 from fastapi import APIRouter
 from sqlalchemy import Connection, Engine, event, text
 
-from hub.core import integrity, profile
+from hub.core import inbox, integrity, profile
 from hub.core.domain import Event, Health, Hit, McpTool, ProposalKind, Ref
 from hub.core.manifest import Manifest, Observation, Severity
 from hub.domains.finance import (
@@ -42,6 +43,7 @@ from hub.platform.settings import Settings
 MIGRATIONS = Path(__file__).parent / "migrations"
 SCHEMA_VERSION = 17  # 0017_snapshot_categories
 log = get_logger("hub.finance")
+LEGACY_ARCHIVE = re.compile(r"\d{4}|duplicates")
 SEVERITY: dict[str, Severity] = {"budget_over": "alert", "budget_likely": "warning"}
 
 
@@ -75,8 +77,8 @@ class FinanceDomain:
         recipient = section.get("archive_recipient") or recipient_from_key(key_file)
         self.importer = ImportService(
             self._engine,
-            inbox=settings.paths.inbox,
-            archiver=Archiver(settings.paths.archive, recipient, key_file),
+            inbox=settings.paths.inbox_of(self.name),
+            archiver=Archiver(settings.paths.archive_of(self.name), recipient, key_file),
             lock_file=settings.paths.data / "finance.history.lock",
             on_applied=self.refresh_snapshots,
         )
@@ -91,6 +93,9 @@ class FinanceDomain:
             "pillar3a": profile.load(self.settings).has("pillar3a"),
             "pillar3a_cap": self.pillar3a_cap,
         }
+
+    def process_inbox(self) -> dict[str, int]:
+        return self.importer.process_inbox().counters()
 
     def manifest(self) -> Manifest:
         return manifest.MANIFEST
@@ -119,6 +124,12 @@ class FinanceDomain:
         (`seed=False` pour une reconstruction, qui recopie les règles de la base d'origine)."""
         fresh = runner.current(MIGRATIONS, self.path) is None
         runner.upgrade(MIGRATIONS, self.path)
+        # S4 : l'archive d'avant (archive/AAAA/MM, archive/duplicates) passe sous archive/finance
+        inbox.adopt(
+            self.settings.paths.archive,
+            self.name,
+            lambda n: LEGACY_ARCHIVE.fullmatch(n) is not None,
+        )
         self.check_currency()
         if fresh and seed:
             with begin_immediate(self._engine) as conn:

@@ -67,7 +67,7 @@ def test_accounts_and_categories(app: typer.Typer) -> None:
 
 
 def test_watch_inbox_once_and_imports(app: typer.Typer, finance: FinanceDomain) -> None:
-    inbox = finance.settings.paths.inbox
+    inbox = finance.settings.paths.inbox_of("finance")
     inbox.mkdir(parents=True)
     path = inbox / "a.xml"
     path.write_bytes(camt053(simple_stmt()))

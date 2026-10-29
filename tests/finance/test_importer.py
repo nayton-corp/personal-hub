@@ -17,7 +17,7 @@ from tests.finance.conftest import D, add_account, ledger_state, ready_account, 
 
 
 def drop(domain: FinanceDomain, name: str, data: bytes) -> Path:
-    inbox = domain.settings.paths.inbox
+    inbox = domain.settings.paths.inbox_of("finance")
     inbox.mkdir(parents=True, exist_ok=True)
     path = inbox / name
     path.write_bytes(data)
@@ -39,7 +39,7 @@ def test_inbox_import_applies_and_archives_encrypted(finance: FinanceDomain) -> 
     assert statuses(finance) == ["applied"]
     assert not path.exists()
     (archive_path,) = rows(finance, "SELECT archive_path FROM imports")
-    stored = finance.settings.paths.archive / str(archive_path[0])
+    stored = finance.settings.paths.archive_of("finance") / str(archive_path[0])
     assert stored.suffix == ".age"
     assert b"Jean Exemple" not in stored.read_bytes()  # chiffré
     key = finance.settings.secrets.age_key_file
@@ -59,7 +59,7 @@ def test_same_file_again_goes_to_duplicates(finance: FinanceDomain) -> None:
     finance.importer.process([Incoming("a.xml", data)])
     report = finance.importer.process([Incoming("b.xml", data)])
     assert [f.status for f in report.files] == ["duplicate"]
-    assert list((finance.settings.paths.archive / "duplicates").iterdir())
+    assert list((finance.settings.paths.archive_of("finance") / "duplicates").iterdir())
     assert len(rows(finance, "SELECT 1 FROM entries WHERE kind = 'movement'")) == 3
 
 
@@ -191,7 +191,7 @@ def test_inbox_skips_files_still_being_copied_and_pauses_during_history(
     finance: FinanceDomain,
 ) -> None:
     ready_account(finance)
-    inbox = finance.settings.paths.inbox
+    inbox = finance.settings.paths.inbox_of("finance")
     inbox.mkdir(parents=True)
     (inbox / "fresh.xml").write_bytes(camt053(simple_stmt()))
     (inbox / ".hidden.xml").write_bytes(b"")
@@ -215,7 +215,7 @@ def test_archive_needs_a_key(tmp_path: Path, finance: FinanceDomain) -> None:
     report = finance.importer.process([Incoming("a.xml", camt053(simple_stmt()))])
     assert report.statements[0].reasons == ["unknown_account"]
     (path,) = rows(finance, "SELECT archive_path FROM imports")
-    (finance.settings.paths.archive / str(path[0])).write_bytes(b"abime")
+    (finance.settings.paths.archive_of("finance") / str(path[0])).write_bytes(b"abime")
     assert finance.importer.retry_needs_review(quiet=True) == []
     with pytest.raises(importer.ImportRefused):
         finance.importer.retry_needs_review()

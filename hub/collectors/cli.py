@@ -26,6 +26,7 @@ from hub.collectors import base
 from hub.collectors.base import Failure
 from hub.collectors.client import HubClient
 from hub.collectors.runtime import Assigned, Env, execute, run_forever, start_link
+from hub.core import connectors
 from hub.kernel.clock import now_iso
 from hub.platform import logging as hub_logging
 from hub.platform.settings import get_settings
@@ -61,9 +62,9 @@ def env_for(
     if headed:
         cfg = cfg.model_copy(update={"headless": False})
     creds = base.open_secrets(settings, item.secrets)
-    return Env(
-        item.id, cfg, creds, settings.paths.inbox, client, diagnose, connector=item.connector
-    )
+    spec = connectors.get(item.connector)
+    inbox = settings.paths.inbox_of(spec.domain) if spec else settings.paths.inbox
+    return Env(item.id, cfg, creds, inbox, client, diagnose, connector=item.connector)
 
 
 def make_env(

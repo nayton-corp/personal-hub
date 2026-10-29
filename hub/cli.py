@@ -11,7 +11,7 @@ from typing import Annotated, Any
 import typer
 import yaml
 
-from hub import cli_tokens
+from hub import cli_inbox, cli_tokens
 from hub.core import connections, connectors, profile, proposals, sessions, tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
@@ -52,6 +52,7 @@ def _ready() -> HubContext:
 
 
 app.add_typer(cli_tokens.build(_ready, CLI_ACTOR), name="token")
+app.command("watch-inbox")(cli_inbox.watch(_ready))
 
 
 @app.command()
@@ -418,8 +419,7 @@ def init(
     currency: Annotated[str, typer.Option(help="Devise de base, fixée ensuite.")] = "CHF",
     country: Annotated[str, typer.Option(help="Pays (ISO, deux lettres).")] = "CH",
 ) -> None:
-    """Prépare une première installation : clé age, secrets chiffrés, dossiers et deploy/.env.
-    Ne remplace rien de ce qui existe."""
+    """Première installation : clé age, secrets, dossiers, deploy/.env ; ne remplace rien."""
     from hub.core import install
 
     choices = install.Choices(config, home, origin, tz, currency, country)

@@ -201,7 +201,7 @@ def run(app: typer.Typer, *args: str) -> tuple[int, str]:
 
 
 def drop(finance: FinanceDomain, name: str, data: bytes) -> importer.BatchReport:
-    inbox: Path = finance.settings.paths.inbox
+    inbox: Path = finance.settings.paths.inbox_of("finance")
     inbox.mkdir(parents=True, exist_ok=True)
     path = inbox / name
     path.write_bytes(data)

@@ -2,6 +2,18 @@
 
 ## [Non publié]
 
+### Boîte d'entrée par domaine (chantier S4)
+
+- `hub watch-inbox` (service `importer`) confie chaque fichier posé à la racine de `inbox/` au
+  domaine qui le réclame (importeurs du manifeste) : il part dans `inbox/<domaine>/`, puis
+  chaque domaine traite son dossier (`Domain.process_inbox`). Un fichier réclamé par personne
+  reste à la racine ; un nom déjà pris devient `nom-2`.
+- Les collecteurs déposent dans `inbox/<domaine de leur connecteur>/` ; le catalogue sait de
+  quel domaine vient chaque connecteur.
+- L'archive chiffrée de la finance vit dans `archive/finance/` ; la migration déplace une fois
+  `archive/AAAA/` et `archive/duplicates/` (les chemins gardés en base restent valables).
+- `hub finance watch-inbox` lit désormais `inbox/finance/`.
+
 ### Intégrité générique (chantier S3)
 
 - `hub.kernel.chain` (empreinte versionnée, maillon) et `hub.core.integrity` (`Ledger` :
