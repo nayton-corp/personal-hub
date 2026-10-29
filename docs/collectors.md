@@ -281,6 +281,10 @@ wallets:
   - account: "crypto:phantom"
     asset: "SOL"
     addresses: ["Fz…"]
+  - account: "crypto:coinbase-wallet"
+    asset: "ETH"
+    addresses: ["0x…"]
+    networks: ["ethereum", "arbitrum", "base", "polygon"]   # facultatif : Ethereum seul sinon
   - account: "crypto:trust"          # plusieurs chaînes, un seul compte
     asset: "ETH"
     addresses: ["0x…"]
@@ -305,7 +309,12 @@ fait une fois par compte (mémoire `btc_history`) ; en cas d'échec, le passage 
 Les transactions elles-mêmes partent aussi dans le fichier (`transactions` : txid, jour, net,
 frais payés), pour le registre : toutes au premier passage (mémoire `btc_txs`), ensuite la
 dernière page de chaque adresse utilisée, une requête par adresse et par jour.
-**ETH** : le solde natif et les jetons de `erc20_tokens` (USDC et USDT par défaut). **SOL** : le
+**ETH** : le solde natif et les jetons de `erc20_tokens` (USDC et USDT par défaut). Un
+portefeuille qui nomme d'autres réseaux (`networks`, cases « Réseaux » dans l'app) est lu aussi
+sur Arbitrum, Base et Polygon (`evm_networks` : nœud public, Blockscout, jetons) : leur ETH, leur
+USDC/USDT, le WETH compté comme ETH, et le POL sur Polygon. Les jetons de staking de
+`staking_tokens` (par défaut Kiln Native20, le « cbwsETH » de Coinbase Wallet) comptent comme
+de l'ETH, à leur valeur sous-jacente (`balanceOfUnderlying` : la mise et ses récompenses). **SOL** : le
 solde natif et les jetons de `spl_tokens` (USDC, USDT) ; les autres jetons, souvent du spam, sont
 ignorés, et le SOL en staking n'est pas lu.
 
@@ -317,7 +326,9 @@ gaz payés par mes adresses — et SOL par le RPC (`getSignaturesForAddress` pui
 `CHAIN_PAGES` pages par adresse, mémoire `chain_txs`), ensuite la dernière page. Un jeton et
 le gaz d'une même transaction donnent deux écritures. Le solde passé, lui, n'est pas
 reconstitué : la courbe de patrimoine de ces portefeuilles part du jour où ils sont branchés.
-Les autres réseaux (Arbitrum, Base, Polygon…) et les jetons de staking liquide ne sont pas lus.
+Chaque réseau nommé a son historique sur son Blockscout ; une mise en staking y apparaît comme
+l'envoi d'ETH et l'arrivée des parts, comptées comme de l'ETH. Les autres jetons de staking
+liquide (stETH, rETH…) ne sont pas lus : à ajouter à `staking_tokens` ou `erc20_tokens`.
 
 Un compte est relevé en entier ou pas du tout : si une de ses adresses ne répond pas, il est
 laissé de côté ce jour-là (détail `partial wallet.<nom>:…`) plutôt que de perdre une crypto. Un

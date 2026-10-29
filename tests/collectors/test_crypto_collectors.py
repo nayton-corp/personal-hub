@@ -324,6 +324,81 @@ def test_eth_and_sol_wallets_read_their_history(make_env: Any) -> None:
     assert env.memory.get("chain_txs") == ["crypto:metamask", "crypto:phantom"]
 
 
+KILN = "0x30a4aa1d14D44f0f5BFe887447AB6FAcc94A549F"
+WETH_POLYGON = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
+
+
+def test_an_eth_wallet_reads_its_networks_and_staking(make_env: Any) -> None:
+    """Coinbase Wallet : ETH staké chez Kiln (cbwsETH), et des fonds sur Base et Polygon."""
+    base = chain()
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        rpc = json.loads(data or b"{}")
+        if rpc.get("method") == "eth_getBalance":
+            wei = {"base": 5 * 10**16, "polygon": 3 * 10**18}
+            return 200, {"result": hex(next((v for k, v in wei.items() if k in url), 0))}
+        if rpc.get("method") == "eth_call":
+            to, call = rpc["params"][0]["to"], rpc["params"][0]["data"]
+            if to == KILN and call.startswith("0x70a08231"):
+                return 200, {"result": hex(488_379 * 10**12)}  # 0.488379 parts
+            if to == KILN and call.startswith("0x3af9e669"):
+                return 200, {"result": hex(512 * 10**15)}  # 0.512 ETH avec les récompenses
+            if to == WETH_POLYGON:
+                return 200, {"result": hex(31 * 10**15 if call != "0x313ce567" else 18)}
+        if "base.blockscout" in url and query(url)["action"] == "txlist":
+            row = {
+                "hash": "0xb1",
+                "from": "0x" + "cd" * 20,
+                "to": ETH_ME,
+                "value": str(5 * 10**16),
+                "gasUsed": "1",
+                "gasPrice": "1",
+                "isError": "0",
+                "timeStamp": "1772280000",
+            }
+            return 200, {"status": "1", "message": "OK", "result": [row]}
+        if "eth.blockscout" in url and query(url)["action"] == "tokentx":
+            row = {  # parts reçues au staking
+                "hash": "0xk1",
+                "from": "0x" + "00" * 20,
+                "to": ETH_ME,
+                "value": str(488_379 * 10**12),
+                "tokenDecimal": "18",
+                "contractAddress": KILN.lower(),
+                "timeStamp": "1772366400",
+            }
+            return 200, {"status": "1", "message": "OK", "result": [row]}
+        return base.route(method, url, headers, data)
+
+    wallet = {
+        "account": "crypto:coinbase-wallet",
+        "asset": "ETH",
+        "addresses": [ETH_ME],
+        "networks": ["ethereum", "base", "polygon"],
+    }
+    env = make_env("market", creds={"wallets": [wallet]}, market={"erc20_tokens": {}})
+    fake = Fake(route)
+    assert market.run(env, "run", Http(fake)).detail is None
+    (doc,) = dropped(env)
+    assert held(doc) == [
+        # 0.05 sur Base, 0.031 de WETH sur Polygon, 0.512 mis en jeu chez Kiln
+        ("crypto:coinbase-wallet", "CRYPTO:ETH", Decimal("0.593")),
+        ("crypto:coinbase-wallet", "CRYPTO:POL", Decimal(3)),
+    ]
+    got = [(t.txid, t.symbol, t.quantity) for t in doc.transactions]
+    assert got == [("0xb1", "ETH", Decimal("0.05")), ("0xk1", "ETH", Decimal("0.488379"))]
+    scans = {urlsplit(u).netloc for _m, u, _h in fake.calls if "blockscout" in u}
+    assert scans == {"eth.blockscout.com", "base.blockscout.com", "polygon.blockscout.com"}
+
+
+def test_an_unknown_network_is_refused(make_env: Any) -> None:
+    wallet = {"account": "crypto:x", "asset": "ETH", "addresses": [ETH_ME], "networks": ["mars"]}
+    env = make_env("market", creds={"wallets": [wallet]})
+    with pytest.raises(Failure) as err:
+        market.wallet_entries(env)
+    assert err.value.outcome == "auth_error"
+
+
 def test_a_wallet_down_is_left_out_whole_and_retried(make_env: Any) -> None:
     creds = {
         "wallets": [

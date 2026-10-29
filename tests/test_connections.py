@@ -383,7 +383,12 @@ def test_app_requests_a_link_and_sees_the_url(khub: HubContext, kclient: TestCli
 
 def test_wallet_settings_are_checked(khub: HubContext) -> None:
     btc = {"account": "crypto:ledger", "asset": "btc", "xpub": "zpub6r…", "script": "wpkh"}
-    eth = {"account": "crypto:metamask", "asset": "ETH", "addresses": ["0x" + "a" * 40]}
+    eth = {
+        "account": "crypto:metamask",
+        "asset": "ETH",
+        "addresses": ["0x" + "a" * 40],
+        "networks": ["ethereum", "base"],
+    }
     with khub.core.engine.begin() as conn:
         c = connections.create(
             conn, "market", "market", "system:test", settings={"wallets": [btc, eth]}
@@ -398,6 +403,8 @@ def test_wallet_settings_are_checked(khub: HubContext) -> None:
             [{"account": "crypto:x", "asset": "ETH", "xpub": "xpub6…"}],
             [{"account": "crypto:x", "asset": "BTC", "xpub": "xprv9…"}],
             [{"account": "crypto:x", "asset": "SOL", "addresses": [1]}],
+            [{"account": "crypto:x", "asset": "ETH", "addresses": ["0x"], "networks": ["mars"]}],
+            [{"account": "crypto:x", "asset": "SOL", "addresses": ["S"], "networks": ["base"]}],
         ):
             with pytest.raises(Problem):
                 connections.update(conn, "market", "system:test", settings={"wallets": wrong})

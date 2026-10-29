@@ -12,6 +12,9 @@
 - KuCoin : grand livre par tranches de 24 heures, un an (ce que KuCoin garde).
 - Portefeuilles ETH (Blockscout, jetons suivis et gaz) et SOL (RPC) : leurs transactions au
   registre, reliées aux plateformes par le txId. Le solde passé n'est pas reconstitué.
+- Portefeuille ETH multi-réseau : `networks` (Ethereum, Arbitrum, Base, Polygon), soldes et
+  historique sur chacun ; cases « Réseaux » dans l'app. Jetons de staking (`staking_tokens`,
+  Kiln cbwsETH) comptés comme de l'ETH à leur valeur sous-jacente.
 - Socle commun `exchanges/history.py` ; une jambe d'opération peut porter sa valeur
   (`value`, `value_currency`).
 
