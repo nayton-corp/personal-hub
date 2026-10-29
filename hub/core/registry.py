@@ -14,6 +14,14 @@ from hub.platform.settings import Settings, env_domains
 
 ENTRY_POINT_GROUP = "hub.domains"
 DomainFactory = Callable[[Settings], Domain]
+# écrans et rubriques de la coquille de l'app : un domaine ne les reprend pas (S5)
+SHELL_IDS = frozenset({"accueil", "sources", "display", "profile", "security", "health"})
+
+
+def _screens(domain: Domain) -> list[str]:
+    """Les identifiants qu'un domaine occupe dans l'app : onglets et rubriques des réglages."""
+    app = domain.manifest().app
+    return [t.id for t in app.tabs] + [s.id for s in app.settings]
 
 
 class Registry:
@@ -31,6 +39,8 @@ class Registry:
             if not scope.startswith(f"{domain.name}:"):
                 raise ValueError(f"portée {scope!r} hors du domaine {domain.name}")
         problems = domain.manifest().problems()
+        taken = SHELL_IDS | {x for d in self for x in _screens(d)}
+        problems += [f"écran déjà pris : {x}" for x in sorted(set(_screens(domain)) & taken)]
         if problems:
             raise ValueError(f"manifeste de {domain.name} : {', '.join(problems)}")
         self._domains[domain.name] = domain

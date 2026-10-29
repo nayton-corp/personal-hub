@@ -7,6 +7,20 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-018 · L'app est une coquille qui monte les modules des domaines (29.10.2026)
+
+- **Contexte** : `finance.js` était à la fois la coquille et la finance : un nouveau domaine
+  aurait dû toucher la navigation, la barre d'onglets et la page des réglages.
+- **Décision** : `shell.js` (navigation, onglets, feuilles) et `sources.js` (page des
+  réglages, rubriques affichage, profil, sécurité, état du hub) ne nomment aucun domaine. Ils
+  lisent `/api/domains` et chargent les modules du manifeste : onglets, bloc d'accueil
+  (`home`), rubriques, module du domaine (`module` : démarrage, rendu commun, liens des
+  notifications). Un onglet ou une rubrique sans balisage reçoit une page générique. Les
+  manifestes du dernier lancement restent dans le navigateur pour démarrer hors ligne.
+- **Conséquence** : un domaine ajoute un onglet sans changer la coquille (test du domaine
+  factice). Ses écrans et ses rubriques ne reprennent ni ceux de la coquille ni ceux d'un
+  autre domaine (refusé au démarrage).
+
 ## D-017 · Un jeton a toujours une date de fin (29.10.2026)
 
 - **Contexte** : un jeton de l'assistant volé lisait la finance sans limite de temps, et le

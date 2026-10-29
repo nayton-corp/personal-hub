@@ -5,7 +5,7 @@
 // choisies (les versements n'y sont pas du gain). Les dettes (/finance/debts) sont des lignes
 // négatives de catégorie « Dettes » : le total est net.
 import { DEBT_KIND, debtDetail, debtMark } from "./debts.js";
-import { go, reveal } from "./finance.js";
+import { go, reveal } from "./shell.js";
 import { linkTo } from "./journal.js";
 import { MOIS, MOIS_L, base } from "./format.js";
 import { gainSpan, perfSection, perfSummary, rate, ratePct, signedMoney, tone, units } from "./perf.js";

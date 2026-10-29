@@ -1,6 +1,6 @@
-// Coquille de l'app (L0-09) : connexion par passkey, puis les écrans Finance (finance.js). Aucun
+// Entrée de l'app (L0-09) : connexion par passkey, puis la coquille (shell.js) et ses domaines. Aucun
 // script en ligne : la CSP de Caddy n'autorise que les fichiers servis par le hub.
-import { start } from "./finance.js";
+import { start } from "./shell.js";
 import { setBase } from "./format.js";
 import { api, setTimeZone, store, timeZone } from "./store.js";
 import { toast } from "./ui.js";
@@ -95,7 +95,7 @@ async function enter(session) {
   $("tabbar").hidden = false;
   if (!started) {
     started = true;
-    start();
+    await start();
   }
   await renderSettings(session);
 }

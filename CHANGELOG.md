@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+### App modulaire (chantier S5)
+
+- La coquille de l'app (`shell.js`, `sources.js`) monte les domaines d'après leurs manifestes :
+  barre d'onglets, blocs de l'accueil, rubriques de Sources et réglages, actions. La finance
+  devient un module comme un autre (`finance.js`, rubriques dans `settings.js`).
+- Le manifeste gagne `home` (bloc d'accueil) et `module` (module du domaine) ; un domaine qui
+  reprend un écran de la coquille ou d'un autre domaine est refusé au démarrage.
+- Écrans identiques à 375 px avant et après (captures comparées, chaque rubrique comprise).
+
 ### Sauvegarde et exploitation sans liste en dur (chantier S7)
 
 - `hub ops databases` et `hub ops litestream` : les bases (core, puis chaque domaine monté)

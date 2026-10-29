@@ -3,7 +3,7 @@
 // l'on agit.
 import { hiddenIds } from "./accounts.js";
 import { budgetPath, model } from "./budget.js";
-import { go } from "./finance.js";
+import { go } from "./shell.js";
 import { base, date, monthName } from "./format.js";
 import { catMark, taxRate } from "./meta.js";
 import { approve, outcome, pendingPath, propose } from "./proposals.js";

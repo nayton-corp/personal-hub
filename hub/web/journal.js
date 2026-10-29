@@ -81,10 +81,9 @@ export function reset() {
   tx.key = null;
 }
 
-export function todoCount() {
-  const k = store.data(kpisPath());
-  return k ? k.to_categorize : 0;
-}
+// badge de l'onglet : les écritures à classer
+export const todoLabel = "à classer";
+export const todoCount = () => (store.data(kpisPath()) || { to_categorize: 0 }).to_categorize;
 
 function catMap() {
   const c = store.data(catsPath);

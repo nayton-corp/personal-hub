@@ -103,12 +103,34 @@
             ],
             "title": "Cards"
           },
+          "home": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home"
+          },
           "home_cards": {
             "items": {
               "$ref": "#/components/schemas/HomeCardOut"
             },
             "title": "Home Cards",
             "type": "array"
+          },
+          "module": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module"
           },
           "settings": {
             "items": {

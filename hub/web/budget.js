@@ -4,7 +4,7 @@
 // six mois, repliés sur une ligne de résumé. Les
 // montants viennent de /finance/budget, /flows, /budget/months ; seul le rythme (part du mois
 // écoulée) et la projection se calculent ici.
-import { go, reveal } from "./finance.js";
+import { go, reveal } from "./shell.js";
 import { MOIS, base, date, monthName } from "./format.js";
 import { GROUP_LABEL, catLook, catMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";

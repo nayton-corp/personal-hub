@@ -14,7 +14,7 @@ from sqlalchemy import text
 from hub.api.app import create_app
 from hub.core import connectors, maintenance
 from hub.core.context import HubContext
-from hub.core.manifest import AppModule, Importer, Manifest, Tab, unguarded
+from hub.core.manifest import AppModule, Importer, Manifest, SettingsSection, Tab, unguarded
 from hub.core.registry import Registry, contributions
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.manifest import MANIFEST as FINANCE
@@ -38,6 +38,7 @@ def test_the_app_mounts_what_the_demo_declares(hub: HubContext, client: TestClie
     ]
     assert demo["app"]["settings"][0]["group"] == "Préférences"
     assert demo["app"]["cards"] == "demo.js"
+    assert (demo["app"]["home"], demo["app"]["module"]) == ("demo-home.js", "demo.js")
     assert demo["importers"] == [
         {"name": "notes", "label": "Notes de démo", "suffixes": [".demo", ".txt"]}
     ]
@@ -152,7 +153,7 @@ def test_the_finance_manifest_matches_the_code(settings: Settings) -> None:
     assert FINANCE.problems() == []
     assert FINANCE.connectors == connectors.names()
     modules = {t.module for t in FINANCE.app.tabs} | {s.module for s in FINANCE.app.settings}
-    for module in {*modules, FINANCE.app.cards}:
+    for module in {*modules, FINANCE.app.cards, FINANCE.app.home, FINANCE.app.module}:
         assert (WEB / str(module)).is_file(), module
     finance = FinanceDomain(settings)
     finance.migrate()
@@ -175,3 +176,21 @@ def test_every_manifest_field_is_filled_by_the_demo() -> None:
         assert getattr(DEMO, f.name) not in ("", (), frozenset(), None), f.name
     for f in dataclasses.fields(AppModule):
         assert getattr(DEMO.app, f.name) not in ((), None), f.name
+
+
+def test_a_domain_cannot_take_a_screen_of_the_shell_or_of_another(
+    settings: Settings, tmp_path: Path
+) -> None:
+    def demo_with(**changes: object) -> DemoDomain:
+        demo = DemoDomain(tmp_path)
+        taken = dataclasses.replace(DEMO, app=dataclasses.replace(DEMO.app, **changes))
+        demo.manifest = lambda: taken  # type: ignore[method-assign]
+        return demo
+
+    with pytest.raises(ValueError, match="écran déjà pris : budget"):
+        Registry([FinanceDomain(settings), demo_with(tabs=(Tab("budget", "B", "x", "b.js"),))])
+    with pytest.raises(ValueError, match="écran déjà pris : sources"):
+        Registry([demo_with(tabs=(Tab("sources", "S", "x", "s.js"),))])
+    shell = (SettingsSection("health", "État", "x", "Compte", "d.js"),)
+    with pytest.raises(ValueError, match="écran déjà pris : health"):
+        Registry([demo_with(settings=shell)])

@@ -53,13 +53,16 @@ MANIFEST = Manifest(
             HomeCard("budget", "Budget du mois", "/budget"),
         ),
         settings=(
-            SettingsSection("conn", "Connexions", "plug", "Données", "connections.js"),
-            SettingsSection("accounts", "Comptes", "wallet", "Données", "accounts.js"),
-            SettingsSection("debts", "Dettes", "landmark", "Données", "debts.js"),
-            SettingsSection("budget-period", "Budget", "piggy", "Préférences", "settings.js"),
+            SettingsSection("conn", "Connexions", "plug", "Données", "settings.js"),
+            SettingsSection("accounts", "Comptes", "wallet", "Données", "settings.js"),
+            SettingsSection("debts", "Dettes", "landmark", "Données", "settings.js"),
+            SettingsSection("export", "Exporter", "download", "Données", "settings.js"),
+            SettingsSection("budget", "Budget", "piggy", "Préférences", "settings.js"),
             SettingsSection("tax", "Impôts et 3a", "shield", "Préférences", "settings.js"),
         ),
         cards="proposals.js",
+        home="home.js",
+        module="finance.js",
     ),
     importers=(
         Importer(

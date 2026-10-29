@@ -27,7 +27,7 @@ hub/core/           cœur : erreurs problem+json, base core.db, jetons, passkeys
 hub/core/migrations Alembic de core.db (SQL explicite, pas de downgrade)
 hub/api/            application FastAPI et routes du cœur
 hub/domains/        domaines, isolés par import-linter ; finance/ : registre, camt.053, API
-hub/web/            coquille de l'app (PWA), servie par Caddy
+hub/web/            l'app (PWA) : coquille (shell.js) et modules des domaines
 hub/brain/          IA locale : passerelle MCP, assistant et suggestions (`hub-brain`), sur le Mac
 hub/cli.py          commande `hub`
 deploy/             compose, Caddy, Tailscale, Litestream, crontab, deploy.sh

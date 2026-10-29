@@ -53,6 +53,8 @@ MANIFEST = Manifest(
         home_cards=(HomeCard("compte", "Éléments", "/summary"),),
         settings=(SettingsSection("demo-prefs", "Démo", "gear", "Préférences", "demo.js"),),
         cards="demo.js",
+        home="demo-home.js",
+        module="demo.js",
     ),
     importers=(
         Importer(

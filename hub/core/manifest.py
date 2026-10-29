@@ -1,8 +1,8 @@
 """Manifeste d'un domaine, v2 (chantier S2) : ce qu'il apporte au hub, déclaré une fois.
 
 Le cœur, l'app et l'assistant lisent le manifeste au lieu de connaître le domaine :
-- `app` : ses onglets, ses cartes d'accueil, ses rubriques de réglages et le module qui dessine
-  ses cartes à valider (la coquille de l'app les monte au chantier S5) ;
+- `app` : ses onglets, ses cartes d'accueil, ses rubriques de réglages et ses modules (cartes à
+  valider, blocs de l'accueil, module du domaine), que la coquille de l'app monte (S5) ;
 - `importers` : les fichiers de la boîte d'entrée qu'il réclame (S4 les lui confie) ;
 - `connectors` : les entrées du catalogue qui le nourrissent (le catalogue lui-même arrive par
   le point d'entrée `hub.connectors`, lisible sans monter le domaine, voir D-016) ;
@@ -64,6 +64,8 @@ class AppModule:
     home_cards: tuple[HomeCard, ...] = ()
     settings: tuple[SettingsSection, ...] = ()
     cards: str | None = None  # module qui dessine les cartes à valider du domaine
+    home: str | None = None  # module qui ajoute ses blocs à l'accueil de la coquille
+    module: str | None = None  # module du domaine : démarrage, rendu commun, liens (S5)
 
 
 @dataclass(frozen=True)
@@ -121,7 +123,7 @@ class Manifest:
             out += [f"identifiant invalide : {i!r}" for i in ids if not ID.match(i)]
             out += [f"identifiant en double : {i}" for i in sorted(set(ids)) if ids.count(i) > 1]
         modules = [t.module for t in self.app.tabs] + [s.module for s in self.app.settings]
-        modules += [self.app.cards] if self.app.cards else []
+        modules += [m for m in (self.app.cards, self.app.home, self.app.module) if m]
         out += [f"module invalide : {m!r}" for m in modules if not MODULE.match(m)]
         out += [
             f"chemin invalide : {c.endpoint!r}"
@@ -142,6 +144,8 @@ class Manifest:
                 "home_cards": [vars(c) for c in self.app.home_cards],
                 "settings": [vars(s) for s in self.app.settings],
                 "cards": self.app.cards,
+                "home": self.app.home,
+                "module": self.app.module,
             },
             "importers": [
                 {"name": i.name, "label": i.label, "suffixes": sorted(i.suffixes)}
