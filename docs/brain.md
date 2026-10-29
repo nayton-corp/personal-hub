@@ -75,7 +75,8 @@ Depuis le clone du dépôt (`~/personal-hub/personal-hub`), avec l'alias `hubc` 
      brain: "hub_…"          # jeton brain-mac
      aggregates: "hub_…"     # jeton claude-aggregates (facultatif)
    ```
-   Le chemin est `HUB_BRAIN_SECRETS` dans `deploy/.env`.
+   Le chemin est `HUB_BRAIN_SECRETS` dans `deploy/.env`. Pour un autre modèle Ollama déjà
+   présent, `HUB_BRAIN_MODEL=<nom affiché par ollama list>` dans le même fichier.
 4. **Déployer** : `make deploy TAG=v0.7.0`, puis ajoute `brain` aux profils de `deploy/.env`
    (`COMPOSE_PROFILES=collectors,brain`) et `hubc up -d`.
 5. **Contrôle de bout en bout** :

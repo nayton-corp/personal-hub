@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -26,7 +27,13 @@ class BrainConfig(BaseModel):
 
 
 def config(settings: Settings) -> BrainConfig:
-    return BrainConfig.model_validate(settings.domain("brain"))
+    """`HUB_BRAIN_MODEL` (deploy/.env) remplace le modèle de settings.toml, figé dans l'image :
+    on change de modèle Ollama sans reconstruire."""
+    data = settings.domain("brain")
+    model = os.environ.get("HUB_BRAIN_MODEL", "").strip()
+    if model:
+        data["model"] = model
+    return BrainConfig.model_validate(data)
 
 
 class TokenMissing(RuntimeError):

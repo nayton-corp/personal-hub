@@ -156,7 +156,9 @@ services:
     image: hub:${HUB_TAG:-dev}
     profiles: [brain]
     command: ["hub-brain", "daemon"]
-    environment: *hub-env
+    environment:
+      <<: *hub-env
+      HUB_BRAIN_MODEL: ${HUB_BRAIN_MODEL:-}  # modèle Ollama, à la place de celui de settings.toml
     volumes:
       - brain:/srv/hub/brain
       - ${HUB_BRAIN_SECRETS:-./brain.enc.yaml}:/srv/hub/config/secrets.enc.yaml:ro
