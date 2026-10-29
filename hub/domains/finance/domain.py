@@ -18,20 +18,18 @@ from sqlalchemy import Connection, Engine, event, text
 from hub.core import inbox, integrity, profile
 from hub.core.domain import Event, Health, Hit, McpTool, ProposalKind, Ref
 from hub.core.manifest import Manifest, Observation, Severity
-from hub.domains.finance import (
-    importer,
-    ledger,
-    manifest,
-    packs,
-    period,
-    reads,
-    recurring,
-    sentinels,
-    snapshots,
-    transfers,
-)
+from hub.domains.finance import manifest
+from hub.domains.finance.api import build_router
+from hub.domains.finance.classement.app import packs, recurring, sentinels
+from hub.domains.finance.cli import build_cli
 from hub.domains.finance.handlers import build_kinds
-from hub.domains.finance.importer import Archiver, ImportService, recipient_from_key
+from hub.domains.finance.patrimoine.app import snapshots, transfers
+from hub.domains.finance.registre.app import ledger, reads
+from hub.domains.finance.registre.model import period
+from hub.domains.finance.sources.app import statements
+from hub.domains.finance.sources.app.importer import ImportService
+from hub.domains.finance.sources.infra.files import Archiver, recipient_from_key
+from hub.domains.finance.tools import FinanceTools
 from hub.kernel.clock import local_today
 from hub.kernel.ids import Urn, urn
 from hub.kernel.money import base_currency
@@ -153,18 +151,12 @@ class FinanceDomain:
         return runner.current(MIGRATIONS, self.path) == runner.head(MIGRATIONS)
 
     def router(self) -> APIRouter:
-        from hub.domains.finance.api import build_router
-
         return build_router(self)
 
     def cli(self) -> typer.Typer | None:
-        from hub.domains.finance.cli import build_cli
-
-        return build_cli(self)
+        return build_cli(self, type(self))
 
     def mcp_tools(self) -> list[McpTool]:
-        from hub.domains.finance.tools import FinanceTools
-
         return FinanceTools(self).build()
 
     def search(self, q: str, limit: int, scopes: frozenset[str]) -> list[Hit]:
@@ -227,7 +219,7 @@ class FinanceDomain:
             ids = conn.execute(
                 text("SELECT id FROM imports WHERE status = 'needs_review' ORDER BY received_at")
             ).scalars()
-            return sum(importer.request_review(conn, i) for i in list(ids))
+            return sum(statements.request_review(conn, i) for i in list(ids))
 
     def verify_ledger(self) -> ledger.VerifyResult:
         with self._engine.connect() as conn:

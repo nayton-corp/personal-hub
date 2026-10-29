@@ -5,8 +5,9 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from hub.domains.finance import institutions, transfers, valuation
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.patrimoine.app import transfers, valuation
+from hub.domains.finance.registre.model import institutions
 from tests.finance.test_app_reads import ctx, fin  # noqa: F401 - fixtures
 
 

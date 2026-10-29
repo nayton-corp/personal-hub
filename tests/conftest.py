@@ -75,7 +75,7 @@ def bearer(secret: str) -> dict[str, str]:
 def add_connections(hub: HubContext, *names: str) -> None:
     """Les connexions d'avant G4 (bcf, revolut…), sans secret : leur état existe."""
     from hub.core import connections
-    from hub.domains.finance.legacy_connections import LEGACY
+    from hub.domains.finance.sources.app.legacy_connections import LEGACY
 
     with hub.core.engine.begin() as conn:
         for name in names or tuple(LEGACY):

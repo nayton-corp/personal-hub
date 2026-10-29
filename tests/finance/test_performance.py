@@ -12,8 +12,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Connection, text
 
 from hub.core.context import HubContext
-from hub.domains.finance import assets, catalog, debts, ledger, performance, valuation
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.patrimoine.app import assets, debts, perf_lines, performance, valuation
+from hub.domains.finance.registre.app import catalog, ledger
 from hub.platform.db import begin_immediate
 from tests.finance.conftest import add_account, open_account
 from tests.finance.test_double_sas import client, ctx, fin
@@ -78,7 +79,7 @@ def price(conn: Connection, on: str, value: str) -> None:
 
 def run(fin: FinanceDomain, as_of: str, ids: list[str] | None = None, **kw: Any) -> dict[str, Any]:
     with fin.engine().connect() as conn:
-        eng = performance.build(conn, as_of)
+        eng = perf_lines.build(conn, as_of)
     assert eng is not None
     return performance.report(eng, ids, kw.get("start"), kw.get("end"), kw.get("step", "day"))
 
@@ -195,12 +196,12 @@ def test_period_inside_history(fin: FinanceDomain, fund: catalog.Account) -> Non
 
 def test_values_match_the_valuation(fin: FinanceDomain, banks: Any, fund: catalog.Account) -> None:
     with fin.engine().connect() as conn:
-        eng = performance.build(conn, "2026-03-31")
+        eng = perf_lines.build(conn, "2026-03-31")
         assert eng is not None
         for on in ("2026-01-15", "2026-01-31", "2026-03-05", "2026-03-31"):
             k = eng.index(on)
             total = sum(
-                ln.value[k] for ln in eng.lines.values() if ln.value[k] != performance.ABSENT
+                ln.value[k] for ln in eng.lines.values() if ln.value[k] != perf_lines.ABSENT
             )
             assert total == valuation.value_at(conn, on).net_worth
 

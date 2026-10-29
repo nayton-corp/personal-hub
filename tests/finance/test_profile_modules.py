@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from hub.core import profile
 from hub.core.context import HubContext
-from hub.domains.finance import sentinels
+from hub.domains.finance.classement.app import sentinels
 from hub.domains.finance.domain import FinanceDomain
 from tests.finance.test_app_reads import (  # noqa: F401 - fixtures
     client,

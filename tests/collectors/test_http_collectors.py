@@ -17,7 +17,7 @@ from hub.collectors.http import Http
 from hub.collectors.ibkr import flow as ibkr
 from hub.collectors.market import flow as market
 from hub.collectors.runtime import Env
-from hub.domains.finance import market as finance_market
+from hub.domains.finance.sources.infra import market_file
 from tests.factories import ibkr as f
 
 Route = Callable[[str, str, bytes | None], tuple[int, bytes]]
@@ -197,7 +197,7 @@ def test_market_run_drops_a_file_the_finance_domain_reads(make_env: Any) -> None
     result = market.run(env, "run", Http(fake))
     assert (result.outcome, result.files, result.detail) == ("ok", 1, None)
     (raw,) = inbox_files(env)
-    doc = finance_market.parse(raw)
+    doc = market_file.parse(raw)
     assert [(x.base, x.rate) for x in doc.fx] == [
         ("EUR", Decimal("0.941176470588")),
         ("USD", Decimal("0.8")),
@@ -233,7 +233,7 @@ def test_market_follows_the_base_currency(make_env: Any, monkeypatch: pytest.Mon
     fx_url = next(u for _m, u in fake.calls if "frankfurter" in u)
     assert parse_qs(urlsplit(fx_url).query) == {"base": ["EUR"], "symbols": ["USD,GBP,CHF"]}
     assert "vs_currency=eur" in next(u for _m, u in fake.calls if "coingecko" in u)
-    doc = finance_market.parse(inbox_files(env)[0])
+    doc = market_file.parse(inbox_files(env)[0])
     assert {x.quote for x in doc.fx} == {"EUR"}
     assert {p.currency for p in doc.prices} == {"EUR"}
 

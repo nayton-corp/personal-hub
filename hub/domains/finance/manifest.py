@@ -4,8 +4,8 @@ l'assistant. Les modules nommés sont des fichiers de `hub/web`."""
 from __future__ import annotations
 
 from hub.core.manifest import AppModule, HomeCard, Importer, Manifest, SettingsSection, Tab
-from hub.domains.finance.connectors import NAMES
-from hub.domains.finance.importer import INBOX_SUFFIXES
+from hub.domains.finance.sources.app.connectors import NAMES
+from hub.domains.finance.sources.app.importer import INBOX_SUFFIXES
 
 DESCRIPTION = (
     "Finances personnelles : comptes, dépenses par catégorie, budget, patrimoine, "

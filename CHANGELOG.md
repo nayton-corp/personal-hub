@@ -2,6 +2,18 @@
 
 ## [Non publié]
 
+### Finance en couches (chantier S6)
+
+- La finance est rangée en quatre sous-contextes (registre, classement, patrimoine, sources),
+  chacun en couches interface → app → infra → model ; import-linter les impose sans écart.
+- L'importeur, les propositions, les lectures, les outils, la CLI, IBKR, la performance et la
+  transparence des fonds sont découpés : plus aucun fichier de la finance au-delà de 400 lignes.
+- Imports circulaires cassés : les bords reçoivent `port.Finance`, l'ouverture d'un compte vit
+  dans le registre, la lecture des fichiers IBKR et `hub.market.v1` dans `sources/infra`.
+- `public.py` : la seule lecture de la finance permise aux autres domaines (agrégats).
+- Aucun changement de comportement : mêmes routes, commandes et outils ; une base d'avant,
+  reconstruite par `hub finance rebuild`, se compare sans écart.
+
 ### App modulaire (chantier S5)
 
 - La coquille de l'app (`shell.js`, `sources.js`) monte les domaines d'après leurs manifestes :
@@ -444,7 +456,7 @@
   défaut en sont tirés ; `[collectors] schedules` ne remplace plus que les horaires qu'il nomme.
   Route `GET /api/collectors/catalog` (app). Des tests vérifient que compose, le code des
   collecteurs (secrets lus) et le planificateur suivent le catalogue.
-- `hub/domains/finance/institutions.py` déclare les codes d'opération VIAC et IBKR et leur rôle
+- `hub/domains/finance/registre/model/institutions.py` déclare les codes d'opération VIAC et IBKR et leur rôle
   (virement, mouvement interne, effet marché, versement 3a) ; l'appariement, la valorisation et
   le suivi du 3a les lisent au lieu de listes écrites en dur. Un test vérifie qu'ils concordent
   avec les règles système des migrations. Aucun changement de résultat.

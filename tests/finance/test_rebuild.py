@@ -11,9 +11,10 @@ from sqlalchemy import text
 
 from hub.core.context import HubContext
 from hub.core.registry import Registry
-from hub.domains.finance import ledger, rebuild
+from hub.domains.finance import compare, rebuild
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.registre.app import ledger
+from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform.db import begin_immediate
 from tests.factories import ibkr as f
 from tests.factories import viac as v
@@ -92,7 +93,7 @@ def test_rebuild_reproduces_the_ledger(ctx: HubContext, fin: FinanceDomain, tmp_
     assert report.ok, report.public()
     assert (report.epoch, report.proposals) == (2, 3)
     assert report.skipped == {"reference": 1}
-    diff = rebuild.compare(fin.engine(), target.engine())
+    diff = compare.compare(fin.engine(), target.engine())
     assert diff.ok, diff.public()
     assert diff.checks["entries"]["source"] == 8  # 2 BCF + 3 VIAC + 3 ouvertures
     assert diff.checks["holdings"]["rebuilt"] == 1
@@ -124,7 +125,7 @@ def test_compare_finds_differences(ctx: HubContext, fin: FinanceDomain, tmp_path
                 "created_at": "t",
             },
         )
-    diff = rebuild.compare(fin.engine(), target.engine())
+    diff = compare.compare(fin.engine(), target.engine())
     assert not diff.ok
     assert diff.checks["notes"]["differences"] == 1
     assert diff.checks["notes"]["examples"] == [eid]
@@ -197,7 +198,7 @@ def test_rebuild_replays_wealth_documents(
     target = target_for(fin, tmp_path)
     report = rebuild.rebuild(fin, target, rebuild.applied_proposals(fin.engine(), ctx.core.engine))
     assert report.ok, report.public()
-    diff = rebuild.compare(fin.engine(), target.engine())
+    diff = compare.compare(fin.engine(), target.engine())
     assert diff.ok, diff.public()
     for name in ("holdings", "prices", "fx", "compositions", "trades"):
         assert diff.checks[name]["rebuilt"] > 0, name

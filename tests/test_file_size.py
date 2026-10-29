@@ -12,27 +12,15 @@ LIMIT = 400
 
 # chemin relatif à hub/ → taille maximale tolérée, en attendant le découpage (S5, S6)
 TOO_LONG: dict[str, int] = {
-    "domains/finance/rebuild.py": 412,
-    "domains/finance/market.py": 432,
     "core/collectors.py": 460,
-    "domains/finance/api.py": 472,
-    "domains/finance/lookthrough.py": 510,
     "cli.py": 522,
     "collectors/exchanges/binance_history.py": 583,
     "web/budget.js": 600,
-    "domains/finance/performance.py": 648,
-    "domains/finance/cli.py": 651,
     "web/journal.js": 662,
-    "domains/finance/insights.py": 713,
-    "domains/finance/tools.py": 723,
     "web/connections.js": 730,
-    "domains/finance/reads.py": 744,
-    "domains/finance/ibkr.py": 750,
     "web/wealth.js": 827,
     "core/proposals.py": 833,
     "collectors/market/flow.py": 1047,
-    "domains/finance/handlers.py": 1281,
-    "domains/finance/importer.py": 1422,
 }
 
 

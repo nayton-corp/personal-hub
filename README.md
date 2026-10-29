@@ -26,7 +26,8 @@ hub/core/           cœur : erreurs problem+json, base core.db, jetons, passkeys
                     contrat de domaine, registre, connexions, tâches de fond
 hub/core/migrations Alembic de core.db (SQL explicite, pas de downgrade)
 hub/api/            application FastAPI et routes du cœur
-hub/domains/        domaines, isolés par import-linter ; finance/ : registre, camt.053, API
+hub/domains/        domaines, isolés par import-linter ; finance/ : registre, classement,
+                    patrimoine, sources (chacun interface → app → infra → model)
 hub/web/            l'app (PWA) : coquille (shell.js) et modules des domaines
 hub/brain/          IA locale : passerelle MCP, assistant et suggestions (`hub-brain`), sur le Mac
 hub/cli.py          commande `hub`

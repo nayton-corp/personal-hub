@@ -7,6 +7,20 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-019 · La finance en quatre sous-contextes, chacun en couches (29.10.2026)
+
+- **Contexte** : 45 modules à plat, douze au-delà de 400 lignes (l'importeur 1 424, les
+  propositions 1 281), des imports circulaires (`domain` ↔ `api`, importeur ↔ IBKR) cachés
+  dans des fonctions.
+- **Décision** : registre, classement (et budget), patrimoine, sources ; chacun en `interface`
+  → `app` → `infra` (formats et fichiers, sans base) → `model` (pur). Un sous-contexte n'importe
+  que ceux d'après lui : sources → patrimoine → classement → registre. Les bords du domaine
+  (`api`, `cli`, `tools`, `handlers`, `rebuild`) reçoivent un `port.Finance` au lieu de
+  `FinanceDomain` ; un autre domaine ne lit que `public.py`.
+- **Conséquence** : quatre contrats import-linter, sans écart ; plus aucun fichier de la finance
+  au-delà de 400 lignes. Une base construite avant le découpage, reconstruite après par
+  `hub finance rebuild`, se compare sans écart.
+
 ## D-018 · L'app est une coquille qui monte les modules des domaines (29.10.2026)
 
 - **Contexte** : `finance.js` était à la fois la coquille et la finance : un nouveau domaine

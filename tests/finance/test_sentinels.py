@@ -12,7 +12,7 @@ from sqlalchemy import text
 from hub.core import proposals
 from hub.core.context import HubContext
 from hub.core.notify import Message
-from hub.domains.finance import sentinels
+from hub.domains.finance.classement.app import sentinels
 from hub.domains.finance.domain import FinanceDomain
 from hub.platform.db import begin_immediate
 from tests.finance.test_app_reads import (  # noqa: F401 - fixtures

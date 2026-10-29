@@ -1,9 +1,9 @@
 """Connecteurs : la forme d'une source que le hub sait collecter (chantier « hub générique », G3).
 
 Le cœur ne connaît aucune source : chaque domaine déclare les siennes au point d'entrée
-`hub.connectors` (la finance : `hub.domains.finance.connectors:CATALOG`). Un connecteur donne son
-nom, sa méthode, son pays, les types de comptes qu'il alimente, les champs de secrets qu'il
-attend, les réglages qu'il accepte et son horaire par défaut. Une *connexion* (G4,
+`hub.connectors` (la finance : `hub.domains.finance.sources.app.connectors:CATALOG`). Un
+connecteur donne son nom, sa méthode, son pays, les types de comptes qu'il alimente, les champs
+de secrets qu'il attend, les réglages qu'il accepte et son horaire par défaut. Une *connexion* (G4,
 `connections` dans `core.db`) est l'usage d'un connecteur par l'instance : un identifiant, ses
 secrets chiffrés, son horaire et ses réglages. Un même connecteur peut servir plusieurs
 connexions.

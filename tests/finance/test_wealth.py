@@ -17,20 +17,14 @@ from hub.api.app import create_app
 from hub.core import tokens
 from hub.core.context import HubContext
 from hub.core.registry import Registry
-from hub.domains.finance import (
-    catalog,
-    insights,
-    ledger,
-    lookthrough,
-    manual,
-    market,
-    recurring,
-    rules,
-    transfers,
-    valuation,
-)
+from hub.domains.finance.classement.app import insights, recurring, rules
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.patrimoine.app import holdings, lookthrough, transfers, valuation
+from hub.domains.finance.patrimoine.infra import composition
+from hub.domains.finance.registre.app import catalog, ledger
+from hub.domains.finance.sources.app import manual
+from hub.domains.finance.sources.infra import market_file
+from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform.db import begin_immediate
 from tests.factories.camt import IBAN, Stmt, Tx, camt053
 from tests.finance.conftest import (
@@ -48,7 +42,7 @@ SPI = "CH0237935652"
 
 def market_doc(**kw: object) -> bytes:
     return json.dumps(
-        {"format": market.FORMAT, "fetched_at": "2026-10-27T07:00:00Z", **kw}
+        {"format": market_file.FORMAT, "fetched_at": "2026-10-27T07:00:00Z", **kw}
     ).encode()
 
 
@@ -88,7 +82,7 @@ def test_market_file_fx_prices_and_wallet(finance: FinanceDomain) -> None:
             }
         ],
     )
-    assert market.is_market(doc)
+    assert market_file.is_market(doc)
     report = finance.importer.process([Incoming("market.json", doc)])
     assert {(s.index, s.status, tuple(s.reasons)) for s in report.statements} == {
         (0, "applied", ()),
@@ -196,14 +190,14 @@ def test_wallet_history_is_valued_with_old_usd_prices(finance: FinanceDomain) ->
 
 
 def test_market_file_refusals() -> None:
-    with pytest.raises(market.MarketError):
-        market.parse(
+    with pytest.raises(market_file.MarketError):
+        market_file.parse(
             market_doc(
                 fx=[{"on_date": "x", "base": "EUR", "quote": "CHF", "rate": 1, "source": "ecb"}]
             )
         )
-    with pytest.raises(market.MarketError):
-        market.parse(
+    with pytest.raises(market_file.MarketError):
+        market_file.parse(
             market_doc(
                 balances=[
                     {
@@ -215,9 +209,9 @@ def test_market_file_refusals() -> None:
                 ]
             )
         )
-    with pytest.raises(market.MarketError):
-        market.parse(b'{"format": "autre"}')
-    assert not market.is_market(b"[1, 2]")
+    with pytest.raises(market_file.MarketError):
+        market_file.parse(b'{"format": "autre"}')
+    assert not market_file.is_market(b"[1, 2]")
 
 
 def test_foreign_cash_account_uses_fx(finance: FinanceDomain) -> None:
@@ -295,7 +289,7 @@ def test_manual_positions(finance: FinanceDomain) -> None:
     assert v.by_envelope["titres"] == (1000 + 400) * 80
     assert v.by_envelope["crypto"] == 450_000
     with finance.engine().connect() as conn:
-        h = insights.holdings(conn, "2026-10-27")
+        h = holdings.holdings(conn, "2026-10-27")
     assert {i["isin"]: i["price_currency"] for i in h["items"]}["SYM:AAPL"] == "USD"
 
 
@@ -353,7 +347,7 @@ def test_crypto_performance_from_bank_payments_and_arrivals(finance: FinanceDoma
     finance.importer.process([Incoming("market.json", doc)])
     with finance.engine().connect() as conn:
         v = valuation.value_at(conn, "2026-10-27")
-        h = insights.holdings(conn, "2026-10-27")
+        h = holdings.holdings(conn, "2026-10-27")
     # le virement achète des cryptos : il ne sort pas du patrimoine
     assert (v.net_worth, v.deposits) == (350_000 + 189_000, 500_000)
     (line,) = h["items"]
@@ -385,7 +379,7 @@ def test_arrival_cost_follows_sales_and_missing_prices(finance: FinanceDomain) -
     )
     finance.importer.process([Incoming("market.json", doc)])
     with finance.engine().connect() as conn:
-        h = insights.holdings(conn, "2026-10-06")
+        h = holdings.holdings(conn, "2026-10-06")
     costs = {i["isin"]: i["cost"] and i["cost"]["minor"] for i in h["items"]}
     assert costs == {"CRYPTO:SOL": 10_000, "CRYPTO:ABC": None}
     assert h["crypto"]["invested"]["minor"] == 0
@@ -410,16 +404,16 @@ ISHARES = (
 
 def test_issuer_holdings_list(finance: FinanceDomain) -> None:
     data = ISHARES.encode()
-    source = lookthrough.detect(f"{WORLD}_holdings.csv", data)
+    source = composition.detect(f"{WORLD}_holdings.csv", data)
     assert source == f"lookthrough:{WORLD}"
-    assert lookthrough.detect("holdings.csv", data) is None  # sans ISIN dans le nom
-    (comp,) = lookthrough.parse(source, data).compositions
+    assert composition.detect("holdings.csv", data) is None  # sans ISIN dans le nom
+    (comp,) = composition.parse(source, data).compositions
     assert comp.on_date == "2026-10-24"
     region = {w.bucket: w.weight for w in comp.weights if w.dimension == "region"}
     assert region == {
-        lookthrough.NORTH_AMERICA: Decimal("0.5"),
-        lookthrough.SWITZERLAND: Decimal("0.1"),
-        lookthrough.JAPAN: Decimal("0.4"),
+        composition.NORTH_AMERICA: Decimal("0.5"),
+        composition.SWITZERLAND: Decimal("0.1"),
+        composition.JAPAN: Decimal("0.4"),
     }
     sector = {w.bucket for w in comp.weights if w.dimension == "sector"}
     assert "Technologie" in sector
@@ -434,7 +428,7 @@ def test_generic_composition_and_breakdown(finance: FinanceDomain) -> None:
         f"{WORLD},region,Amérique du Nord,70,2026-09-30\n"
         f"{WORLD},region,Europe (hors Suisse),20,2026-09-30\n"
     ).encode()
-    assert lookthrough.detect("fiche.csv", generic) == lookthrough.SOURCE
+    assert composition.detect("fiche.csv", generic) == composition.SOURCE
     add_ref(finance, "revolut:invest", "securities")
     add_ref(finance, "revolut:crypto", "crypto")
     finance.importer.process(
@@ -464,14 +458,14 @@ def test_generic_composition_and_breakdown(finance: FinanceDomain) -> None:
     items = {i["bucket"]: i["value"]["minor"] for i in out["items"]}
     # fonds : 1000 → 700 / 200 / 100 non ventilé ; Apple 400 non ventilé ; ETH 4500 crypto
     assert items == {
-        lookthrough.NORTH_AMERICA: 70_000,
-        lookthrough.EUROPE: 20_000,
-        lookthrough.CRYPTO: 450_000,
-        lookthrough.UNKNOWN: 50_000,
+        composition.NORTH_AMERICA: 70_000,
+        composition.EUROPE: 20_000,
+        composition.CRYPTO: 450_000,
+        composition.UNKNOWN: 50_000,
     }
-    assert out["items"][-1]["bucket"] == lookthrough.UNKNOWN  # le reste en dernier
+    assert out["items"][-1]["bucket"] == composition.UNKNOWN  # le reste en dernier
     # chaque case nomme les actifs qui la remplissent, le plus gros d'abord
-    na = next(i for i in out["items"] if i["bucket"] == lookthrough.NORTH_AMERICA)
+    na = next(i for i in out["items"] if i["bucket"] == composition.NORTH_AMERICA)
     assert [(a["isin"], a["value"]["minor"]) for a in na["assets"]] == [(WORLD, 70_000)]
     unknown = out["items"][-1]["assets"]
     assert [a["value"]["minor"] for a in unknown] == sorted(

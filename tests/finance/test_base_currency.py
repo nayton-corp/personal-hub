@@ -11,9 +11,12 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy import text
 
-from hub.domains.finance import catalog, handlers, insights, market, valuation
+from hub.domains.finance.classement.app import budget_kinds
 from hub.domains.finance.domain import MIGRATIONS, CurrencyMismatch, FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.patrimoine.app import holdings, valuation
+from hub.domains.finance.registre.app import catalog
+from hub.domains.finance.sources.infra import market_file
+from hub.domains.finance.sources.infra.files import Incoming
 from hub.kernel.money import CurrencyError, base_currency
 from hub.platform import migrations as runner
 from hub.platform.db import begin_immediate
@@ -82,21 +85,21 @@ def test_a_euro_hub_values_in_euros(euro: FinanceDomain) -> None:
     with euro.engine().connect() as conn:
         assert valuation.value_at(conn, "2026-10-27").missing_fx == [chf.id]
     fx = {"on_date": "2026-10-01", "base": "CHF", "quote": "EUR", "rate": "1.05", "source": "ecb"}
-    doc = {"format": market.FORMAT, "fetched_at": "2026-10-27T07:00:00Z", "fx": [fx]}
+    doc = {"format": market_file.FORMAT, "fetched_at": "2026-10-27T07:00:00Z", "fx": [fx]}
     euro.importer.process([Incoming("fx.json", json.dumps(doc).encode())])
     with euro.engine().connect() as conn:
         v = valuation.value_at(conn, "2026-10-27")
         assert (v.net_worth, v.missing_fx) == (60_500, [])
-        kpis = insights.kpis(conn, "2026-10", date(2026, 10, 27), pillar3a=False)
+        kpis = holdings.kpis(conn, "2026-10", date(2026, 10, 27), pillar3a=False)
     assert kpis["currency"] == "EUR"
     assert kpis["net_worth"] == {"minor": 60_500, "currency": "EUR", "display": "605.00"}
 
 
 def test_a_budget_is_in_the_base_currency(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HUB_CURRENCY", "EUR")
-    assert handlers.SetBudget(category_id="loisirs", monthly_minor=1).currency == "EUR"
+    assert budget_kinds.SetBudget(category_id="loisirs", monthly_minor=1).currency == "EUR"
     with pytest.raises(ValidationError):
-        handlers.SetBudget(category_id="loisirs", monthly_minor=1, currency="CHF")
+        budget_kinds.SetBudget(category_id="loisirs", monthly_minor=1, currency="CHF")
 
 
 def test_rows_of_a_euro_hub(euro: FinanceDomain) -> None:

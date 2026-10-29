@@ -16,9 +16,9 @@ from hub.core import sessions, tokens
 from hub.core.auth import SESSION_COOKIE
 from hub.core.context import HubContext
 from hub.core.registry import Registry
-from hub.domains.finance import ledger
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.registre.app import ledger
+from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform.db import begin_immediate
 from tests.factories.camt import OTHER_IBAN, Stmt, Tx, camt053
 from tests.finance.conftest import (
@@ -215,7 +215,7 @@ def test_review_and_search(client: TestClient, ctx: HubContext, fin: FinanceDoma
     assert [s["id"] for s in g["samples"]] == g["entry_ids"]
     assert g["history"] == []
     # une écriture déjà classée à la main : sa catégorie est proposée en premier pour les autres
-    from hub.domains.finance.cli import propose_and_accept
+    from hub.domains.finance.registre.interface.terminal import propose_and_accept
 
     propose_and_accept(
         fin, "recategorize", {"entry_id": g["entry_ids"][0], "category_id": "loisirs"}
@@ -272,7 +272,7 @@ def test_review_groups_card_payments_by_merchant(
     """Le commerçant est lu dans le libellé de carte BCF (la contrepartie est vide ou le nom du
     titulaire) ; un crédit classé par la règle « tout le reste » reste à confirmer ; l'ancien se
     classe d'un coup."""
-    from hub.domains.finance.cli import propose_and_accept
+    from hub.domains.finance.registre.interface.terminal import propose_and_accept
 
     ready_account(fin, 100_000)
     with begin_immediate(fin.engine()) as conn:  # la règle « tout le reste » des crédits
@@ -420,7 +420,7 @@ def test_pending_accounts_then_created_from_a_proposal(
 ) -> None:
     """G5 : l'app liste les comptes que des relevés attendent (sans montant), puis la création
     validée ouvre un compte Revolut au solde déduit, comme `fin revolut add-account`."""
-    from hub.domains.finance.cli import propose_and_accept
+    from hub.domains.finance.registre.interface.terminal import propose_and_accept
     from tests.finance.test_revolut import FIRST, drop, eb_file
 
     drop(fin, "revolut-a.json", eb_file(FIRST, full=True))
@@ -472,7 +472,7 @@ def test_rule_packs_listed_then_installed_from_a_proposal(
 ) -> None:
     """G6 : les premiers pas proposent les packs du pays quand aucune règle n'est active ; la
     proposition validée les installe."""
-    from hub.domains.finance.cli import propose_and_accept
+    from hub.domains.finance.registre.interface.terminal import propose_and_accept
 
     with begin_immediate(fin.engine()) as conn:
         conn.execute(text("DELETE FROM rules WHERE id LIKE 'pack-ch-%'"))
@@ -500,7 +500,7 @@ def test_rule_packs_listed_then_installed_from_a_proposal(
 def test_install_pack_refuses_an_unknown_pack(fin: FinanceDomain) -> None:
     import typer
 
-    from hub.domains.finance.cli import propose_and_accept
+    from hub.domains.finance.registre.interface.terminal import propose_and_accept
 
     with pytest.raises(typer.Exit):
         propose_and_accept(fin, "install_pack", {"name": "atlantide"})

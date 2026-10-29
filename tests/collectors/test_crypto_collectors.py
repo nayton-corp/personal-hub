@@ -23,7 +23,7 @@ from hub.collectors.exchanges import binance, coinbase, kucoin
 from hub.collectors.http import Http
 from hub.collectors.market import flow as market
 from hub.collectors.runtime import Env
-from hub.domains.finance import market as finance_market
+from hub.domains.finance.sources.infra import market_file
 
 Route = Callable[[str, str, dict[str, str], bytes | None], tuple[int, Any]]
 
@@ -59,12 +59,12 @@ class Fake:
         return status, body if isinstance(body, bytes) else json.dumps(body).encode()
 
 
-def dropped(env: Env) -> list[finance_market.MarketFile]:
+def dropped(env: Env) -> list[market_file.MarketFile]:
     files = sorted(p for p in env.inbox_root.glob("*") if p.is_file())
-    return [finance_market.parse(p.read_bytes()) for p in files]
+    return [market_file.parse(p.read_bytes()) for p in files]
 
 
-def held(doc: finance_market.MarketFile) -> list[tuple[str, str, Decimal]]:
+def held(doc: market_file.MarketFile) -> list[tuple[str, str, Decimal]]:
     return [(b.account, b.key, b.quantity) for b in doc.balances]
 
 
@@ -759,7 +759,7 @@ def binance_history_route(
     return history
 
 
-def ops_of(doc: finance_market.MarketFile) -> list[tuple[str, str, list[tuple[str, str, str]]]]:
+def ops_of(doc: market_file.MarketFile) -> list[tuple[str, str, list[tuple[str, str, str]]]]:
     return [
         (o.on_date, o.id, [(leg.symbol, assets_text(leg.quantity), leg.role) for leg in o.legs])
         for o in doc.operations

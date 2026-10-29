@@ -8,9 +8,9 @@ import pytest
 from hypothesis import given, settings
 from lxml import etree
 
-from hub.domains.finance import dedup
-from hub.domains.finance.camt import parser
-from hub.domains.finance.camt.models import ParsedEntry
+from hub.domains.finance.registre.model import dedup
+from hub.domains.finance.registre.model.statements import ParsedEntry
+from hub.domains.finance.sources.infra import camt as parser
 from tests.factories.camt import (
     IBAN,
     OTHER_IBAN,

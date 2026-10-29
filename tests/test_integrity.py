@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from hub.core import integrity
 from hub.core.manifest import unguarded
-from hub.domains.finance import hashing
+from hub.domains.finance.registre.model import hashing
 from hub.kernel import chain
 from hub.platform.db import begin_immediate, make_engine
 

@@ -101,7 +101,7 @@ la plus prioritaire d'abord (priorité la plus basse, puis identifiant). Une rè
 jamais une écriture que tu as catégorisée toi-même.
 
 **Packs de règles.** Une base neuve reçoit les règles de départ des packs livrés dans
-`hub/domains/finance/packs/` : `base` (mots génériques et services internationaux) et le pack
+`hub/domains/finance/classement/app/packs/` : `base` (mots génériques et services internationaux) et le pack
 du pays du profil (`ch` pour la Suisse : commerces, transports, caisses maladie, opérateurs,
 prestataires 3a). Une base créée avant les packs garde ses règles `seed-` et n'en reçoit
 aucun sans qu'on le demande.

@@ -21,9 +21,9 @@ from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
 from hub.core.registry import Registry
-from hub.domains.finance import ledger
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.registre.app import ledger
+from hub.domains.finance.sources.infra.files import Incoming
 from tests.factories.camt import IBAN, IBAN_2, Stmt, Tx, camt053
 from tests.finance.conftest import finance_settings, ready_account, rows
 from tests.finance.test_finance_api import token

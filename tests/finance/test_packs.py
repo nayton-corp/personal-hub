@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 
 from hub.core import profile
 from hub.core.coredb import CoreDB
-from hub.domains.finance import packs, rules
+from hub.domains.finance.classement.app import packs, rules
 from hub.domains.finance.domain import FinanceDomain
 from hub.platform.db import begin_immediate
 from hub.platform.settings import Settings

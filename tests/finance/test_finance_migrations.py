@@ -7,8 +7,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DatabaseError
 
-from hub.domains.finance import hashing, ledger, packs
+from hub.domains.finance.classement.app import packs
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.registre.app import ledger
+from hub.domains.finance.registre.model import hashing
 from hub.platform.db import backup, begin_immediate, make_engine
 from tests.finance.conftest import ready_account
 

@@ -13,8 +13,8 @@ from fastapi.testclient import TestClient
 
 from hub.core import proposals
 from hub.core.context import HubContext
+from hub.domains.finance.classement.interface.tools import ClassementTools
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.tools import FinanceTools
 from hub.platform.settings import Auth
 from tests.conftest import add_connections
 from tests.factories.camt import IBAN
@@ -166,7 +166,7 @@ def test_reads_for_the_local_model(
     review = call(client, brain, "finance_to_review")
     merchants = {g["counterparty"]: g for g in review["groups"]}
     assert merchants["kiosque inconnu"]["known_merchant"] is False
-    assert "bistrot fictif" in FinanceTools(year).known_merchants(year.engine().connect())
+    assert "bistrot fictif" in ClassementTools(year).known_merchants(year.engine().connect())
     assert call(client, brain, "finance_recurring")["count"] >= 1
     cats = call(client, brain, "finance_list_categories")["categories"]
     assert {"id": "restaurants", "name": "Restaurants et sorties", "group": "variable"} in cats

@@ -16,9 +16,11 @@ from sqlalchemy import text
 from hub.api.app import create_app
 from hub.core.context import HubContext
 from hub.core.registry import Registry
-from hub.domains.finance import catalog, importer, insights, ledger, period, snapshots, valuation
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.patrimoine.app import holdings, snapshots, valuation
+from hub.domains.finance.registre.app import catalog, export, ledger, opening
+from hub.domains.finance.registre.model import amounts, period
+from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform.db import begin_immediate
 from tests.factories.camt import IBAN, IBAN_2, OTHER_IBAN, Stmt, Tx, camt053
 from tests.finance.conftest import finance_settings, rows, without_seed_rules
@@ -118,7 +120,7 @@ def setup_account(fin: FinanceDomain) -> catalog.Account:
             liquid=True,
             budget_account=True,
         )
-        importer.open_account(conn, a.id, "2025-11-30", 100_000, "CHF")
+        opening.open_account(conn, a.id, "2025-11-30", 100_000, "CHF")
     return a
 
 
@@ -214,7 +216,7 @@ def test_refresh_triggers(year: FinanceDomain) -> None:
     assert later.reason == "as_of"
     with begin_immediate(year.engine()) as conn:
         b = catalog.add_account(conn, institution="BCF", name="Épargne", iban=IBAN_2)
-        importer.open_account(conn, b.id, "2026-10-01", 50_000, "CHF")
+        opening.open_account(conn, b.id, "2026-10-01", 50_000, "CHF")
     assert snapshots.refresh(year.engine(), date(2026, 10, 28)).reason == "entries"
     year.nightly()
     assert rows(year, "SELECT as_of FROM snapshot_state") == [("2026-10-27",)]
@@ -224,7 +226,7 @@ def test_empty_ledger(fin: FinanceDomain) -> None:
     assert fin.refresh_snapshots().rows == 0
     with fin.engine().connect() as conn:
         assert snapshots.history(conn, None, None)["items"] == []
-        k = insights.kpis(conn, "2026-10", TODAY)
+        k = holdings.kpis(conn, "2026-10", TODAY)
     assert minor(k["net_worth"]) == 0
     assert k["months_covered"] is None
     assert k["savings_rate"] is None
@@ -237,7 +239,7 @@ def test_foreign_currency_needs_a_rate(fin: FinanceDomain) -> None:
         a = catalog.add_account(
             conn, institution="Revolut", name="EUR", currency="EUR", external_ref="rev-eur"
         )
-        importer.open_account(conn, a.id, "2026-10-01", 100_000, "EUR")
+        opening.open_account(conn, a.id, "2026-10-01", 100_000, "EUR")
     with fin.engine().connect() as conn:
         assert valuation.value_at(conn, "2026-10-02").missing_fx == [a.id]
     with begin_immediate(fin.engine()) as conn:
@@ -413,18 +415,18 @@ def test_export_csv(client: TestClient, ctx: HubContext, year: FinanceDomain) ->
 
 
 def test_export_neutralizes_formulas() -> None:
-    assert insights._cell("=HYPERLINK()") == "'=HYPERLINK()"
-    assert insights._cell("Migros") == "Migros"
-    assert insights._cell(None) == ""
+    assert export._cell("=HYPERLINK()") == "'=HYPERLINK()"
+    assert export._cell("Migros") == "Migros"
+    assert export._cell(None) == ""
 
 
 def test_ratio_and_periods() -> None:
-    assert insights.ratio(1, 3) == "0.3333"
-    assert insights.ratio(1, 0) is None
-    assert insights.period_months("2026-01", "q") == ["2025-10", "2025-11", "2025-12"]
-    assert insights.days_left("2026-02", date(2026, 2, 10)) == 18
-    with pytest.raises(insights.FutureMonth):
-        insights.as_of("2026-11", TODAY)
+    assert amounts.ratio(1, 3) == "0.3333"
+    assert amounts.ratio(1, 0) is None
+    assert amounts.period_months("2026-01", "q") == ["2025-10", "2025-11", "2025-12"]
+    assert amounts.days_left("2026-02", date(2026, 2, 10)) == 18
+    with pytest.raises(amounts.FutureMonth):
+        amounts.as_of("2026-11", TODAY)
 
 
 def test_freshness_without_closing_balance(

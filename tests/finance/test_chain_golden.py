@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from hub.domains.finance import ledger
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.registre.app import ledger
 from hub.platform.db import begin_immediate
 from hub.platform.settings import Settings
 
