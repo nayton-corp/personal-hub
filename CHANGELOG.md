@@ -8,6 +8,27 @@
   (`-6021`) : fenêtres de 29 jours. Les récompenses manquées depuis la v0.9.9 sont relues une
   fois depuis la première opération (mémoire `rewards_since`, `first_day`).
 
+### Dettes dans le patrimoine : crédit, hypothèque, leasing, prêt étudiant
+
+- Nouvelles tables `debts` et `debt_balances` (migration `0016_debts`). Une dette part d'un
+  solde à une date, ou du versement reçu du prêteur choisi dans le Journal (« Créer une dette
+  depuis ce versement »).
+- Son solde baisse de chaque paiement de sa catégorie (depuis son compte s'il est choisi), quel
+  que soit le montant : une mensualité qui change suit d'elle-même. Intérêts courus au taux
+  annuel s'il y en a un ; un relevé du prêteur (`record_debt_balance`) remplace le calcul à
+  partir de sa date. Mensualité et échéance facultatives : sans mensualité, la fin projetée suit
+  les derniers paiements. Une dette se marque soldée ou se rouvre.
+- Le patrimoine est net : enveloppe `dettes`, clé `debt:<id>` dans `by_account`, ligne « Dettes »
+  dans l'écran Patrimoine (détail : remboursé, paiements, fin projetée). Un remboursement compte
+  comme versement, seuls les intérêts font baisser le patrimoine. `GET /finance/debts`, carte
+  « Dettes » dans les réglages, propositions `save_debt` et `record_debt_balance` (Face ID).
+
+### Diagramme de flux du budget plus lisible
+
+- Les flux ne se croisent plus : revenus (du plus gros au plus petit) et groupes sont empilés dans le même ordre, et chaque revenu remplit les groupes dans l'ordre Fixes, Variables, Épargne, Reste. Un petit revenu (remboursement) ne s'étale plus en filets vers tous les groupes.
+- Une couleur par groupe, de la source jusqu'aux postes : flux, barre du groupe et barres de ses postes. Les Fixes passent en bleu pour ne plus ressembler au Reste gris (même couleur dans l'historique des mois).
+- Toucher un revenu n'allume que les groupes et postes qu'il alimente vraiment.
+
 ### Historique Binance dans le Journal, mouvements crypto reliés entre mes comptes
 
 - Le collecteur Binance lit, en plus des soldes, les dépôts et retraits crypto (txId, adresse),

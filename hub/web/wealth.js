@@ -1,7 +1,9 @@
 // Patrimoine : une sélection (filtres par catégorie, disponibilité, objectif, institution) pilote
 // tout l'écran : total et courbe, répartition, puis le détail par compte ou par actif, chacun
 // dépliable et relié à l'autre. Les lignes viennent de /finance/accounts et /finance/holdings ;
-// la courbe, de la valeur de chaque compte dans /finance/networth/history.
+// la courbe, de la valeur de chaque compte dans /finance/networth/history. Les dettes
+// (/finance/debts) sont des lignes négatives de catégorie « Dettes » : le total est net.
+import { DEBT_KIND, debtDetail, debtMark } from "./debts.js";
 import { reveal } from "./finance.js";
 import { MOIS, MOIS_L, base, date } from "./format.js";
 import { CCY_NAME, FACET, FACETS, assetMark, facetColor, facetIc, facetMark, facetName, setInstitutions } from "./meta.js";
@@ -11,8 +13,8 @@ import {
 } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
-const paths = { accounts: "/finance/accounts", holdings: "/finance/holdings", history: "/finance/networth/history", fresh: "/finance/freshness" };
-const KIND_LABEL = { cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" };
+const paths = { accounts: "/finance/accounts", holdings: "/finance/holdings", history: "/finance/networth/history", fresh: "/finance/freshness", debts: "/finance/debts" };
+const KIND_LABEL = { cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto", debt: "Dette" };
 const PERIODS = [
   { k: "1M", label: "sur 1 mois", days: 30, def: "J" },
   { k: "3M", label: "sur 3 mois", days: 91, def: "J" },
@@ -57,9 +59,9 @@ function lastValues() {
 
 let cache = { key: null, lines: [] };
 function lines() {
-  const acc = store.data(paths.accounts), hold = store.data(paths.holdings), byAcc = lastValues();
-  if (!acc || !hold || !byAcc) return null;
-  const key = [acc, hold, byAcc];
+  const acc = store.data(paths.accounts), hold = store.data(paths.holdings), byAcc = lastValues(), owed = store.data(paths.debts);
+  if (!acc || !hold || !byAcc || !owed) return null;
+  const key = [acc, hold, byAcc, owed];
   if (cache.key && cache.key.every((x, i) => x === key[i])) return cache.lines;
   setInstitutions(acc.items.map((a) => a.institution));
   const out = [];
@@ -82,6 +84,12 @@ function lines() {
       const q = own.length ? rest : a.balance.minor / 100;
       out.push({ ...meta, asset: `ccy:${ccy}`, name: CCY_NAME[ccy] || ccy, symbol: ccy, cat: a.category || (a.kind === "crypto" && !own.length ? "crypto" : "cash"), qty: q, unit: ccy, value: own.length ? rest : total });
     }
+  }
+  // une dette : sa valeur (négative) du dernier point ; ni disponibilité ni objectif
+  for (const d of owed.items) {
+    const v = byAcc[d.key];
+    if (!v || !v.minor) continue;
+    out.push({ acc: d.key, debt: d.id, accName: d.name, inst: d.lender, liq: null, goal: null, kind: "debt", debtKind: d.kind, asset: `debt:${d.id}`, name: d.name, symbol: null, cat: "debt", qty: v.minor / 100, unit: base(), value: v.minor / 100 });
   }
   cache = { key, lines: out };
   return out;
@@ -231,9 +239,9 @@ function setScrub(i) {
 let current = null; // { all, sel, frac, items }
 
 export function render() {
-  const ae = store.use(paths.accounts), he = store.use(paths.holdings), hi = store.use(paths.history);
+  const ae = store.use(paths.accounts), he = store.use(paths.holdings), hi = store.use(paths.history), de = store.use(paths.debts);
   store.use(paths.fresh);
-  const err = [ae, he, hi].find((e) => e.status === "error");
+  const err = [ae, he, hi, de].find((e) => e.status === "error");
   const all = lines();
   renderFilterbar();
   if (err || !all) {
@@ -340,7 +348,9 @@ function drawFoot(all, sel) {
   const f = store.data(paths.fresh);
   const last = f ? f.items.map((x) => x.last_import).filter(Boolean).sort().pop() : null;
   const stale = last && Date.now() - Date.parse(last) > 3 * 864e5;
+  const owed = sum(all.filter((l) => l.kind === "debt"));
   fill($("heroFoot"), `
+    ${!n && owed < 0 ? `<div class="share">Avoirs ${amount(whole - owed)} · dettes ${amount(owed)}</div>` : ""}
     ${n && whole > 0 ? `<div class="share"><div class="sharebar"><i data-css="width:${Math.max(0, Math.min(100, (total / whole) * 100)).toFixed(1)}%"></i></div>${share(total / whole)} de ton patrimoine (${amount(whole)})</div>` : ""}
     <div class="hero-foot"><div class="fresh${stale ? " stale" : ""}"><i></i>${last ? `Mis à jour le ${date(last.slice(0, 10))}` : "Pas encore d'import"} · ${nacc} compte${nacc > 1 ? "s" : ""}</div>
     <button class="graph-toggle" type="button" data-a="w-fold" data-v="evo" aria-expanded="${!FOLD.evo}" aria-controls="evoBody">${FOLD.evo ? "Afficher la courbe" : "Masquer la courbe"}<svg class="fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>`);
@@ -348,9 +358,11 @@ function drawFoot(all, sel) {
 
 function drawAlloc(sel) {
   fill($("bySeg"), BY.map((k) => `<button type="button" data-a="w-by" data-v="${k}" aria-pressed="${S.by === k}">${FACET[k].label}</button>`).join(""));
-  const total = sum(sel), g = {};
-  for (const l of sel) g[l[S.by]] = (g[l[S.by]] || 0) + l.value;
+  const g = {};
+  for (const l of sel) if (l[S.by] != null) g[l[S.by]] = (g[l[S.by]] || 0) + l.value;
   const rows = Object.entries(g).filter(([, v]) => Math.abs(v) >= 0.5).sort((a, b) => b[1] - a[1]);
+  // parts des avoirs : une dette s'y lit en négatif
+  const total = rows.reduce((t, [, v]) => t + Math.max(0, v), 0);
   const flex = (v) => Math.max(0, v).toFixed(2);
   fill($("stack"), rows.map(([k, v]) => `<i data-css="--f:${flex(v)};--c:${facetColor(S.by, k)}"></i>`).join(""));
   fill($("allocList"), rows.length && total > 0 ? rows.map(([k, v]) => `<button class="alloc-row" type="button" data-a="w-alloc" data-v="${esc(k)}" aria-pressed="${S.filters[S.by].has(k)}" aria-label="${esc(facetName(S.by, k))}, ${share(v / total)}, filtrer sur cette valeur">
@@ -363,7 +375,7 @@ function drawAlloc(sel) {
 
 function tagsFor(ls) {
   const ks = [S.by, "cat", "liq", "goal"].filter((k, i, a) => a.indexOf(k) === i && k !== "inst");
-  return `<span class="tags">${ks.flatMap((k) => [...new Set(ls.map((l) => l[k]))].map((v) => `<span class="tag${k === S.by ? " cur" : ""}" title="${FACET[k].label}">${facetIc(k, v)}${esc(facetName(k, v))}</span>`)).join("")}</span>`;
+  return `<span class="tags">${ks.flatMap((k) => [...new Set(ls.map((l) => l[k]))].filter((v) => v != null).map((v) => `<span class="tag${k === S.by ? " cur" : ""}" title="${FACET[k].label}">${facetIc(k, v)}${esc(facetName(k, v))}</span>`)).join("")}</span>`;
 }
 
 const rowId = (key) => `row-${key.replace(/[^A-Za-z0-9_-]/g, "-")}`;
@@ -383,6 +395,9 @@ function drawList(all, sel) {
   let rows = Object.entries(groups).map(([key, ls]) => {
     const c = change(items, fractions(all, ls));
     const f = ls[0];
+    if (f.kind === "debt") {
+      return { key, ls, title: f.name, sub: `${esc(f.inst)} · ${DEBT_KIND[f.debtKind] || "Dette"}`, mark: debtMark({ kind: f.debtKind }, ""), value: sum(ls), c, debt: f.debt };
+    }
     if (S.view === "acc") {
       const totalLines = all.filter((l) => l.acc === f.acc).length;
       return { key, ls, title: f.accName, sub: `${esc(f.inst)} · ${KIND_LABEL[f.kind] || ""}`, mark: facetMark("inst", f.inst, ""), value: sum(ls), c,
@@ -399,14 +414,14 @@ function drawList(all, sel) {
     fill($("list"), '<div class="empty">Aucun élément ne correspond à ces filtres.<br><button type="button" data-a="w-clear">Effacer les filtres</button></div>');
     return;
   }
-  const total = sum(sel);
+  const total = sel.reduce((t, l) => t + Math.max(0, l.value), 0); // parts des avoirs, dettes à part
   fill($("list"), rows.map((r) => {
     const open = S.open.has(r.key);
     return `<div id="${rowId(r.key)}"><button class="row" type="button" data-a="w-row" data-v="${esc(r.key)}" aria-expanded="${open}">
       ${r.mark}
       <span class="row-main"><span class="row-title">${esc(r.title)}<span class="chev" aria-hidden="true">›</span></span><span class="row-sub">${r.sub}</span>${tagsFor(r.ls)}${r.partial ? `<span class="partial">${r.partial}</span>` : ""}</span>
       <span class="row-num"><span class="row-val num">${amount(r.value)}</span><span class="row-delta">${items && items.length > 1 ? pctOnly(r.c.p) : ""} <span class="faint">· ${total > 0 ? share(r.value / total) : "—"}</span></span></span>
-    </button>${open ? `<div class="sub">${S.view === "acc" ? accountDetail(r, all) : assetDetail(r)}</div>` : ""}</div>`;
+    </button>${open ? `<div class="sub">${r.debt ? debtDetail(r.debt) : S.view === "acc" ? accountDetail(r, all) : assetDetail(r)}</div>` : ""}</div>`;
   }).join(""));
 }
 

@@ -1,8 +1,9 @@
 // Sources et réglages : connexions et comptes en attente (connections.js, formulaires construits
 // à l'ouverture), comptes avec leur fraîcheur et leurs réglages (accounts.js), affichage de cet
-// appareil. Profil, passkeys et état du hub sont remplis par app.js.
+// appareil, dettes (debts.js). Profil, passkeys et état du hub sont remplis par app.js.
 import { accountsList } from "./accounts.js";
 import { accountsCard, connectionsCard } from "./connections.js";
+import { debtsList } from "./debts.js";
 import { api, monthStartDay, store } from "./store.js";
 import { esc, failure, fill, pref, toast } from "./ui.js";
 
@@ -25,6 +26,7 @@ export function render() {
   connectionsCard();
   accountsCard();
   accountsList();
+  debtsList();
   const se = store.use(SETTINGS), day = se.data ? se.data.month_start_day : monthStartDay();
   fill($("budget-rows"), `
     <div class="setrow"><label for="month-start" id="month-start-lbl">Début du mois budgétaire<small>${se.data ? esc(example(se.data)) : "Le jour de ta paie, par exemple."} Après le 15, le mois porte le nom du mois où il finit.</small></label>

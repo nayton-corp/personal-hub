@@ -17,6 +17,7 @@ from hub.core.db import begin_immediate
 from hub.core.errors import Problem
 from hub.domains.finance import (
     catalog,
+    debts,
     insights,
     lookthrough,
     packs,
@@ -171,6 +172,12 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         """Positions des comptes de titres (VIAC) à une date, aujourd'hui par défaut."""
         with engine.connect() as conn:
             return insights.holdings(conn, on or domain.today().isoformat())
+
+    @r.get("/debts")
+    def debts_route(_p: AnyReader) -> dict[str, Any]:
+        """Dettes et leur solde aujourd'hui : départ, paiements et intérêts depuis, fin projetée."""
+        with engine.connect() as conn:
+            return {"items": debts.items(conn, domain.today().isoformat())}
 
     @r.get("/lookthrough")
     def lookthrough_route(
