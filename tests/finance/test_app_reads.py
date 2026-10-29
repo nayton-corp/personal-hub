@@ -296,10 +296,25 @@ def test_networth_history(client: TestClient, ctx: HubContext, year: FinanceDoma
     last = r["items"][-1]
     assert minor(last["net_worth"]) == minor(last["deposits_cum"]) == 2_869_000
     assert set(last["by_envelope"]) == {"cash", "pilier3a", "titres", "crypto"}
+    # la valeur par compte suit la courbe : ici un seul compte, qui porte tout le patrimoine
+    assert [minor(v) for v in last["by_account"].values()] == [2_869_000]
     part = client.get(
         "/api/finance/networth/history?from=2026-01-01&to=2026-03-31", headers=h
     ).json()
     assert [i["on_date"] for i in part["items"]] == ["2026-01-31", "2026-02-28", "2026-03-31"]
+    # pas semaine, calculé à la demande : se termine toujours à `to`, mêmes valeurs qu'en direct
+    weekly = client.get(
+        "/api/finance/networth/history?from=2026-09-01&to=2026-10-27&step=week", headers=h
+    ).json()
+    dates = [i["on_date"] for i in weekly["items"]]
+    assert dates[-1] == "2026-10-27"
+    assert dates[0] >= "2026-09-01"
+    assert len(dates) == 9
+    assert minor(weekly["items"][-1]["net_worth"]) == 2_869_000
+    assert set(weekly["items"][-1]["by_account"]) == set(last["by_account"])
+    for bad in ("step=day", "from=2025-01-01&step=day", "from=2026-10-28&to=2026-10-01&step=day"):
+        r = client.get(f"/api/finance/networth/history?{bad}", headers=h)
+        assert r.status_code == 422, bad
 
 
 def test_flows_and_rule_of_three(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
@@ -317,6 +332,10 @@ def test_flows_and_rule_of_three(client: TestClient, ctx: HubContext, year: Fina
     # une catégorie à moins de 3 écritures n'apparaît pas en portée aggregates
     assert {i["category"] for i in agg_variable} == {"alimentation", "autres"}
     assert {i["category"] for i in agg["sources"]} == {"autres"}
+    # trois mois complets avant octobre : juillet à septembre, sans les écritures d'octobre
+    q = client.get("/api/finance/flows?month=2026-10&period=q", headers=token(ctx, "brain")).json()
+    assert q["months"] == ["2026-07", "2026-08", "2026-09"]
+    assert minor(q["income"]) == 3 * 500_000
 
 
 def test_budget_and_totals(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:

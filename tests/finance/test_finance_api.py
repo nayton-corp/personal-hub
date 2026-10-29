@@ -142,6 +142,13 @@ def test_entries_pagination_and_detail(
     assert len(seen) == len(set(seen)) == 6  # ouverture comprise
     r = client.get("/api/finance/entries?uncategorized=true", headers=h).json()
     assert [e["amount"]["minor"] for e in r["items"]] == []  # tout est catégorisé sauf l'ouverture
+    credits = client.get("/api/finance/entries?direction=in", headers=h).json()["items"]
+    debits = client.get("/api/finance/entries?direction=out", headers=h).json()["items"]
+    assert credits
+    assert debits
+    assert all(e["amount"]["minor"] > 0 for e in credits)
+    assert all(e["amount"]["minor"] < 0 for e in debits)
+    assert client.get("/api/finance/entries?direction=both", headers=h).status_code == 422
     r = client.get("/api/finance/entries?category=salaire&from=2026-10-02&to=2026-10-02", headers=h)
     (salary,) = r.json()["items"]
     assert salary["category"] == {"id": "salaire", "source": "user"}
@@ -262,7 +269,7 @@ def test_upload_and_import_detail(client: TestClient, ctx: HubContext, fin: Fina
 
 def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
     r = client.get("/api/health").json()
-    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 11, "ok": True}
+    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 12, "ok": True}
     events = loaded.events_since(0, 10)
     assert [e.type for e in events] == ["entries.appended", "import.applied"]
     assert loaded.applied([]) == {}

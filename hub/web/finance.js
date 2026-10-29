@@ -1,608 +1,154 @@
-// Vues Finance (L2-03, L2-04) : accueil, patrimoine, budget, journal et sources, reprises du
-// dashboard prototype. Aucun chiffre n'est calculé ici : chacun vient d'une route de
-// /api/finance, en centimes ; l'app ne fait que la mise en forme et les graphiques.
-import * as charts from "./charts.js";
+// Coquille de l'app (maquette du 28/10/2026) : onglets, rendu, actions. Chaque écran est un
+// module (home, wealth, budget, journal, settings) qui dessine ses blocs depuis le store et
+// déclare ses actions ; un seul écouteur de clics les distribue par data-a. Aucun chiffre n'est
+// inventé ici : tout vient de /api/finance, en centimes.
+import * as budget from "./budget.js";
+import { initConnections } from "./connections.js";
+import * as home from "./home.js";
+import * as journal from "./journal.js";
+import * as settings from "./settings.js";
+import { store } from "./store.js";
 import {
-  base, chf, chf2, date, dayName, daysSince, el, initials, monthName, pct, ratio, signed, spct, units,
-} from "./format.js";
-import { accountsCard, connectionsCard, initConnections } from "./connections.js";
-import { initWelcome, welcomeCard } from "./welcome.js";
-import { pendingCard, pendingPath, reviewCard } from "./proposals.js";
-import { api, shiftMonth, store } from "./store.js";
+  SH, announce, applyTheme, closeSheet, fill, ic, initToast, pref, renderSheet, setPref,
+} from "./ui.js";
+import { initWelcome } from "./welcome.js";
+import * as wealth from "./wealth.js";
 
 const $ = (id) => document.getElementById(id);
 const P = store.params;
-const STALE_DAYS = 45;
-const ENV_LABEL = { all: "Patrimoine net", cash: "Cash", pilier3a: "3e pilier", titres: "Titres", crypto: "Crypto" };
-const KIND_ENV = { cash: "cash", pension: "pilier3a", securities: "titres", crypto: "crypto" };
-const CADENCE = { weekly: "chaque semaine", monthly: "chaque mois", quarterly: "chaque trimestre", yearly: "chaque année" };
-const KIND_LABEL = { cash: "Cash", pension: "Prévoyance", securities: "Titres", crypto: "Crypto" };
+const TABS = [["accueil", "Accueil", "home"], ["patrimoine", "Patrimoine", "trend"], ["budget", "Budget", "wallet"], ["journal", "Journal", "list"]];
+const VIEWS = { accueil: home.render, patrimoine: wealth.render, budget: budget.render, journal: journal.render, sources: settings.render };
+const LABEL = { accueil: "Accueil", patrimoine: "Patrimoine", budget: "Budget", journal: "Journal", sources: "Sources et réglages" };
+const ACTIONS = { ...home.actions, ...wealth.actions, ...budget.actions, ...journal.actions, ...settings.actions };
+const scrolls = {};
+let back = "accueil";
+let drawn = null;
 
-const path = {
-  kpis: () => `/finance/kpis?month=${P.month}`,
-  history: () => "/finance/networth/history",
-  accounts: () => "/finance/accounts",
-  holdings: () => "/finance/holdings",
-  look: () => `/finance/lookthrough?dimension=${P.look}`,
-  recurring: () => "/finance/recurring",
-  alerts: () => "/finance/alerts",
-  freshness: () => "/finance/freshness",
-  categories: () => "/finance/categories",
-  budget: () => `/finance/budget?month=${P.month}&period=${P.period}`,
-  totals: () => `/finance/budget/totals?month=${P.month}&period=${P.period}`,
-  months: () => `/finance/budget/months?month=${P.month}&months=6`,
-  flows: () => `/finance/flows?month=${P.month}`,
-};
+// --- navigation -------------------------------------------------------------------------------
 
-function pressed(id, value) {
-  for (const b of $(id).querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.v === value ? "true" : "false");
-}
-
-function text(id, value) {
-  $(id).textContent = value;
-}
-
-function setBar(id, r) {
-  const i = $(id);
-  i.style.width = `${Math.min(100, Math.max(0, (r || 0) * 100))}%`;
-  i.className = r == null ? "neutral" : r > 1 ? "over" : r > 0.85 ? "near" : "ok";
-}
-
-function setDelta(node, value, pctText, label) {
-  node.className = `delta ${value >= 0 ? "up" : "down"}`;
-  const [a, b, c] = node.children;
-  a.textContent = signed(value);
-  if (c) {
-    b.textContent = pctText;
-    c.textContent = label;
-  } else b.textContent = label;
-}
-
-function row(ini, name, sub, val, subv, subCls, accent) {
-  const r = el("div", "row");
-  r.append(el("span", accent ? "av" : "av g", ini));
-  const n = el("div", "n");
-  n.append(el("b", "", name), el("span", "", sub));
-  const v = el("div", "v");
-  v.append(el("b", "amt", val));
-  if (subv != null) v.append(el("span", subCls || "", subv));
-  r.append(n, v);
-  return r;
-}
-
-function failed(entry) {
-  return entry.status === "error" ? `Impossible de charger : ${entry.error.message}` : null;
-}
-
-// --- en-tête et mois ------------------------------------------------------------------------
-
-function header(k) {
-  const sub = $("pg-sub");
-  sub.classList.remove("warn");
-  if (!k) return;
-  if (!k.last_statement) sub.textContent = "Aucun relevé importé";
-  else {
-    const age = daysSince(k.last_statement);
-    sub.textContent = `Relevé du ${date(k.last_statement)}`;
-    if (age > STALE_DAYS) sub.classList.add("warn");
-  }
-}
-
-function monthStepper(id) {
-  const box = $(id);
-  box.querySelector("b").textContent = monthName(P.month);
-  box.querySelector('[data-step="1"]').disabled = P.month >= store.today;
-}
-
-// --- instantanés ----------------------------------------------------------------------------
-
-function snapshotRows(key) {
-  const h = store.data(path.history());
-  if (!h) return null;
-  return h.items.map((s) => ({
-    iso: s.on_date,
-    date: new Date(`${s.on_date}T00:00:00Z`),
-    v: units(key === "all" ? s.net_worth : s.by_envelope[key]),
-    ref: key === "all" ? units(s.deposits_cum) : null,
-  }));
-}
-
-function inRange(rows, range) {
-  if (range === "all") return rows;
-  if (range === "ytd") {
-    const year = rows[rows.length - 1].date.getUTCFullYear();
-    const i = rows.findIndex((r) => r.iso === `${year - 1}-12-31`);
-    return rows.slice(Math.max(0, i));
-  }
-  return rows.slice(-(Number(range) + 1));
-}
-
-// --- accueil --------------------------------------------------------------------------------
-
-const RANGE_LABEL = { 1: "1 mois", 3: "3 mois", ytd: "depuis janvier", 12: "1 an", all: "depuis le début" };
-
-function home() {
-  const ke = store.use(path.kpis());
-  const k = ke.data;
-  header(k);
-  welcomeCard();
-  pressed("range-seg", P.range);
-  pressed("mode-seg", P.mode);
-  monthStepper("month-home");
-
-  const banner = $("stale-banner");
-  banner.hidden = !(k && k.stale_accounts > 0);
-  if (k && k.stale_accounts > 0) {
-    banner.textContent = `${k.stale_accounts} compte${k.stale_accounts > 1 ? "s" : ""} sans relevé depuis plus de ${STALE_DAYS} jours : les chiffres peuvent être en retard.`;
-  }
-
-  const hero = $("hero-val");
-  const all = snapshotRows("all");
-  const box = $("ch-wealth");
-  if (k && all) {
-    const rows = all.length ? inRange(all, P.range) : [];
-    const net = units(k.net_worth);
-    const first = rows[0];
-    const dv = first ? net - first.v : 0;
-    const dp = first && first.v ? dv / first.v : null;
-    hero.textContent = P.mode === "chf" ? chf(net) : spct(dp);
-    setDelta($("hero-delta"), dv, spct(dp), RANGE_LABEL[P.range]);
-    $("hero-delta").hidden = rows.length < 2;
-    if (P.mode === "chf") {
-      charts.area(box, rows, {
-        h: 190, year: P.range === "all", fmt: (v) => `${chf(v / 1000)} k`,
-        tip: (r) => [`Patrimoine ${chf(r.v)} ${base()}`, `Versements ${chf(r.ref)} ${base()}`],
-      });
-    } else {
-      charts.area(box, rows.map((r) => ({ ...r, v: first.v ? r.v / first.v - 1 : 0, ref: null })), {
-        h: 190, year: P.range === "all", fmt: (v) => spct(v, 0), tip: (r) => [`Évolution ${spct(r.v)}`],
-      });
-    }
-  } else {
-    hero.textContent = "—";
-    if (failed(ke)) charts.placeholder(box, failed(ke));
-    else charts.clear(box);
-  }
-
-  // le mois
-  const cells = ["k-income", "k-expenses", "k-savings", "k-rest"];
-  if (!k) {
-    for (const id of cells) text(id, "—");
-    text("k-used", failed(ke) || "—");
-  } else {
-    text("k-income", chf(units(k.income)));
-    text("k-expenses", chf(units(k.expenses)));
-    text("k-savings", chf(units(k.savings)));
-    const rest = units(k.rest_to_live);
-    text("k-rest", rest == null ? "pas de budget" : chf(rest));
-    $("k-rest").className = `amt${rest != null && rest < 0 ? " down" : ""}`;
-    text("k-budget-sub", k.budget ? `budget ${chf(units(k.budget))}` : "");
-    text("k-days", k.days_left ? `${k.days_left} jours restants` : "");
-    const used = ratio(k.budget_used);
-    text("k-used", used == null ? "Pas encore de budget : fixe des cibles par catégorie pour suivre le reste à vivre." : `${pct(used)} du budget consommé`);
-    setBar("bar-budget", used);
-  }
-
-  pendingCard();
-
-  // à traiter
-  const todo = $("todo-list");
-  todo.replaceChildren();
-  if (!k) return;
-  const items = [];
-  const pending = store.data(pendingPath);
-  const n = pending ? pending.items.length : 0;
-  if (n > 0) items.push([`${n} proposition${n > 1 ? "s" : ""} à valider`, "un seul Face ID pour tout le lot", "accueil", String(n)]);
-  if (k.stale_accounts > 0) items.push([`${k.stale_accounts} compte${k.stale_accounts > 1 ? "s" : ""} à rafraîchir`, `dernier relevé de plus de ${STALE_DAYS} jours`, "sources", "!"]);
-  if (k.unmatched_transfers > 0) items.push([`${k.unmatched_transfers} virement${k.unmatched_transfers > 1 ? "s" : ""} sans autre côté`, "un relevé manque peut-être sur l'autre compte", "sources", "⇄"]);
-  if (k.to_categorize > 0) items.push([`${k.to_categorize} écriture${k.to_categorize > 1 ? "s" : ""} à catégoriser`, "par contrepartie, en un Face ID", "journal", String(k.to_categorize)]);
-  const p3 = k.pillar3a;
-  if (p3 && p3.margin.minor > 0) items.push([`Marge 3a ${p3.year} : ${chf(units(p3.margin))} ${base()}`, `versé ${chf(units(p3.paid))} sur ${chf(units(p3.cap))}`, "patrimoine", "3a"]);
-  // sentinelles de nuit (lot 7) : budget, abonnements ; la marge 3a est déjà ci-dessus
-  const alerts = store.data(path.alerts());
-  for (const a of alerts ? alerts.items : []) {
-    if (a.kind === "pillar3a_margin") continue;
-    const d = a.detail;
-    const sub = a.kind === "recurring_up"
-      ? `${chf2(Math.abs(units(d.usual)))} → ${chf2(Math.abs(units(d.last)))} ${d.last.currency}`
-      : `${chf(units(d.spent))} sur ${chf(units(d.target))} ${base()}` + (a.kind === "budget_likely" ? ` · ${chf(units(d.projected))} projetés` : "");
-    items.push([a.title, `${sub} · le ${date(a.on_date)}`, "budget", "!"]);
-  }
-  if (!items.length) todo.append(el("div", "empty", "Rien à traiter."));
-  for (const [title, sub, tab, ini] of items) {
-    const r = row(ini, title, sub, "", null, "", tab !== "patrimoine");
-    r.classList.add("go");
-    r.querySelector(".v").replaceChildren(el("span", "muted", "›"));
-    r.addEventListener("click", () => {
-      if (tab === "accueil") $("c-props").scrollIntoView({ behavior: "smooth" });
-      else store.set(tab === "journal" ? { tab, tx: "todo" } : { tab });
-    });
-    todo.append(r);
-  }
-}
-
-// --- patrimoine -----------------------------------------------------------------------------
-
-function patrimoine() {
-  pressed("env-chips", P.env);
-  const ke = store.use(path.kpis());
-  const k = ke.data;
-  const rows = snapshotRows(P.env);
-  text("pat-lbl", ENV_LABEL[P.env]);
-  if (k && rows) {
-    const cur = units(P.env === "all" ? k.net_worth : k.envelopes[P.env]);
-    text("pat-val", chf(cur));
-    const dec = rows.find((r) => r.iso === k.change_ytd.since) || rows[0];
-    setDelta($("pat-delta"), dec ? cur - dec.v : 0, "", "depuis janvier");
-    charts.area($("ch-pat"), rows, { h: 160, fmt: (v) => `${chf(v / 1000)} k`, tip: (r) => [`${ENV_LABEL[P.env]} ${chf(r.v)} ${base()}`] });
-    text("p-deposits", signed(units(k.deposits_ytd)));
-    text("p-market", signed(units(k.market_ytd)));
-    text("p-total", signed(units(k.change_ytd.amount)));
-    $("p-market").className = `amt ${units(k.market_ytd) >= 0 ? "up" : "down"}`;
-  } else if (failed(ke)) charts.placeholder($("ch-pat"), failed(ke));
-  charts.hbars($("alloc"), k ? [
-    { n: "Cash", v: units(k.envelopes.cash), cls: "neutral" },
-    { n: "3e pilier", v: units(k.envelopes.pilier3a) },
-    { n: "Titres", v: units(k.envelopes.titres) },
-    { n: "Crypto", v: units(k.envelopes.crypto) },
-  ].sort((a, b) => b.v - a.v) : null, chf);
-
-  positions();
-  lookthrough();
-
-  const list = $("acct-list");
-  list.replaceChildren();
-  const acc = store.use(path.accounts());
-  if (acc.status !== "ok") {
-    if (failed(acc)) list.append(el("div", "empty", failed(acc)));
+export function go(tab, opts = {}) {
+  if (!VIEWS[tab]) tab = "accueil";
+  closeSheet(true);
+  if (tab === P.tab) {
+    if (opts.top) window.scrollTo({ top: 0, behavior: reduced() ? "auto" : "smooth" });
     return;
   }
-  const shown = acc.data.items.filter((a) => P.env === "all" || KIND_ENV[a.kind] === P.env);
-  text("comptes-note", `${shown.length} compte${shown.length > 1 ? "s" : ""}`);
-  if (!shown.length) list.append(el("div", "empty", "Aucun compte dans cette enveloppe."));
-  for (const kind of Object.keys(KIND_LABEL)) {
-    const rs = shown.filter((a) => a.kind === kind);
-    if (!rs.length) continue;
-    if (P.env === "all") {
-      const g = el("div", "grp");
-      // dans la devise de base : l'enveloppe des chiffres clés (un compte en devise y est converti)
-      const sum = k ? units(k.envelopes[KIND_ENV[kind]]) : rs.reduce((s, a) => s + (a.value.currency === base() ? units(a.value) : 0), 0);
-      g.append(el("span", "", KIND_LABEL[kind]), el("span", "amt", chf(sum)));
-      list.append(g);
-    }
-    for (const a of rs) {
-      const clbd = a.last_clbd && a.last_clbd.on_date;
-      const age = daysSince(clbd);
-      const stale = a.kind === "cash" && (age == null || age > STALE_DAYS);
-      const gap = a.last_clbd && a.last_clbd.gap.minor !== 0;
-      const sub = (clbd ? `relevé du ${date(clbd)}` : "aucun relevé") + (stale ? " · à rafraîchir" : "") + (gap ? " · écart au relevé" : "");
-      const val = chf(units(a.value)) + (a.value.currency === base() ? "" : ` ${a.value.currency}`);
-      const r = row(initials(a.institution), a.name, sub, val, a.iban || null, "", true);
-      if (stale || gap) r.querySelector(".n span").className = "warn";
-      list.append(r);
-    }
-  }
+  scrolls[P.tab] = window.scrollY;
+  if (tab === "sources") back = P.tab;
+  store.set({ tab });
+  if (opts.top) scrolls[tab] = 0;
+  announce(LABEL[tab]);
 }
 
-// positions de toutes les enveloppes (VIAC, IBKR, cryptos, titres saisis à la main) : valeur,
-// plus-value latente, poids ; filtrées par l'enveloppe choisie
-function positions() {
-  const card = $("c-positions");
-  const h = store.use(path.holdings()).data;
-  const acc = store.data(path.accounts());
-  const env = Object.fromEntries((acc ? acc.items : []).map((a) => [a.id, KIND_ENV[a.kind]]));
-  const items = h ? h.items.filter((p) => P.env === "all" || env[p.account_id] === P.env) : [];
-  card.hidden = !items.length || P.env === "cash";
-  if (card.hidden) return;
-  const list = $("pos-list");
-  list.replaceChildren();
-  const value = items.reduce((s, p) => s + units(p.value), 0);
-  const gains = items.map((p) => (p.gain ? units(p.gain) : null));
-  const gain = gains.every((g) => g != null) ? gains.reduce((s, g) => s + g, 0) : null;
-  text("positions-note", gain == null ? `${chf(value)} ${base()}` : `plus-value ${signed(gain)} ${base()}`);
-  // cryptos : investi = virements de la catégorie « Crypto » ; le gain par ligne compte depuis
-  // l'arrivée sur le portefeuille, le résultat global depuis le virement (frais compris)
-  const c = h.crypto;
-  if (P.env === "crypto" && c) text("positions-note", `investi ${chf(units(c.invested))} · résultat ${signed(units(c.result))} ${base()}`);
-  for (const p of items) {
-    const unit = p.kind === "crypto" ? "" : " parts";
-    const share = value ? pct(units(p.value) / value, 1) : "—";
-    const sub = `${p.account || ""} · ${p.quantity.replace(".", ",")}${unit} · ${share}` + (p.price_date ? ` · cours du ${date(p.price_date)}` : " · sans cours");
-    const g = p.gain ? units(p.gain) : null;
-    list.append(row(initials(p.name), p.name, sub, chf(units(p.value)), g == null ? null : signed(g), g == null ? "" : g >= 0 ? "up" : "down", false));
-  }
-  const missing = h.missing_prices.filter((isin) => items.some((p) => p.isin === isin));
-  $("pos-missing").hidden = !missing.length;
-  $("pos-missing").textContent = missing.length ? `Sans cours : ${missing.join(", ")} (valorisé au solde du registre).` : "";
+const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// amène un élément sous la barre du haut de l'écran affiché
+export function reveal(node, extra = 0) {
+  if (!node) return;
+  setTimeout(() => {
+    const top = document.querySelector(`#${P.tab} .topbar`);
+    const y = node.getBoundingClientRect().top + window.scrollY - (top ? top.offsetHeight : 0) - 8 - extra;
+    window.scrollTo({ top: Math.max(0, y), behavior: reduced() ? "auto" : "smooth" });
+  }, 40);
 }
 
-// transparence des fonds : ce que les positions détiennent vraiment, toutes enveloppes
-function lookthrough() {
-  const card = $("c-look");
-  const h = store.data(path.holdings());
-  card.hidden = !(h && h.items.length) || !(P.env === "all" || P.env === "titres" || P.env === "pilier3a");
-  if (card.hidden) return;
-  pressed("look-seg", P.look);
-  const le = store.use(path.look());
-  const l = le.data;
-  charts.hbars($("look-bars"), l ? l.items.map((x) => ({ n: x.bucket, v: units(x.value), cls: x.bucket === "Non ventilé" ? "neutral" : "" })) : null, chf);
-  if (!l) {
-    text("look-note", failed(le) || "—");
-    text("look-foot", "");
-    return;
-  }
-  const covered = ratio(l.covered);
-  text("look-note", covered == null ? "—" : `${pct(covered)} ventilé`);
-  text("look-foot", l.compositions_since ? `Compositions des fonds au ${date(l.compositions_since)} ; le reste est classé d'après le fonds lui-même.` : "Aucune composition importée : chaque fonds est classé d'après lui-même.");
-}
-
-// --- budget ---------------------------------------------------------------------------------
-
-function budget() {
-  monthStepper("month-budget");
-  pressed("period-seg", P.period);
-  $("period-seg").querySelector('[data-v="m"]').textContent = monthName(P.month).split(" ")[0].replace(/^./, (c) => c.toUpperCase());
-  const be = store.use(path.budget());
-  const b = be.data;
-  const t = store.data(path.totals());
-  const lines = $("flow-lines");
-  lines.replaceChildren();
-  if (b) {
-    const rest = units(b.rest_to_live);
-    const spent = units(b.expenses);
-    const goal = units(b.budget);
-    text("bud-lbl", P.period === "m" ? `Reste à vivre${b.days_left ? ` · ${b.days_left} jours` : ""}` : "Reste sur 3 mois de budget");
-    text("bud-val", rest == null ? chf(spent) : chf(rest));
-    $("bud-val").className = `hero amt${rest != null && rest < 0 ? " down" : ""}`;
-    text("bud-sub", goal == null ? `${chf(spent)} dépensés · aucun budget défini` : `${chf(spent)} dépensés sur ${chf(goal)} de budget · ${pct(spent / goal)}`);
-    setBar("bar-bud", goal ? spent / goal : null);
-  } else {
-    text("bud-val", "—");
-    text("bud-sub", failed(be) || "—");
-  }
-  if (t) {
-    for (const [n, v, cls] of [
-      ["Revenus", units(t.income), ""],
-      ["Dépenses fixes", -units(t.fixed), "muted"],
-      ["Dépenses variables", -units(t.variable), "muted"],
-      ["Épargne et investissements", units(t.savings), "up"],
-    ]) {
-      const kv = el("div", "kv");
-      kv.append(el("span", "", n), el("b", `amt ${cls}`, signed(v)));
-      lines.append(kv);
-    }
-    const kv = el("div", "kv total");
-    kv.append(el("span", "", "Taux d'épargne"), el("b", "", pct(ratio(t.rate))));
-    lines.append(kv);
-  }
-  const sk = $("ch-sankey");
-  if (!sk.hidden) charts.sankey(sk, store.data(path.flows()));
-
-  const list = $("cat-list");
-  list.replaceChildren();
-  if (b) {
-    text("cat-note", b.over_count ? `${b.over_count} dépassée${b.over_count > 1 ? "s" : ""}` : "aucun dépassement");
-    if (!b.lines.length) list.append(el("div", "empty", "Aucune dépense sur la période."));
-    for (const [g, label] of [["fixed", "Fixe"], ["variable", "Variable"], ["mixed", "Autres"]]) {
-      const gr = b.lines.filter((l) => l.group === g);
-      if (!gr.length) continue;
-      const head = el("div", "grp");
-      const spentG = gr.reduce((s, l) => s + units(l.spent), 0);
-      const goalG = gr.reduce((s, l) => s + (units(l.target) || 0), 0);
-      head.append(el("span", "", label), el("span", "amt", goalG ? `${chf(spentG)} / ${chf(goalG)}` : chf(spentG)));
-      list.append(head);
-      for (const l of gr) {
-        const hb = el("div", "hb pad");
-        const top = el("div", "l");
-        const v = el("span", "v", l.target ? ` / ${chf(units(l.target))}` : " hors budget");
-        v.prepend(el("b", `amt${l.over ? " down" : ""}`, chf(units(l.spent))));
-        top.append(el("span", "", l.name), v);
-        const bar = el("div", "bar");
-        const i = el("i");
-        const r = ratio(l.ratio);
-        i.style.width = `${Math.min(100, (r || 0) * 100)}%`;
-        i.className = r == null ? "neutral" : r > 1 ? "over" : r > 0.85 ? "near" : "ok";
-        bar.append(i);
-        hb.append(top, bar);
-        list.append(hb);
-      }
-    }
-  }
-  subscriptions();
-  const m = store.data(path.months());
-  charts.months($("ch-months"), m ? m.series.map((s) => ({
-    month: s.month, fixed: units(s.fixed), variable: units(s.variable), savings: units(s.savings),
-  })) : null);
-}
-
-// abonnements et paiements réguliers : prochaines échéances et total mensuel
-function subscriptions() {
-  const r = store.use(path.recurring()).data;
-  const card = $("c-subs");
-  card.hidden = !(r && r.items && r.items.length);
-  if (card.hidden) return;
-  const total = r.monthly_total.map((m) => `${chf(Math.abs(units(m)))} ${m.currency}`).join(" + ");
-  text("subs-note", `${r.count} actif${r.count > 1 ? "s" : ""} · ${total || "—"} par mois`);
-  const list = $("subs-list");
-  list.replaceChildren();
-  for (const s of r.items.filter((x) => x.active)) {
-    const sub = `${CADENCE[s.cadence] || s.cadence} · prochain le ${date(s.next_date)}` + (s.category_name ? ` · ${s.category_name}` : "");
-    const v = Math.abs(units(s.last_amount));
-    list.append(row(initials(s.label), s.label, sub, chf2(v), s.amount.currency === base() ? null : s.amount.currency, "muted", false));
-  }
-}
-
-// --- journal --------------------------------------------------------------------------------
-
-const tx = { key: null, items: [], cursor: null, loading: false, error: null };
-
-function txKey() {
-  return `${P.tx}|${P.q}`;
-}
-
-async function loadTx(more = false) {
-  const key = txKey();
-  if (tx.loading) return;
-  tx.loading = true;
-  try {
-    let page;
-    if (P.q.length >= 3) page = await api(`/finance/search?q=${encodeURIComponent(P.q)}`);
-    else {
-      const qs = new URLSearchParams({ limit: "50" });
-      if (P.tx === "todo") qs.set("uncategorized", "true");
-      if (more && tx.cursor) qs.set("cursor", tx.cursor);
-      page = await api(`/finance/entries?${qs}`);
-    }
-    if (key !== txKey()) return;
-    tx.items = more ? tx.items.concat(page.items) : page.items;
-    tx.cursor = page.next_cursor || null;
-    tx.error = null;
-  } catch (e) {
-    tx.error = e.message;
-  } finally {
-    tx.loading = false;
+Object.assign(ACTIONS, {
+  tab: (v) => go(v, { top: v === P.tab }),
+  settings: () => go("sources"),
+  back: () => go(back || "accueil"),
+  "sheet-close": () => closeSheet(),
+  hide: () => {
+    const on = !pref("hide", false);
+    setPref("hide", on);
+    shell();
+    announce(on ? "Montants masqués" : "Montants affichés");
+  },
+  theme: (v) => {
+    setPref("theme", v);
+    applyTheme(v);
     store.notify();
-  }
+  },
+});
+
+// --- rendu ------------------------------------------------------------------------------------
+
+function selectorFor(node) {
+  if (node.id) return `#${CSS.escape(node.id)}`;
+  const at = [...node.attributes].filter((a) => a.name.startsWith("data-") && a.name !== "data-css").map((a) => `[${a.name}="${CSS.escape(a.value)}"]`).join("");
+  return at ? node.tagName.toLowerCase() + at : null;
 }
 
-function journal() {
-  pressed("tx-chips", P.tx);
-  if (tx.key !== txKey()) {
-    tx.key = txKey();
-    tx.items = [];
-    tx.cursor = null;
-    loadTx();
+function shell() {
+  const hide = pref("hide", false);
+  document.body.classList.toggle("hide-amounts", hide);
+  for (const b of document.querySelectorAll('.icon-btn[data-a="hide"]')) {
+    b.innerHTML = ic(hide ? "eyeoff" : "eye");
+    b.setAttribute("aria-pressed", String(hide));
+    b.setAttribute("aria-label", hide ? "Afficher les montants" : "Masquer les montants");
   }
-  const k = store.data(path.kpis());
-  text("todo-count", k && k.to_categorize ? String(k.to_categorize) : "");
-  reviewCard(path.categories());
-  const cats = store.data(path.categories());
-  const names = Object.fromEntries((cats ? cats.items : []).map((c) => [c.id, c.name]));
-  const acc = store.data(path.accounts());
-  const accName = Object.fromEntries((acc ? acc.items : []).map((a) => [a.id, a.name]));
-  const list = $("tx-list");
-  list.replaceChildren();
-  $("tx-more").hidden = !tx.cursor || P.q.length >= 3;
-  if (tx.error) list.append(el("div", "empty", `Impossible de charger : ${tx.error}`));
-  else if (!tx.items.length) list.append(el("div", "empty", tx.loading ? "Chargement…" : "Aucune écriture."));
-  let lastDay = null;
-  for (const e of tx.items) {
-    if (e.booking_date !== lastDay) {
-      lastDay = e.booking_date;
-      const day = el("div", "day");
-      day.append(el("span", "", dayName(e.booking_date)));
-      list.append(day);
-    }
-    const amount = units(e.amount);
-    const internal = e.category && e.category.id === "transfer-own";
-    const title = e.counterparty || e.label || (e.kind === "opening" ? "Solde d'ouverture" : "Écriture");
-    const r = row(initials(title), title, accName[e.account_id] || "", (amount > 0 ? "+" : "−") + chf2(Math.abs(amount)), null, "", !internal);
-    const sub = r.querySelector(".n span");
-    const cat = e.category ? names[e.category.id] || e.category.id : e.kind === "movement" ? "À catégoriser" : null;
-    if (cat) sub.append(el("span", `chip${e.category ? "" : " todo"}`, cat));
-    const v = r.querySelector(".v b");
-    if (amount > 0 && !internal) v.classList.add("up");
-    if (internal) v.classList.add("muted");
-    list.append(r);
-  }
+  for (const b of document.querySelectorAll('[data-a="settings"]')) if (!b.firstChild) b.innerHTML = ic("gear");
+  for (const b of document.querySelectorAll('[data-a="back"]')) if (!b.firstChild) b.innerHTML = ic("back");
+  const badges = { accueil: home.todoCount(), journal: journal.todoCount() };
+  fill($("tabs"), TABS.map(([k, l, i]) => {
+    const n = badges[k] || 0;
+    const what = k === "journal" ? "à classer" : "à traiter";
+    return `<button type="button" data-a="tab" data-v="${k}" ${P.tab === k ? 'aria-current="page"' : ""} aria-label="${l}${n ? `, ${n} ${what}` : ""}">${ic(i)}${l}${n ? `<span class="badge" aria-hidden="true">${n > 99 ? "99+" : n}</span>` : ""}</button>`;
+  }).join(""));
 }
-
-// --- sources --------------------------------------------------------------------------------
-
-function sources() {
-  connectionsCard();
-  accountsCard();
-  const list = $("fresh-list");
-  list.replaceChildren();
-  const f = store.use(path.freshness());
-  if (f.status !== "ok") {
-    list.append(el("div", "empty", failed(f) || "Chargement…"));
-    return;
-  }
-  if (!f.data.items.length) list.append(el("div", "empty", "Aucun compte pour l'instant."));
-  for (const a of f.data.items) {
-    const clbd = a.last_clbd && a.last_clbd.on_date;
-    const age = daysSince(clbd);
-    const sub = clbd ? `relevé du ${date(clbd)} · importé le ${date(a.last_import)}` : "aucun relevé importé";
-    const r = row(initials(a.name), a.name, sub, age == null ? "—" : `${age} j`, null, "", false);
-    r.querySelector(".v b").className = age == null || age > STALE_DAYS ? "warn" : "muted";
-    list.append(r);
-  }
-}
-
-// --- assemblage -----------------------------------------------------------------------------
-
-const VIEWS = { accueil: home, patrimoine, budget, journal, sources };
-const TITLES = { accueil: "Mes finances", patrimoine: "Patrimoine", budget: "Budget", journal: "Journal", sources: "Sources" };
 
 export function draw() {
-  if ($("tabbar").hidden) return; // déconnecté : l'écran de connexion reste affiché
+  if ($("shell").hidden) return; // déconnecté : l'écran de connexion reste affiché
+  const active = document.activeElement;
+  const focus = active && active !== document.body && document.body.contains(active) ? selectorFor(active) : null;
   for (const id of Object.keys(VIEWS)) $(id).hidden = id !== P.tab;
-  for (const b of document.querySelectorAll("#tabbar button")) b.setAttribute("aria-selected", b.dataset.tab === P.tab ? "true" : "false");
-  $("btn-src").setAttribute("aria-pressed", P.tab === "sources" ? "true" : "false");
-  text("pg-title", TITLES[P.tab]);
-  if (P.tab !== "accueil") header(store.data(path.kpis()));
+  shell();
   VIEWS[P.tab]();
-}
-
-function seg(id, param) {
-  $(id).addEventListener("click", (e) => {
-    const b = e.target.closest("button");
-    if (b && b.dataset.v) store.set({ [param]: b.dataset.v });
-  });
-}
-
-function stepper(id) {
-  $(id).addEventListener("click", (e) => {
-    const b = e.target.closest("button[data-step]");
-    if (!b) return;
-    const next = shiftMonth(P.month, Number(b.dataset.step));
-    if (next <= store.today) store.set({ month: next });
-  });
+  if (SH.kind) renderSheet();
+  if (drawn !== P.tab) {
+    drawn = P.tab;
+    window.scrollTo(0, scrolls[P.tab] || 0);
+  }
+  if (focus && !(active && document.body.contains(active))) {
+    const n = document.querySelector(focus);
+    if (n && (SH.kind ? $("sheet").contains(n) : !$("sheet").contains(n))) n.focus({ preventScroll: true });
+  }
 }
 
 export function start() {
   if (!VIEWS[P.tab]) P.tab = "accueil";
-  if (!ENV_LABEL[P.env]) P.env = "all"; // « ibkr » d'une version précédente : l'enveloppe s'appelle « titres »
-  for (const b of document.querySelectorAll("#tabbar button")) b.addEventListener("click", () => store.set({ tab: b.dataset.tab }));
-  $("btn-src").addEventListener("click", () => store.set({ tab: P.tab === "sources" ? "accueil" : "sources" }));
-  $("go-budget").addEventListener("click", () => store.set({ tab: "budget" }));
-  $("btn-hide").addEventListener("click", (e) => {
-    const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
-    e.currentTarget.setAttribute("aria-pressed", on ? "true" : "false");
-    document.body.classList.toggle("hide-amounts", on);
+  applyTheme(pref("theme", "system"));
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-a]");
+    if (!t || t.disabled || t.getAttribute("aria-disabled") === "true") return;
+    const fn = ACTIONS[t.dataset.a];
+    if (!fn) return;
+    e.preventDefault();
+    fn(t.dataset.v, t, e);
   });
-  $("btn-sankey").addEventListener("click", (e) => {
-    const box = $("ch-sankey");
-    box.hidden = !box.hidden;
-    e.currentTarget.textContent = box.hidden ? "Voir le flux complet" : "Masquer le flux";
-    store.notify();
+  // éléments SVG ou blocs à rôle de bouton : Entrée et Espace comme un clic
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && SH.kind) {
+      e.preventDefault();
+      closeSheet();
+      return;
+    }
+    const t = e.target.closest && e.target.closest('[role="button"][data-a]');
+    if (t && t.tagName !== "BUTTON" && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      t.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    }
   });
-  $("tx-more").addEventListener("click", () => loadTx(true));
+  $("backdrop").addEventListener("click", () => closeSheet());
+  initToast(() => store.notify());
   initConnections();
   initWelcome();
-  let typing;
-  $("tx-search").addEventListener("input", (e) => {
-    clearTimeout(typing);
-    typing = setTimeout(() => store.set({ q: e.target.value.trim() }), 250);
-  });
-  seg("range-seg", "range");
-  seg("mode-seg", "mode");
-  seg("env-chips", "env");
-  seg("look-seg", "look");
-  seg("period-seg", "period");
-  seg("tx-chips", "tx");
-  stepper("month-home");
-  stepper("month-budget");
+  wealth.init();
+  journal.init();
   // au retour dans l'app (iPhone), les chiffres sont relus
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") store.invalidate();
   });
-  window.addEventListener("resize", () => store.notify());
-  // une validation a changé le registre : le journal se relit
-  window.addEventListener("hub:changed", () => {
-    tx.key = null;
-  });
+  window.addEventListener("hub:changed", () => journal.reset());
   store.on(draw);
   draw();
 }

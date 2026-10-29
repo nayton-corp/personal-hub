@@ -67,6 +67,7 @@ class Valuation:
     deposits: int = 0
     liquid: int = 0
     by_envelope: dict[str, int] = field(default_factory=lambda: dict.fromkeys(ENVELOPE_ORDER, 0))
+    by_account: dict[str, int] = field(default_factory=dict)  # dans la devise de base
     missing_fx: list[str] = field(default_factory=list)
     missing_prices: list[str] = field(default_factory=list)  # instruments sans cours à la date
 
@@ -256,6 +257,7 @@ def _value(
         out.net_worth += value
         out.deposits += cost
         out.by_envelope[a.envelope] += value
+        out.by_account[a.id] = value
         if a.liquid:
             out.liquid += value
     out.missing_prices = sorted(set(out.missing_prices))

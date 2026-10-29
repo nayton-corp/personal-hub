@@ -59,6 +59,7 @@ def compute(conn: Connection, as_of: date) -> list[dict[str, Any]]:
             "net_worth_minor": v.net_worth,
             "deposits_cum_minor": v.deposits,
             "by_envelope_json": canonical.dumps(v.by_envelope),
+            "by_account_json": canonical.dumps(v.by_account),
         }
         for v in valuation.series(conn, snapshot_dates(conn, as_of))
     ]
@@ -111,8 +112,9 @@ def refresh(engine: Engine, as_of: date, *, force: bool = False) -> Refresh:
             conn.execute(
                 text(
                     "INSERT INTO snapshots (on_date, net_worth_minor, deposits_cum_minor, "
-                    "by_envelope_json, computed_at) VALUES "
-                    "(:on_date, :net_worth_minor, :deposits_cum_minor, :by_envelope_json, :at)"
+                    "by_envelope_json, by_account_json, computed_at) VALUES "
+                    "(:on_date, :net_worth_minor, :deposits_cum_minor, :by_envelope_json, "
+                    ":by_account_json, :at)"
                 ),
                 [{**r, "at": at} for r in rows],
             )
@@ -129,11 +131,46 @@ def refresh(engine: Engine, as_of: date, *, force: bool = False) -> Refresh:
     return Refresh(True, len(rows), reason)
 
 
+MAX_LIVE_POINTS = 400
+_STEP_DAYS = {"day": 1, "week": 7}
+
+
+def steps(date_from: str, date_to: str, step: str) -> list[str]:
+    """Dates de `date_to` en remontant de `step` jusqu'à `date_from`, dans l'ordre : la
+    dernière est toujours `date_to`. Vide si l'intervalle est inversé."""
+    start, end = date.fromisoformat(date_from), date.fromisoformat(date_to)
+    out: list[str] = []
+    d = end
+    while d >= start and len(out) <= MAX_LIVE_POINTS:
+        out.append(d.isoformat())
+        d -= timedelta(days=_STEP_DAYS[step])
+    return out[::-1]
+
+
+def live_history(conn: Connection, dates: list[str]) -> dict[str, Any]:
+    """Même forme que `history`, calculée à la demande (pas jour ou semaine, non stocké)."""
+    ccy = base_currency()
+    return {
+        "currency": ccy,
+        "as_of": dates[-1],
+        "items": [
+            {
+                "on_date": v.on_date,
+                "net_worth": money(v.net_worth, ccy),
+                "deposits_cum": money(v.deposits, ccy),
+                "by_envelope": {k: money(x, ccy) for k, x in v.by_envelope.items()},
+                "by_account": {k: money(x, ccy) for k, x in v.by_account.items()},
+            }
+            for v in valuation.series(conn, dates)
+        ],
+    }
+
+
 def stored(conn: Connection) -> list[dict[str, Any]]:
     rows = conn.execute(
         text(
-            "SELECT on_date, net_worth_minor, deposits_cum_minor, by_envelope_json "
-            "FROM snapshots ORDER BY on_date"
+            "SELECT on_date, net_worth_minor, deposits_cum_minor, by_envelope_json, "
+            "by_account_json FROM snapshots ORDER BY on_date"
         )
     ).fetchall()
     return [
@@ -142,6 +179,7 @@ def stored(conn: Connection) -> list[dict[str, Any]]:
             "net_worth_minor": int(r[1]),
             "deposits_cum_minor": int(r[2]),
             "by_envelope_json": r[3],
+            "by_account_json": r[4],
         }
         for r in rows
     ]
@@ -150,9 +188,9 @@ def stored(conn: Connection) -> list[dict[str, Any]]:
 def history(conn: Connection, date_from: str | None, date_to: str | None) -> dict[str, Any]:
     rows = conn.execute(
         text(
-            "SELECT on_date, net_worth_minor, deposits_cum_minor, by_envelope_json "
-            "FROM snapshots WHERE (:f IS NULL OR on_date >= :f) AND (:t IS NULL OR on_date <= :t) "
-            "ORDER BY on_date"
+            "SELECT on_date, net_worth_minor, deposits_cum_minor, by_envelope_json, "
+            "by_account_json FROM snapshots WHERE (:f IS NULL OR on_date >= :f) "
+            "AND (:t IS NULL OR on_date <= :t) ORDER BY on_date"
         ),
         {"f": date_from, "t": date_to},
     ).fetchall()
@@ -167,6 +205,8 @@ def history(conn: Connection, date_from: str | None, date_to: str | None) -> dic
                 "net_worth": money(r[1], ccy),
                 "deposits_cum": money(r[2], ccy),
                 "by_envelope": {k: money(v, ccy) for k, v in json.loads(r[3]).items()},
+                # valeur de chaque compte, pour une courbe filtrée (objectif, institution…)
+                "by_account": {k: money(v, ccy) for k, v in json.loads(r[4]).items()},
             }
             for r in rows
         ],

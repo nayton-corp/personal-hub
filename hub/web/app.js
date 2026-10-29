@@ -1,8 +1,9 @@
-// Coquille de l'app (L0-09) : connexion par passkey, puis les vues Finance (L2-03). Aucun
+// Coquille de l'app (L0-09) : connexion par passkey, puis les écrans Finance (finance.js). Aucun
 // script en ligne : la CSP de Caddy n'autorise que les fichiers servis par le hub.
 import { start } from "./finance.js";
 import { setBase } from "./format.js";
 import { api, setTimeZone, store, timeZone } from "./store.js";
+import { toast } from "./ui.js";
 import { creationOptions, credentialJSON, requestOptions } from "./webauthn.js";
 
 const $ = (id) => document.getElementById(id);
@@ -11,14 +12,17 @@ let started = false;
 
 function showAuth(name) {
   for (const v of AUTH_VIEWS) $(`view-${v}`).hidden = v !== name;
-  for (const s of document.querySelectorAll("section[data-tab]")) s.hidden = true;
+  $("auth").hidden = false;
+  $("shell").hidden = true;
   $("tabbar").hidden = true;
-  $("top-icons").hidden = true;
-  $("pg-title").textContent = "Personal Hub";
-  $("pg-sub").textContent = "";
 }
 
+// connecté : un message éphémère ; sinon, sous le formulaire de connexion
 function say(text, error = false) {
+  if (!$("shell").hidden) {
+    if (text) toast(text, { error });
+    return;
+  }
   const el = $("message");
   el.textContent = text || "";
   el.classList.toggle("error", error);
@@ -39,7 +43,6 @@ function renderProfile(p) {
   const tz = setTimeZone(p.timezone);
   const ccy = setBase(p.currency);
   if (tz || ccy) store.invalidate();
-  $("mode-seg").querySelector('[data-v="chf"]').textContent = p.currency;
   $("profile-name").value = p.display_name || "";
   $("profile-country").value = p.country;
   const modules = p.modules.length ? ` · modules : ${p.modules.join(", ")}` : "";
@@ -75,9 +78,9 @@ async function renderSettings(session) {
 }
 
 async function enter(session) {
-  for (const v of AUTH_VIEWS) $(`view-${v}`).hidden = true;
+  $("auth").hidden = true;
+  $("shell").hidden = false;
   $("tabbar").hidden = false;
-  $("top-icons").hidden = false;
   if (!started) {
     started = true;
     start();

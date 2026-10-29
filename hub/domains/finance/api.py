@@ -74,10 +74,11 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         to: Annotated[str | None, Query(pattern=DATE)] = None,
         category: str | None = None,
         uncategorized: bool = False,
+        direction: Annotated[str | None, Query(pattern=r"^(in|out)$")] = None,
         cursor: Annotated[str | None, Query(max_length=40)] = None,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> dict[str, Any]:
-        f = reads.EntryFilter(account, from_, to, category, uncategorized)
+        f = reads.EntryFilter(account, from_, to, category, uncategorized, direction)
         try:
             with engine.connect() as conn:
                 items, next_cursor = reads.entries(conn, f, cursor, limit)
@@ -184,20 +185,34 @@ def build_router(domain: FinanceDomain) -> APIRouter:
         _p: AnyReader,
         from_: Annotated[str | None, Query(alias="from", pattern=DATE)] = None,
         to: Annotated[str | None, Query(pattern=DATE)] = None,
+        step: Annotated[str, Query(pattern=r"^(day|week|month)$")] = "month",
     ) -> dict[str, Any]:
-        """Instantanés : patrimoine, versements cumulés et valeur par enveloppe."""
+        """Instantanés : patrimoine, versements cumulés, valeur par enveloppe et par compte.
+        `step=day` ou `week` : un point par jour ou par semaine, calculé à la demande entre
+        `from` et `to` (aujourd'hui par défaut), au plus 400 points."""
+        if step != "month":
+            if from_ is None:
+                raise Problem("validation.params", "from requis pour un pas jour ou semaine")
+            dates = snapshots.steps(from_, to or domain.today().isoformat(), step)
+            if not dates or len(dates) > snapshots.MAX_LIVE_POINTS:
+                raise Problem("validation.params", "période vide ou trop longue pour ce pas")
+            with engine.connect() as conn:
+                return snapshots.live_history(conn, dates)
         domain.refresh_snapshots()
         with engine.connect() as conn:
             return snapshots.history(conn, from_, to)
 
     @r.get("/flows")
     def flows(
-        p: AnyReader, month: Annotated[str | None, Query(pattern=MONTH)] = None
+        p: AnyReader,
+        month: Annotated[str | None, Query(pattern=MONTH)] = None,
+        period: Annotated[str, Query(pattern=PERIOD)] = "m",
     ) -> dict[str, Any]:
-        """Revenus → groupes (fixe, variable, épargne) → catégories, et le reste sur compte."""
+        """Revenus → groupes (fixe, variable, épargne) → catégories, et le reste sur compte.
+        `period=q` : les trois mois complets avant `month`, comme le budget."""
         m = _month(month)
         with engine.connect() as conn:
-            return insights.flows(conn, m, aggregates_only=_aggregates_only(p))
+            return insights.flows(conn, m, aggregates_only=_aggregates_only(p), period=period)
 
     @r.get("/export.csv", response_class=StreamingResponse)
     def export_csv(
