@@ -307,6 +307,8 @@ class _Chain:
     def value(self, t: Transaction, quantity: Decimal) -> int | None:
         known = price_at(self.conn, t.key, t.on_date)
         if known is None:
+            if t.symbol in exchange.STABLE:  # stablecoin sans cours : le dollar
+                return self.fx.convert(quantity, "USD", t.on_date)
             return None
         with localcontext(DECIMAL_CONTEXT):
             return self.fx.convert(quantity * known[0], known[1], t.on_date)
@@ -351,7 +353,7 @@ class _Chain:
                 fx = canonical.dumps({**detail, "quantity": assets.qty_text(qty)})
                 self.writer.entry(
                     account,
-                    f"{t.txid}|{leg}",
+                    f"{t.txid}|{leg}" if t.symbol == "BTC" else f"{t.txid}|{t.symbol}|{leg}",
                     t.on_date,
                     int(amount),
                     code,
@@ -359,7 +361,9 @@ class _Chain:
                     remittance=f"{assets.qty_text(qty)} {t.symbol}",
                     fx_json=fx,
                 )
-        trade_key = ledger.dedup_hash(f"chain|{t.account}|{t.txid}|trade")
+        # une transaction Ethereum porte l'ETH (le gaz) et un jeton : une clé par crypto
+        part = t.txid if t.symbol == "BTC" else f"{t.txid}|{t.symbol}"
+        trade_key = ledger.dedup_hash(f"chain|{t.account}|{part}|trade")
         if (
             t.quantity
             and not self.conn.execute(

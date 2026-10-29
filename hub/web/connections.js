@@ -440,9 +440,27 @@ function walletsEditor(box, initial) {
     keys.value = [...(w.xpubs || (w.xpub ? [w.xpub] : [])), ...(w.addresses || [])].join("\n");
     keys.spellcheck = false;
     field(wrap, `w-${i}-keys`, "Adresses ou xpub, une par ligne", keys);
+    // réseaux d'un portefeuille ETH : la même adresse sur Ethereum et ses couches 2
+    const nets = el("div", "networks");
+    const chosen = new Set(w.networks || ["ethereum"]);
+    const boxes = {};
+    for (const n of ["ethereum", "arbitrum", "base", "polygon"]) {
+      const lab = el("label", "check");
+      const cb = el("input");
+      cb.type = "checkbox";
+      cb.checked = chosen.has(n);
+      boxes[n] = cb;
+      lab.append(cb, document.createTextNode(` ${n[0].toUpperCase()}${n.slice(1)}`));
+      nets.append(lab);
+    }
+    const netLabel = el("label", "", "Réseaux");
+    wrap.append(netLabel, nets);
+    const showNets = () => { netLabel.hidden = nets.hidden = asset.value !== "ETH"; };
+    asset.addEventListener("change", showNets);
+    showNets();
     const remove = link("Retirer", () => { wrap.remove(); row.removed = true; });
     wrap.append(remove);
-    const row = { w, account, asset, keys, removed: false };
+    const row = { w, account, asset, keys, boxes, removed: false };
     rows.push(row);
     list.append(wrap);
   };
@@ -455,8 +473,10 @@ function walletsEditor(box, initial) {
         const lines = r.keys.value.split(/\s+/).map((s) => s.trim()).filter(Boolean);
         const xpubs = lines.filter((s) => /^[xyz]pub/.test(s));
         const addresses = lines.filter((s) => !/^[xyz]pub/.test(s));
-        const { xpub: _x, xpubs: _xs, addresses: _a, ...rest } = r.w;
+        const { xpub: _x, xpubs: _xs, addresses: _a, networks: _n, ...rest } = r.w;
         const out = { ...rest, account: r.account.value.trim(), asset: r.asset.value };
+        const networks = Object.keys(r.boxes).filter((n) => r.boxes[n].checked);
+        if (r.asset.value === "ETH" && networks.join() !== "ethereum") out.networks = networks;
         if (xpubs.length === 1) out.xpub = xpubs[0];
         else if (xpubs.length) out.xpubs = xpubs;
         if (addresses.length) out.addresses = addresses;

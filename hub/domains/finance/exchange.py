@@ -7,7 +7,8 @@ conversion), `income` (récompense, distribution) et `fee`. Chaque jambe devient
 en devise de base (codes `EXCHANGE/…`, quantité et actif dans le détail), et l'opération un
 mouvement de parts par actif dans `trades` (prix de revient).
 
-Valeur : une monnaie au change du jour ; une crypto à son cours du jour (CoinGecko, sinon la
+Valeur : celle donnée par la plateforme quand elle la donne (Coinbase), sinon une monnaie au
+change du jour ; une crypto à son cours du jour (CoinGecko, sinon la
 clôture Binance déposée avec l'opération) ; un stablecoin en dollar faute de cours. Les deux
 côtés d'un échange prennent la valeur du côté le plus sûr (monnaie, puis stablecoin) : un
 échange ne crée ni ne détruit de valeur, seuls ses frais coûtent. Un dépôt ou un retrait de
@@ -59,6 +60,8 @@ class Leg:
     symbol: str
     quantity: Decimal
     role: str
+    value: Decimal | None = None  # contre-valeur donnée par la plateforme
+    value_currency: str = ""
 
     @property
     def fiat(self) -> bool:
@@ -97,7 +100,17 @@ def parse(items: list[Any], number: Any, iso: Any) -> list[Operation]:
                 assets.instrument_key(symbol, "crypto")
             except AssetError:
                 raise ExchangeError("instrument illisible") from None
-            legs.append(Leg(symbol, number(leg.get("quantity")), str(leg["role"])))
+            value, ccy = leg.get("value"), str(leg.get("value_currency") or "").upper()
+            known = value is not None and assets.known_currency(ccy)
+            legs.append(
+                Leg(
+                    symbol,
+                    number(leg.get("quantity")),
+                    str(leg["role"]),
+                    abs(number(value)) if known else None,
+                    ccy if known else "",
+                )
+            )
         if not legs:
             raise ExchangeError("opération sans jambe")
         extra = {k: str(x.get(k) or "")[:128] for k in ("txid", "address", "network")}
@@ -147,6 +160,9 @@ class Journal:
         self.opened: set[str] = set()
 
     def value(self, leg: Leg, on: str) -> int | None:
+        if leg.value is not None:
+            got = self.fx.convert(leg.value, leg.value_currency, on)
+            return None if got is None else (got if leg.quantity > 0 else -got)
         if leg.fiat:
             return self.fx.convert(leg.quantity, leg.symbol, on)
         known = assets.price_at(self.conn, assets.crypto_key(leg.symbol), on)

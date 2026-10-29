@@ -220,3 +220,63 @@ def test_counterpart_prefers_the_txid_and_skips_taken_sides(
     assert found == (seqs["withdraw:w0"], -25_000)  # sans txId : la première de même quantité
     assert by_txid == (seqs["withdraw:w1"], -25_000)
     assert none is None  # hors délai
+
+
+def test_a_value_given_by_the_platform_wins(finance: FinanceDomain, accounts: None) -> None:
+    doc = {
+        "format": market.FORMAT,
+        "fetched_at": "2026-10-27",
+        "fx": BINANCE["fx"],
+        "prices": [price("BTC", "50000")],
+        "operations": [
+            {
+                **op("tx:c1", "reward", "2026-03-01", ("BTC", "0.001", "income")),
+                # Coinbase donne la valeur reçue : 60 USD, pas le cours du jour (50 CHF)
+                "legs": [
+                    {
+                        "instrument": "BTC",
+                        "quantity": "0.001",
+                        "role": "income",
+                        "value": "60",
+                        "value_currency": "USD",
+                    }
+                ],
+            }
+        ],
+    }
+    finance.importer.process([Incoming("coinbase.json", json.dumps(doc).encode())])
+    assert journal(finance, "crypto:binance") == [
+        ("tx:c1", "EXCHANGE/INCOME", 4_800, "0.001 BTC", "rendement"),
+    ]
+
+
+def test_a_token_and_its_gas_share_a_txid(finance: FinanceDomain, accounts: None) -> None:
+    doc = {
+        "format": market.FORMAT,
+        "fetched_at": "2026-10-27",
+        "fx": BINANCE["fx"],
+        "prices": [price("ETH", "2000")],
+        "transactions": [
+            {
+                "account": "crypto:ledger",
+                "instrument": "ETH",
+                "on_date": "2026-03-01",
+                "txid": "0xabc",
+                "quantity": "-0.002",
+                "fee": "0.001",
+            },
+            {
+                "account": "crypto:ledger",
+                "instrument": "USDT",
+                "on_date": "2026-03-01",
+                "txid": "0xabc",
+                "quantity": "-50",
+                "fee": "0",
+            },
+        ],
+    }
+    finance.importer.process([Incoming("market.json", json.dumps(doc).encode())])
+    got = journal(finance, "crypto:ledger")
+    # deux écritures distinctes pour la même transaction ; le stablecoin vaut 1 USD
+    assert ("0xabc", "CRYPTO/SEND", -4_000, "-50 USDT", "transfer-own") in got
+    assert sum(1 for r in got if r[0] == "0xabc") == 3

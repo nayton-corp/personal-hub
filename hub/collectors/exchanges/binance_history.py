@@ -47,6 +47,7 @@ STABLE = frozenset({"USDT", "USDC", "BUSD", "FDUSD", "TUSD", "USDP", "DAI"})
 DEPOSIT_DONE = frozenset({1, 6})  # crédité (6 : crédité, pas encore retirable)
 WITHDRAW_DONE = 6
 MAX_PAGES = 50
+EARN_DAYS = 29  # rewardsRecord : 30 jours au plus par appel (sinon -6021)
 
 
 def _pause(ms: int) -> None:
@@ -88,19 +89,31 @@ class Op:
     txid: str = ""
     address: str = ""
     network: str = ""
+    # contre-valeur donnée par la plateforme (Coinbase : `native_amount`), par jambe
+    values: dict[int, tuple[Decimal, str]] = field(default_factory=dict)
 
-    def leg(self, asset: Any, quantity: Decimal, role: str) -> Op:
+    def leg(
+        self, asset: Any, quantity: Decimal, role: str, value: tuple[Decimal, str] | None = None
+    ) -> Op:
         if quantity:
+            if value is not None:
+                self.values[len(self.legs)] = value
             self.legs.append((str(asset).upper(), quantity, role))
         return self
 
     def doc(self, account: str) -> dict[str, Any]:
+        legs = []
+        for i, (a, q, r) in enumerate(self.legs):
+            leg: dict[str, str] = {"instrument": a, "quantity": _text(q), "role": r}
+            if i in self.values:
+                leg["value"], leg["value_currency"] = _text(self.values[i][0]), self.values[i][1]
+            legs.append(leg)
         out: dict[str, Any] = {
             "account": account,
             "id": self.id,
             "kind": self.kind,
             "on_date": self.on_date,
-            "legs": [{"instrument": a, "quantity": _text(q), "role": r} for a, q, r in self.legs],
+            "legs": legs,
         }
         for k in ("txid", "address", "network"):
             if getattr(self, k):
@@ -340,7 +353,7 @@ def _earn_pages(
 ) -> Iterator[Any]:
     cursor = start
     while cursor < end:
-        stop = min(cursor + 89 * DAY_MS, end)
+        stop = min(cursor + EARN_DAYS * DAY_MS, end)
         seen = 0
         for page in range(1, MAX_PAGES + 1):
             doc = api.get(
@@ -507,7 +520,14 @@ def collect(
         start = _ms(date.fromisoformat(min(op.on_date for op in ops)))
     stream("withdrawals", lambda: withdrawals(api, start, end))
     stream("convert", lambda: converts(api, start, end))
-    stream("rewards", lambda: rewards(api, start, end, env.today))
+    # récompenses : relues depuis le début tant qu'un passage ne les a pas toutes lues
+    # (fenêtres trop larges jusqu'à la v0.9.9)
+    earn_full = memory.get("rewards_since") is None
+    first_day = memory.get("first_day")
+    earn_start = start
+    if earn_full and not full:
+        earn_start = _ms(date.fromisoformat(first_day) if first_day else first)
+    stream("rewards", lambda: rewards(api, earn_start, end, env.today))
     stream("dividends", lambda: dividends(api, start, end))
     stream("dust", lambda: dust(api, start))
     extra = env.creds.get("assets") or []
@@ -547,8 +567,14 @@ def collect(
         ops, prices, fx = [], [], []
     ops.sort(key=lambda op: (op.on_date, op.id))
 
+    earn_ok = not [f for f in failed if f.startswith("rewards")]
+
     def commit() -> None:
         memory.put("assets", sorted(assets))
+        if full and ops:
+            memory.put("first_day", ops[0].on_date)
+        if earn_ok and not (full and broken):
+            memory.put("rewards_since", env.today.isoformat())
         if not (full and broken):
             memory.put("trade_ids", cursor)
         if not broken:

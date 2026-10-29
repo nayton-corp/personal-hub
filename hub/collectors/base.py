@@ -63,6 +63,15 @@ class RevolutConfig(BaseModel):
     api_url: str = "https://api.enablebanking.com"
 
 
+class EvmNetwork(BaseModel):
+    """Un réseau compatible Ethereum (couche 2, Polygon) : nœud public et Blockscout."""
+
+    rpc_url: str
+    blockscout_url: str
+    native: str = "ETH"  # crypto qui paie le gaz
+    tokens: dict[str, str] = {}  # contrat → symbole (le WETH compte comme ETH)
+
+
 class MarketConfig(BaseModel):
     """Cours du marché (lot 6) : sources publiques, sans compte."""
 
@@ -75,6 +84,7 @@ class MarketConfig(BaseModel):
         "SOL": "solana",
         "USDC": "usd-coin",
         "USDT": "tether",
+        "POL": "polygon-ecosystem-token",
     }
     yahoo_url: str = "https://query1.finance.yahoo.com/v8/finance/chart"
     quotes: dict[str, str] = {}  # ISIN ou symbole → symbole Yahoo (par ex. « VWRL.SW »)
@@ -84,11 +94,49 @@ class MarketConfig(BaseModel):
     binance_url: str = "https://api.binance.com"  # clôtures publiques, pour l'historique
     mempool_pause_seconds: int = Field(default=1, ge=0, le=10)  # entre deux adresses BTC
     eth_rpc_url: str = "https://ethereum-rpc.publicnode.com"
+    # historique Ethereum : un nœud public ne liste pas les transactions d'une adresse, l'API
+    # publique de Blockscout (compatible Etherscan, sans clé) le fait
+    blockscout_url: str = "https://eth.blockscout.com/api"
     solana_rpc_url: str = "https://api.mainnet-beta.solana.com"
     # jetons lus en plus de la crypto native ; les autres (souvent du spam) sont ignorés
     erc20_tokens: dict[str, str] = {  # symbole → contrat Ethereum
         "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
         "USDT": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    }
+    # réseaux lus en plus d'Ethereum, pour un portefeuille qui les nomme (`networks`)
+    evm_networks: dict[str, EvmNetwork] = {
+        "arbitrum": EvmNetwork(
+            rpc_url="https://arbitrum-one-rpc.publicnode.com",
+            blockscout_url="https://arbitrum.blockscout.com/api",
+            tokens={
+                "0xaf88d065e77c8cC2239327C5EDb3A432268e5831": "USDC",
+                "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9": "USDT",
+                "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1": "ETH",
+            },
+        ),
+        "base": EvmNetwork(
+            rpc_url="https://base-rpc.publicnode.com",
+            blockscout_url="https://base.blockscout.com/api",
+            tokens={
+                "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": "USDC",
+                "0x4200000000000000000000000000000000000006": "ETH",
+            },
+        ),
+        "polygon": EvmNetwork(
+            rpc_url="https://polygon-bor-rpc.publicnode.com",
+            blockscout_url="https://polygon.blockscout.com/api",
+            native="POL",
+            tokens={
+                "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359": "USDC",
+                "0xc2132D05D31c914a87C6611C10748AEb04B58e8F": "USDT",
+                "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619": "ETH",
+            },
+        ),
+    }
+    # jetons de staking (Ethereum) : contrat → crypto mise en jeu, comptée à sa quantité
+    # sous-jacente (`balanceOfUnderlying`, sinon une part pour une unité)
+    staking_tokens: dict[str, str] = {
+        "0x30a4aa1d14D44f0f5BFe887447AB6FAcc94A549F": "ETH",  # Kiln Native20 (cbwsETH)
     }
     spl_tokens: dict[str, str] = {  # mint Solana → symbole
         "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": "USDC",

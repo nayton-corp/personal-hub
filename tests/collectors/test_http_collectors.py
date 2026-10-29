@@ -154,6 +154,8 @@ def market_api(broken: str | None = None) -> Fake:
             return 200, json.dumps(chart).encode()
         if "/txs/chain" in url:
             return 200, b"[]"
+        if "blockscout" in url:
+            return 200, b'{"status":"0","message":"No transactions found","result":[]}'
         if "mempool" in url:
             stats = {"funded_txo_sum": 150_000_000, "spent_txo_sum": 25_000_000}
             return 200, json.dumps({"chain_stats": stats}).encode()
@@ -188,6 +190,7 @@ def test_market_run_drops_a_file_the_finance_domain_reads(make_env: Any) -> None
         "quotes": {"GB00TEST0001": "TEST.L"},
         "crypto": {"BTC": "bitcoin", "ETH": "ethereum"},
         "erc20_tokens": {},
+        "staking_tokens": {},
     }
     env = make_env("market", creds=WALLETS, market=cfg)
     fake = market_api()
@@ -222,7 +225,9 @@ def test_market_run_drops_a_file_the_finance_domain_reads(make_env: Any) -> None
 def test_market_follows_the_base_currency(make_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """Un hub en euros : cours de change vers l'euro (le franc compris), cryptos en euros."""
     monkeypatch.setenv("HUB_CURRENCY", "EUR")
-    env = make_env("market", market={"crypto": {"BTC": "bitcoin"}, "erc20_tokens": {}})
+    env = make_env(
+        "market", market={"crypto": {"BTC": "bitcoin"}, "erc20_tokens": {}, "staking_tokens": {}}
+    )
     fake = market_api()
     assert market.run(env, "run", Http(fake)).outcome == "ok"
     fx_url = next(u for _m, u in fake.calls if "frankfurter" in u)

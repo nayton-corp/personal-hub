@@ -18,6 +18,7 @@ en flottant : les nombres du JSON sont lus comme textes.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import time
@@ -434,23 +435,62 @@ def _scaled(raw: Any, places: int) -> Decimal:
     return Decimal(int(raw)) / (Decimal(10) ** places)
 
 
+# nœud, Blockscout, crypto du gaz, contrat → symbole
+Network = tuple[str, str, str, dict[str, str]]
+
+
+def networks(env: Env, w: dict[str, Any]) -> list[Network]:
+    """Réseaux lus pour un portefeuille ETH : Ethereum, et ceux qu'il nomme (`networks`)."""
+    m = env.cfg.market
+    out = []
+    for name in w.get("networks") or ["ethereum"]:
+        if name == "ethereum":
+            tokens = {c: s for s, c in m.erc20_tokens.items()}
+            out.append((m.eth_rpc_url, m.blockscout_url, "ETH", tokens))
+        else:
+            n = m.evm_networks[name]
+            out.append((n.rpc_url, n.blockscout_url, n.native, dict(n.tokens)))
+    return out
+
+
+def _uint(url: str, http: Http, step: str, contract: str, data: str) -> int:
+    return int(
+        str(_rpc(url, http, step, "eth_call", [{"to": contract, "data": data}, "latest"])), 16
+    )
+
+
 def eth_wallet(env: Env, http: Http, w: dict[str, Any]) -> dict[str, Decimal]:
-    url = env.cfg.market.eth_rpc_url
     out: dict[str, Decimal] = {}
-    for address in w["addresses"]:
-        try:
-            wei = int(str(_rpc(url, http, "wallet.eth", "eth_getBalance", [address, "latest"])), 16)
-            out["ETH"] = out.get("ETH", Decimal(0)) + Decimal(wei) / WEI
-            owner = "0x70a08231" + address[2:].lower().rjust(64, "0")  # balanceOf(adresse)
-            for symbol, contract in sorted(env.cfg.market.erc20_tokens.items()):
-                call = [{"to": contract, "data": owner}, "latest"]
-                held = int(str(_rpc(url, http, "wallet.erc20", "eth_call", call)), 16)
-                if held:
-                    call = [{"to": contract, "data": "0x313ce567"}, "latest"]  # decimals()
-                    places = int(str(_rpc(url, http, "wallet.erc20", "eth_call", call)), 16)
-                    out[symbol] = out.get(symbol, Decimal(0)) + _scaled(held, places)
-        except (TypeError, ValueError):
-            raise Failure("invalid_file", "wallet.eth") from None
+
+    def add(symbol: str, amount: Decimal) -> None:
+        out[symbol] = out.get(symbol, Decimal(0)) + amount
+
+    try:
+        for url, _scan, native, tokens in networks(env, w):
+            for address in w["addresses"]:
+                wei = int(
+                    str(_rpc(url, http, "wallet.eth", "eth_getBalance", [address, "latest"])), 16
+                )
+                add(native, Decimal(wei) / WEI)
+                owner = address[2:].lower().rjust(64, "0")
+                for contract, symbol in sorted(tokens.items()):
+                    held = _uint(url, http, "wallet.erc20", contract, "0x70a08231" + owner)
+                    if held:  # balanceOf(adresse), puis decimals()
+                        places = _uint(url, http, "wallet.erc20", contract, "0x313ce567")
+                        add(symbol, _scaled(held, places))
+                if url != env.cfg.market.eth_rpc_url:
+                    continue
+                for contract, symbol in sorted(env.cfg.market.staking_tokens.items()):
+                    held = _uint(url, http, "wallet.staking", contract, "0x70a08231" + owner)
+                    if held:
+                        # balanceOfUnderlying(adresse) : la mise et ses récompenses
+                        with contextlib.suppress(Failure):
+                            held = _uint(
+                                url, http, "wallet.staking", contract, "0x3af9e669" + owner
+                            )
+                        add(symbol, Decimal(held) / WEI)
+    except (TypeError, ValueError):
+        raise Failure("invalid_file", "wallet.eth") from None
     return out
 
 
@@ -476,6 +516,161 @@ def sol_wallet(env: Env, http: Http, w: dict[str, Any]) -> dict[str, Decimal]:
         except (KeyError, TypeError, ValueError):
             raise Failure("invalid_file", "wallet.sol") from None
     return out
+
+
+# --- historique ETH et SOL ---------------------------------------------------------------------
+
+Move = tuple[str, str, str, Decimal, Decimal]  # jour UTC, txid, symbole, net (frais compris), frais
+CHAIN_PAGES = 20  # pages de 100 (Blockscout) ou de 1000 signatures (Solana) au premier passage
+
+
+def _blockscout(http: Http, url: str, action: str, address: str, page: int) -> list[Any]:
+    query = urllib.parse.urlencode(
+        {
+            "module": "account",
+            "action": action,
+            "address": address,
+            "sort": "desc",
+            "page": page,
+            "offset": 100,
+        }
+    )
+    doc = http.json(f"{url}?{query}", "history.eth")
+    rows = doc.get("result") if isinstance(doc, dict) else None
+    if isinstance(rows, list):
+        return rows
+    if isinstance(doc, dict) and str(doc.get("message", "")).startswith("No "):
+        return []  # « No transactions found »
+    raise Failure("invalid_file", "history.eth")
+
+
+def eth_moves(env: Env, http: Http, w: dict[str, Any], full: bool) -> list[Move]:
+    """Transactions des adresses, sur chaque réseau du portefeuille (Blockscout) : crypto du
+    gaz reçue ou envoyée (transactions et transferts internes), gaz payé, jetons suivis et
+    jetons de staking (comptés comme la crypto mise en jeu). Au premier passage tout, ensuite
+    la page la plus récente de chaque liste."""
+    addresses = w["addresses"]
+    mine = {a.lower() for a in addresses}
+    staking = env.cfg.market.staking_tokens
+    net: dict[tuple[str, str], Decimal] = {}
+    fees: dict[str, tuple[str, Decimal]] = {}
+    days: dict[str, str] = {}
+
+    def add(txid: str, symbol: str, amount: Decimal, stamp: Any) -> None:
+        days[txid] = datetime.fromtimestamp(int(stamp), UTC).date().isoformat()
+        net[(txid, symbol)] = net.get((txid, symbol), Decimal(0)) + amount
+
+    try:
+        for _url, scan, native, tokens in networks(env, w):
+            if scan == env.cfg.market.blockscout_url:
+                tokens = {**tokens, **staking}
+            tokens = {c.lower(): s for c, s in tokens.items()}
+            for address in addresses:
+                for action in ("txlist", "txlistinternal", "tokentx"):
+                    for page in range(1, (CHAIN_PAGES if full else 1) + 1):
+                        rows = _blockscout(http, scan, action, address, page)
+                        for r in rows:
+                            txid = str(r["hash"])
+                            sender = str(r.get("from", "")).lower()
+                            to = str(r.get("to", "")).lower()
+                            if action == "tokentx":
+                                symbol = tokens.get(str(r.get("contractAddress", "")).lower())
+                                if symbol is None:
+                                    continue  # jeton inconnu, souvent du spam
+                                value = _scaled(r["value"], int(r["tokenDecimal"]))
+                            else:
+                                symbol = native
+                                ok = str(r.get("isError", "0")) == "0"
+                                value = Decimal(int(r["value"])) / WEI if ok else Decimal(0)
+                                if action == "txlist" and sender in mine:
+                                    gas = Decimal(int(r["gasUsed"]) * int(r["gasPrice"])) / WEI
+                                    fees[txid] = (native, gas)
+                                    add(txid, native, -gas, r["timeStamp"])
+                            if to in mine:
+                                add(txid, symbol, value, r["timeStamp"])
+                            if sender in mine:
+                                add(txid, symbol, -value, r["timeStamp"])
+                        if len(rows) < 100:
+                            break
+    except (KeyError, TypeError, ValueError):
+        raise Failure("invalid_file", "history.eth") from None
+    out = []
+    for (t, s), q in net.items():
+        paid, fee = fees.get(t, ("", Decimal(0)))
+        out.append((days[t], t, s, q, fee if s == paid else Decimal(0)))
+    return sorted(out)
+
+
+def sol_moves(env: Env, http: Http, w: dict[str, Any], full: bool) -> list[Move]:
+    """Transactions des adresses Solana (nœud public) : SOL reçu ou envoyé, frais payés,
+    jetons de `spl_tokens`."""
+    addresses = w["addresses"]
+    url, tokens = env.cfg.market.solana_rpc_url, env.cfg.market.spl_tokens
+    out: list[Move] = []
+    try:
+        for address in addresses:
+            signatures: list[dict[str, Any]] = []
+            before = None
+            for _page in range(CHAIN_PAGES if full else 1):
+                options: dict[str, Any] = {"limit": 1000 if full else 25}
+                if before:
+                    options["before"] = before
+                page = _rpc(url, http, "history.sol", "getSignaturesForAddress", [address, options])
+                signatures += page
+                if len(page) < options["limit"]:
+                    break
+                before = page[-1]["signature"]
+            for sig in signatures:
+                params = [
+                    sig["signature"],
+                    {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0},
+                ]
+                tx = _rpc(url, http, "history.sol", "getTransaction", params)
+                if not tx or not tx.get("blockTime"):
+                    continue
+                day = datetime.fromtimestamp(int(tx["blockTime"]), UTC).date().isoformat()
+                meta, keys = tx["meta"], tx["transaction"]["message"]["accountKeys"]
+                pubkeys = [k["pubkey"] if isinstance(k, dict) else k for k in keys]
+                txid = str(sig["signature"])
+                if address in pubkeys:
+                    i = pubkeys.index(address)
+                    lamports = int(meta["postBalances"][i]) - int(meta["preBalances"][i])
+                    fee = int(meta["fee"]) if i == 0 else 0
+                    out.append((day, txid, "SOL", _scaled(lamports, 9), _scaled(fee, 9)))
+                held: dict[str, Decimal] = {}
+                for side, sign in (("preTokenBalances", -1), ("postTokenBalances", 1)):
+                    for b in meta.get(side) or []:
+                        symbol = tokens.get(str(b.get("mint")))
+                        if symbol and b.get("owner") == address:
+                            amount = b["uiTokenAmount"]
+                            value = _scaled(amount["amount"], int(amount["decimals"]))
+                            held[symbol] = held.get(symbol, Decimal(0)) + sign * value
+                out += [(day, txid, s, q, Decimal(0)) for s, q in held.items()]
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
+        raise Failure("invalid_file", "history.sol") from None
+    return sorted(out)
+
+
+# chaque crypto suivie en portefeuille a son historique (règle : pas de soldes sans écritures)
+HISTORIES: dict[str, Callable[[Env, Http, dict[str, Any], bool], list[Move]]] = {
+    "ETH": eth_moves,
+    "SOL": sol_moves,
+}
+
+
+def chain_transactions(account: str, moves: list[Move]) -> list[dict[str, str]]:
+    return [
+        {
+            "account": account,
+            "instrument": symbol,
+            "on_date": day,
+            "txid": txid,
+            "quantity": format(net.normalize(), "f"),
+            "fee": format(fee.normalize(), "f"),
+        }
+        for day, txid, symbol, net, fee in moves
+        if net or fee
+    ]
 
 
 WALLETS: dict[str, Callable[[Env, Http, dict[str, Any]], dict[str, Decimal]]] = {
@@ -509,8 +704,11 @@ def wallet_entries(env: Env) -> list[dict[str, Any]]:
             or (xpubs and asset != "BTC")
         ):
             raise Failure("auth_error", "secret:wallets")
-        if asset == "ETH" and not all(
-            re.fullmatch(r"0x[0-9a-fA-F]{40}", str(a)) for a in addresses
+        chains = w.get("networks") or []
+        if asset == "ETH" and (
+            not all(re.fullmatch(r"0x[0-9a-fA-F]{40}", str(a)) for a in addresses)
+            or not isinstance(chains, list)
+            or any(c != "ethereum" and c not in env.cfg.market.evm_networks for c in chains)
         ):
             raise Failure("auth_error", "secret:wallets")
         for x in xpubs:
@@ -528,7 +726,7 @@ def wallet_entries(env: Env) -> list[dict[str, Any]]:
 
 def balances(
     env: Env, http: Http
-) -> tuple[list[dict[str, str]], list[str], dict[str, str], list[dict[str, str]]]:
+) -> tuple[list[dict[str, str]], list[str], dict[str, str], list[dict[str, str]], dict[str, str]]:
     """(soldes, portefeuilles en échec, historiques relus : compte → premier jour, transactions).
     Un compte est relevé en entier ou pas du tout : un relevé partiel ferait disparaître une
     crypto de la valeur. Un compte vide donne un relevé à zéro.
@@ -536,7 +734,8 @@ def balances(
     Au premier passage d'un compte BTC (mémoire `btc_history`), son historique est relu sur la
     chaîne et déposé en relevés passés, un par jour où le solde a bougé. Ses transactions
     partent dans le fichier : toutes au premier passage (mémoire `btc_txs`), ensuite la
-    dernière page de chaque adresse (le registre écarte les doublons)."""
+    dernière page de chaque adresse (le registre écarte les doublons). Les comptes ETH et SOL
+    font de même avec leurs transactions (mémoire `chain_txs`, `HISTORIES`)."""
     by_account: dict[str, list[dict[str, Any]]] = {}
     for w in wallet_entries(env):
         by_account.setdefault(str(w["account"]), []).append(w)
@@ -544,6 +743,8 @@ def balances(
     histories: dict[str, str] = {}
     done = set(env.memory.get("btc_history", []))
     listed = set(env.memory.get("btc_txs", []))
+    chained = set(env.memory.get("chain_txs", []))
+    chain_new: dict[str, str] = {}
     for account, entries in by_account.items():
         held: dict[str, Decimal] = {}
         try:
@@ -555,6 +756,16 @@ def balances(
             continue
         out += holdings(account, env.today, held, entries[0]["asset"])
         if any(w["asset"] != "BTC" for w in entries):
+            full = account not in chained
+            try:
+                moves_of = [HISTORIES[w["asset"]](env, http, w, full) for w in entries]
+            except Failure as f:
+                failed.append(f"history.{account.split(':', 1)[1]}:{f.outcome}")
+                continue
+            found = [m for moves in moves_of for m in moves]
+            txs += chain_transactions(account, found)
+            if full:
+                chain_new[account] = min((m[0] for m in found), default=env.today.isoformat())
             continue
         used = [a for w in entries for a in w.get("used", [])]
         full = account not in done or account not in listed
@@ -573,7 +784,7 @@ def balances(
         for day, quantity in sorted(past.items()):
             if day < today:
                 out += holdings(account, date.fromisoformat(day), {"BTC": quantity}, "BTC")
-    return out, failed, histories, txs
+    return out, failed, histories, txs, chain_new
 
 
 def holdings(account: str, on: date, held: dict[str, Decimal], empty: str) -> list[dict[str, str]]:
@@ -614,23 +825,36 @@ def run(env: Env, kind: Kind, http: Http | None = None) -> Result:
             doc.setdefault("prices", []).extend(fetch())
         except Failure as f:
             failed.append(f"{name}:{f.outcome}")
-    doc["balances"], down, histories, doc["transactions"] = balances(env, http)
+    doc["balances"], down, histories, doc["transactions"], chains = balances(env, http)
     failed += down
-    first = min(histories.values(), default=None)
+    first = min([*histories.values(), *chains.values()], default=None)
     if first and first < since.isoformat():
         # l'historique remonte avant la fenêtre des cours : change BCE et clôtures Binance
         start = date.fromisoformat(first)
+        symbols = sorted({"BTC"} if histories else set())
+        symbols += sorted(
+            {str(t["instrument"]) for t in doc["transactions"] if t["account"] in chains} - {"BTC"}
+        )
         try:
             doc["fx"] += fx_rates(env, http, start, until=since)
-            doc.setdefault("prices", []).extend(binance_prices(env, http, ["BTC"], start, since))
+            for symbol in symbols:
+                try:
+                    found = binance_prices(env, http, [symbol], start, since)
+                except Failure as f:
+                    if symbol == "BTC" or not f.detail.endswith(":http_400"):
+                        raise
+                    continue  # pas de paire USDT (USDT lui-même) : le dollar fait foi
+                doc.setdefault("prices", []).extend(found)
         except Failure as f:
             failed.append(f"history_prices:{f.outcome}")
-            histories = {}  # le prochain passage relit l'historique et ses cours
+            histories, chains = {}, {}  # le prochain passage relit l'historique et ses cours
     data = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
     dropped = env.inbox.drop("market.json", data, is_market_json, step="market.file")
     if histories:
         env.memory.put("btc_history", sorted({*env.memory.get("btc_history", []), *histories}))
         env.memory.put("btc_txs", sorted({*env.memory.get("btc_txs", []), *histories}))
+    if chains:
+        env.memory.put("chain_txs", sorted({*env.memory.get("chain_txs", []), *chains}))
     if not failed:  # sinon le prochain run reprend la même fenêtre
         env.memory.put("last_run", env.today.isoformat())
     detail = "partial " + " ".join(failed) if failed else None

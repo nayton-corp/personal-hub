@@ -30,6 +30,7 @@ MAX_SETTINGS = 16_384
 MAX_SECRETS = 65_536
 MAX_WALLETS = 50
 WALLET_ASSETS = ("BTC", "ETH", "SOL")
+WALLET_NETWORKS = ("ethereum", "arbitrum", "base", "polygon")  # réseaux d'un portefeuille ETH
 WALLET_ACCOUNT = re.compile(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$")
 _COLUMNS = "id, connector, label, schedule, settings, secrets, secrets_at, created_at, updated_at"
 
@@ -192,6 +193,13 @@ def clean_wallets(value: Any) -> list[dict[str, Any]]:
             raise Problem("validation.params", "portefeuille : adresses, ou xpub pour BTC")
         if any(x[1:4] == "prv" for x in xpubs):
             raise Problem("validation.params", "portefeuille : clé privée refusée")
+        chains = w.get("networks") or []
+        if not isinstance(chains, list) or not all(c in WALLET_NETWORKS for c in chains):
+            raise Problem(
+                "validation.params", f"portefeuille : réseaux parmi {', '.join(WALLET_NETWORKS)}"
+            )
+        if chains and asset != "ETH":
+            raise Problem("validation.params", "portefeuille : réseaux pour ETH seulement")
         out.append({**w, "account": account, "asset": asset})
     return out
 
