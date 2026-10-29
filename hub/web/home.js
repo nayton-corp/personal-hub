@@ -23,7 +23,7 @@ function sparkPath(k) {
   if (!k) return null;
   const d = new Date(`${k.as_of}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - 30);
-  return `/finance/networth/history?from=${d.toISOString().slice(0, 10)}&step=day`;
+  return `/finance/performance?from=${d.toISOString().slice(0, 10)}&step=day`;
 }
 
 function spark(vals, w = 140, h = 30) {
@@ -100,10 +100,12 @@ export function render() {
   // un compte masqué sort aussi du patrimoine de l'accueil
   store.use("/finance/accounts");
   const hidden = hiddenIds();
-  const worth = (i) => (hidden.size ? Object.entries(i.by_account || {}).reduce((t, [id, v]) => t + (hidden.has(id) ? 0 : v.minor), 0) : i.net_worth.minor) / 100;
-  const vals = se && se.data ? se.data.items.map(worth) : [];
+  // courbe et rendement sans les comptes masqués ; le rendement ne compte pas les versements
+  const sum30 = se && se.data ? se.data.summary : null;
+  const vals = sum30 ? se.data.items.map((i) => i.value.minor / 100) : [];
   const net = hidden.size && vals.length ? vals[vals.length - 1] : k.net_worth.minor / 100;
-  const p30 = vals.length > 1 && vals[0] ? vals[vals.length - 1] / vals[0] - 1 : null;
+  const p30 = sum30 && sum30.twr != null ? Number(sum30.twr) : null;
+  const g30 = sum30 ? sum30.gain.minor / 100 : null;
   const m = be.data ? model(be.data, true) : null;
   const all = items();
   const acts = all.filter((x) => !x.info), infos = all.filter((x) => x.info);
@@ -127,10 +129,10 @@ export function render() {
   const budgetLabel = m && m.T != null ? `Reste à vivre ce mois ${nf(m.rest)} ${base()}, ${m.state.short}, ${m.daysLeft} jours restants. Ouvrir le budget` : "Ouvrir le budget";
   fill($("homeBody"), `
     <div class="tiles">
-      <button class="tile" type="button" data-a="tab" data-v="patrimoine" aria-label="Patrimoine ${n0(net)} ${base()}${p30 != null ? `, ${sgn(p30)}${pf(Math.abs(p30))} % sur 30 jours` : ""}. Ouvrir le patrimoine">
+      <button class="tile" type="button" data-a="tab" data-v="patrimoine" aria-label="Patrimoine ${n0(net)} ${base()}${g30 != null ? `, gain ${sgn(g30)}${n0(g30)} ${base()}${p30 != null ? `, rendement ${sgn(p30)}${pf(Math.abs(p30))} %` : ""} sur 30 jours` : ""}. Ouvrir le patrimoine">
         <span class="tile-lbl">${ic("trend")}Patrimoine</span>
         <span class="tile-amt num"><span class="money">${n0(net)}</span></span>
-        <span class="tile-sub">${vals.length > 1 ? `${pctOnly(p30)} sur 30 jours` : base()}</span>
+        <span class="tile-sub">${vals.length > 1 && p30 != null ? `${pctOnly(p30)} sur 30 jours` : base()}</span>
         ${spark(vals)}
       </button>
       <button class="tile" type="button" data-a="tab" data-v="budget" aria-label="${budgetLabel}">${budgetTile}</button>
