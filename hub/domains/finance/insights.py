@@ -194,11 +194,9 @@ def to_categorize(conn: Connection) -> int:
     return int(
         conn.execute(
             text(
-                "SELECT count(*) FROM entries e LEFT JOIN v_entry_category vc "
-                "ON vc.entry_seq = e.seq WHERE vc.category_id IS NULL AND e.kind = 'movement' "
-                # un côté de virement apparié n'attend pas de catégorie (lot 6)
-                "AND e.seq NOT IN (SELECT debit_seq FROM transfer_links) "
-                "AND e.seq NOT IN (SELECT credit_seq FROM transfer_links)"
+                # un côté de virement apparié n'attend pas de catégorie (lot 6, v_entry_shown)
+                "SELECT count(*) FROM entries e LEFT JOIN v_entry_shown vc "
+                "ON vc.entry_seq = e.seq WHERE vc.category_id IS NULL AND e.kind = 'movement'"
             )
         ).scalar_one()
     )
