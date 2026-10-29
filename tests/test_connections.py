@@ -20,6 +20,7 @@ from hub.api.app import create_app
 from hub.collectors import base
 from hub.collectors.runtime import Assigned
 from hub.core import collectors, connections, secrets
+from hub.core.clock import now_iso
 from hub.core.context import HubContext
 from hub.core.errors import Problem
 from hub.core.migrations import runner as migrations
@@ -379,6 +380,46 @@ def test_app_requests_a_link_and_sees_the_url(khub: HubContext, kclient: TestCli
     assert state["link_url"] == put["url"]
     r = kclient.put("/api/collectors/n26/link-url", json={"url": None}, headers=collector)
     assert r.json()["link_url"] is None
+
+
+def test_app_refreshes_a_connection_or_all_of_them(khub: HubContext, kclient: TestClient) -> None:
+    """« Actualiser » : un run hors horaire, pour une connexion prête et active seulement ;
+    le run déclaré par le service efface la demande."""
+    recipient = secrets.recipient(khub.settings.secrets.age_key_file)
+    with khub.core.engine.begin() as conn:
+        connections.create(conn, "market", "market", "system:test")  # sans secret exigé
+        connections.create(conn, "bcf", "bcf", "system:test")  # identifiants à donner
+        connections.create(conn, "ibkr", "ibkr", "system:test")
+        connections.set_secrets(conn, "ibkr", {"flex_token": "t", "query_id": "q"}, recipient, "x")
+    collector = bearer(_token(khub, "collector"))
+    assert kclient.post("/api/collectors/market/refresh", headers=collector).status_code == 403
+    app_session(khub, kclient)
+    assert kclient.post("/api/collectors/bcf/refresh", json={}).status_code == 422
+    r = kclient.post("/api/collectors/market/refresh", json={})
+    assert r.status_code == 200
+    assert r.json()["run_requested"] is True
+    assert kclient.post("/api/collectors/market/refresh", json={}).json()["run_requested"]
+    assert kclient.get("/api/collectors/market", headers=collector).json()["run_requested"]
+    # un contrôle déclaré ne vaut pas actualisation ; un run, si
+    now = now_iso()
+    run = {"started_at": now, "ended_at": now}
+    check = {**run, "kind": "check", "outcome": "ok"}
+    r = kclient.post("/api/collectors/market/runs", json=check, headers=collector)
+    assert r.json()["run_requested"] is True
+    r = kclient.post(
+        "/api/collectors/market/runs", json={**run, "outcome": "nothing_new"}, headers=collector
+    )
+    assert r.json()["run_requested"] is False
+    # une connexion désactivée ne s'actualise pas ; « tout » saute aussi les non prêtes
+    assert kclient.post("/api/collectors/ibkr/mode", json={"mode": "disabled"}).status_code == 200
+    r = kclient.post("/api/collectors/ibkr/refresh", json={})
+    assert r.status_code == 409
+    assert r.json()["type"].endswith("collector.not_enabled")
+    kclient.post("/api/collectors/ibkr/mode", json={"mode": "enabled"})
+    items = kclient.post("/api/collectors/refresh", json={}).json()["items"]
+    asked = {s["name"]: s["run_requested"] for s in items}
+    assert asked == {"bcf": False, "ibkr": True, "market": True}
+    assert "refresh" in connections.RESERVED  # `POST /collectors/refresh` reste à l'app
 
 
 def test_wallet_settings_are_checked(khub: HubContext) -> None:

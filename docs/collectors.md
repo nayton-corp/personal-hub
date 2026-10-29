@@ -18,8 +18,8 @@ Deux services les exécutent :
 | `viac` | profil gardé dans le volume | dimanche 09:00 | avis PDF nouveaux de la liste Documents, et un rapport tous les 6 jours |
 | `enable_banking` | API Enable Banking (PSD2), une banque européenne par connexion | 07:15, 13:15, 19:15 | un `revolut-<empreinte>.json` par compte, seulement s'il a changé |
 | `ibkr` | Flex Web Service d'IBKR (jeton en lecture seule) | 06:45 du mardi au samedi | le relevé Flex XML de la veille |
-| `market` | API publiques (BCE, CoinGecko, mempool.space, nœuds Ethereum et Solana publics, Yahoo facultatif) | 06:15 | un `market.json` : change, cours, soldes des portefeuilles |
-| `binance`, `kucoin`, `coinbase` | API officielle, clé en lecture seule | 06:20, 06:22, 06:24 | un `<plateforme>.json` : soldes de la plateforme (Binance : et ses opérations) |
+| `market` | API publiques (BCE, CoinGecko, mempool.space, nœuds Ethereum et Solana publics, Yahoo facultatif) | toutes les 4 h, de 06:15 à 22:15 | un `market.json` : change, cours, soldes des portefeuilles |
+| `binance`, `kucoin`, `coinbase` | API officielle, clé en lecture seule | toutes les 4 h, de 06:20, 06:22, 06:24 à 22:2x | un `<plateforme>.json` : soldes de la plateforme (Binance : et ses opérations) |
 
 Chaque minute, un service demande au hub ses connexions prêtes (`GET
 /api/collectors/runner/<service>`) : leurs secrets arrivent chiffrés et ne sont déchiffrés
@@ -45,6 +45,27 @@ l'app affiche « Ouvrir la banque pour valider », et la reprise de l'historique
 retour. La carte **Comptes** liste les comptes que des relevés attendent (Revolut par Enable
 Banking, portefeuilles, plateformes) et les crée par une proposition validée avec Face ID ;
 un compte Revolut s'ouvre au solde déduit de sa reprise, comme `fin revolut add-account`.
+
+**Actualiser** : hors de son horaire, « Actualiser » sur une connexion (ou « Tout actualiser »
+en tête de la carte) demande un run complet que le service lance dans la minute (`POST
+/api/collectors/<id>/refresh`, `POST /api/collectors/refresh`). Seule une connexion prête et
+active s'actualise : une connexion suspendue passe d'abord par « Contrôler » puis
+« Réactiver ». La ligne affiche « actualisation en cours » jusqu'à ce que le run soit déclaré,
+puis l'app relit ses chiffres, une fois tout de suite et une fois après l'import (la boîte
+d'entrée passe toutes les 30 secondes). Les limites de chaque source restent celles de son
+flux :
+
+- BCF : chaque run demande la validation push dans l'app BCF (trois minutes) ;
+- Enable Banking (Revolut) : quatre synchronisations par jour au plus (`max_syncs_per_day`),
+  trois prises par l'horaire ; au-delà, le run finit en « quota du jour atteint » ;
+- VIAC : un code 2FA demandé au milieu d'un run le fait échouer, comme à l'horaire ;
+- positions et soldes crypto : un seul relevé par compte et par jour (le premier de la
+  journée, le registre est en ajout seul) ; un run de plus dans la journée apporte les
+  nouvelles opérations au Journal, le solde du jour suit le lendemain.
+
+Les cours et plateformes crypto, sans limite de synchro, passent toutes les 4 heures (06:15,
+10:15, 14:15, 18:15, 22:15, et quelques minutes après pour les plateformes) : leurs nouvelles
+opérations arrivent dans la journée. Un horaire réglé à la main reste celui de la connexion.
 
 **Depuis le terminal**, pour le dépannage :
 
@@ -346,8 +367,8 @@ nouveau connecteur ou une nouvelle chaîne qui ne le fait pas.
 
 Une connexion par plateforme (`binance`, `kucoin`, `coinbase`), chacune avec sa clé API **en
 lecture seule** dans ses secrets (`hub connections add binance binance`, puis `hub connections
-secrets binance`). Tous les jours
-après les cours (06:20, 06:22, 06:24), il dépose un `<plateforme>.json` (`hub.market.v1`,
+secrets binance`). Toutes les 4 heures,
+après les cours (06:20, 06:22, 06:24, puis 10:2x…), il dépose un `<plateforme>.json` (`hub.market.v1`,
 soldes et opérations) dont les soldes deviennent un relevé de positions du compte `crypto:<plateforme>`, valorisé avec les
 cours CoinGecko du collecteur `market`. Une crypto sans cours garde sa quantité et attend son
 cours : ajoute-la à `crypto` dans `[collectors.market]` (symbole → id CoinGecko).

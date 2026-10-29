@@ -48,6 +48,14 @@ def test_schedules() -> None:
         if due(_schedule("enable_banking"), MONDAY_0730.replace(hour=h, minute=15))
     ]
     assert len(syncs) <= 4
+    # les sources sans limite de synchro passent plusieurs fois par jour
+    for name in ("market", "binance", "kucoin", "coinbase"):
+        runs = [
+            h
+            for h in range(24)
+            if any(due(_schedule(name), MONDAY_0730.replace(hour=h, minute=m)) for m in range(60))
+        ]
+        assert runs == [6, 10, 14, 18, 22], name
 
 
 BCF = Assigned("bcf", "bcf", "BCF", _schedule("bcf"), {}, None)
@@ -61,18 +69,26 @@ def _runner(log: list[tuple[str, Kind]]):  # type: ignore[no-untyped-def]
     return run
 
 
+LATER = MONDAY_0730 + timedelta(minutes=1)
+
+
 @pytest.mark.parametrize(
-    ("mode", "check", "at", "expected"),
+    ("mode", "check", "refresh", "at", "expected"),
     [
-        ("enabled", False, MONDAY_0730, [("bcf", "run")]),
-        ("degraded", False, MONDAY_0730, []),
-        ("disabled", False, MONDAY_0730, []),
-        ("enabled", False, MONDAY_0730 + timedelta(minutes=1), []),
-        ("degraded", True, MONDAY_0730 + timedelta(minutes=1), [("bcf", "check")]),
+        ("enabled", False, False, MONDAY_0730, [("bcf", "run")]),
+        ("degraded", False, False, MONDAY_0730, []),
+        ("disabled", False, False, MONDAY_0730, []),
+        ("enabled", False, False, LATER, []),
+        ("degraded", True, False, LATER, [("bcf", "check")]),
+        ("enabled", False, True, LATER, [("bcf", "run")]),  # actualisation hors horaire
+        ("degraded", False, True, LATER, []),
+        ("enabled", True, True, LATER, [("bcf", "check")]),  # le run suit à la minute d'après
     ],
 )
-def test_tick(tmp_path: Path, mode: str, check: bool, at: datetime, expected: list[Any]) -> None:
-    hub = FakeHub(mode=mode, check_requested=check)
+def test_tick(
+    tmp_path: Path, mode: str, check: bool, refresh: bool, at: datetime, expected: list[Any]
+) -> None:
+    hub = FakeHub(mode=mode, check_requested=check, run_requested=refresh)
     log: list[tuple[str, Kind]] = []
     tick(
         lambda item: _env(tmp_path, hub, item.id),

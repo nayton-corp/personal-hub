@@ -1,11 +1,12 @@
 // Connexions et comptes dans l'app (chantier « hub générique », G5) : ajouter une banque ou une
 // plateforme, donner ses identifiants (chiffrés à la saisie, jamais relus), son horaire, ses
-// réglages et ses portefeuilles, lier un consentement Enable Banking, puis créer les comptes
-// dont les relevés attendent, par une proposition validée avec Face ID.
+// réglages et ses portefeuilles, lier un consentement Enable Banking, actualiser une connexion
+// (ou toutes) hors horaire, puis créer les comptes dont les relevés attendent, par une
+// proposition validée avec Face ID.
 //
 // La liste se redessine à chaque réponse ; les formulaires, eux, ne sont construits qu'à
 // l'ouverture, pour ne jamais effacer une saisie en cours.
-import { base, date, el, initials } from "./format.js";
+import { ago, base, date, el, initials } from "./format.js";
 import { brandColors, brandSvg, instLook } from "./meta.js";
 import { approve, propose } from "./proposals.js";
 import { api, store } from "./store.js";
@@ -60,10 +61,15 @@ const NUMBER_SETTINGS = new Set(["consent_days", "max_syncs_per_day"]);
 const MULTILINE_SECRETS = new Set(["private_key"]);
 const KIND_LABEL = { cash: "Cash", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" };
 const POLL_MS = 4000;
+const STATES_POLL_MS = 10_000;
+const IMPORT_MS = 45_000;
+// détail d'un run qui dit plus que son issue
+const DETAIL_LABEL = { "quota.day": "quota du jour atteint" };
 
 let busy = false;
 let editing = null; // { id } ou { create: true }
 let poller = null;
+let statesPoller = null; // tant qu'une actualisation ou un contrôle attend le service
 
 function say(id, text, error = false) {
   const n = $(id);
@@ -130,7 +136,9 @@ const byName = (items) => Object.fromEntries((items || []).map((x) => [x.name ??
 function sub(c, s) {
   if (!c.ready) return "identifiants à donner";
   const last = s && s.last_run;
-  let text = last ? `${OUTCOME_LABEL[last.outcome] || last.outcome} le ${date(last.started_at.slice(0, 10))}` : "jamais lancé";
+  const outcome = last && (DETAIL_LABEL[last.detail] || OUTCOME_LABEL[last.outcome] || last.outcome);
+  let text = last ? `${outcome} ${ago(Date.parse(last.ended_at))}` : "jamais lancé";
+  if (s && s.run_requested) text = `actualisation en cours · ${text}`;
   if (s && s.check_requested) text += " · contrôle demandé";
   if (s && (s.link_requested || s.link_url)) text += " · liaison en cours";
   return text;
@@ -148,6 +156,9 @@ export function connectionsCard() {
     return;
   }
   const states = byName(st.data.items);
+  const waiting = st.data.items.some((s) => s.run_requested || s.check_requested);
+  watchStates(waiting);
+  $("conn-refresh").disabled = busy || !st.data.items.some((s) => s.ready && s.mode === "enabled" && !s.run_requested);
   if (!cs.data.items.length) list.append(el("div", "empty", "Aucune connexion : « Ajouter » pour la première."));
   for (const c of cs.data.items) {
     const s = states[c.id];
@@ -161,6 +172,9 @@ export function connectionsCard() {
     v.append(el("b", mode === "enabled" && c.ready ? "muted" : "warn", c.ready ? MODE_LABEL[mode] || mode : "à régler"));
     const post = (what, body) => api(`/collectors/${c.id}/${what}`, body);
     if (s && c.ready) {
+      if (mode === "enabled" && !s.run_requested) {
+        v.append(link("Actualiser", () => act("coll-msg", async () => { await post("refresh", {}); return refreshText(c); })));
+      }
       if (mode === "enabled") {
         v.append(link("Désactiver", () => act("coll-msg", async () => { await post("mode", { mode: "disabled" }); return `${c.label} désactivé.`; })));
       } else if (s.can_enable) {
@@ -174,6 +188,44 @@ export function connectionsCard() {
     list.append(r);
   }
   linkStatus();
+}
+
+function refreshText(c) {
+  const when = "le service la lance dans la minute";
+  if (c.connector === "bcf") return `${c.label} : actualisation demandée, ${when}. Valide la connexion sur ton téléphone.`;
+  if (c.connector === "enable_banking") return `${c.label} : actualisation demandée, ${when} (synchronisations par jour limitées par la banque).`;
+  return `${c.label} : actualisation demandée, ${when}.`;
+}
+
+// relit sans effacer : la liste reste affichée pendant la lecture
+function reread(path) {
+  const e = store.cache.get(path);
+  if (e && e.status === "ok") {
+    e.stale = true;
+    store.notify();
+  } else refresh(path);
+}
+
+// relit l'état tant que le service n'a pas déclaré le run demandé ; à la fin, les chiffres se
+// relisent tout de suite puis après l'import (la boîte d'entrée passe toutes les 30 s)
+function watchStates(on) {
+  if (on && !statesPoller) statesPoller = setInterval(() => reread(paths.states), STATES_POLL_MS);
+  if (!on && statesPoller) {
+    clearInterval(statesPoller);
+    statesPoller = null;
+    setTimeout(() => store.invalidate(), 0);
+    setTimeout(() => store.invalidate(), IMPORT_MS);
+  }
+}
+
+async function refreshAll() {
+  await act("coll-msg", async () => {
+    const out = await api(`${paths.states}/refresh`, {});
+    const asked = out.items.filter((s) => s.run_requested);
+    if (!asked.length) return "Aucune connexion active à actualiser.";
+    const bcf = asked.some((s) => s.connector === "bcf");
+    return `${asked.length} connexion${asked.length > 1 ? "s" : ""} à actualiser dans les minutes qui viennent.${bcf ? " BCF : valide la connexion sur ton téléphone." : ""}`;
+  });
 }
 
 // --- formulaire d'une connexion -------------------------------------------------------------
@@ -647,5 +699,6 @@ function openAccount(preset = {}) {
 
 export function initConnections() {
   $("conn-add").addEventListener("click", () => open({ create: true }));
+  $("conn-refresh").addEventListener("click", refreshAll);
   $("acct-add").addEventListener("click", () => openAccount());
 }

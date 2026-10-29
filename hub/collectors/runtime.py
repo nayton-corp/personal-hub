@@ -221,10 +221,10 @@ def tick(
     runner: Callable[[Env, Kind], Result] = execute,
     linker: Callable[[Env], object] | None = None,
 ) -> list[tuple[str, str, str]]:
-    """Une minute de la boucle : runs planifiés si la connexion est `enabled`, contrôles et
-    consentements demandés depuis l'app. Sans réponse du hub, rien ne part : un run doit
-    pouvoir être déclaré. Les secrets d'une connexion ne sont déchiffrés que si elle tourne
-    maintenant."""
+    """Une minute de la boucle : runs planifiés ou actualisations demandées depuis l'app si la
+    connexion est `enabled`, contrôles et consentements demandés depuis l'app. Sans réponse du
+    hub, rien ne part : un run doit pouvoir être déclaré. Les secrets d'une connexion ne sont
+    déchiffrés que si elle tourne maintenant."""
     done: list[tuple[str, str, str]] = []
     for item in items:
         if item.id in LINKING:
@@ -251,7 +251,7 @@ def tick(
         kind: Kind
         if state.get("check_requested"):
             kind = "check"
-        elif scheduled and state.get("mode") == "enabled":
+        elif (scheduled or state.get("run_requested")) and state.get("mode") == "enabled":
             kind = "run"
         else:
             if scheduled:
