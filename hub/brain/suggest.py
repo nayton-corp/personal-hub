@@ -276,3 +276,119 @@ def catchup(
             report.proposals += 1
     memory.save()
     return report
+
+
+DIRECT_MAX = 300  # commerçants examinés par passage
+DIRECT_CARD = 30  # écritures par carte (plafond de finance_propose_categories)
+PAGE = 100  # groupes par appel de finance_to_review
+
+
+def _direct_key(g: dict[str, Any]) -> str:
+    return f"direct:{g['direction']}:{g['counterparty']}"
+
+
+def _queue(toolbox: Toolbox) -> tuple[list[dict[str, Any]], str]:
+    groups: list[dict[str, Any]] = []
+    currency = "CHF"
+    while True:
+        page = _tool(toolbox, "finance_to_review", {"limit": PAGE, "offset": len(groups)})
+        currency = page.get("currency") or currency
+        groups += page["groups"]
+        if len(page["groups"]) < PAGE:
+            return groups, currency
+
+
+def _cards(groups: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """Groupes réunis en cartes de DIRECT_CARD écritures au plus, sans couper un groupe."""
+    cards: list[list[dict[str, Any]]] = [[]]
+    size = 0
+    for g in groups:
+        n = len(g["entry_ids"])
+        if cards[-1] and size + n > DIRECT_CARD:
+            cards.append([])
+            size = 0
+        cards[-1].append(g)
+        size += n
+    return [c for c in cards if c]
+
+
+def direct(
+    toolbox: Toolbox,
+    model: ChatModel,
+    memory: Memory,
+    *,
+    limit: int = DIRECT_MAX,
+    max_count: int = 1,
+    dry_run: bool = False,
+) -> Report:
+    """Fin de la file « À classer » : les achats uniques (un commerçant vu `max_count` fois au
+    plus), qu'aucune règle ne retrouvera. Le modèle choisit une catégorie par commerçant, puis
+    une carte par catégorie réunit leurs écritures (au plus DIRECT_CARD), à relire et valider
+    d'un Face ID. Aucune règle n'est créée. Un commerçant incertain n'est plus redemandé : il
+    reste à classer à la main."""
+    report = Report()
+    toolbox.load("finance")
+    queue, currency = _queue(toolbox)
+    cats = _tool(toolbox, "finance_list_categories", {})["categories"]
+    cats = [c for c in cats if c["group"] not in EXCLUDED_GROUPS]
+    fresh = [
+        g
+        for g in queue
+        if g["guess"] is None
+        and g["direction"] == "debit"
+        and g["count"] <= max_count
+        and g["counterparty"] != "(inconnu)"
+        and _done_key(g) not in memory.done
+        and _direct_key(g) not in memory.done
+    ]
+    chosen: dict[str, list[dict[str, Any]]] = {}
+    for g in fresh[:limit]:
+        report.merchants += 1
+        usable = for_merchant(cats, g["counterparty"])
+        prompt = PROMPT.format(
+            categories=listing(usable),
+            merchant=g["counterparty"].replace("<", " ").replace(">", " "),
+            direction="dépense",
+            count=g["count"],
+            total=g["total"],
+            currency=currency,
+        )
+        try:
+            reply = model.chat([{"role": "user", "content": prompt}], json_mode=True)
+        except LlmError as exc:
+            report.stopped = str(exc)
+            break
+        category, reason = parse_choice(reply.content, {c["id"] for c in usable})
+        if category is None:
+            report.skipped += 1
+            report.items.append({"merchant": g["counterparty"], "category": None})
+            if not dry_run:
+                memory.done.add(_direct_key(g))
+            continue
+        report.suggested += 1
+        report.items.append({"merchant": g["counterparty"], "category": category, "reason": reason})
+        chosen.setdefault(category, []).append(g)
+    if dry_run:
+        return report
+    for category, groups in sorted(chosen.items()):
+        for part in _cards(groups):
+            result = toolbox.call(
+                "finance_propose_categories",
+                {
+                    "entry_ids": [i for g in part for i in g["entry_ids"]],
+                    "category": category,
+                    "reason": "achats uniques : catégorie choisie par le modèle local pour "
+                    "chaque commerçant",
+                },
+            )
+            if result.is_error:
+                if "rate_limited" in result.text:
+                    report.stopped = "limite de propositions par heure atteinte"
+                    memory.save()
+                    return report
+                continue
+            memory.done.update(_direct_key(g) for g in part)
+            if isinstance(result.data, dict) and result.data.get("created"):
+                report.proposals += 1
+    memory.save()
+    return report

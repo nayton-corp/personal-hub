@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+### Achats uniques : une carte par catégorie
+
+- `categorize_entries` : une catégorie pour quelques écritures choisies (30 au plus), une seule
+  carte. L'outil `finance_propose_categories` la propose (16 outils Finance) ;
+  `finance_to_review` prend `offset` pour parcourir toute la file.
+- IA locale : `hub-brain direct` classe les commerçants vus une seule fois, sans créer de
+  règle ; les cartes se déplient dans « À valider » pour décocher une écriture.
+
 ### Classer plus vite : commerçant lu dans le libellé, revenus à confirmer, rattrapage par l'IA
 
 - Les paiements par carte BCF (« Paiement jj.mm.aaaa hh:mm COMMERÇANTVILLE Numéro de carte… »,

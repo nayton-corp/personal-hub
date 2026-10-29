@@ -22,7 +22,7 @@ from hub.core.errors import Problem
 from hub.core.ids import new_id
 from hub.core.money import Money, base_currency
 from hub.core.text import mask_iban, normalize
-from hub.domains.finance import catalog, importer, ledger, packs, period, rules
+from hub.domains.finance import catalog, importer, ledger, merchant, packs, period, rules
 
 if TYPE_CHECKING:
     from hub.domains.finance.domain import FinanceDomain
@@ -250,6 +250,85 @@ class CategorizeRestHandler:
                 },
             )
         return {"changed": len(rows)}
+
+
+# --- plusieurs écritures, une catégorie -------------------------------------------------------
+
+ENTRIES_MAX = 30  # une carte reste lisible : on la relit avant le Face ID
+
+
+class CategorizeEntries(_Params):
+    """Une catégorie pour quelques écritures choisies : les achats uniques, qu'aucune règle ne
+    retrouvera, proposés par lot plutôt qu'une carte par écriture."""
+
+    entry_ids: list[EntryId] = Field(min_length=1, max_length=ENTRIES_MAX)
+    category_id: Slug
+    suggested: bool = False  # proposée par un modèle et acceptée telle quelle
+
+    @field_validator("entry_ids")
+    @classmethod
+    def _distinct(cls, v: list[str]) -> list[str]:
+        if len(set(v)) != len(v):
+            raise ValueError("écriture en double")
+        return v
+
+
+def _entries(conn: Connection, ids: list[str]) -> list[Any]:
+    marks = ", ".join(f":i{n}" for n in range(len(ids)))
+    rows = conn.execute(
+        text(
+            "SELECT e.seq, e.id, e.kind, e.booking_date, e.amount_minor, e.currency, "
+            "e.counterparty, e.label, vc.category_id, vc.categorization_seq "
+            "FROM entries e LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
+            f"WHERE e.id IN ({marks}) ORDER BY e.booking_date DESC, e.seq DESC"
+        ),
+        {f"i{n}": i for n, i in enumerate(ids)},
+    ).fetchall()
+    if len(rows) != len(ids):
+        raise _bad("écriture inconnue")
+    if any(r.kind != "movement" for r in rows):
+        raise _bad("seules les écritures de mouvement se catégorisent")
+    return list(rows)
+
+
+class CategorizeEntriesHandler:
+    def preview(self, conn: Connection, params: BaseModel) -> Preview:
+        assert isinstance(params, CategorizeEntries)  # noqa: S101
+        name, _grp = _category(conn, params.category_id)
+        rows = _entries(conn, params.entry_ids)
+        n = len(rows)
+        totals = _totals([(int(r.amount_minor), r.currency) for r in rows])
+        shown = " + ".join(f"{t['display']} {t['currency']}" for t in totals)
+        return Preview(
+            summary=f"{n} écriture{'s' if n > 1 else ''} → {name} ({shown})",
+            details={
+                "count": n,
+                "totals": totals,
+                "entries": [{**_entry_brief(r), "merchant": merchant.key(r.label)} for r in rows],
+                "to_category": params.category_id,
+            },
+            fingerprint=_fp(
+                "categorize_entries", sorted((r.id, r.categorization_seq or 0) for r in rows)
+            ),
+        )
+
+    def apply(self, conn: Connection, params: BaseModel, proposal_id: str) -> dict[str, Any]:
+        assert isinstance(params, CategorizeEntries)  # noqa: S101
+        at = now_iso()
+        for r in _entries(conn, params.entry_ids):
+            ledger.append(
+                conn,
+                "categorizations",
+                {
+                    "entry_seq": r.seq,
+                    "category_id": params.category_id,
+                    "source": "suggestion_accepted" if params.suggested else "user",
+                    "rule_id": None,
+                    "proposal_id": proposal_id,
+                    "created_at": at,
+                },
+            )
+        return {"changed": len(params.entry_ids)}
 
 
 # --- règles ---------------------------------------------------------------------------------
@@ -934,4 +1013,7 @@ def build_kinds(domain: FinanceDomain) -> Mapping[str, ProposalKind]:
         "edit_account": ProposalKind(EditAccount, EditAccountHandler()),
         "install_pack": ProposalKind(InstallPack, InstallPackHandler()),
         "categorize_rest": ProposalKind(CategorizeRest, CategorizeRestHandler()),
+        "categorize_entries": ProposalKind(
+            CategorizeEntries, CategorizeEntriesHandler(), ai_allowed=True
+        ),
     }

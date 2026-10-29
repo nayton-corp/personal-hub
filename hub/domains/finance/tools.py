@@ -1,4 +1,4 @@
-"""Les quinze outils Finance de l'assistant (lot 7).
+"""Les seize outils Finance de l'assistant (lot 7, puis la catégorisation par lot).
 
 Règles communes (plan, « IA locale ») :
 - `category` est une liste fermée dans le schéma : le modèle ne peut pas inventer de catégorie ;
@@ -25,6 +25,7 @@ from hub.core.errors import Problem
 from hub.core.money import Money, base_currency
 from hub.core.text import normalize
 from hub.domains.finance import insights, period, reads, recurring, sentinels
+from hub.domains.finance.handlers import ENTRIES_MAX
 from hub.domains.finance.reads import MIN_COUNT_FOR_AGGREGATES
 
 if TYPE_CHECKING:
@@ -40,6 +41,7 @@ EXTERNAL_NOTICE = (
 SEARCH_LIMIT = 50
 REVIEW_GROUPS = 100  # un passage de rattrapage du brain voit toute la file
 REVIEW_IDS = 10
+REVIEW_OFFSET_MAX = 5000  # la file se parcourt par pages de REVIEW_GROUPS groupes
 # règle proposée par un assistant : avant les packs (11+) et la règle « tout le reste », après
 # « Toujours » (4) et la règle d'une poche (5)
 RULE_PRIORITY = 10
@@ -79,6 +81,7 @@ class TrendArgs(_Args):
 
 class ReviewArgs(_Args):
     limit: int = Field(default=10, ge=1, le=REVIEW_GROUPS)
+    offset: int = Field(default=0, ge=0, le=REVIEW_OFFSET_MAX)
 
 
 class SearchArgs(_Args):
@@ -88,6 +91,12 @@ class SearchArgs(_Args):
 
 class ProposeCategoryArgs(_Args):
     entry_id: EntryId
+    category: str
+    reason: Reason = None
+
+
+class ProposeCategoriesArgs(_Args):
+    entry_ids: list[EntryId] = Field(min_length=1, max_length=ENTRIES_MAX)
     category: str
     reason: Reason = None
 
@@ -389,7 +398,7 @@ class FinanceTools:
                     "guess": g["guess"],
                     "entry_ids": g["entry_ids"][:REVIEW_IDS],
                 }
-                for g in reads.review(conn, a.limit)
+                for g in reads.review(conn, a.offset + a.limit)[a.offset :]
             ]
             return self._wrap(
                 conn,
@@ -436,6 +445,15 @@ class FinanceTools:
         return caller.propose(
             "recategorize",
             {"entry_id": a.entry_id, "category_id": a.category, "suggested": True},
+            a.reason,
+        )
+
+    def propose_categories(self, a: ProposeCategoriesArgs, caller: ToolCaller) -> dict[str, Any]:
+        with self.engine.connect() as conn:
+            self._category(conn, a.category)
+        return caller.propose(
+            "categorize_entries",
+            {"entry_ids": a.entry_ids, "category_id": a.category, "suggested": True},
             a.reason,
         )
 
@@ -586,7 +604,12 @@ class FinanceTools:
                 "finance_to_review",
                 "Écritures sans catégorie, groupées par commerçant ; known_merchant dit si ce "
                 "commerçant a déjà été catégorisé.",
-                _obj({"limit": {"type": "integer", "minimum": 1, "maximum": REVIEW_GROUPS}}),
+                _obj(
+                    {
+                        "limit": {"type": "integer", "minimum": 1, "maximum": REVIEW_GROUPS},
+                        "offset": {"type": "integer", "minimum": 0, "maximum": REVIEW_OFFSET_MAX},
+                    }
+                ),
                 READ,
                 ReviewArgs,
                 self.to_review,
@@ -613,6 +636,28 @@ class FinanceTools:
                 PROPOSE,
                 ProposeCategoryArgs,
                 self.propose_category,
+            ),
+            tool(
+                "finance_propose_categories",
+                f"Propose une même catégorie pour plusieurs écritures (au plus {ENTRIES_MAX}), "
+                "des achats uniques qu'aucune règle ne retrouvera. Une seule carte à valider ; "
+                "rien n'est appliqué.",
+                _obj(
+                    {
+                        "entry_ids": {
+                            "type": "array",
+                            "items": ENTRY_PROP,
+                            "minItems": 1,
+                            "maxItems": ENTRIES_MAX,
+                        },
+                        "category": category,
+                        "reason": REASON_PROP,
+                    },
+                    ["entry_ids", "category"],
+                ),
+                PROPOSE,
+                ProposeCategoriesArgs,
+                self.propose_categories,
             ),
             tool(
                 "finance_propose_rule",
