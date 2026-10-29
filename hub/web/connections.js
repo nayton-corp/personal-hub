@@ -502,7 +502,7 @@ function walletsEditor(box, initial, newWallet = false) {
     const i = rows.length;
     const account = field(wrap, `w-${i}-account`, "Compte (crypto:nom)", input(w.account || "crypto:"));
     const asset = el("select");
-    for (const a of ["BTC", "ETH", "SOL"]) {
+    for (const a of ["BTC", "ETH", "SOL", "ATOM"]) {
       const o = el("option", "", a);
       o.value = a;
       asset.append(o);

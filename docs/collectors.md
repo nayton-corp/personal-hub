@@ -344,7 +344,14 @@ USDC/USDT, le WETH compté comme ETH, le POL sur Polygon et le BNB sur BNB Smart
 `staking_tokens` (par défaut Kiln Native20, le « cbwsETH » de Coinbase Wallet) comptent comme
 de l'ETH, à leur valeur sous-jacente (`balanceOfUnderlying` : la mise et ses récompenses). **SOL** : le
 solde natif et les jetons de `spl_tokens` (USDC, USDT) ; les autres jetons, souvent du spam, sont
-ignorés, et le SOL en staking n'est pas lu.
+ignorés, et le SOL en staking n'est pas lu. **ATOM** (Cosmos Hub, adresse `cosmos1…`) : par l'API REST publique
+(`cosmos_rest_url`), l'ATOM disponible, mis en jeu, en cours de retrait et les récompenses à
+réclamer, le tout compté comme ATOM. Son historique vient des transactions envoyées et reçues
+(`/cosmos/tx/v1beta1/txs`), variation lue dans les événements `coin_received`/`coin_spent`,
+frais compris (mémoire `<compte>@cosmos`) ; une mise en jeu y est un envoi vers le staking. Les
+nœuds publics élaguent leur index des transactions : s'ils n'en rendent aucune, c'est signalé
+(`partial history.<nom>.cosmos:pruned`) et relu au passage suivant ; un historique complet
+demande un indexeur (Mintscan, nœud d'archive), à brancher sur `cosmos_rest_url`.
 
 **Historique ETH et SOL.** Leurs transactions partent aussi dans `transactions`, pour le
 registre : ETH par l'API de Routescan (`eth_history_url`, compatible Etherscan, sans clé) — envois et arrivées d'ETH, transferts internes de contrats et jetons suivis, les frais de

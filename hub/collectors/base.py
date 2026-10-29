@@ -87,6 +87,7 @@ class MarketConfig(BaseModel):
         "USDT": "tether",
         "POL": "polygon-ecosystem-token",
         "BNB": "binancecoin",
+        "ATOM": "cosmos",
     }
     yahoo_url: str = "https://query1.finance.yahoo.com/v8/finance/chart"
     quotes: dict[str, str] = {}  # ISIN ou symbole → symbole Yahoo (par ex. « VWRL.SW »)
@@ -105,6 +106,8 @@ class MarketConfig(BaseModel):
     chain_pause_seconds: int = Field(default=1, ge=0, le=10)  # entre deux pages d'historique
     coingecko_pause_seconds: int = Field(default=3, ge=0, le=30)  # entre deux cours, sans clé
     solana_rpc_url: str = "https://api.mainnet-beta.solana.com"
+    # Cosmos Hub : API REST publique (soldes, staking, récompenses, transactions)
+    cosmos_rest_url: str = "https://cosmos-rest.publicnode.com"
     # jetons lus en plus de la crypto native ; les autres (souvent du spam) sont ignorés
     erc20_tokens: dict[str, str] = {  # symbole → contrat Ethereum
         "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",

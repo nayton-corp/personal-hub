@@ -1436,3 +1436,94 @@ def test_a_network_outside_the_free_plan_is_flagged(make_env: Any) -> None:
     assert result.detail == "partial history.trust-wallet.bsc:unsupported"
     assert ("crypto:trust-wallet", "CRYPTO:BNB", Decimal("0.5")) in held(dropped(env)[0])
     assert env.memory.get("chain_txs") == ["crypto:trust-wallet"]
+
+
+COSMOS = "cosmos15npzl0778xs4tlxjgxueazuxyprdfved26dxgs"
+
+
+def cosmos_api() -> Fake:
+    inner = chain()
+
+    def coin(amount: str, who: str, kind: str) -> dict[str, Any]:
+        key = "receiver" if kind == "coin_received" else "spender"
+        attrs = [{"key": key, "value": who}, {"key": "amount", "value": amount}]
+        return {"type": kind, "attributes": attrs}
+
+    sent = {  # 1 ATOM envoyé, 0.005 de frais
+        "txhash": "C1",
+        "code": 0,
+        "timestamp": "2026-03-01T10:00:00Z",
+        "events": [
+            coin("5000uatom", COSMOS, "coin_spent"),
+            coin("1000000uatom", COSMOS, "coin_spent"),
+        ],
+    }
+    received = {  # 3 ATOM reçus, et un jeton IBC ignoré
+        "txhash": "C2",
+        "code": 0,
+        "timestamp": "2026-02-01T10:00:00Z",
+        "events": [coin("3000000uatom,7ibc/ABC", COSMOS, "coin_received")],
+    }
+    failed = {"txhash": "C3", "code": 5, "timestamp": "2026-02-02T10:00:00Z", "events": []}
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if "cosmos-rest" not in url:
+            return inner.route(method, url, headers, data)
+        path = urlsplit(url).path
+        if path.endswith(f"/balances/{COSMOS}"):
+            return 200, {"balances": [{"denom": "uatom", "amount": "2000000"}]}
+        if path.endswith(f"/delegations/{COSMOS}"):
+            return 200, {
+                "delegation_responses": [{"balance": {"denom": "uatom", "amount": "10000000"}}]
+            }
+        if path.endswith("/unbonding_delegations"):
+            return 200, {"unbonding_responses": [{"entries": [{"balance": "500000"}]}]}
+        if path.endswith("/rewards"):
+            return 200, {"total": [{"denom": "uatom", "amount": "123456.789000000000000000"}]}
+        if path.endswith("/txs"):
+            if "sender" in query(url)["query"]:
+                fee = {"auth_info": {"fee": {"amount": [{"denom": "uatom", "amount": "5000"}]}}}
+                return 200, {"tx_responses": [sent], "txs": [fee]}
+            return 200, {"tx_responses": [received, failed], "txs": [{}, {}]}
+        raise AssertionError(url)
+
+    return Fake(route)
+
+
+def test_a_cosmos_wallet_reads_its_staking_and_history(make_env: Any) -> None:
+    wallet = {"account": "crypto:trust-wallet-atom", "asset": "ATOM", "addresses": [COSMOS]}
+    env = make_env("market", creds={"wallets": [wallet]}, market={"coingecko_pause_seconds": 0})
+    assert market.run(env, "run", Http(cosmos_api())).detail is None
+    (doc,) = dropped(env)
+    # disponible, mis en jeu, en cours de retrait, récompenses à réclamer
+    assert held(doc) == [("crypto:trust-wallet-atom", "CRYPTO:ATOM", Decimal("12.623456789"))]
+    got = [(t.on_date, t.txid, t.symbol, t.quantity, t.fee) for t in doc.transactions]
+    assert got == [
+        ("2026-02-01", "C2", "ATOM", Decimal(3), Decimal(0)),
+        ("2026-03-01", "C1", "ATOM", Decimal("-1.005"), Decimal("0.005")),
+    ]
+    assert env.memory.get("chain_txs") == ["crypto:trust-wallet-atom@cosmos"]
+
+
+def test_a_pruned_cosmos_node_is_flagged(make_env: Any) -> None:
+    inner = cosmos_api()
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if "/txs?" in url:
+            return 200, {"tx_responses": [], "txs": [], "pagination": None}
+        return inner.route(method, url, headers, data)
+
+    wallet = {"account": "crypto:trust-wallet-atom", "asset": "ATOM", "addresses": [COSMOS]}
+    env = make_env("market", creds={"wallets": [wallet]}, market={"coingecko_pause_seconds": 0})
+    result = market.run(env, "run", Http(Fake(route)))
+    # le solde est là, l'historique manque : signalé, et relu au passage suivant
+    assert result.detail == "partial history.trust-wallet-atom.cosmos:pruned"
+    assert held(dropped(env)[0])
+    assert not env.memory.get("chain_txs")
+
+
+def test_a_cosmos_address_is_checked(make_env: Any) -> None:
+    wallet = {"account": "crypto:x", "asset": "ATOM", "addresses": ["cosmos1bad"]}
+    with pytest.raises(Failure) as err:
+        market.wallet_entries(make_env("market", creds={"wallets": [wallet]}))
+    assert err.value.outcome == "auth_error"

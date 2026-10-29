@@ -13,6 +13,8 @@
 - Coinbase : la conversion ETH2 → ETH (`retail_eth2_deprecation`) est interne.
 - Réseau BNB Smart Chain (`bsc` : BNB, USDC, USDT, ETH) ; un réseau refusé par l'offre gratuite
   d'Etherscan est signalé (`unsupported`) sans bloquer les autres.
+- Portefeuille ATOM (Cosmos Hub) : disponible, staking, retraits en cours, récompenses, et
+  historique des transactions.
 
 ### Collectes en parallèle
 
