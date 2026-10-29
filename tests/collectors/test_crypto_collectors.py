@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import json
 from collections.abc import Callable
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -220,8 +221,33 @@ def query(url: str) -> dict[str, str]:
     return {k: v[0] for k, v in parse_qs(urlsplit(url).query).items()}
 
 
-def binance_api(spot: list[dict[str, str]] | None = None, status: int = 200) -> Fake:
+EMPTY_HISTORY: dict[str, Any] = {
+    "/sapi/v1/capital/deposit/hisrec": [],
+    "/sapi/v1/capital/withdraw/history": [],
+    "/sapi/v1/fiat/orders": {"data": []},
+    "/sapi/v1/fiat/payments": {"data": []},
+    "/sapi/v1/convert/tradeFlow": {"list": []},
+    "/sapi/v1/simple-earn/flexible/history/rewardsRecord": {"rows": [], "total": 0},
+    "/sapi/v1/simple-earn/locked/history/rewardsRecord": {"rows": [], "total": 0},
+    "/sapi/v1/asset/assetDividend": {"rows": [], "total": 0},
+    "/sapi/v1/asset/dribblet": {"total": 0, "userAssetDribblets": []},
+    "/api/v3/myTrades": [],
+}
+
+
+def binance_api(
+    spot: list[dict[str, str]] | None = None,
+    status: int = 200,
+    history: Callable[[str, dict[str, str]], Any] | None = None,
+) -> Fake:
     def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        path = urlsplit(url).path
+        if path == "/api/v3/exchangeInfo":
+            return 200, {"symbols": SYMBOLS}
+        if path == "/api/v3/klines" or "frankfurter" in url:
+            assert history is not None
+            found = history(path if "klines" in path else "fx", query(url))
+            return (found, b"") if isinstance(found, int) else (200, found)
         assert headers["X-MBX-APIKEY"] == "cle-test"
         raw = urlsplit(url).query
         unsigned, signature = raw.rsplit("&signature=", 1)
@@ -230,7 +256,11 @@ def binance_api(spot: list[dict[str, str]] | None = None, status: int = 200) -> 
         assert {"timestamp", "recvWindow"} <= set(query(url))
         if status != 200:
             return status, {"code": -2015}
-        path = urlsplit(url).path
+        if path in EMPTY_HISTORY:
+            found = history(path, query(url)) if history else None
+            if isinstance(found, int):
+                return found, b""
+            return 200, EMPTY_HISTORY[path] if found is None else found
         if path.endswith("/flexible/position"):
             rows = [{"asset": "BTC", "totalAmount": "0.1"}] if query(url)["current"] == "1" else []
             return 200, {"rows": rows, "total": 1}
@@ -292,6 +322,316 @@ def test_exchange_account_secret_and_empty_platform(make_env: Any) -> None:
             make_env("binance", creds={**creds, "account": "Binance"}), "run", Http(binance_api())
         )
     assert exc.value.detail == "secret:account"
+
+
+SYMBOLS = [
+    {"symbol": "BTCUSDT", "baseAsset": "BTC", "quoteAsset": "USDT"},
+    {"symbol": "ETHBTC", "baseAsset": "ETH", "quoteAsset": "BTC"},
+    {"symbol": "BNBUSDT", "baseAsset": "BNB", "quoteAsset": "USDT"},
+    {"symbol": "DOGEUSDT", "baseAsset": "DOGE", "quoteAsset": "USDT"},  # jamais détenu
+]
+CLOSES = {"BTC": "60000", "ETH": "3000", "BNB": "500", "LDO": "2"}  # XRP : pas de paire USDT
+
+
+def at(day: str, hour: int = 12) -> int:
+    return int(datetime.fromisoformat(f"{day}T{hour:02d}:00:00+00:00").timestamp()) * 1000
+
+
+BINANCE_ROWS: dict[str, list[dict[str, Any]]] = {
+    "/sapi/v1/capital/deposit/hisrec": [
+        {
+            "id": "d1",
+            "amount": "0.01",
+            "coin": "BTC",
+            "network": "BTC",
+            "status": 1,
+            "address": "bc1qbinance",
+            "txId": "aa11",
+            "insertTime": at("2026-03-05"),
+        },
+        {"id": "d2", "amount": "5", "coin": "BTC", "status": 0, "insertTime": at("2026-03-06")},
+    ],
+    "/sapi/v1/capital/withdraw/history": [
+        {
+            "id": "w1",
+            "amount": "0.005",
+            "transactionFee": "0.0001",
+            "coin": "BTC",
+            "status": 6,
+            "address": "bc1qledger",
+            "txId": "bb22",
+            "network": "BTC",
+            "_ms": at("2026-04-01"),
+            "applyTime": "2026-04-01 10:00:00",
+            "completeTime": "2026-04-01 10:30:00",
+        },
+    ],
+    "/sapi/v1/fiat/orders": [
+        {
+            "orderNo": "f1",
+            "fiatCurrency": "CHF",
+            "indicatedAmount": "1000.00",
+            "amount": "999.00",
+            "totalFee": "1.00",
+            "status": "Successful",
+            "createTime": at("2026-03-01"),
+            "_type": "0",
+        },
+    ],
+    "/sapi/v1/fiat/payments": [
+        {
+            "orderNo": "p1",
+            "sourceAmount": "102",
+            "fiatCurrency": "CHF",
+            "obtainAmount": "100",
+            "cryptoCurrency": "USDT",
+            "totalFee": "2",
+            "status": "Completed",
+            "createTime": at("2026-03-02"),
+            "_type": "0",
+        },
+    ],
+    "/sapi/v1/convert/tradeFlow": [
+        {
+            "orderId": 77,
+            "orderStatus": "SUCCESS",
+            "fromAsset": "USDT",
+            "fromAmount": "10",
+            "toAsset": "ETH",
+            "toAmount": "0.005",
+            "createTime": at("2026-04-03"),
+        },
+    ],
+    "/sapi/v1/simple-earn/flexible/history/rewardsRecord": [
+        {"asset": "USDT", "rewards": "0.2", "type": "REALTIME", "time": at("2026-04-02", 1)},
+        {"asset": "USDT", "rewards": "0.3", "type": "REALTIME", "time": at("2026-04-02", 2)},
+        {"asset": "USDT", "rewards": "0.1", "type": "REALTIME", "time": at("2026-10-27", 1)},
+    ],
+    "/sapi/v1/simple-earn/locked/history/rewardsRecord": [
+        {"positionId": 1, "asset": "ETH", "amount": "0.001", "time": at("2026-04-10")},
+    ],
+    "/sapi/v1/asset/assetDividend": [
+        {
+            "id": 5,
+            "tranId": 9,
+            "amount": "0.5",
+            "asset": "BNB",
+            "divTime": at("2026-04-05"),
+            "enInfo": "BNB Vault",
+        },
+        {
+            "id": 6,
+            "tranId": 10,
+            "amount": "1",
+            "asset": "USDT",
+            "divTime": at("2026-04-06"),
+            "enInfo": "Simple Earn Flexible Interest",
+        },  # déjà dans les récompenses
+    ],
+}
+DUST = {
+    "total": 1,
+    "userAssetDribblets": [
+        {
+            "operateTime": at("2026-04-07"),
+            "transId": 45,
+            "userAssetDribbletDetails": [
+                {
+                    "fromAsset": "LDO",
+                    "amount": "3",
+                    "transferedAmount": "0.00098",
+                    "serviceChargeAmount": "0.00002",
+                },
+                {
+                    "fromAsset": "XRP",
+                    "amount": "0.5",
+                    "transferedAmount": "0.0002",
+                    "serviceChargeAmount": "0",
+                },
+            ],
+        }
+    ],
+}
+FILLS = [
+    {
+        "symbol": "BTCUSDT",
+        "id": 100,
+        "orderId": 9,
+        "qty": "0.0006",
+        "quoteQty": "36",
+        "commission": "0.00005",
+        "commissionAsset": "BNB",
+        "time": at("2026-03-03"),
+        "isBuyer": True,
+    },
+    {
+        "symbol": "BTCUSDT",
+        "id": 101,
+        "orderId": 9,
+        "qty": "0.0004",
+        "quoteQty": "24",
+        "commission": "0.00003",
+        "commissionAsset": "BNB",
+        "time": at("2026-03-03"),
+        "isBuyer": True,
+    },
+]
+TIME_KEYS = ("insertTime", "_ms", "createTime", "time", "divTime")
+
+
+def binance_history_route(
+    broken: str | None = None, code: int = 503
+) -> Callable[[str, dict[str, str]], Any]:
+    def history(path: str, q: dict[str, str]) -> Any:
+        if broken and broken in path:
+            return code
+        if path == "fx":
+            return {"rates": {"2026-03-01": {"USD": "1.25"}, "2026-04-01": {"USD": "1.25"}}}
+        if path == "/api/v3/klines":
+            asset = q["symbol"].removesuffix("USDT")
+            if asset not in CLOSES:
+                return 400
+            day, stop = int(q["startTime"]), int(q["endTime"])
+            return [[t, "0", "0", "0", CLOSES[asset]] for t in range(day, stop, 86_400_000)]
+        if path == "/sapi/v1/asset/dribblet":
+            return DUST
+        if path == "/api/v3/myTrades":
+            return [f for f in FILLS if f["symbol"] == q["symbol"] and f["id"] >= int(q["fromId"])]
+        rows = BINANCE_ROWS.get(path, [])
+        start = int(q.get("startTime") or q.get("beginTime") or 0)
+        end = int(q.get("endTime") or 0)
+        rows = [
+            r
+            for r in rows
+            if start <= next(r[k] for k in TIME_KEYS if k in r) <= end
+            and r.get("_type", q.get("transactionType")) == q.get("transactionType")
+            and q.get("page", "1") == "1"
+            and q.get("type", "REALTIME") == r.get("type", "REALTIME")
+        ]
+        if path.startswith("/sapi/v1/fiat"):
+            return {"data": rows}
+        if path == "/sapi/v1/convert/tradeFlow":
+            return {"list": rows}
+        if "rewardsRecord" in path or "assetDividend" in path:
+            return {"rows": rows, "total": len(rows)}
+        return rows
+
+    return history
+
+
+def ops_of(doc: finance_market.MarketFile) -> list[tuple[str, str, list[tuple[str, str, str]]]]:
+    return [
+        (o.on_date, o.id, [(leg.symbol, assets_text(leg.quantity), leg.role) for leg in o.legs])
+        for o in doc.operations
+    ]
+
+
+def assets_text(q: Decimal) -> str:
+    return format(q.normalize(), "f")
+
+
+def test_binance_history_reads_every_stream_once(make_env: Any, binance_pauses: list[int]) -> None:
+    env = make_env("binance")
+    fake = binance_api(history=binance_history_route())
+    result = binance.run(env, "run", Http(fake))
+    assert (result.outcome, result.detail) == ("ok", None)
+    (doc,) = dropped(env)
+    assert ops_of(doc) == [
+        ("2026-03-01", "fiat:f1", [("CHF", "1000", "deposit"), ("CHF", "-1", "fee")]),
+        (
+            "2026-03-02",
+            "payment:p1",
+            [
+                ("CHF", "102", "deposit"),
+                ("CHF", "-100", "trade"),
+                ("CHF", "-2", "fee"),
+                ("USDT", "100", "trade"),
+            ],
+        ),
+        (
+            "2026-03-03",
+            "trade:BTCUSDT:9:100",  # deux exécutions du même ordre
+            [("BTC", "0.001", "trade"), ("USDT", "-60", "trade"), ("BNB", "-0.00008", "fee")],
+        ),
+        ("2026-03-05", "deposit:d1", [("BTC", "0.01", "deposit")]),
+        (
+            "2026-04-01",
+            "withdraw:w1",
+            [("BTC", "-0.005", "withdrawal"), ("BTC", "-0.0001", "fee")],
+        ),
+        ("2026-04-02", "reward:flexible:USDT:2026-04-02", [("USDT", "0.5", "income")]),
+        (
+            "2026-04-03",
+            "convert:77",
+            [("USDT", "-10", "trade"), ("ETH", "0.005", "trade")],
+        ),
+        ("2026-04-05", "dividend:9", [("BNB", "0.5", "income")]),
+        (
+            "2026-04-07",
+            "dust:45",
+            [
+                ("LDO", "-3", "trade"),
+                ("BNB", "0.001", "trade"),
+                ("BNB", "-0.00002", "fee"),
+                ("XRP", "-0.5", "trade"),
+                ("BNB", "0.0002", "trade"),
+            ],
+        ),
+        ("2026-04-10", "reward:locked:ETH:2026-04-10", [("ETH", "0.001", "income")]),
+    ]
+    deposit = next(o for o in doc.operations if o.id == "deposit:d1")
+    assert (deposit.txid, deposit.address, deposit.network) == ("aa11", "bc1qbinance", "BTC")
+    # les cours Binance des seuls jours d'opération ; XRP sans paire USDT est laissé
+    binance_prices = sorted((p.key, p.on_date) for p in doc.prices)
+    assert binance_prices == [
+        ("CRYPTO:BNB", "2026-03-03"),
+        ("CRYPTO:BNB", "2026-04-05"),
+        ("CRYPTO:BNB", "2026-04-07"),
+        ("CRYPTO:BTC", "2026-03-03"),
+        ("CRYPTO:BTC", "2026-03-05"),
+        ("CRYPTO:BTC", "2026-04-01"),
+        ("CRYPTO:ETH", "2026-04-03"),
+        ("CRYPTO:ETH", "2026-04-10"),
+        ("CRYPTO:LDO", "2026-04-07"),
+    ]
+    assert {(f.on_date, f.base) for f in doc.fx} == {("2026-03-01", "USD"), ("2026-04-01", "USD")}
+    # les retraits ne sont lus qu'à partir du premier apport, à dix appels par minute
+    withdrawals = [query(u) for _m, u, _h in fake.calls if "withdraw/history" in u]
+    assert int(withdrawals[0]["startTime"]) == at("2026-03-01", 0)
+    assert binance_pauses.count(6_000) == len(withdrawals) == 3
+    # les paires des actifs connus seulement
+    pairs = {query(u)["symbol"] for _m, u, _h in fake.calls if "myTrades" in u}
+    assert pairs == {"BTCUSDT", "ETHBTC", "BNBUSDT"}
+    assert env.memory.get("history_since") == "2026-10-27"
+    assert env.memory.get("trade_ids") == {"BTCUSDT": 102}
+    later = binance_api(history=binance_history_route())
+    assert binance.run(env, "run", Http(later)).outcome == "ok"
+    # ensuite : quelques jours de recouvrement, les exécutions suivantes, ni cours ni change
+    deposits = [query(u) for _m, u, _h in later.calls if "deposit/hisrec" in u]
+    assert [int(q["startTime"]) for q in deposits] == [at("2026-10-24", 0)]
+    trades = [query(u) for _m, u, _h in later.calls if "myTrades" in u]
+    assert {q["symbol"]: q["fromId"] for q in trades}["BTCUSDT"] == "102"
+    assert not [u for _m, u, _h in later.calls if "klines" in u or "frankfurter" in u]
+    assert [bool(d.operations) for d in dropped(env)].count(False) == 1
+
+
+def test_binance_first_history_is_all_or_nothing(make_env: Any) -> None:
+    env = make_env("binance")
+    fake = binance_api(history=binance_history_route(broken="convert"))
+    result = binance.run(env, "run", Http(fake))
+    assert result.detail == "partial convert:site_unavailable"
+    (doc,) = dropped(env)
+    assert (doc.operations, doc.prices) == ([], [])  # les soldes, pas l'historique
+    assert len(doc.balances) == 4
+    assert env.memory.get("history_since") is None
+    assert env.memory.get("trade_ids") is None
+    # une fenêtre refusée (400 : trop ancienne pour ce flux) est comptée, pas fatale
+    env = make_env("binance", creds={"api_key": "cle-test", "api_secret": "secret-test"})
+    route = binance_history_route("dribblet", code=400)
+    refused = binance.run(env, "run", Http(binance_api(history=route)))
+    assert refused.detail == "partial dust:skipped=1"
+    assert max(len(d.operations) for d in dropped(env)) == 9
+    assert env.memory.get("history_since") == "2026-10-27"
 
 
 def kucoin_api(code: str = "200000") -> Fake:

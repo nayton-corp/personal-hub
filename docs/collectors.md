@@ -19,7 +19,7 @@ Deux services les exécutent :
 | `enable_banking` | API Enable Banking (PSD2), une banque européenne par connexion | 07:15, 13:15, 19:15 | un `revolut-<empreinte>.json` par compte, seulement s'il a changé |
 | `ibkr` | Flex Web Service d'IBKR (jeton en lecture seule) | 06:45 du mardi au samedi | le relevé Flex XML de la veille |
 | `market` | API publiques (BCE, CoinGecko, mempool.space, nœuds Ethereum et Solana publics, Yahoo facultatif) | 06:15 | un `market.json` : change, cours, soldes des portefeuilles |
-| `binance`, `kucoin`, `coinbase` | API officielle, clé en lecture seule | 06:20, 06:22, 06:24 | un `<plateforme>.json` : soldes de la plateforme |
+| `binance`, `kucoin`, `coinbase` | API officielle, clé en lecture seule | 06:20, 06:22, 06:24 | un `<plateforme>.json` : soldes de la plateforme (Binance : et ses opérations) |
 
 Chaque minute, un service demande au hub ses connexions prêtes (`GET
 /api/collectors/runner/<service>`) : leurs secrets arrivent chiffrés et ne sont déchiffrés
@@ -326,13 +326,13 @@ cours : ajoute-la à `crypto` dans `[collectors.market]` (symbole → id CoinGec
 
 | Plateforme | Ce qui est lu | Clé à créer |
 |---|---|---|
-| Binance | Spot, Funding, Simple Earn flexible et bloqué | Gestion des API → clé générée par le système, « Enable Reading » seul coché |
+| Binance | Spot, Funding, Simple Earn flexible et bloqué, et l'historique (ci-dessous) | Gestion des API → clé générée par le système, « Enable Reading » seul coché |
 | KuCoin | tous les comptes (principal, trading…) et Earn | API Management → permission « General » seule, une passphrase à toi |
 | Coinbase | tous les portefeuilles, ETH en staking compris (`ETH2` compté comme ETH) | portail CDP → clé API secrète, permission « View » seule |
 
 | Plateforme | Secrets |
 |---|---|
-| Binance | `api_key`, `api_secret` |
+| Binance | `api_key`, `api_secret` ; facultatifs : `since` (AAAA-MM-JJ), `assets` (liste) |
 | KuCoin | `api_key`, `api_secret`, `passphrase` |
 | Coinbase | `key_name` (`organizations/…/apiKeys/…`), `private_key` (clé EC en PEM, ou Ed25519 en base64 ; par `--file -` pour garder les retours à la ligne) |
 
@@ -340,6 +340,47 @@ Le compte se déclare avec `fin crypto add-wallet binance` (ou `kucoin`, `coinba
 `account` des secrets en choisit un autre. Contrôle : `hubc run --rm collector-api
 hub-collector run binance --check` lit les soldes sans rien déposer. Une clé révoquée donne
 `auth_error` et suspend cette connexion seulement.
+
+### Historique Binance
+
+Le collecteur Binance dépose aussi les opérations du compte (`operations` du `binance.json`),
+qui deviennent des écritures du compte `crypto:binance` dans le Journal, en CHF (codes
+`EXCHANGE/…`) :
+
+| Flux de l'API | Opération | Écritures |
+|---|---|---|
+| `capital/deposit/hisrec`, `capital/withdraw/history` | dépôt, retrait crypto (txId, adresse, réseau) | `EXCHANGE/DEPOSIT`, `EXCHANGE/WITHDRAWAL` + frais de réseau |
+| `fiat/orders` | virement en monnaie (SEPA) | `EXCHANGE/DEPOSIT` ou `WITHDRAWAL` + frais |
+| `fiat/payments` | achat ou vente par carte | dépôt de la carte, échange, frais |
+| `myTrades` | ordre exécuté (ses exécutions groupées) | `EXCHANGE/TRADE/BUY` et `SELL` + commission |
+| `convert/tradeFlow` | conversion | `EXCHANGE/TRADE/…` |
+| Simple Earn `rewardsRecord` | récompenses, une par actif et par jour terminé | `EXCHANGE/INCOME` |
+| `asset/assetDividend` | airdrop, staking, Launchpool | `EXCHANGE/INCOME` |
+| `asset/dribblet` | petits soldes convertis en BNB | `EXCHANGE/TRADE/…` + frais |
+
+Premier passage : tout depuis le premier apport (`since` dans les secrets, sinon
+`binance_since`, juillet 2017, pour trouver le premier dépôt), avec les clôtures Binance des
+actifs aux jours de leurs opérations et le change BCE depuis la première. Il prend quelques
+minutes : l'historique des retraits est limité à dix appels par minute
+(`withdraw_pause_ms`). S'il manque un flux, aucune opération n'est déposée et tout est relu au
+passage suivant (le compte s'ouvre la veille de sa première opération). Ensuite, trois jours
+de recouvrement et les exécutions suivantes de chaque paire (mémoire `history_since`,
+`trade_ids`). Une fenêtre refusée (400) est comptée dans le détail (`partial dust:skipped=1`)
+sans bloquer le reste.
+
+Valeur : une monnaie au change du jour, une crypto à son cours du jour, un stablecoin en dollar
+faute de cours ; les deux côtés d'un échange prennent la valeur du côté le plus sûr (monnaie,
+puis stablecoin). Une opération sans cours attend et repasse quand il arrive.
+
+**Mouvements entre mes comptes.** Un retrait Binance qui arrive sur la Ledger, un envoi de la
+Ledger vers Binance, un retrait SwissBorg vers Binance : l'autre côté est cherché sur mes autres
+comptes crypto, du même txId, sinon de la même quantité (nette de frais), à cinq jours près.
+Le côté enregistré en second prend la valeur du premier et les deux deviennent un virement
+entre mes comptes, apparié avant tout le reste.
+
+Hors API, donc absents : P2P, Binance Pay, contrats à terme et marge. Les paires lues sont celles
+dont les deux actifs sont connus du compte (soldes, opérations) ; un actif acheté puis revendu
+en entier sans jamais être déposé se liste dans le champ `assets` des secrets.
 
 SwissBorg n'a pas d'API publique : l'argent qui y part se voit dans les virements BCF, ce qui
 arrive ensuite sur la Ledger est relevé par la xpub, et le solde gardé chez SwissBorg vient de

@@ -31,6 +31,8 @@ def test_roles_keep_the_previous_lists() -> None:
         "SWISSBORG/WITHDRAWAL",
         "CRYPTO/RECEIVE",
         "CRYPTO/SEND",
+        "EXCHANGE/DEPOSIT",
+        "EXCHANGE/WITHDRAWAL",
     )
     assert valuation.NOT_DEPOSITS == (
         "VIAC/INCOME",
@@ -47,12 +49,18 @@ def test_roles_keep_the_previous_lists() -> None:
         "CRYPTO/RECEIVE",
         "CRYPTO/SEND",
         "CRYPTO/FEE",
+        "EXCHANGE/DEPOSIT",
+        "EXCHANGE/WITHDRAWAL",
+        "EXCHANGE/TRADE",
+        "EXCHANGE/INCOME",
+        "EXCHANGE/FEE",
     )
     assert institutions.prefixes(internal=True) == (
         "VIAC/TRADE",
         "IBKR/TRADE",
         "IBKR/FX",
         "SWISSBORG/TRADE",
+        "EXCHANGE/TRADE",
     )
     assert institutions.prefixes(pension_deposit=True) == ("VIAC/DEPOSIT",)
     assert institutions.like_any("c", ()) == "0"

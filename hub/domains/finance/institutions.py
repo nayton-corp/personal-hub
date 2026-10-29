@@ -51,6 +51,12 @@ CODES: tuple[Code, ...] = (
     Code("CRYPTO/RECEIVE", "transfer-own", transfer=True, market=True),
     Code("CRYPTO/SEND", "transfer-own", transfer=True, market=True),
     Code("CRYPTO/FEE", "frais-placement", market=True),
+    # plateforme lue par son API (Binance) : comme SwissBorg, sous un code commun
+    Code("EXCHANGE/DEPOSIT", "transfer-own", transfer=True, market=True),
+    Code("EXCHANGE/WITHDRAWAL", "transfer-own", transfer=True, market=True),
+    Code("EXCHANGE/TRADE", "transfer-titres", internal=True, market=True),
+    Code("EXCHANGE/INCOME", "rendement", market=True),
+    Code("EXCHANGE/FEE", "frais-placement", market=True),
 )
 
 

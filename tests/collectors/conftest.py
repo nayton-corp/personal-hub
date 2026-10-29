@@ -113,3 +113,13 @@ def pauses(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     seen: list[int] = []
     monkeypatch.setattr(flow, "sleep", seen.append)
     return seen
+
+
+@pytest.fixture(autouse=True)
+def binance_pauses(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Les pauses de l'historique Binance (millisecondes), notées au lieu d'attendre."""
+    from hub.collectors.exchanges import binance_history
+
+    seen: list[int] = []
+    monkeypatch.setattr(binance_history, "sleep", seen.append)
+    return seen
