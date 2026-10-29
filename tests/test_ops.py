@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from sqlalchemy import text
 from typer.testing import CliRunner
 
@@ -35,7 +36,9 @@ def test_a_mounted_domain_gets_replicated(hub: HubContext) -> None:
     assert ops.database_names(hub) == ["core", "demo"]
 
 
-def test_ops_commands() -> None:
+def test_ops_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # les bases dans un dossier à soi, pas sous /srv/hub (refusé hors root, en CI)
+    monkeypatch.setenv("HUB_PATHS__DATA", str(tmp_path / "data"))
     out = CliRunner().invoke(cli.app, ["ops", "databases"])
     assert out.exit_code == 0, out.output
     assert out.output.split() == ["core", "finance"]
