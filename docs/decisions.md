@@ -1,0 +1,117 @@
+# Décisions
+
+Les choix qui engagent le hub, un par entrée, du plus récent au plus ancien. Une décision ne
+s'efface pas : une décision contraire s'ajoute et dit laquelle elle remplace. Les mots sont ceux
+du [glossaire](glossaire.md).
+
+Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
+change ou ce qu'on s'interdit).
+
+## D-014 · Les contrats d'architecture listent leurs écarts (29.10.2026)
+
+- **Contexte** : le découpage visé (noyau, plateforme, cœur, domaines en couches) n'existe pas
+  encore, et l'attendre pour poser les règles laisserait le code dériver.
+- **Décision** : les contrats import-linter, le test des 400 lignes et le test des journaux
+  décrivent la cible dès maintenant ; les écarts d'aujourd'hui sont listés dans le dépôt.
+- **Conséquence** : une liste d'écarts ne peut que rétrécir (un écart corrigé doit en sortir).
+  Un nouvel écart se corrige dans le code, jamais dans la règle.
+
+## D-013 · Les seuils de risque appartiennent au domaine (29.10.2026)
+
+- **Contexte** : passer les petites actions répétitives en automatique, pour éviter la fatigue
+  de validation, demande un plafond (un montant pour la finance).
+- **Décision** : chaque domaine lit ses seuils dans sa propre configuration et rend un verdict
+  de risque. Le cœur ne connaît ni montant ni plafond, il applique le palier.
+- **Conséquence** : aucune notion de montant dans le cœur. Ne passent jamais en automatique :
+  un effet externe, une suppression, un changement de règle ou de budget, une action sans inverse.
+
+## D-012 · Le modèle choisit et rédige, le code calcule et croise (29.10.2026)
+
+- **Contexte** : un modèle local de 24 à 32 milliards de paramètres calcule et joint mal, et
+  peut être lent.
+- **Décision** : tout chiffre vient d'un outil ; un croisement entre domaines est une lecture
+  écrite en code ; une demande lourde devient une tâche en arrière-plan. Le routage passe par
+  quatre niveaux, du code sans modèle au gros modèle chargé à la demande.
+- **Conséquence** : le code vérifie chaque nombre d'une réponse. Le banc d'essai décide du
+  modèle, jamais l'impression.
+
+## D-011 · Le socle d'abord, Domia ensuite (29.10.2026)
+
+- **Contexte** : le hub n'a qu'un domaine, et plusieurs pièces sont taillées pour la finance.
+- **Décision** : construire d'abord un socle propre (contrats, CI/CD, découpage, contrat de
+  domaine v2), remonter dans le hub ce qui vient de Domia (assistant, bibliothèque, agenda,
+  constats), puis seulement brancher Domia.
+- **Conséquence** : l'ordre des chantiers S0 à S14 du plan « Socle du hub ».
+
+## D-010 · Domia reste un service à part, branché par un domaine « maison » (29.10.2026)
+
+- **Contexte** : Domia pilote la maison en temps réel, pour tout le foyer, au-dessus de Home
+  Assistant.
+- **Décision** : Domia garde sa boucle, sa loi et ses écrans sur le Pi. Le hub le lit par un
+  domaine adaptateur `maison`, en agrégats. Les gestes du quotidien vont directement de
+  l'assistant à Domia.
+- **Conséquence** : Domia reste le seul à parler à Home Assistant et à la météo.
+
+## D-009 · Un seul assistant, celui de Domia, dans le dépôt du hub (29.10.2026)
+
+- **Contexte** : le brain du hub et l'assistant de Domia font chacun une partie du travail.
+- **Décision** : l'assistant de Domia (voix, mémoire, banc d'essai, routage) devient l'assistant
+  unique. Il vit dans ce dépôt et s'installe en natif sur le Mac.
+- **Conséquence** : le brain est remplacé au chantier S10. La bibliothèque devient le domaine
+  Documents, le pont Rappels et Calendrier le domaine Agenda.
+
+## D-008 · Deux dépôts, une version (29.10.2026)
+
+- **Contexte** : il fallait choisir entre un dépôt par domaine et un seul dépôt.
+- **Décision** : `personal-hub` contient le hub, ses domaines et l'assistant ; `domia` reste à
+  part. Le hub porte une seule version SemVer ; un domaine ne se déploie pas seul, il s'active
+  ou non par instance.
+- **Conséquence** : Domia a ses propres versions et déclare la version minimale du contrat qu'il
+  attend du hub.
+
+## D-007 · Déployer à la main, sur un tag (29.10.2026)
+
+- **Contexte** : la machine de production est le Mac de la maison.
+- **Décision** : la CI construit et publie les images ; le déploiement reste manuel, sur un tag,
+  après un « oui déploie vX » explicite.
+- **Conséquence** : aucun déploiement automatique, même sur une CI verte.
+
+## D-006 · Un hub par personne (28.10.2026)
+
+- **Contexte** : le hub doit pouvoir servir à quelqu'un d'autre que son premier utilisateur.
+- **Décision** : une instance par personne, avec son profil (pays, devise, modules), ses
+  connexions et ses packs de règles. Rien de taillé pour un foyer dans le code.
+- **Conséquence** : `hub init` et le profil d'instance ; aucun nom ni lieu propre dans le code.
+
+## D-005 · Toutes les opérations crypto au registre (28.10.2026)
+
+- **Contexte** : les soldes seuls ne disent ni d'où vient un actif ni ce qu'il a coûté.
+- **Décision** : chaque connecteur crypto apporte ses écritures, et pas seulement ses soldes.
+- **Conséquence** : les arrivées sont appariées aux retraits de même quantité.
+
+## D-004 · Sauvegardes sur le Mac (27.10.2026)
+
+- **Contexte** : pas de disque externe pour l'instant.
+- **Décision** : réplique Litestream et dépôt restic dans `~/PersonalHub/backup/`.
+- **Conséquence** : aucune copie hors de la machine ; la question reste ouverte (chantier S7).
+
+## D-003 · Tout sur le Mac d'abord (27.10.2026)
+
+- **Contexte** : le Pi n'est pas prêt.
+- **Décision** : phase 1 sur le Mac, en conteneurs (Docker Desktop), avec Ollama en natif pour
+  le GPU. La migration vers le Pi est repoussée, sans date.
+- **Conséquence** : le Mac doit rester allumé ; le hub ne répond pas quand il dort.
+
+## D-002 · Claude ne lit que des agrégats (27.10.2026)
+
+- **Contexte** : des données financières personnelles.
+- **Décision** : un modèle hors de la maison ne voit jamais une transaction, seulement des
+  totaux (portée `*:aggregates`, petits totaux fondus).
+- **Conséquence** : les tests et la CI n'utilisent que des données fictives.
+
+## D-001 · Un registre en ajout seul (27.10.2026)
+
+- **Contexte** : un historique financier doit rester vérifiable.
+- **Décision** : montants en centimes avec leur devise ; triggers qui refusent la modification
+  et la suppression ; chaîne d'empreintes vérifiée chaque nuit.
+- **Conséquence** : une correction s'ajoute, elle ne réécrit rien.

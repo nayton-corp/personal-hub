@@ -2,6 +2,19 @@
 
 ## [Non publié]
 
+### Garde-fous du socle (chantier S0)
+
+- Cinq contrats import-linter de plus décrivent l'architecture visée : un noyau pur, une
+  plateforme sans métier, un cœur sans FastAPI ni Typer, des modules purs dans la finance, et une
+  interface que personne n'importe. Les écarts d'aujourd'hui sont listés dans `pyproject.toml`
+  et ne peuvent que disparaître (`unmatched_ignore_imports_alerting = "error"`).
+- `tests/test_file_size.py` : 400 lignes au plus par fichier Python ou JavaScript de `hub/` ;
+  les 23 fichiers plus longs sont listés avec leur taille, qui ne peut que baisser.
+- `tests/test_log_safety.py` : un nom d'événement fixe, aucune clé interdite, jamais `str(exc)`
+  dans un journal (5 écarts listés dans les collecteurs). Le filtre refuse aussi `description`,
+  `merchant`, `question`, `answer` et `prompt`.
+- `docs/glossaire.md` et `docs/decisions.md`.
+
 ### Actualiser une connexion depuis l'app
 
 - « Actualiser » sur chaque connexion et « Tout actualiser » (Réglages › Connexions) : un run
