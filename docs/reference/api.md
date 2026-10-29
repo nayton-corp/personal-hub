@@ -40,6 +40,7 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `GET` | `/api/domains` | Les domaines actifs et leurs manifestes : onglets, cartes d'accueil et rubriques que l'app monte, fichiers que chacun réclame. Un jeton ne voit que les domaines qu'il ouvre. |
 | `GET` | `/api/health` | Health |
 | `GET` | `/api/links` | Links |
+| `GET` | `/api/observations` | Les constats de chaque domaine lisible (budget dépassé, document à renouveler), les plus récents d'abord. Il faut la lecture du domaine : un constat peut nommer une contrepartie (un abonnement en hausse), ce que `…:aggregates` ne voit jamais. |
 | `GET` | `/api/profile` | Get Profile |
 | `POST` | `/api/profile` | Update Profile |
 | `GET` | `/api/proposals` | List Proposals |
@@ -49,7 +50,7 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `POST` | `/api/proposals/{proposal_id}/reject` | Reject Proposal |
 | `POST` | `/api/proposals/{proposal_id}/revert` | Crée et applique l'inverse d'une proposition réversible (un Face ID). |
 | `GET` | `/api/resolve` | Resolve |
-| `GET` | `/api/search` | Search |
+| `GET` | `/api/search` | Les domaines lisibles, fusionnés par rang (`hub.core.search`) : chaque résultat dit son domaine, son rang dans ce domaine et le passage trouvé. |
 | `GET` | `/api/tools` | Capabilities |
 | `GET` | `/api/tools/{domain}` | Domain Tools |
 | `POST` | `/api/tools/{domain}/{name}` | Call Tool |
@@ -60,7 +61,6 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 |---|---|---|
 | `GET` | `/api/finance/accounts` | Comptes, IBAN masqué, solde calculé, dernier CLBD et écart. |
 | `GET` | `/api/finance/accounts/pending` | Comptes vus dans des relevés en attente (Enable Banking, CSV Revolut) mais pas encore créés : clé, devise, nombre d'écritures et période. Aucun montant. |
-| `GET` | `/api/finance/alerts` | Alertes des sentinelles des 31 derniers jours (budget, abonnements, 3a). |
 | `GET` | `/api/finance/budget` | Réel et cible par catégorie de dépense, dépassements, reste à vivre, jours restants. `period=q` : les trois mois complets avant `month`. |
 | `GET` | `/api/finance/budget/months` | Les totaux du budget mois par mois, jusqu'à `month` compris. |
 | `GET` | `/api/finance/budget/totals` | Revenus, dépenses (fixes, variables), épargne, placements et taux d'épargne. |

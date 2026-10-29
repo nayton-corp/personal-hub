@@ -21,6 +21,7 @@ from hub.core.context import HubContext
 from hub.core.coredb import audit
 from hub.core.domain import Domain, ExternalHandler, LocalHandler, Preview, ProposalKind
 from hub.core.errors import Problem
+from hub.core.links import Owner, owner, owners
 from hub.core.notify import Message
 from hub.kernel import canonical
 from hub.kernel.clock import iso, now_iso, parse_iso, utcnow
@@ -117,7 +118,7 @@ def get(conn: Connection, proposal_id: str) -> Proposal:
 
 def find(hub: HubContext, domain: str, kind: str, params: dict[str, Any]) -> Proposal | None:
     """Dernière proposition pour ces paramètres exacts (une carte liée à un import…)."""
-    pk = hub.registry.get(domain).proposal_kinds.get(kind)
+    pk = owner(hub, domain).proposal_kinds.get(kind)
     if pk is None:
         return None
     clean = pk.params_model.model_validate(params).model_dump(mode="json")
@@ -183,7 +184,7 @@ def _preview(hub: HubContext, domain: str, kind: ProposalKind, params: BaseModel
         external: ExternalHandler = kind.handler  # type: ignore[assignment]
         return external.preview(params)
     local: LocalHandler = kind.handler  # type: ignore[assignment]
-    with hub.registry.get(domain).engine().connect() as conn:
+    with owner(hub, domain).engine().connect() as conn:
         return local.preview(conn, params)
 
 
@@ -244,7 +245,7 @@ def create(
     qu'il ne déclare pas `external_text = False` : une proposition tirée d'un texte externe
     passe toujours par une carte. Aux paliers `auto` et `auto_digest`, l'effet est appliqué
     tout de suite."""
-    d = hub.registry.get(domain)
+    d = owner(hub, domain)
     kind = d.proposal_kinds.get(kind_name)
     if kind is None:
         raise Problem("proposal.kind_unknown")
@@ -406,7 +407,7 @@ def release(hub: HubContext, proposal_id: str) -> None:
 
 def release_or_reconcile(hub: HubContext, p: Proposal) -> None:
     """Après une erreur ambiguë (au COMMIT par exemple) : `applied_proposals` décide."""
-    done = hub.registry.get(p.domain).applied([p.id]).get(p.id)
+    done = owner(hub, p.domain).applied([p.id]).get(p.id)
     if done is not None:
         _mark(hub, p, "applied", done, None, "system:reconcile")
     else:
@@ -494,7 +495,7 @@ def accept_one(
         if now.status == "applied":
             return Outcome(p.id, "applied", now.result)
         raise _not_pending(hub, p)
-    domain = hub.registry.get(p.domain)
+    domain = owner(hub, p.domain)
     kind = domain.proposal_kinds[p.kind]
     params = kind.params_model.model_validate(p.params)
     if kind.external:
@@ -536,7 +537,7 @@ def accept_one(
 
 
 def _after_commit(
-    domain: Domain, kind: ProposalKind, params: BaseModel, result: dict[str, Any]
+    domain: Owner, kind: ProposalKind, params: BaseModel, result: dict[str, Any]
 ) -> None:
     hook = getattr(kind.handler, "after_commit", None)
     if hook is None:
@@ -571,7 +572,7 @@ def _external_apply(
 
 
 def inverse_of(hub: HubContext, p: Proposal) -> tuple[str, dict[str, Any]]:
-    kind = hub.registry.get(p.domain).proposal_kinds.get(p.kind)
+    kind = owner(hub, p.domain).proposal_kinds.get(p.kind)
     if p.status != "applied" or kind is None or not kind.reversible or kind.inverse is None:
         raise Problem("proposal.not_reversible")
     if reverted_by(hub, p) is not None:
@@ -629,7 +630,7 @@ def digest(hub: HubContext, day: str) -> list[dict[str, Any]]:
     out = []
     for r in rows:
         p = _from_row(r)
-        kind = hub.registry.get(p.domain).proposal_kinds.get(p.kind)
+        kind = owner(hub, p.domain).proposal_kinds.get(p.kind)
         out.append(
             {
                 **p.public(),
@@ -640,9 +641,7 @@ def digest(hub: HubContext, day: str) -> list[dict[str, Any]]:
     return out
 
 
-# --- événements des domaines ----------------------------------------------------------------
-
-EVENTS_CONSUMER = "proposals"
+EVENTS_CONSUMER = "proposals"  # --- événements des domaines ---
 
 
 def sync_events(hub: HubContext, limit: int = 500) -> dict[str, int]:
@@ -714,7 +713,7 @@ def _requested(hub: HubContext, d: Domain, payload: dict[str, Any]) -> int:
 
 def _obsolete(hub: HubContext, domain: str, payload: dict[str, Any]) -> int:
     kind = str(payload.get("kind"))
-    d = hub.registry.get(domain)
+    d = owner(hub, domain)
     pk = d.proposal_kinds.get(kind)
     if pk is None:
         return 0
@@ -758,7 +757,7 @@ def reconcile(hub: HubContext) -> ReconcileReport:
     """
     marked = released = 0
     cutoff = utcnow() - APPLYING_GRACE
-    for domain in hub.registry:
+    for domain in owners(hub):
         with hub.core.engine.connect() as conn:
             rows = conn.execute(
                 text(
@@ -817,7 +816,7 @@ def _reconcile_external(hub: HubContext) -> int:
     done = 0
     for r in rows:
         p = _from_row(r)
-        kind = hub.registry.get(p.domain).proposal_kinds.get(p.kind)
+        kind = owner(hub, p.domain).proposal_kinds.get(p.kind)
         if kind is None or not kind.external:
             continue
         external: ExternalHandler = kind.handler  # type: ignore[assignment]

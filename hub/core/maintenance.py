@@ -13,7 +13,7 @@ from typing import Any
 
 from sqlalchemy import Engine
 
-from hub.core import collectors, passkeys, proposals, ratelimit, sessions, tokens
+from hub.core import collectors, links, passkeys, proposals, ratelimit, sessions, tokens
 from hub.core.context import HubContext
 from hub.core.manifest import unguarded
 from hub.core.notify import Message
@@ -94,6 +94,11 @@ def verify(hub: HubContext) -> VerifyReport:
     if not hub.core.is_current():
         report.checks["core.schema"] = "not at head"
         report.ok = False
+    elif hub.core.path.exists():
+        with hub.core.engine.connect() as conn:
+            ledger = links.LEDGER.verify(conn)
+        report.checks["core.ledger"] = "ok" if ledger.ok else "failed"
+        report.ok &= ledger.ok
     for d in hub.registry:
         health = d.verify()
         report.checks[f"{d.name}.verify"] = "ok" if health.ok else "failed"

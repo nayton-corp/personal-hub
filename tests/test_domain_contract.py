@@ -41,9 +41,11 @@ def test_search_resolve_links(
     assert r.json()["items"] == [
         {
             "domain": "demo",
+            "rank": 1,
             "urn": f"hub:demo:item:{seq}",
             "title": "abonnement cff",
             "date": "2026-10-27",
+            "excerpt": "abonnement cff",
         }
     ]
     assert client.get("/api/search?q=ab", headers=bearer(token)).status_code == 422

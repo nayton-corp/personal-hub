@@ -42,7 +42,7 @@ export async function deeplink(h) {
   if (!h.startsWith("alert=")) return false;
   const id = h.slice(6);
   try {
-    const a = (await api("/finance/alerts")).items.find((x) => x.id === id);
+    const a = (await api("/observations?domain=finance")).items.find((x) => x.key === id);
     if (!a) return false;
     if (a.kind === "recurring_up") action("subs")();
     else if (a.kind === "pillar3a_margin") go("sources", { rubric: "tax" });

@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+### Recherche, liens et constats (chantier S9)
+
+- `/api/search` fusionne les domaines par rang : chaque résultat dit son domaine, son rang dans
+  ce domaine et le passage trouvé ; un domaine aux scores plus grands ne prend plus toute la
+  page.
+- Lier deux objets de deux domaines passe par une carte : type de proposition `core/link`,
+  réversible d'un geste (`core/unlink`). `core.db` gagne le journal chaîné, `applied_proposals`
+  et `events` (migration `0008_core_ledger`), contrôlés par `hub verify`.
+- `GET /api/observations` réunit les constats de chaque domaine ; l'accueil et les liens des
+  notifications y lisent les sentinelles de la finance (`/api/finance/alerts` retirée).
+
 ### Documentation (chantier S14)
 
 - `vision.md`, `docs/architecture.md` (anneaux, Double Sas, boîte d'entrée, finance en

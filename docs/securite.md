@@ -20,7 +20,8 @@ quittent pas sa machine, sauf les sauvegardes chiffrées qu'elle choisit d'envoy
 - **Les programmes** (assistant, collecteurs, Claude) : un jeton à portée et à date de fin
   ([D-017](decisions.md)). Le jeton n'est montré qu'une fois et gardé par son empreinte ; un
   jeton fini est refusé, une alerte prévient 14 jours avant, `hub token rotate` le renouvelle.
-  Portées : `<domaine>:read`, `<domaine>:aggregates`, `<domaine>:propose`, `core:collector` ;
+  Portées : `<domaine>:read`, `<domaine>:aggregates`, `<domaine>:propose`, `core:collector`,
+  `core:propose` (proposer un lien, entre deux objets que le jeton lit) ;
   la portée `app` n'existe que par une session passkey.
 
 ## Ce qu'un programme peut faire

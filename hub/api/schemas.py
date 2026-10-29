@@ -67,10 +67,27 @@ class ProposalListOut(BaseModel):
 
 
 class HitOut(BaseModel):
-    domain: str
+    domain: str  # provenance
+    rank: int  # rang dans son domaine
     urn: str
     title: str
     date: str | None
+    excerpt: str | None
+
+
+class ObservationOut(BaseModel):
+    domain: str
+    key: str
+    kind: str
+    severity: str
+    title: str
+    on_date: str
+    urn: str | None
+    detail: dict[str, Any]
+
+
+class ObservationListOut(BaseModel):
+    items: list[ObservationOut]
 
 
 class SearchOut(BaseModel):

@@ -62,9 +62,12 @@ invalide.
   crée une proposition, jamais un effet.
 - `proposal_kinds` : ses types de proposition (paramètres validés, aperçu avec empreinte,
   `apply()` dans la transaction du cœur) : le Double Sas.
-- `search(q, limit, scopes)` et `resolve(urn)` : sa part de la recherche et des liens.
-- `observations(limit)` : ses constats (budget dépassé, document à renouveler…), au niveau
-  des agrégats.
+- `search(q, limit, scopes)` et `resolve(urn)` : sa part de la recherche et des liens. Le
+  score d'un `Hit` ne sert qu'à classer ses propres résultats (le cœur fusionne par rang) ;
+  `excerpt` porte le passage trouvé (`hub.core.search.excerpt`), jamais un montant. Un objet que
+  `resolve` connaît peut être lié à un autre par une carte `core/link`.
+- `observations(limit)` : ses constats (budget dépassé, document à renouveler…), servis par
+  `GET /api/observations` à qui lit le domaine ; une clé opaque, un titre sans montant.
 - `process_inbox()` : traite `inbox/<nom>/`, où `hub watch-inbox` range les fichiers qu'il
   réclame.
 - `nightly()` : sa tâche de nuit.

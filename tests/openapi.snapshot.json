@@ -1330,6 +1330,21 @@
             "title": "Domain",
             "type": "string"
           },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -1341,9 +1356,11 @@
         },
         "required": [
           "domain",
+          "rank",
           "urn",
           "title",
-          "date"
+          "date",
+          "excerpt"
         ],
         "title": "HitOut",
         "type": "object"
@@ -1473,6 +1490,78 @@
           "credential"
         ],
         "title": "LoginFinishIn",
+        "type": "object"
+      },
+      "ObservationListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ObservationOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ObservationListOut",
+        "type": "object"
+      },
+      "ObservationOut": {
+        "properties": {
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "on_date": {
+            "title": "On Date",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "urn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Urn"
+          }
+        },
+        "required": [
+          "domain",
+          "key",
+          "kind",
+          "severity",
+          "title",
+          "on_date",
+          "urn",
+          "detail"
+        ],
+        "title": "ObservationOut",
         "type": "object"
       },
       "PasskeyOut": {
@@ -3468,6 +3557,69 @@
         ]
       }
     },
+    "/api/observations": {
+      "get": {
+        "description": "Les constats de chaque domaine lisible (budget dépassé, document à renouveler), les plus\nrécents d'abord. Il faut la lecture du domaine : un constat peut nommer une contrepartie\n(un abonnement en hausse), ce que `…:aggregates` ne voit jamais.",
+        "operationId": "observations_api_observations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "domain",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z][a-z0-9_]{1,30}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Observations",
+        "tags": [
+          "cœur"
+        ]
+      }
+    },
     "/api/profile": {
       "get": {
         "operationId": "get_profile_api_profile_get",
@@ -3876,6 +4028,7 @@
     },
     "/api/search": {
       "get": {
+        "description": "Les domaines lisibles, fusionnés par rang (`hub.core.search`) : chaque résultat dit son\ndomaine, son rang dans ce domaine et le passage trouvé.",
         "operationId": "search_api_search_get",
         "parameters": [
           {

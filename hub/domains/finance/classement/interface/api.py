@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 
 from hub.core import profile
 from hub.domains.finance.classement.app import budget as budget_app
-from hub.domains.finance.classement.app import packs, recurring, rules, sentinels, totals
+from hub.domains.finance.classement.app import packs, recurring, rules, totals
 from hub.domains.finance.classement.app import review as reviewing
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.http import (
@@ -104,12 +104,6 @@ def build_router(host: Host) -> APIRouter:
         """Écritures sans catégorie, groupées par contrepartie normalisée."""
         with engine.connect() as conn:
             return {"groups": reviewing.review(conn)}
-
-    @r.get("/alerts")
-    def alerts(_p: Reader) -> dict[str, Any]:
-        """Alertes des sentinelles des 31 derniers jours (budget, abonnements, 3a)."""
-        with engine.connect() as conn:
-            return {"items": sentinels.recent(conn, host.today())}
 
     @r.get("/rules/packs")
     def rule_packs(_p: Reader) -> dict[str, Any]:

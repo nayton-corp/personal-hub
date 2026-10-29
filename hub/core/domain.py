@@ -116,7 +116,8 @@ class Hit:
     urn: str
     title: str
     date: str | None
-    score: int  # plus grand = plus pertinent ; entier, pas de flottant
+    score: int  # plus grand = plus pertinent, dans le domaine seulement (S9 fusionne par rang)
+    excerpt: str | None = None  # le passage trouvé, court ; jamais un montant
 
 
 @dataclass(frozen=True)

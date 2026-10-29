@@ -18,6 +18,7 @@ def test_verify_and_backup_include_domains(hub: HubContext, tmp_path: Path) -> N
     assert report.ok
     assert report.checks == {
         "core": "ok",
+        "core.ledger": "ok",
         "demo": "ok",
         "demo.verify": "ok",
         "demo.protected": "ok",

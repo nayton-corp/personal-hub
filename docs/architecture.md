@@ -87,6 +87,17 @@ Un fichier que personne ne réclame reste à la racine. L'original part chiffré
 une base se reconstruit par rejeu (`hub finance rebuild`) et se compare à l'originale
 (`hub finance compare`).
 
+## Recherche, liens, constats
+
+- **Recherche** (`/api/search`) : chaque domaine lisible classe ses résultats ; le cœur les
+  fusionne par rang (`hub.core.search`), si bien qu'aucun domaine ne prend toute la page.
+  Chaque résultat dit son domaine, son rang et le passage trouvé.
+- **Liens** (`/api/links`) : une relation entre deux URN, dans `core.db`. Elle se crée par une
+  carte `core/link` (le cœur est propriétaire de ce type, `hub.core.links`) et se défait par
+  son inverse.
+- **Constats** (`/api/observations`) : ce que chaque domaine remarque seul (budget dépassé,
+  abonnement en hausse), réunis pour l'accueil et l'assistant.
+
 ## Intégrité
 
 Chaque domaine tient un journal chaîné (`hub.core.integrity`, `hub.kernel.chain`) : une ligne

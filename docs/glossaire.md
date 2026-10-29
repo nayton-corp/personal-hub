@@ -58,7 +58,7 @@ quels, en français. Un mot nouveau entre ici dans la même PR que le code qui l
 | **Instance d'essai** | Un hub jetable où l'image d'une version migre les données fictives et répond, avant tout déploiement. | `deploy/trial.sh` |
 | **Agrégat** | Un total qui ne révèle aucune transaction (moins de 3 écritures : fondu ou masqué). C'est tout ce que Claude voit. | portée `*:aggregates` |
 | **URN** | L'identifiant stable d'un objet, d'un domaine à l'autre : `hub:<domaine>:<sorte>:<id>`. | `hub.kernel.ids` |
-| **Lien** | Une relation entre deux URN, tenue par le cœur. | `links` |
+| **Lien** | Une relation entre deux URN, tenue par le cœur ; elle se crée par une carte (`core/link`) et se défait par son inverse. | `links`, `hub.core.links` |
 
 ## Accès et IA
 

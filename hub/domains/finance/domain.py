@@ -18,6 +18,7 @@ from sqlalchemy import Connection, Engine, event, text
 from hub.core import inbox, integrity, profile
 from hub.core.domain import Event, Health, Hit, McpTool, ProposalKind, Ref
 from hub.core.manifest import Manifest, Observation, Severity
+from hub.core.search import excerpt
 from hub.domains.finance import manifest
 from hub.domains.finance.api import build_router
 from hub.domains.finance.classement.app import packs, recurring, sentinels
@@ -104,7 +105,7 @@ class FinanceDomain:
             alerts = sentinels.recent(conn, self.today())[:limit]
         return [
             Observation(
-                a["key"],
+                a["id"],  # opaque : la clé nomme la catégorie
                 a["kind"],
                 SEVERITY.get(a["kind"], "info"),
                 a["title"],
@@ -162,13 +163,16 @@ class FinanceDomain:
     def search(self, q: str, limit: int, scopes: frozenset[str]) -> list[Hit]:
         with self._engine.connect() as conn:
             found = reads.search(conn, q, limit)
-        hits = []
-        for rank, e in enumerate(found):
-            title = e["counterparty"] or e["label"] or "écriture"
-            hits.append(
-                Hit(urn("finance", "entry", e["id"]), title, e["booking_date"], len(found) - rank)
+        return [
+            Hit(
+                urn("finance", "entry", e["id"]),
+                e["counterparty"] or e["label"] or "écriture",
+                e["booking_date"],
+                len(found) - rank,
+                excerpt([e["label"], e["remittance"]], q),
             )
-        return hits
+            for rank, e in enumerate(found)
+        ]
 
     def resolve(self, value: str) -> Ref | None:
         u = Urn.parse(value)

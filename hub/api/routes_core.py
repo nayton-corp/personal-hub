@@ -20,6 +20,8 @@ from hub.api.schemas import (
     HitOut,
     LinkOut,
     LinksOut,
+    ObservationListOut,
+    ObservationOut,
     ProfileIn,
     ProfileOut,
     ProposalCreateIn,
@@ -30,9 +32,11 @@ from hub.api.schemas import (
     SearchOut,
 )
 from hub.api.schemas_domains import DomainListOut
+from hub.core import links as linking
 from hub.core import passkeys, profile, proposals
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal, require
 from hub.core.errors import Problem
+from hub.core.search import fuse
 from hub.kernel.clock import utcnow
 from hub.kernel.ids import Urn
 
@@ -150,6 +154,8 @@ def create_proposal(
     response: Response,
     idempotency_key: Annotated[str | None, Header(max_length=100)] = None,
 ) -> ProposalOut:
+    if body.domain == linking.CORE:
+        linking.authorize(hub_ctx, principal, body.params)
     p, created = proposals.create(
         hub_ctx,
         principal,
@@ -246,15 +252,48 @@ def search(
     q: Annotated[str, Query(min_length=3, max_length=200)],
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> SearchOut:
-    scored: list[tuple[int, HitOut]] = []
+    """Les domaines lisibles, fusionnés par rang (`hub.core.search`) : chaque résultat dit son
+    domaine, son rang dans ce domaine et le passage trouvé."""
+    granted = frozenset({"app"}) if principal.is_app else principal.scopes
+    per_domain = {
+        d.name: d.search(q, limit, granted)
+        for d in hub_ctx.registry
+        if principal.is_app or principal.allows(f"{d.name}:read")
+    }
+    return SearchOut(
+        items=[
+            HitOut(
+                domain=f.domain,
+                rank=f.rank,
+                urn=f.hit.urn,
+                title=f.hit.title,
+                date=f.hit.date,
+                excerpt=f.hit.excerpt,
+            )
+            for f in fuse(per_domain, limit)
+        ]
+    )
+
+
+@router.get("/observations", response_model=ObservationListOut, tags=["cœur"])
+def observations(
+    hub_ctx: Ctx,
+    principal: CurrentPrincipal,
+    domain: Annotated[str | None, Query(pattern=r"^[a-z][a-z0-9_]{1,30}$")] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> ObservationListOut:
+    """Les constats de chaque domaine lisible (budget dépassé, document à renouveler), les plus
+    récents d'abord. Il faut la lecture du domaine : un constat peut nommer une contrepartie
+    (un abonnement en hausse), ce que `…:aggregates` ne voit jamais."""
+    items: list[ObservationOut] = []
     for d in hub_ctx.registry:
-        if not (principal.is_app or principal.allows(f"{d.name}:read")):
+        if domain is not None and d.name != domain:
             continue
-        granted = frozenset({"app"}) if principal.is_app else principal.scopes
-        for h in d.search(q, limit, granted):
-            scored.append((h.score, HitOut(domain=d.name, urn=h.urn, title=h.title, date=h.date)))
-    scored.sort(key=lambda item: (item[0], item[1].date or ""), reverse=True)
-    return SearchOut(items=[h for _, h in scored[:limit]])
+        if not principal.allows(f"{d.name}:read"):
+            continue
+        items.extend(ObservationOut(domain=d.name, **vars(o)) for o in d.observations(limit))
+    items.sort(key=lambda o: o.on_date, reverse=True)  # tri stable : l'ordre du domaine reste
+    return ObservationListOut(items=items[:limit])
 
 
 def _resolve(hub_ctx: Ctx, principal: Principal, value: str) -> RefOut | None:

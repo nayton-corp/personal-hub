@@ -35,6 +35,7 @@ from hub.core.manifest import (
     SettingsSection,
     Tab,
 )
+from hub.core.search import excerpt
 from hub.kernel.clock import now_iso
 from hub.kernel.ids import urn
 from hub.platform.db import make_engine
@@ -115,8 +116,8 @@ class DemoDomain:
     scopes = frozenset({"demo:read", "demo:propose", "demo:aggregates"})
 
     def __init__(self, data_dir: Path, inbox: Path | None = None) -> None:
-        self.path = data_dir / "demo.db"
-        self.inbox = inbox or data_dir.parent / "inbox" / "demo"
+        self.path = data_dir / f"{self.name}.db"
+        self.inbox = inbox or data_dir.parent / "inbox" / self.name
         self._engine = make_engine(self.path)
         self.nightly_runs = 0
         self.third_party = FakeThirdParty()
@@ -197,13 +198,17 @@ class DemoDomain:
                 text("SELECT seq, name, created_at FROM items WHERE name LIKE :q LIMIT :n"),
                 {"q": f"%{q}%", "n": limit},
             ).fetchall()
-        return [Hit(urn("demo", "item", str(s)), n, at[:10], 10) for s, n, at in rows]
+        # comme bm25 : le plus court d'abord, sur une échelle à lui (S9 fusionne par rang)
+        return [
+            Hit(urn(self.name, "item", str(s)), n, at[:10], 1000 - len(n), excerpt([n], q))
+            for s, n, at in rows
+        ]
 
     def resolve(self, value: str) -> Ref | None:
         seq = value.rsplit(":", 1)[1]
         with self._engine.connect() as conn:
             row = conn.execute(text("SELECT name FROM items WHERE seq = :s"), {"s": seq}).first()
-        return Ref(value, row[0], None, f"/demo/items/{seq}") if row else None
+        return Ref(value, row[0], None, f"/{self.name}/items/{seq}") if row else None
 
     def events_since(self, cursor: int, limit: int) -> list[Event]:
         with self._engine.connect() as conn:

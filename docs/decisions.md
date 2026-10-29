@@ -7,6 +7,23 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-020 · Recherche fusionnée par rang ; liens et constats tenus par le cœur (30.10.2026)
+
+- **Contexte** : `/api/search` triait les résultats de tous les domaines sur leurs scores bruts,
+  qui ne se comparent pas (bm25 de la finance, qui préfère les libellés courts, contre l'échelle
+  d'un autre domaine) : un domaine pouvait occuper toute la page. Les liens n'avaient pas de
+  geste pour se créer, et les alertes de la finance avaient leur route à elles.
+- **Décision** : chaque domaine classe ses résultats ; le cœur ne garde que le rang de chacun
+  dans son domaine et les fusionne (Reciprocal Rank Fusion, k = 60, en entiers). Un résultat
+  dit son domaine, son rang et le passage trouvé. Le cœur tient ses propres types de
+  proposition, `core/link` et son inverse `core/unlink`, appliqués dans `core.db` (qui gagne le
+  journal chaîné, `applied_proposals` et `events`) ; un jeton ne lie que des objets qu'il lit,
+  avec `core:propose`. `GET /api/observations` réunit les constats des domaines lisibles ; les
+  sentinelles de la finance y passent, `/api/finance/alerts` disparaît.
+- **Conséquence** : le premier résultat de chaque domaine passe avant le second de tous. Un
+  constat exige la lecture du domaine (il peut nommer une contrepartie). `hub verify` contrôle
+  aussi le journal de `core.db`.
+
 ## D-019 · La finance en quatre sous-contextes, chacun en couches (29.10.2026)
 
 - **Contexte** : 45 modules à plat, douze au-delà de 400 lignes (l'importeur 1 424, les

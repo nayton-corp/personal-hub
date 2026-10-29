@@ -16,7 +16,7 @@ const STALE_DAYS = 45;
 const RESERVE_MONTHS = 6;
 const BILAN_DAYS = 7; // le bilan du mois passé reste sur l'accueil la première semaine
 const kpisPath = () => `/finance/kpis?month=${store.today}`;
-const alertsPath = "/finance/alerts";
+const alertsPath = "/observations?domain=finance"; // les constats des sentinelles
 const connPath = "/collectors/connections";
 const unchecked = new Set(); // propositions décochées dans le panneau « À valider »
 const dropped = new Map(); // carte à plusieurs écritures → écritures décochées
