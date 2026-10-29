@@ -223,6 +223,7 @@ def apply_notice(conn: Connection, import_id: str, n: Notice) -> Outcome:
             None,
             entry.bank_tx_code,
             None,
+            account.id,
         )
         won = ruleset.winner(target)
         if won is not None:

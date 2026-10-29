@@ -187,6 +187,8 @@ class CreateRule(_Params):
     direction: Literal["any", "debit", "credit"] = "any"
     category_id: Slug
     priority: int = Field(default=50, ge=1, le=10_000)
+    # règle d'un seul compte ; son motif peut être vide : « tout débit de ce compte »
+    account_id: str | None = Field(default=None, max_length=120)
 
     @model_validator(mode="after")
     def _pattern(self) -> CreateRule:
@@ -194,7 +196,8 @@ class CreateRule(_Params):
             value = rules.normalize_pattern(self.field, self.pattern)
         except rules.RuleError as exc:
             raise ValueError(str(exc)) from None
-        if self.field == "search_text" and len(value.strip()) < 2:
+        short = self.field == "search_text" and len(value.strip()) < 2
+        if short and (self.account_id is None or value.strip()):
             raise ValueError("motif de deux caractères au moins")
         return self
 
@@ -211,6 +214,7 @@ class CreateRuleHandler:
             params.direction,
             params.category_id,
             params.priority,
+            account_id=params.account_id,
         )
 
     def _changes(self, conn: Connection, params: CreateRule, rule_id: str) -> list[rules.Change]:
@@ -221,16 +225,26 @@ class CreateRuleHandler:
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, CreateRule)  # noqa: S101
         name, _grp = _category(conn, params.category_id)
+        account = None
+        if params.account_id is not None:
+            account = conn.execute(
+                text("SELECT name FROM accounts WHERE id = :i"), {"i": params.account_id}
+            ).scalar()
+            if account is None:
+                raise _bad(f"compte inconnu : {params.account_id}")
         found = self._changes(conn, params, PREVIEW_RULE_ID)
         items = [(c.current.amount_minor, c.current.currency) for c in found]
         sample = _sample(conn, [c.current.entry_seq for c in found[:SAMPLE]])
         shape = {"search_text": "texte", "counterparty_iban": "IBAN", "bank_tx_code": "code"}
         motif = mask_iban(params.normalized()) if params.field == "counterparty_iban" else None
+        what = f"{shape[params.field]} « {motif or params.normalized().strip()} »"
+        if account is not None:
+            sens = {"debit": "débit", "credit": "crédit", "any": "mouvement"}[params.direction]
+            what = (
+                f"« {account} » : {f'{what}, ' if params.normalized().strip() else ''}tout {sens}"
+            )
         return Preview(
-            summary=(
-                f"Règle {shape[params.field]} « {motif or params.normalized().strip()} » → "
-                f"{name} : {len(found)} écriture{'s' if len(found) > 1 else ''}"
-            ),
+            summary=f"Règle {what} → {name} : {len(found)} écriture{'s' if len(found) > 1 else ''}",
             details={
                 "count": len(found),
                 "totals": _totals(items),
@@ -258,6 +272,7 @@ class CreateRuleHandler:
             category_id=params.category_id,
             priority=params.priority,
             proposal_id=proposal_id,
+            account_id=params.account_id,
         )
         version = rules.bump_version(conn)
         changed = rules.apply_changes(
@@ -317,6 +332,8 @@ class SetBudget(_Params):
     monthly_minor: int = Field(ge=0, le=100_000_000)
     currency: str = Field(default_factory=base_currency)
     valid_from: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-01$")
+    # suivi au mois ou à l'année (cible annuelle = 12 × monthly_minor) ; absent : inchangé
+    cadence: Literal["month", "year"] | None = None
 
     @field_validator("currency")
     @classmethod
@@ -350,15 +367,23 @@ class SetBudgetHandler:
             raise _bad("un budget porte sur une catégorie de dépenses")
         current = _budget_row(conn, params.category_id)
         before = int(current.monthly_minor) if current else None
-        then = f" (avant {_display(before, params.currency)})" if before is not None else ""
+        cadence = params.cadence or _cadence(conn, params.category_id)
+        if cadence == "year":
+            then = (
+                f" (avant {_display(before * 12, params.currency)})" if before is not None else ""
+            )
+            amount = f"{_display(params.monthly_minor * 12, params.currency)} par an"
+        else:
+            then = f" (avant {_display(before, params.currency)})" if before is not None else ""
+            amount = f"{_display(params.monthly_minor, params.currency)} par mois"
         return Preview(
-            summary=f"Budget {name} : {_display(params.monthly_minor, params.currency)} par mois"
-            f"{then}, dès {self._from(params)[:7]}",
+            summary=f"Budget {name} : {amount}{then}, dès {self._from(params)[:7]}",
             details={
                 "category_id": params.category_id,
                 "monthly": Money(params.monthly_minor, params.currency).to_api(),
                 "previous": Money(before, params.currency).to_api() if before is not None else None,
                 "valid_from": self._from(params),
+                "cadence": cadence,
             },
             fingerprint=_fp("set_budget", params.category_id, current.seq if current else 0),
         )
@@ -378,9 +403,21 @@ class SetBudgetHandler:
                 "created_at": now_iso(),
             },
         )
+        before = _cadence(conn, params.category_id)
+        if params.cadence is not None and params.cadence != before:
+            conn.execute(
+                text(
+                    "INSERT INTO budget_cadence (category_id, cadence, updated_at, actor) "
+                    "VALUES (:c, :k, :at, :p) ON CONFLICT (category_id) DO UPDATE SET "
+                    "cadence = excluded.cadence, updated_at = excluded.updated_at, "
+                    "actor = excluded.actor"
+                ),
+                {"c": params.category_id, "k": params.cadence, "at": now_iso(), "p": proposal_id},
+            )
         return {
             "budget_seq": seq,
             "previous_minor": int(current.monthly_minor) if current else None,
+            "previous_cadence": before,
             "valid_from": self._from(params),
         }
 
@@ -392,7 +429,15 @@ def _budget_inverse(params: dict[str, Any], result: dict[str, Any]) -> tuple[str
         "monthly_minor": 0 if previous is None else previous,
         "currency": params.get("currency") or base_currency(),
         "valid_from": result.get("valid_from"),
+        "cadence": result.get("previous_cadence") or "month",
     }
+
+
+def _cadence(conn: Connection, category_id: str) -> str:
+    row = conn.execute(
+        text("SELECT cadence FROM budget_cadence WHERE category_id = :c"), {"c": category_id}
+    ).first()
+    return str(row[0]) if row else "month"
 
 
 class AddNote(_Params):

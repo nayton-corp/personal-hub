@@ -7,8 +7,10 @@ sait que c'est un virement, par ordre de confiance :
 1. `iban` : l'IBAN de contrepartie de l'un est celui de l'autre compte ;
 2. `code` : les deux côtés ressemblent à un virement (catégorie de virement ou d'épargne,
    IBAN de contrepartie qui est l'un de mes comptes, versement VIAC ou IBKR) ;
-3. `amount` : un seul côté y ressemble, et c'est le seul candidat de ce montant dans la fenêtre
-   (une recharge Revolut depuis la BCF, par exemple).
+3. `amount` : c'est le seul candidat de ce montant dans la fenêtre, et soit un côté ressemble à
+   un virement (une recharge Revolut depuis la BCF, par exemple), soit les deux comptes sont chez
+   le même établissement à un jour d'écart au plus (le compte Revolut et ses poches, dont les
+   mouvements n'ont ni IBAN ni code de virement).
 
 Chaque écriture n'a qu'un seul partenaire. La table est dérivée : recalculée en entier avec les
 instantanés. Une écriture appariée sans catégorie compte comme un virement entre mes comptes
@@ -29,6 +31,7 @@ from hub.domains.finance import institutions
 from hub.domains.finance.reads import money
 
 WINDOW_DAYS = 5
+SIBLING_DAYS = 1  # compte et poche du même établissement : le virement est passé le jour même
 TRANSFER_CODES = institutions.prefixes(transfer=True)
 _INTERNAL = institutions.like_any("e.bank_tx_code", institutions.prefixes(internal=True))
 METHOD_RANK = {"iban": 0, "code": 1, "amount": 2}
@@ -40,6 +43,7 @@ class Move:
     id: str
     account_id: str
     account_iban: str | None
+    institution: str | None
     on: date
     amount: int
     currency: str
@@ -69,7 +73,8 @@ class Link:
 def _moves(conn: Connection) -> list[Move]:
     rows = conn.execute(
         text(
-            "SELECT e.seq, e.id, e.account_id, a.iban, e.booking_date, e.amount_minor, e.currency, "  # noqa: S608 - codes déclarés
+            "SELECT e.seq, e.id, e.account_id, a.iban, a.institution, e.booking_date, "  # noqa: S608 - codes déclarés
+            "e.amount_minor, e.currency, "
             "e.counterparty_iban, coalesce(e.bank_tx_code, ''), c.grp "
             "FROM entries e JOIN accounts a ON a.id = e.account_id "
             "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
@@ -80,10 +85,24 @@ def _moves(conn: Connection) -> list[Move]:
     ).fetchall()
     return [
         Move(
-            int(r[0]), r[1], r[2], r[3], date.fromisoformat(r[4]), int(r[5]), r[6], r[7], r[8], r[9]
+            int(r[0]),
+            r[1],
+            r[2],
+            r[3],
+            r[4],
+            date.fromisoformat(r[5]),
+            int(r[6]),
+            r[7],
+            r[8],
+            r[9],
+            r[10],
         )
         for r in rows
     ]
+
+
+def _siblings(d: Move, c: Move) -> bool:
+    return bool(d.institution) and d.institution == c.institution
 
 
 def match(moves: list[Move], own: frozenset[str]) -> list[Link]:
@@ -107,7 +126,11 @@ def match(moves: list[Move], own: frozenset[str]) -> list[Link]:
                 candidates.append(Link(d, c, "iban"))
             elif d.transfer_like(own) and c.transfer_like(own):
                 candidates.append(Link(d, c, "code"))
-            elif (d.transfer_like(own) or c.transfer_like(own)) and len(near) == 1:
+            elif len(near) == 1 and (
+                d.transfer_like(own)
+                or c.transfer_like(own)
+                or (_siblings(d, c) and abs((c.on - d.on).days) <= SIBLING_DAYS)
+            ):
                 rivals = [
                     x
                     for x in debits[(d.currency, d.amount)]

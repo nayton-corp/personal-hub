@@ -19,6 +19,9 @@ const picks = {}; // contrepartie → catégorie choisie
 const always = new Set();
 const opened = new Set(); // groupes « À classer » dépliés
 let busy = false;
+// « Toujours » : ton choix passe avant les règles de départ et la règle d'une poche (5), par
+// exemple la mensualité du crédit dans la poche Voiture
+const ALWAYS_PRIORITY = 4;
 
 const internal = (e) => Boolean(e.category && e.category.id.startsWith("transfer"));
 const u = (m) => m.minor / 100;
@@ -413,7 +416,7 @@ export const actions = {
     if (!e) return;
     const cat = SH.tmp;
     const items = [["recategorize", { entry_id: e.id, category_id: cat }]];
-    if (SH.always && e.counterparty) items.push(["create_rule", { pattern: e.counterparty, direction: e.amount.minor > 0 ? "credit" : "debit", category_id: cat }]);
+    if (SH.always && e.counterparty) items.push(["create_rule", { pattern: e.counterparty, direction: e.amount.minor > 0 ? "credit" : "debit", category_id: cat, priority: ALWAYS_PRIORITY }]);
     SH.busy = true;
     SH.err = "";
     renderSheet();
@@ -456,7 +459,7 @@ export const actions = {
     for (const g of gs) {
       const cat = picks[g.counterparty];
       // la règle catégorise aussi, à l'application, les écritures en attente qui lui correspondent
-      if (always.has(g.counterparty) && g.counterparty !== "(inconnu)") items.push(["create_rule", { pattern: g.counterparty, direction: g.direction, category_id: cat }]);
+      if (always.has(g.counterparty) && g.counterparty !== "(inconnu)") items.push(["create_rule", { pattern: g.counterparty, direction: g.direction, category_id: cat, priority: ALWAYS_PRIORITY }]);
       else for (const id of g.entry_ids) items.push(["recategorize", { entry_id: id, category_id: cat }]);
     }
     if (!items.length) return;

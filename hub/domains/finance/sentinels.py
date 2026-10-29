@@ -51,6 +51,7 @@ def budget_projection(conn: Connection, month: str, today: date) -> list[Project
     goal = insights.targets(conn, month)
     groups = insights.category_groups(conn)
     names = insights.category_names(conn)
+    year = insights.yearly(conn)
     spent: dict[str, int] = {}
     for x in insights.lines_for(conn, [month]):
         if x.group in insights.EXPENSE_GROUPS:
@@ -61,8 +62,8 @@ def budget_projection(conn: Connection, month: str, today: date) -> list[Project
     out = []
     for cat, target in sorted(goal.items()):
         group = groups.get(cat)
-        if group not in insights.EXPENSE_GROUPS or target <= 0:
-            continue
+        if group not in insights.EXPENSE_GROUPS or target <= 0 or cat in year:
+            continue  # une catégorie suivie à l'année n'a pas de cible du mois (voir _yearly)
         value = max(0, spent.get(cat, 0))
         projected = value
         if current and group == "variable" and elapsed >= MIN_DAY_FOR_PROJECTION:
@@ -113,6 +114,39 @@ def _budget(conn: Connection, today: date) -> list[Alert]:
                     f"Budget {p.name} : dépassement probable",
                     "Budget : une cible du mois sera probablement dépassée",
                     detail,
+                )
+            )
+    return out + _yearly(conn, month)
+
+
+def _yearly(conn: Connection, month: str) -> list[Alert]:
+    """Cible annuelle dépassée par le cumul depuis janvier : une alerte par année."""
+    year = insights.yearly(conn)
+    if not year:
+        return []
+    goal = insights.targets(conn, month)
+    names = insights.category_names(conn)
+    done: dict[str, int] = {}
+    for x in insights.lines_for(conn, insights.year_months(month)):
+        if x.category in year:
+            done[x.category] = done.get(x.category, 0) - x.minor
+    out = []
+    for cat in sorted(year):
+        annual = goal.get(cat, 0) * 12
+        if annual > 0 and done.get(cat, 0) > annual:
+            out.append(
+                Alert(
+                    f"budget-over-year:{cat}:{month[:4]}",
+                    "budget_over",
+                    f"Budget annuel {names.get(cat, cat)} dépassé",
+                    "Budget : une cible annuelle est dépassée",
+                    {
+                        "category": cat,
+                        "month": month,
+                        "spent": insights.in_base(done[cat]),
+                        "target": insights.in_base(annual),
+                        "projected": insights.in_base(done[cat]),
+                    },
                 )
             )
     return out

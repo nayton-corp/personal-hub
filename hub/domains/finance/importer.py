@@ -849,6 +849,7 @@ def _insert(conn: Connection, import_id: str, plan: Plan, proposal_id: str | Non
             e.counterparty_iban,
             e.bank_tx_code,
             account.iban,
+            account.id,
         )
         won = ruleset.winner(target)
         if won is not None:

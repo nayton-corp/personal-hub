@@ -90,6 +90,16 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
         )
     ).fetchall()
     positions = valuation.Positions(conn)
+    # « tout débit de ce compte → … » : la règle sans motif d'un compte, la plus prioritaire
+    spend = {}
+    for acc, rid, cat in conn.execute(
+        text(
+            "SELECT account_id, id, category_id FROM rules WHERE account_id IS NOT NULL "
+            "AND active = 1 AND trim(pattern) = '' AND direction = 'debit' "
+            "ORDER BY priority DESC, id DESC"
+        )
+    ):
+        spend[acc] = {"rule_id": rid, "category_id": cat}
     for r in rows:
         clbd = last_clbd(conn, r[0])
         value, missing = valuation.account_value(positions, r[0], int(r[8]), "9999-12-31")
@@ -111,6 +121,7 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
                 # catégorie imposée à toutes les lignes du compte ; NULL : déduite de chaque ligne
                 "category": r[13],
                 "hidden": bool(r[14]),
+                "spend_rule": spend.get(r[0]),
                 "balance": money(r[8], r[4]),
                 # valeur de marché pour un compte de titres (parts × dernier cours), sinon le solde
                 "value": money(value, r[4]),
@@ -297,7 +308,7 @@ def entries(
     rows = conn.execute(
         text(
             f"SELECT {_ENTRY_COLS} FROM entries e "
-            "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
+            "LEFT JOIN v_entry_shown vc ON vc.entry_seq = e.seq "
             f"WHERE {' AND '.join(where)} ORDER BY {order} LIMIT :lim"
         ),
         params,
@@ -316,7 +327,7 @@ def entry_detail(conn: Connection, entry_id: str) -> dict[str, Any] | None:
     row = conn.execute(
         text(
             f"SELECT {_ENTRY_COLS} FROM entries e "
-            "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq WHERE e.id = :id"
+            "LEFT JOIN v_entry_shown vc ON vc.entry_seq = e.seq WHERE e.id = :id"
         ),
         {"id": entry_id},
     ).first()
@@ -542,7 +553,7 @@ def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
         text(
             "SELECT e.counterparty, e.label, e.currency, e.amount_minor, e.id, e.account_id, "
             "e.booking_date, e.remittance, e.bank_tx_code FROM entries e "
-            "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
+            "LEFT JOIN v_entry_shown vc ON vc.entry_seq = e.seq "
             "WHERE vc.category_id IS NULL AND e.kind = 'movement' "
             "ORDER BY e.booking_date DESC, e.seq DESC"
         )
@@ -604,7 +615,7 @@ def search(conn: Connection, q: str, limit: int = SEARCH_LIMIT) -> list[dict[str
         text(
             f"SELECT {_ENTRY_COLS}, bm25(entries_fts) AS score FROM entries_fts "
             "JOIN entries e ON e.seq = entries_fts.rowid "
-            "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
+            "LEFT JOIN v_entry_shown vc ON vc.entry_seq = e.seq "
             "WHERE entries_fts MATCH :q ORDER BY score, e.booking_date DESC LIMIT :n"
         ),
         {"q": query, "n": limit},

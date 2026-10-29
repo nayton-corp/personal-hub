@@ -40,6 +40,7 @@ class Rule:
     category_id: str
     priority: int
     active: bool = True
+    account_id: str | None = None  # règle d'un seul compte (« tout débit de la poche Vacances »)
 
     def key(self) -> tuple[int, str]:
         return (self.priority, self.id)
@@ -54,6 +55,7 @@ class Target:
     counterparty_iban: str | None
     bank_tx_code: str | None
     account_iban: str | None = None
+    account_id: str | None = None
 
 
 def normalize_pattern(field: str, pattern: str) -> str:
@@ -97,6 +99,8 @@ class RuleSet:
     def matches(self, rule: Rule, t: Target) -> bool:
         if not _direction_ok(rule.direction, t.amount_minor):
             return False
+        if rule.account_id is not None and rule.account_id != t.account_id:
+            return False
         if rule.field == "search_text":
             return rule.pattern in f" {t.search_text} "
         if rule.field == "counterparty_iban":
@@ -121,7 +125,7 @@ class RuleSet:
 
 # --- base ----------------------------------------------------------------------------------
 
-_RULE_COLS = "id, field, pattern, direction, category_id, priority, active"
+_RULE_COLS = "id, field, pattern, direction, category_id, priority, active, account_id"
 
 
 def _rule(r: Sequence[object]) -> Rule:
@@ -133,6 +137,7 @@ def _rule(r: Sequence[object]) -> Rule:
         category_id=str(r[4]),
         priority=int(str(r[5])),
         active=bool(r[6]),
+        account_id=str(r[7]) if r[7] is not None else None,
     )
 
 
@@ -168,9 +173,17 @@ def bump_version(conn: Connection) -> int:
     return version(conn)
 
 
-def rule_id(prefix: str, field: str, pattern: str, direction: str, category_id: str) -> str:
+def rule_id(
+    prefix: str,
+    field: str,
+    pattern: str,
+    direction: str,
+    category_id: str,
+    account_id: str | None = None,
+) -> str:
     """Identifiant déterministe : une même règle reprise deux fois garde le même."""
-    digest = hashlib.sha256(f"{field}|{pattern}|{direction}|{category_id}".encode()).hexdigest()
+    seed = f"{field}|{pattern}|{direction}|{category_id}" + (f"|{account_id}" if account_id else "")
+    digest = hashlib.sha256(seed.encode()).hexdigest()
     return f"{prefix}-{digest[:16]}"
 
 
@@ -184,6 +197,7 @@ def insert_rule(
     category_id: str,
     priority: int,
     proposal_id: str | None = None,
+    account_id: str | None = None,
 ) -> Rule:
     if field not in FIELDS or field == "own_account":
         raise RuleError(f"champ non autorisé : {field}")
@@ -197,7 +211,8 @@ def insert_rule(
     conn.execute(
         text(
             "INSERT INTO rules (id, field, pattern, direction, category_id, priority, active, "
-            "proposal_id, created_at) VALUES (:id, :f, :p, :d, :c, :prio, 1, :prop, :at)"
+            "proposal_id, created_at, account_id) "
+            "VALUES (:id, :f, :p, :d, :c, :prio, 1, :prop, :at, :acc)"
         ),
         {
             "id": id,
@@ -208,9 +223,10 @@ def insert_rule(
             "prio": priority,
             "prop": proposal_id,
             "at": now_iso(),
+            "acc": account_id,
         },
     )
-    return Rule(id, field, pattern, direction, category_id, priority)
+    return Rule(id, field, pattern, direction, category_id, priority, account_id=account_id)
 
 
 def set_active(conn: Connection, rule_id: str, active: bool) -> None:
@@ -242,7 +258,8 @@ def candidates(conn: Connection) -> list[Current]:
     rows = conn.execute(
         text(
             "SELECT e.seq, e.id, e.amount_minor, e.currency, vc.category_id, vc.source, "
-            "vc.categorization_seq, e.search_text, e.counterparty_iban, e.bank_tx_code, a.iban "
+            "vc.categorization_seq, e.search_text, e.counterparty_iban, e.bank_tx_code, a.iban, "
+            "e.account_id "
             "FROM entries e JOIN accounts a ON a.id = e.account_id "
             "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
             "WHERE e.kind = 'movement' AND (vc.source IS NULL OR vc.source = 'rule') "
@@ -258,7 +275,7 @@ def candidates(conn: Connection) -> list[Current]:
             category_id=r[4],
             source=r[5],
             categorization_seq=r[6],
-            target=Target(int(r[2]), str(r[7]), r[8], r[9], r[10]),
+            target=Target(int(r[2]), str(r[7]), r[8], r[9], r[10], r[11]),
         )
         for r in rows
     ]

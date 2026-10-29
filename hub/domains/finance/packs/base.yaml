@@ -31,6 +31,12 @@ categories:
 - id: transports
   name: Transports
   group: variable
+- id: voiture-credit
+  name: 'Voiture : crédit'
+  group: fixed
+- id: voiture-frais
+  name: 'Voiture : frais'
+  group: variable
 - id: abonnements
   name: Abonnements
   group: fixed

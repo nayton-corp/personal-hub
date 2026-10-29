@@ -553,6 +553,73 @@ def test_transfers_are_matched(finance: FinanceDomain) -> None:
     assert s["by_method"] == {"amount": 1, "iban": 1}
 
 
+def test_pocket_transfer_beats_catch_all_rule(finance: FinanceDomain) -> None:
+    """Compte Revolut → poche : ni IBAN ni code de virement, mais le même établissement, le même
+    montant et le même jour. La règle « tout crédit restant → Autres revenus » ne doit pas en
+    faire un revenu ; une catégorie précise, elle, reste la sienne."""
+    without_seed_rules(finance)
+    rev = add_ref(finance, "revolut:CHF", "cash", "Revolut")
+    pocket = add_ref(finance, "revolut:CHF:poche-1", "cash", "Revolut")
+    bcf = add_account(finance)
+    with begin_immediate(finance.engine()) as conn:
+        out = _entry(conn, rev, "2026-10-05", -40_000, label="To pocket CHF Vacances")
+        into = _entry(conn, pocket, "2026-10-05", 40_000, label="From CHF")
+        # même montant, même jour, mais deux établissements sans indice de virement
+        _entry(conn, bcf, "2026-10-08", -1_500, counterparty="Kiosque")
+        gift = _entry(conn, pocket, "2026-10-08", 1_500, label="Cadeau")
+        # à deux jours d'écart, une poche n'est pas appariée sur le seul établissement
+        _entry(conn, rev, "2026-10-12", -2_500, label="Achat")
+        _entry(conn, pocket, "2026-10-14", 2_500, label="Retour")
+        catch_all = rules.Rule("pack-base-x", "search_text", "", "credit", "autres-revenus", 29)
+        precise = rules.Rule("user-x", "search_text", "from chf", "credit", "remboursements", 10)
+        for r in (catch_all, precise):
+            conn.execute(
+                text(
+                    "INSERT INTO rules (id, field, pattern, direction, category_id, priority, "
+                    "created_at) VALUES (:i, :f, :p, :d, :c, :n, '2026-10-01T00:00:00.000Z')"
+                ),
+                {
+                    "i": r.id,
+                    "f": r.field,
+                    "p": r.pattern,
+                    "d": r.direction,
+                    "c": r.category_id,
+                    "n": r.priority,
+                },
+            )
+        for seq in (into, gift):
+            rules.categorize(
+                conn, seq, catch_all, proposal_id=None, created_at="2026-10-05T00:00:00.000Z"
+            )
+    finance.refresh_derived()
+    assert rows(finance, "SELECT debit_seq, credit_seq, method FROM transfer_links") == [
+        (out, into, "amount")
+    ]
+
+    def shown(seq: int) -> tuple[str | None, str | None]:
+        with finance.engine().connect() as conn:
+            r = conn.execute(
+                text(
+                    "SELECT vs.category_id, va.category_id FROM v_entry_shown vs "
+                    "JOIN v_entry_allocation va USING (entry_seq) WHERE vs.entry_seq = :s"
+                ),
+                {"s": seq},
+            ).one()
+            return r[0], r[1]
+
+    assert shown(out) == ("transfer-own", "transfer-own")  # plus « à classer »
+    assert shown(into) == ("transfer-own", "transfer-own")  # plus un revenu
+    assert shown(gift) == ("autres-revenus", "autres-revenus")  # pas apparié
+    with finance.engine().connect() as conn:
+        assert insights.to_categorize(conn) == 3  # le kiosque, l'achat et le retour
+    # une catégorie précise passe avant l'appariement
+    with begin_immediate(finance.engine()) as conn:
+        rules.categorize(
+            conn, into, precise, proposal_id=None, created_at="2026-10-06T00:00:00.000Z"
+        )
+    assert shown(into) == ("remboursements", "remboursements")
+
+
 RAIFFEISEN_IBAN = "CH3880808001234567890"  # clearing Raiffeisen, numéro fictif
 
 

@@ -124,10 +124,31 @@ def category_groups(conn: Connection) -> dict[str, str]:
     return {r[0]: r[1] for r in conn.execute(text("SELECT id, grp FROM categories"))}
 
 
+def yearly(conn: Connection) -> frozenset[str]:
+    """Catégories suivies à l'année (vacances, entretien) : leur cible mensuelle est le douzième
+    de la cible annuelle, et elles sortent du budget et du reste à vivre du mois."""
+    rows = conn.execute(text("SELECT category_id FROM budget_cadence WHERE cadence = 'year'"))
+    return frozenset(str(r[0]) for r in rows)
+
+
 def expense_budget(conn: Connection, month: str) -> int | None:
-    groups = category_groups(conn)
-    found = {c: v for c, v in targets(conn, month).items() if groups.get(c) in EXPENSE_GROUPS}
+    groups, year = category_groups(conn), yearly(conn)
+    found = {
+        c: v
+        for c, v in targets(conn, month).items()
+        if groups.get(c) in EXPENSE_GROUPS and c not in year
+    }
     return sum(found.values()) if found else None
+
+
+def year_months(month: str) -> list[str]:
+    """Mois budgétaires de l'année de `month`, de janvier à `month` compris."""
+    return [f"{month[:4]}-{m:02d}" for m in range(1, int(month[5:7]) + 1)]
+
+
+def monthly_expenses(lines: list[Line], year: frozenset[str]) -> int:
+    """Dépenses de la période hors catégories suivies à l'année, en positif."""
+    return -sum(x.minor for x in lines if x.group in EXPENSE_GROUPS and x.category not in year)
 
 
 def lines_for(conn: Connection, months: list[str]) -> list[Line]:
@@ -194,11 +215,9 @@ def to_categorize(conn: Connection) -> int:
     return int(
         conn.execute(
             text(
-                "SELECT count(*) FROM entries e LEFT JOIN v_entry_category vc "
-                "ON vc.entry_seq = e.seq WHERE vc.category_id IS NULL AND e.kind = 'movement' "
-                # un côté de virement apparié n'attend pas de catégorie (lot 6)
-                "AND e.seq NOT IN (SELECT debit_seq FROM transfer_links) "
-                "AND e.seq NOT IN (SELECT credit_seq FROM transfer_links)"
+                # un côté de virement apparié n'attend pas de catégorie (lot 6, v_entry_shown)
+                "SELECT count(*) FROM entries e LEFT JOIN v_entry_shown vc "
+                "ON vc.entry_seq = e.seq WHERE vc.category_id IS NULL AND e.kind = 'movement'"
             )
         ).scalar_one()
     )
@@ -517,6 +536,12 @@ def budget(
     names = category_names(conn)
     goal = targets(conn, months[-1])
     groups = category_groups(conn)
+    year = yearly(conn)
+    ytd: dict[str, int] = {}
+    if year:
+        for x in lines_for(conn, year_months(months[-1])):
+            if x.category in year:
+                ytd[x.category] = ytd.get(x.category, 0) - x.minor
     spent: dict[str, tuple[str, int, int]] = {}
     for x in lines:
         if x.group in EXPENSE_GROUPS:
@@ -527,19 +552,34 @@ def budget(
             spent[cat] = (groups[cat], 0, 0)
     out: list[dict[str, Any]] = []
     for cat, (group, minor, count) in spent.items():
-        target = goal[cat] * n if cat in goal else None
-        out.append(
-            {
-                "category": cat,
-                "name": names.get(cat, cat),
-                "group": group,
+        line: dict[str, Any] = {"category": cat, "name": names.get(cat, cat), "group": group}
+        if cat in year:
+            # suivie à l'année : comparée au cumul depuis janvier, pas au mois
+            annual = goal[cat] * 12 if cat in goal else None
+            done = ytd.get(cat, 0)
+            line |= {
+                "spent": in_base(minor),
+                "count": count,
+                "target": None,
+                "ratio": None,
+                "over": annual is not None and done > annual,
+                "yearly": {
+                    "target": in_base(annual) if annual is not None else None,
+                    "spent": in_base(done),
+                    "ratio": ratio(done, annual) if annual else None,
+                    "from": year_months(months[-1])[0],
+                },
+            }
+        else:
+            target = goal[cat] * n if cat in goal else None
+            line |= {
                 "spent": in_base(minor),
                 "count": count,
                 "target": in_base(target) if target is not None else None,
                 "ratio": ratio(minor, target) if target else None,
                 "over": target is not None and minor > target,
             }
-        )
+        out.append(line)
     out.sort(key=lambda i: (EXPENSE_GROUPS.index(i["group"]), -i["spent"]["minor"], i["category"]))
     if aggregates_only:
         out = merge_small(out, key="spent")
@@ -555,7 +595,13 @@ def budget(
         "income": in_base(t.income),
         "expenses": in_base(t.expenses),
         "budget": in_base(total_budget) if total_budget is not None else None,
-        "rest_to_live": (in_base(total_budget - t.expenses) if total_budget is not None else None),
+        # le reste à vivre ne compte que les catégories suivies au mois
+        "budgeted_expenses": in_base(monthly_expenses(lines, year)),
+        "rest_to_live": (
+            in_base(total_budget - monthly_expenses(lines, year))
+            if total_budget is not None
+            else None
+        ),
         "days_left": days_left(month, today) if period == "m" else 0,
         "start": span(months)[0],
         "end": span(months)[1],
@@ -565,9 +611,11 @@ def budget(
 
 def budget_totals(conn: Connection, month: str, period: str) -> dict[str, Any]:
     months = period_months(month, period)
-    t = Totals.of(lines_for(conn, months))
+    lines = lines_for(conn, months)
+    t = Totals.of(lines)
     monthly = expense_budget(conn, months[-1])
     total_budget = monthly * len(months) if monthly is not None else None
+    used = monthly_expenses(lines, yearly(conn))
     return {
         "month": month,
         "period": period,
@@ -577,7 +625,7 @@ def budget_totals(conn: Connection, month: str, period: str) -> dict[str, Any]:
         "currency": base_currency(),
         **totals_json(t),
         "budget": in_base(total_budget) if total_budget is not None else None,
-        "budget_used": ratio(t.expenses, total_budget) if total_budget else None,
+        "budget_used": ratio(used, total_budget) if total_budget else None,
     }
 
 
