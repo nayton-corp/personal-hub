@@ -39,7 +39,7 @@ from hub.domains.finance.handlers import build_kinds
 from hub.domains.finance.importer import Archiver, ImportService, recipient_from_key
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 16  # 0016_debts
+SCHEMA_VERSION = 17  # 0017_snapshot_categories
 log = get_logger("hub.finance")
 
 
