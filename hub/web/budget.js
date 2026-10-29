@@ -1,0 +1,430 @@
+// Budget : reste à vivre et rythme du mois, projection, diagramme de flux (revenus → usage →
+// postes), catégories avec leur trait de rythme, abonnements et tendance sur six mois. Les
+// montants viennent de /finance/budget, /flows, /budget/months ; seul le rythme (part du mois
+// écoulée) et la projection se calculent ici.
+import { go, reveal } from "./finance.js";
+import { MOIS, base, date, monthName } from "./format.js";
+import { GROUP_LABEL, catIc, catLook, catMark } from "./meta.js";
+import { outcome, proposeAndApprove } from "./proposals.js";
+import { shiftMonth, store } from "./store.js";
+import {
+  SHEETS, SH, amount, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, money, n0, nf, openSheet, pf, pref,
+  renderSheet, setPref, toast,
+} from "./ui.js";
+
+const $ = (id) => document.getElementById(id);
+const P = store.params;
+const UNCAT = "a-categoriser";
+const CADENCE = { weekly: "chaque semaine", monthly: "mensuel", quarterly: "trimestriel", yearly: "annuel" };
+const OLDEST = 36; // mois en arrière au plus
+const B = { sk: null, bgroup: null };
+
+export const budgetPath = (month, period) => `/finance/budget?month=${month}&period=${period}`;
+const flowsPath = () => `/finance/flows?month=${P.month}&period=${P.period}`;
+const monthsPath = () => `/finance/budget/months?month=${P.month}&months=6`;
+const recurringPath = "/finance/recurring";
+const trendPath = (cat) => `/finance/trend?category=${encodeURIComponent(cat)}&months=6&month=${P.month}`;
+const u = (m) => (m ? m.minor / 100 : 0);
+
+function daysIn(month) {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+// chiffres d'une période : dépensé, budget, reste, rythme attendu, état, projection
+export function model(b, current = b.month === store.today && b.period === "m") {
+  const lines = b.lines.map((l) => ({ ...l, s: u(l.spent), t: l.target ? u(l.target) : null }));
+  const T = b.budget ? u(b.budget) : null;
+  const spent = u(b.expenses);
+  const pace = current ? (daysIn(b.month) - b.days_left) / daysIn(b.month) : null;
+  const tf = lines.filter((l) => l.group === "fixed" && l.t).reduce((t, l) => t + l.t, 0);
+  const tv = lines.filter((l) => l.group !== "fixed" && l.t).reduce((t, l) => t + l.t, 0);
+  const expected = pace != null && tf + tv > 0 ? (tf + tv * pace) / (tf + tv) : null;
+  const rest = T == null ? null : u(b.rest_to_live);
+  const ratio = T ? spent / T : 0;
+  let state;
+  if (T == null) state = { k: "ok", short: "Sans budget", color: "var(--accent)", icon: "info", text: "Pas encore de budget : fixe une cible par catégorie pour suivre le reste à vivre." };
+  else if (!current) {
+    state = rest >= 0
+      ? { k: "good", short: "Clos", color: "var(--accent)", icon: "check", text: `Période close avec ${n0(rest)} ${base()} d'avance sur le budget` }
+      : { k: "bad", short: "Dépassé", color: "var(--neg)", icon: "alert", text: `Période close avec un dépassement de ${n0(-rest)} ${base()}` };
+  } else if (rest < 0) state = { k: "bad", short: "Dépassé", color: "var(--neg)", icon: "alert", text: `Budget dépassé de ${n0(-rest)} ${base()}` };
+  else if (expected != null && ratio > expected + 0.03) state = { k: "warn", short: "Au-dessus du rythme", color: "var(--s3)", icon: "alert", text: `Au-dessus du rythme : ${pf(ratio, 0)} % dépensés, ${pf(expected, 0)} % attendus à ce jour` };
+  else state = { k: "good", short: "Dans le rythme", color: "var(--accent)", icon: "check", text: expected != null ? `Dans le rythme : ${pf(ratio, 0)} % dépensés, ${pf(expected, 0)} % attendus à ce jour` : `${pf(ratio, 0)} % du budget dépensé` };
+  // fin de période : les fixes restants tombent, le reste suit son rythme actuel
+  const projection = pace ? lines.reduce((t, l) => t + (l.group === "fixed" ? Math.max(l.s, l.t || 0) : l.s / pace), 0) : null;
+  return { lines, T, spent, rest, ratio, pace, expected, state, projection, current, daysLeft: b.days_left };
+}
+
+function catState(l, pace) {
+  if (l.t == null) return { k: "ok", col: "var(--faint)", txt: "Hors budget" };
+  const r = l.t ? l.s / l.t : 0;
+  if (l.s > l.t) return { k: "bad", col: "var(--neg)", txt: `Dépassé de ${n0(l.s - l.t)}` };
+  if (pace != null && l.group !== "fixed" && r > pace + 0.05) return { k: "warn", col: "var(--s3)", txt: `Reste ${n0(l.t - l.s)}, au-dessus du rythme` };
+  if (l.group === "fixed" && l.s >= l.t - 0.5) return { k: "ok", col: "var(--pos)", txt: "Payé" };
+  return { k: "ok", col: "var(--pos)", txt: `Reste ${n0(l.t - l.s)}` };
+}
+
+const shortMonth = (m) => MOIS[Number(m.slice(5, 7)) - 1];
+function periodLabel(b) {
+  if (P.period === "m") return monthName(P.month);
+  const ms = b ? b.months : [shiftMonth(P.month, -3), shiftMonth(P.month, -1)];
+  return `${shortMonth(ms[0])} – ${shortMonth(ms[ms.length - 1])} ${ms[ms.length - 1].slice(0, 4)}`;
+}
+
+// --- diagramme de flux ------------------------------------------------------------------------
+
+function sankeyData(f) {
+  const I = u(f.income);
+  const g = Object.fromEntries(f.groups.map((x) => [x.group, x]));
+  const F = u(g.fixed?.total), V = u(g.variable?.total), S = u(g.savings?.total);
+  const out = F + V + S;
+  const srcs = f.sources.filter((s) => u(s.total) > 0).map((s) => ({ id: `src:${s.category}`, name: s.name, v: u(s.total), c: catLook(s.category, "income").color, ic: catLook(s.category, "income").icon, col: 0 }));
+  if (out > I) srcs.push({ id: "src:deficit", name: "Réserves", v: out - I, c: "var(--neg)", ic: "wallet", col: 0, note: "Les sorties dépassent les revenus : la différence vient de tes réserves." });
+  const tot = Math.max(I, out) || 1, R = Math.max(0, I - out), small = tot * 0.03;
+  const kids = (key) => {
+    const cs = (g[key]?.items || []).filter((i) => u(i.total) > 0).map((i) => ({
+      id: `c:${i.category}`, cat: i.category, name: i.name, v: u(i.total), c: catLook(i.category, key).color, ic: catLook(i.category, key).icon,
+      uncl: i.category === UNCAT, sav: key === "savings", group: key,
+    }));
+    cs.sort((x, y) => y.v - x.v);
+    const big = cs.filter((c) => c.v >= small), sm = cs.filter((c) => c.v < small);
+    if (sm.length > 1) big.push({ id: `c:autres-${key}`, name: key === "fixed" ? "Autres fixes" : key === "variable" ? "Autres variables" : "Autre épargne", v: sm.reduce((t, c) => t + c.v, 0), c: "var(--faint)", ic: "dots", others: sm });
+    else big.push(...sm);
+    return big;
+  };
+  const mids = [
+    { id: "g:fixed", g: "fixed", name: "Fixes", v: F, c: "var(--s6)", ic: "home", kids: kids("fixed") },
+    { id: "g:variable", g: "variable", name: "Variables", v: V, c: "var(--s3)", ic: "cart", kids: kids("variable") },
+    { id: "g:savings", g: "savings", name: "Épargne", v: S, c: "var(--s2)", ic: "piggy", kids: kids("savings") },
+  ].filter((m) => m.v > 0);
+  if (R > 0) mids.push({ id: "g:rest", g: "rest", name: "Reste", v: R, c: "var(--faint)", ic: "wallet", kids: [] });
+  for (const m of mids) {
+    m.col = 1;
+    for (const k of m.kids) { k.col = 2; k.parent = m.id; }
+  }
+  return { srcs, mids, tot, I, R, out, S };
+}
+
+function sankeySvg(sd) {
+  const W = 358, nw = 9, X = [0, 122, 232], padL = 10, padM = 12, padR = 12, H0 = 460;
+  const right = sd.mids.flatMap((m) => m.kids), totR = right.reduce((t, k) => t + k.v, 0) || 1;
+  const k = Math.min((H0 - padL * (sd.srcs.length - 1)) / sd.tot, (H0 - padM * (sd.mids.length - 1)) / sd.tot, (H0 - padR * Math.max(0, right.length - 1)) / totR);
+  const place = (arr, pad) => {
+    let y = 0;
+    for (const n of arr) { n.h = Math.max(2, n.v * k); n.y = y; y += n.h + pad; }
+    return y - pad;
+  };
+  const hL = place(sd.srcs, padL), hM = place(sd.mids, padM), hR = place(right, padR), H = Math.max(hL, hM, hR, 40) + 4;
+  for (const [arr, h] of [[sd.srcs, hL], [sd.mids, hM], [right, hR]]) for (const n of arr) n.y += (H - h) / 2;
+  const sel = B.sk, all = [...sd.srcs, ...sd.mids, ...right], selN = all.find((n) => n.id === sel);
+  const band = (xa, ya0, ya1, xb, yb0, yb1) => {
+    const xm = (xa + xb) / 2;
+    return `M${xa},${ya0.toFixed(1)}C${xm},${ya0.toFixed(1)} ${xm},${yb0.toFixed(1)} ${xb},${yb0.toFixed(1)}L${xb},${yb1.toFixed(1)}C${xm},${yb1.toFixed(1)} ${xm},${ya1.toFixed(1)} ${xa},${ya1.toFixed(1)}Z`;
+  };
+  const cls = (on) => `sk-link${selN ? (on ? " on" : " off") : ""}`;
+  let links = "";
+  const sOut = {}, mIn = {}, mOut = {};
+  for (const s of sd.srcs) for (const m of sd.mids) {
+    const w = s.v * (m.v / sd.tot) * k;
+    const a0 = s.y + (sOut[s.id] || 0), b0 = m.y + (mIn[m.id] || 0);
+    sOut[s.id] = (sOut[s.id] || 0) + w;
+    mIn[m.id] = (mIn[m.id] || 0) + w;
+    const on = !selN || sel === s.id || sel === m.id || selN.parent === m.id;
+    links += `<path class="${cls(on)}" d="${band(X[0] + nw, a0, a0 + w, X[1], b0, b0 + w)}" data-css="fill:${m.c}"/>`;
+  }
+  for (const m of sd.mids) for (const kd of m.kids) {
+    const w = kd.h, a0 = m.y + (mOut[m.id] || 0);
+    mOut[m.id] = (mOut[m.id] || 0) + w;
+    const on = !selN || sel === m.id || sel === kd.id || selN.col === 0;
+    links += `<path class="${cls(on)}" d="${band(X[1] + nw, a0, a0 + w, X[2], kd.y, kd.y + w)}" data-css="fill:${kd.c === "var(--faint)" ? m.c : kd.c}"/>`;
+  }
+  // libellés sans chevauchement : chaque colonne repousse vers le bas ce qui toucherait le précédent
+  const labels = (arr, x, w) => {
+    let prev = -99;
+    return arr.map((n) => {
+      const cy = Math.max(n.y + n.h / 2, prev + 25);
+      prev = cy;
+      const dim = selN && !(n.id === sel || n.parent === sel || selN.parent === n.id || (selN.col === 0 && n.col === 1) || (n.col === 0 && selN.col === 1));
+      const pctI = sd.I ? ` · ${pf(n.v / sd.I, 0)} %` : "";
+      return `<g class="sk-node${sel === n.id ? " sel" : ""}${dim ? " dim" : ""}" data-a="sk" data-v="${esc(n.id)}" tabindex="0" role="button" aria-pressed="${sel === n.id}" aria-label="${esc(n.name)}, ${n0(n.v)} ${base()}${sd.I ? `, ${pf(n.v / sd.I, 0)} % des revenus` : ""}">
+        <rect class="sk-hit" x="${x - 4}" y="${(Math.min(n.y, cy - 14) - 2).toFixed(1)}" width="${w}" height="${(Math.max(n.h, 28) + 4).toFixed(1)}"/>
+        <rect class="sk-bar" x="${x}" y="${n.y.toFixed(1)}" width="${nw}" height="${n.h.toFixed(1)}" rx="2" data-css="fill:${n.c}"/>
+        <text class="sk-name" x="${x + nw + 5}" y="${(cy - 2).toFixed(1)}">${esc(n.name)}</text>
+        <text class="sk-val money" x="${x + nw + 5}" y="${(cy + 10).toFixed(1)}">${n0(n.v)}${n.col === 1 ? pctI : ""}</text></g>`;
+    }).join("");
+  };
+  return `<svg class="sankey" viewBox="0 0 ${W} ${H.toFixed(0)}" role="group" aria-label="Diagramme de flux du budget : d'où vient l'argent et où il va">${links}${labels(sd.srcs, X[0], 112)}${labels(sd.mids, X[1], 104)}${labels(right, X[2], 126)}</svg>`;
+}
+
+function sankeyInfo(sd) {
+  const all = [...sd.srcs, ...sd.mids, ...sd.mids.flatMap((m) => m.kids)], n = all.find((x) => x.id === B.sk);
+  if (!n) return '<div class="skinfo"><span class="hint">Touche un bloc pour suivre son flux.</span></div>';
+  const pct = sd.I ? `${pf(n.v / sd.I, 0)} % des revenus` : "";
+  let sub = pct, btn = "";
+  if (n.col === 1 && n.g !== "rest") {
+    sub = `${pct} · ${n.kids.length} poste${n.kids.length > 1 ? "s" : ""}`;
+    btn = `<button class="secondary" type="button" data-a="sk-list" data-v="${n.g}">${ic("list")}Voir le détail de ce groupe</button>`;
+  }
+  if (n.col === 1 && n.g === "rest") sub = `${pct} · ni dépensé ni épargné à ce jour`;
+  if (n.cat && !n.uncl && !n.sav) btn = `<button class="secondary" type="button" data-a="cat" data-v="${esc(n.cat)}">${ic("chev")}Ouvrir ${esc(n.name)}</button>`;
+  if (n.uncl) btn = `<button class="secondary" type="button" data-a="gotodo">${ic("help")}Classer dans le journal</button>`;
+  if (n.others) sub = `${pct} · ${n.others.map((o) => esc(o.name)).join(", ")}`;
+  if (n.sav) sub = `${pct} · versé sur la période`;
+  if (n.note) sub = n.note;
+  return `<div class="skinfo" role="status">
+    <div class="ihead">${ibox(ic(n.ic), n.c === "var(--faint)" ? "var(--muted)" : n.c)}<span class="row-main"><span class="row-title">${esc(n.name)}</span><span class="row-sub">${sub}</span></span><span class="row-val num">${amount(n.v)}</span></div>
+    <div class="acts">${btn}<button class="secondary" type="button" data-a="sk" data-v="" aria-label="Effacer la sélection">${ic("close")}</button></div></div>`;
+}
+
+// --- rendu ------------------------------------------------------------------------------------
+
+export function render() {
+  const be = store.use(budgetPath(P.month, P.period));
+  const b = be.data;
+  const fe = store.use(flowsPath());
+  const me = store.use(monthsPath());
+  const re = store.use(recurringPath);
+  const lab = periodLabel(b);
+  const oldest = shiftMonth(store.today, -OLDEST);
+  fill($("budCtx"), `<div class="stepper" role="group" aria-label="Mois affiché">
+      <button type="button" data-a="bm" data-v="-1" aria-label="Mois précédent" ${P.month <= oldest ? "disabled" : ""}>${ic("back")}</button>
+      <b aria-live="polite">${esc(lab)}</b>
+      <button type="button" data-a="bm" data-v="1" aria-label="Mois suivant" ${P.month >= store.today ? "disabled" : ""}>${ic("chev")}</button></div>
+    <div class="seg small" role="group" aria-label="Période"><button type="button" data-a="bper" data-v="m" aria-pressed="${P.period === "m"}">Mois</button><button type="button" data-a="bper" data-v="q" aria-pressed="${P.period === "q"}" aria-label="Trois mois complets avant le mois choisi">3 mois</button></div>`);
+  if (be.status === "error") return fill($("budBody"), `<div class="err-box" role="alert">Impossible de charger le budget : ${esc(be.error.message)}</div>`);
+  if (!b) return fill($("budBody"), '<div class="loading">Chargement…</div>');
+  const m = model(b);
+  const st = m.state;
+  let proj = "";
+  if (m.projection != null && m.T != null) {
+    const d = m.projection - m.T;
+    proj = `<div class="proj">${ic("trend")}<span>Projection fin ${P.period === "m" ? monthName(P.month).split(" ")[0] : "de période"} : <b class="num">${amount(m.projection)}</b>, ${d > 0 ? `<span class="delta neg">${n0(d)} au-dessus</span>` : `<span class="delta pos">${n0(-d)} sous</span>`} le budget</span></div>`;
+  }
+  const hero = `<section class="card" aria-labelledby="t-bud">
+      <div class="hero-label"><span id="t-bud">${m.T == null ? "Dépensé" : P.period === "m" ? "Reste à vivre" : "Reste sur 3 mois"}</span><span>${m.current ? `${m.daysLeft} jour${m.daysLeft > 1 ? "s" : ""} restant${m.daysLeft > 1 ? "s" : ""}` : "clos"}</span></div>
+      <div class="hero-amount num${m.rest != null && m.rest < 0 ? " neg" : ""}"><span class="money">${nf(m.T == null ? m.spent : m.rest)}</span><small>${base()}</small></div>
+      ${m.T == null ? "" : `<div class="hint">${amount(m.spent)} dépensés sur ${amount(m.T)} de budget</div>
+      <div class="pbar" role="img" aria-label="${pf(m.ratio, 0)} % du budget dépensé${m.expected != null ? `, ${pf(m.expected, 0)} % attendus à ce jour` : ""}" data-css="--c:${st.color}"><i data-css="width:${Math.min(100, m.ratio * 100).toFixed(1)}%"></i>${m.expected != null ? `<span class="pace" data-css="left:${(m.expected * 100).toFixed(1)}%"></span>` : ""}</div>`}
+      <div class="status ${st.k}">${ic(st.icon)}<span>${st.text}</span></div>
+      ${proj}
+    </section>`;
+  // flux
+  let flow = "";
+  if (fe.data) {
+    const sd = sankeyData(fe.data);
+    if (B.sk && ![...sd.srcs, ...sd.mids, ...sd.mids.flatMap((x) => x.kids)].some((n) => n.id === B.sk)) B.sk = null;
+    const spentF = sd.out - sd.S;
+    flow = `<section class="card" aria-labelledby="t-flow">
+      <div class="section-head"><h2 class="section-title" id="t-flow">Flux de l'argent</h2></div>
+      <div class="flowkpi">
+        <span><small>Entré · ${base()}</small><b class="num">${money(sd.I)}</b></span>
+        <span><small>Dépensé</small><b class="num">${money(spentF)}</b></span>
+        <span><small>Épargné</small><b class="num">${money(sd.S)}</b></span>
+        <span><small>Taux d'épargne</small><b class="num">${sd.I ? `${pf(sd.S / sd.I, 0)} %` : "—"}</b></span>
+      </div>
+      ${sd.tot > 1 ? `<div class="skcols" aria-hidden="true"><span>Revenus</span><span>Usage</span><span>Postes</span></div>${sankeySvg(sd)}${sankeyInfo(sd)}` : '<div class="empty">Aucun mouvement sur la période.</div>'}
+    </section>`;
+  } else if (fe.status === "error") flow = `<div class="err-box">Flux indisponible : ${esc(fe.error.message)}</div>`;
+  fill($("budBody"), hero + flow + categories(m) + subscriptions(re) + trend(me) + '<div class="endspace"></div>');
+}
+
+function categories(m) {
+  const pv = m.pace;
+  const nOver = m.lines.filter((l) => l.over).length;
+  const uncl = m.lines.find((l) => l.category === UNCAT);
+  const show = B.bgroup ? [B.bgroup] : ["fixed", "variable", "mixed"];
+  const body = show.map((g) => {
+    if (g === "rest") return '<div class="empty">Ni dépensé ni épargné pour l\'instant.</div>';
+    if (g === "savings") {
+      const f = store.data(flowsPath());
+      const items = f ? (f.groups.find((x) => x.group === "savings")?.items || []) : [];
+      return `<div class="grp"><span>Épargne</span><span class="num">${amount(items.reduce((t, i) => t + u(i.total), 0))}</span></div>` +
+        items.map((i) => `<div class="crow">${catMark(i.category, "savings")}<span><span class="crow-top"><b>${esc(i.name)}</b><span class="t num">${amount(u(i.total))}</span></span><span class="crow-st ok">${f.income.minor ? `${pf(u(i.total) / u(f.income), 0)} % des revenus` : ""}</span></span></div>`).join("");
+    }
+    const cs = m.lines.filter((l) => l.group === g && l.category !== UNCAT)
+      .sort((x, y) => Number(y.over) - Number(x.over) || (y.t ? y.s / y.t : 0) - (x.t ? x.s / x.t : 0) || y.s - x.s);
+    if (!cs.length) return "";
+    const sp = cs.reduce((t, c) => t + c.s, 0), tg = cs.reduce((t, c) => t + (c.t || 0), 0);
+    return `<div class="grp"><span>${GROUP_LABEL[g]}</span><span class="num">${money(sp)}${tg ? ` / ${money(tg)}` : ""}</span></div>` + cs.map((c) => {
+      const cp = g === "fixed" ? null : pv;
+      const s = catState(c, cp), r = c.t ? c.s / c.t : 0;
+      return `<button class="crow" type="button" data-a="cat" data-v="${esc(c.category)}" aria-label="${esc(c.name)}, ${n0(c.s)}${c.t != null ? ` sur ${n0(c.t)}` : ""} ${base()}, ${s.txt}">
+        ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}</b><span class="t num">${money(c.s)}${c.t != null ? ` / ${money(c.t)}` : ""}</span></span>
+        ${c.t != null ? `<span class="pbar thin" data-css="--c:${s.col}"><i data-css="width:${Math.min(100, r * 100).toFixed(1)}%"></i>${cp != null ? `<span class="pace" data-css="left:${(cp * 100).toFixed(1)}%"></span>` : ""}</span>` : ""}
+        <span class="crow-st ${s.k}">${s.txt}</span></span></button>`;
+    }).join("");
+  }).join("");
+  const head = B.bgroup
+    ? `<button class="chip" type="button" data-a="bgroupx" aria-label="Retirer le filtre ${GROUP_LABEL[B.bgroup] || "Reste"}">${GROUP_LABEL[B.bgroup] || "Reste"}${ic("close")}</button>`
+    : `<span class="pill ${nOver ? "bad" : "ok"}">${nOver ? `${nOver} dépassée${nOver > 1 ? "s" : ""}` : "aucun dépassement"}</span>`;
+  const unclRow = uncl && (!B.bgroup || B.bgroup === "variable")
+    ? `<button class="crow" type="button" data-a="gotodo">${catMark(null)}<span><span class="crow-top"><b>Non classées</b><span class="t num">${amount(uncl.s)}</span></span><span class="crow-st warn">${uncl.count} écriture${uncl.count > 1 ? "s" : ""} à classer dans le journal</span></span></button>` : "";
+  return `<section class="card" id="budCats" aria-labelledby="t-cats">
+      <div class="section-head"><h2 class="section-title" id="t-cats">${B.bgroup === "savings" ? "Épargne" : B.bgroup === "rest" ? "Reste" : "Catégories"}</h2>${head}</div>
+      ${unclRow}${body || '<div class="empty">Aucune dépense sur la période.</div>'}
+      ${pv != null && (!B.bgroup || B.bgroup === "variable") ? '<p class="hint">Le trait vertical marque où tu devrais en être aujourd\'hui. Les charges fixes sont dues en entier, elles n\'en ont pas.</p>' : ""}
+    </section>`;
+}
+
+function subscriptions(re) {
+  const r = re.data;
+  const items = r && r.items ? r.items.filter((x) => x.active) : [];
+  if (!items.length) return "";
+  const open = pref("subs", true);
+  const total = r.monthly_total.map((x) => `${n0(Math.abs(u(x)))} ${x.currency}`).join(" + ");
+  return `<section class="card${open ? "" : " folded"}" id="subs" aria-labelledby="t-subs">
+      <div class="section-head"><button class="fold-btn" type="button" data-a="subsfold" aria-expanded="${open}" aria-controls="subs-body"><h2 class="section-title" id="t-subs">Abonnements</h2><svg class="fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><span class="hint num">${esc(total)} / mois</span></div>
+      <div class="sec-body" id="subs-body">${items.map((s) => {
+        const up = Math.abs(u(s.last_amount)) - Math.abs(u(s.amount));
+        return `<div class="kv">${ibox(ic("repeat"), "var(--s4)", "sm")}<span>${esc(s.label)}<span class="s">${CADENCE[s.cadence] || esc(s.cadence)} · prochain le ${date(s.next_date)}</span>${up > 0.009 ? ` <span class="pill warn">${ic("alert")}hausse +${amount2(up)}</span>` : ""}</span><b class="num">${amount2(Math.abs(u(s.last_amount)))}${s.amount.currency === base() ? "" : ` ${esc(s.amount.currency)}`}</b></div>`;
+      }).join("")}<p class="hint">Paiements réguliers repérés dans le registre ; les prochaines échéances sont estimées.</p></div>
+    </section>`;
+}
+
+function trend(me) {
+  const d = me.data;
+  if (!d) return "";
+  const ms = d.series.map((s) => ({ m: s.month, F: u(s.fixed), V: u(s.variable), S: u(s.savings) }));
+  const mx = Math.max(1, ...ms.map((x) => x.F + x.V + x.S));
+  return `<section class="card" aria-labelledby="t-trend">
+      <div class="section-head"><h2 class="section-title" id="t-trend">Tendance sur 6 mois</h2><span class="hint">toucher un mois</span></div>
+      <div class="months" role="group" aria-label="Choisir un mois">${ms.map((x) => {
+        const t = x.F + x.V + x.S;
+        return `<button class="mcol" type="button" data-a="month" data-v="${x.m}" aria-pressed="${P.period === "m" && P.month === x.m}" aria-label="${monthName(x.m)} : fixes ${n0(x.F)}, variables ${n0(x.V)}, épargne ${n0(x.S)}">
+          <span class="bars" data-css="--h:${((t / mx) * 100).toFixed(0)}%"><i data-css="--f:${x.F};--c:var(--s6)"></i><i data-css="--f:${x.V};--c:var(--s3)"></i><i data-css="--f:${x.S};--c:var(--s2)"></i></span><span>${shortMonth(x.m)}</span></button>`;
+      }).join("")}</div>
+      <div class="legend"><span><i data-css="--c:var(--s6)"></i>Fixes</span><span><i data-css="--c:var(--s3)"></i>Variables</span><span><i data-css="--c:var(--s2)"></i>Épargne</span></div>
+    </section>`;
+}
+
+// --- panneau d'une catégorie ------------------------------------------------------------------
+
+SHEETS.cat = (id, sh) => {
+  const b = store.data(budgetPath(P.month, P.period));
+  const cats = store.data("/finance/categories");
+  const c = cats ? cats.items.find((x) => x.id === id) : null;
+  const l = b ? b.lines.find((x) => x.category === id) : null;
+  if (!c && !l) return { title: "Catégorie", body: '<div class="loading">Chargement…</div>' };
+  const name = c ? c.name : l.name, group = c ? c.group : l.group;
+  const m = b ? model(b) : null;
+  const line = m ? m.lines.find((x) => x.category === id) : null;
+  const spent = line ? line.s : 0;
+  const n = P.period === "q" ? 3 : 1;
+  const target = line && line.t != null ? line.t / n : null; // cible mensuelle
+  if (sh.tmp == null) sh.tmp = target != null ? Math.round(target) : 0;
+  const s = line ? catState(line, group === "fixed" ? null : m.pace) : { k: "ok", txt: "Aucune dépense" };
+  const te = store.use(trendPath(id));
+  let hist = '<div class="loading">Chargement…</div>';
+  if (te.data) {
+    const pts = te.data.series.map((x) => ({ m: x.month, v: Math.abs(u(x.total)) }));
+    const mx = Math.max(1, ...pts.map((p) => p.v), target || 0) * 1.1;
+    const look = catLook(id, group);
+    hist = `<div class="mini-months" role="img" aria-label="${pts.map((p) => `${monthName(p.m).split(" ")[0]} ${n0(p.v)}`).join(", ")}${target != null ? `, cible ${n0(target)}` : ""}">
+      ${target != null ? `<span class="tline" data-css="--b:${(18 + (target / mx) * 72).toFixed(0)}px"></span>` : ""}
+      ${pts.map((p) => `<div><i class="${p.m === P.month ? "" : "past"}" data-css="--h:${((p.v / mx) * 72).toFixed(0)}px;--c:${target != null && p.v > target ? "var(--neg)" : look.color}"></i><span>${shortMonth(p.m)}</span></div>`).join("")}</div>
+      ${target != null ? '<p class="hint">Pointillés : la cible mensuelle.</p>' : ""}`;
+  }
+  const budgetable = group === "fixed" || group === "variable";
+  const changed = budgetable && sh.tmp > 0 && sh.tmp !== Math.round(target ?? -1);
+  return {
+    title: `${catMark(id, group)}<span>${esc(name)}</span>`,
+    body: `<div class="sheet-big num">${amount(spent)}${line && line.t != null ? ` <small>sur ${amount(line.t)}</small>` : ""}</div>
+      <span class="crow-st ${s.k}">${esc(s.txt)} · ${esc(periodLabel(b))}</span>
+      <h3>Six derniers mois</h3>${hist}
+      ${budgetable ? `<h3>Cible mensuelle</h3>
+      <div class="target"><button type="button" data-a="tstep" data-v="-10" aria-label="Diminuer de 10">−</button><input id="t-input" inputmode="numeric" value="${sh.tmp || ""}" aria-label="Cible mensuelle en ${base()}" placeholder="aucune"><button type="button" data-a="tstep" data-v="10" aria-label="Augmenter de 10">+</button></div>
+      ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}` : '<p class="hint">Les cibles portent sur les dépenses fixes et variables.</p>'}
+      ${line && line.count ? `<div class="stack-v"><button class="secondary" type="button" data-a="cat-tx" data-v="${esc(id)}">${ic("list")}${line.count > 1 ? `Voir les ${line.count} écritures` : "Voir l'écriture"}</button></div>` : ""}`,
+    foot: budgetable ? `<button class="primary" type="button" data-a="target-save" ${changed && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer la cible avec Face ID"}</button>` : "",
+  };
+};
+
+document.addEventListener("input", (e) => {
+  if (e.target.id !== "t-input" || SH.kind !== "cat") return;
+  const n = parseInt(e.target.value.replace(/\D/g, ""), 10);
+  SH.tmp = Number.isNaN(n) ? 0 : n;
+  renderSheet();
+});
+
+function setMonth(month) {
+  if (month > store.today || month < shiftMonth(store.today, -OLDEST)) return;
+  B.sk = null;
+  store.set({ month });
+  announce(P.period === "m" ? monthName(month) : periodLabel(null));
+}
+
+export const actions = {
+  cat: (id) => {
+    if (P.tab !== "budget") {
+      store.set({ month: store.today, period: "m" });
+      go("budget");
+    }
+    store.use("/finance/categories");
+    openSheet("cat", id);
+  },
+  bm: (v) => setMonth(shiftMonth(P.month, Number(v))),
+  bper: (v) => {
+    B.sk = null;
+    store.set({ period: v });
+  },
+  month: (v) => {
+    B.sk = null;
+    store.set({ month: v, period: "m" });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    announce(monthName(v));
+  },
+  sk: (v) => {
+    B.sk = !v || B.sk === v ? null : v;
+    store.notify();
+  },
+  "sk-list": (g) => {
+    B.bgroup = g;
+    store.notify();
+    requestAnimationFrame(() => reveal($("budCats")));
+  },
+  bgroupx: () => {
+    B.bgroup = null;
+    store.notify();
+  },
+  subsfold: () => {
+    setPref("subs", !pref("subs", true));
+    store.notify();
+  },
+  subs: () => {
+    setPref("subs", true);
+    store.set({ month: store.today, period: "m" });
+    go("budget");
+    requestAnimationFrame(() => requestAnimationFrame(() => reveal($("subs"))));
+  },
+  tstep: (v) => {
+    SH.tmp = Math.max(0, (SH.tmp || 0) + Number(v));
+    renderSheet();
+  },
+  "target-save": async () => {
+    const id = SH.arg, value = SH.tmp;
+    SH.busy = true;
+    SH.err = "";
+    renderSheet();
+    try {
+      const [text, bad] = outcome(await proposeAndApprove([["set_budget", { category_id: id, monthly_minor: Math.round(value * 100) }]]));
+      if (bad) SH.err = text;
+      else {
+        closeSheet();
+        toast(`Cible enregistrée : ${n0(value)} ${base()} par mois`);
+      }
+    } catch (e) {
+      SH.err = failure(e);
+    } finally {
+      SH.busy = false;
+      if (SH.kind) renderSheet();
+    }
+  },
+  "cat-tx": (id) => {
+    closeSheet(true);
+    const months = P.period === "m" ? [P.month] : (store.data(budgetPath(P.month, P.period))?.months || [P.month]);
+    store.set({ tx: "all", q: "", txcat: { id, from: months[0], to: months[months.length - 1] } });
+    go("journal", { top: true });
+  },
+};
+

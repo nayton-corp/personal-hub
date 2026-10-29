@@ -4,31 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#171b23" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hub">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Personal Hub</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="preload" href="/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/ibm-plex-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/styles.css">
-  <script src="/vendor/d3.v7.9.0.min.js" defer></script>
   <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <header class="bar-top">
-    <div><h1 id="pg-title">Personal Hub</h1><div class="sub" id="pg-sub"></div></div>
-    <div class="icons" id="top-icons" hidden>
-      <button class="icon" id="btn-hide" type="button" aria-label="Masquer les montants" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
-      <button class="icon" id="btn-src" type="button" aria-label="Sources et réglages" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
-    </div>
-  </header>
-
-  <main id="root">
-    <!-- ================= CONNEXION (L0-09) ================= -->
+  <!-- ================= CONNEXION (L0-09) ================= -->
+  <main class="auth" id="auth">
+    <h1>Personal Hub</h1>
     <section id="view-loading" class="card"><p>Chargement…</p></section>
-
     <section id="view-bootstrap" class="card form" hidden>
       <h2>Première passkey</h2>
       <p>Sur le Mac, lance <code>hub auth bootstrap-code</code> puis saisis le code ici.
@@ -42,207 +36,151 @@
         <button class="btn" type="submit">Créer la passkey</button>
       </form>
     </section>
-
     <section id="view-login" class="card" hidden>
       <h2>Connexion</h2>
       <p>Utilise Face ID ou la passkey de secours.</p>
       <button id="btn-login" class="btn" type="button">Se connecter avec une passkey</button>
     </section>
+    <p id="message" class="message" role="status" aria-live="polite"></p>
+  </main>
 
+  <div class="shell" id="shell" hidden>
     <!-- ================= ACCUEIL ================= -->
-    <section id="accueil" class="stack" data-tab hidden>
-      <div class="card" id="c-welcome" hidden>
-        <div class="head"><h2>Premiers pas</h2><button class="link" id="welcome-hide" type="button">Masquer</button></div>
+    <section class="view" id="accueil" data-view="accueil" aria-labelledby="t-accueil" hidden>
+      <header class="topbar"><div class="topbar-row">
+        <h1 class="topbar-title" id="t-accueil">Accueil<span class="topbar-sub" id="home-sub"></span></h1>
+        <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
+        <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+      </div></header>
+      <section class="card form" id="c-welcome" aria-labelledby="t-welcome" hidden>
+        <div class="head"><h2 id="t-welcome">Premiers pas</h2><button class="link" id="welcome-hide" type="button">Masquer</button></div>
         <p class="note" id="welcome-sub"></p>
         <div id="welcome-list"></div>
         <p class="message" id="welcome-msg" role="status"></p>
-      </div>
-      <div id="stale-banner" class="banner" hidden></div>
-
-      <div class="card" id="c-hero">
-        <div class="head flush"><span class="lbl">Patrimoine net</span><div class="seg sm" id="mode-seg"><button type="button" data-v="chf" aria-pressed="true">CHF</button><button type="button" data-v="pct">%</button></div></div>
-        <div class="hero amt" id="hero-val">—</div>
-        <div><span class="delta" id="hero-delta"><span class="amt">—</span><span></span><span class="m"></span></span></div>
-        <div class="chart h190" id="ch-wealth"><div class="tip"></div></div>
-        <div class="seg" id="range-seg"><button type="button" data-v="1">1 M</button><button type="button" data-v="3">3 M</button><button type="button" data-v="ytd">YTD</button><button type="button" data-v="12" aria-pressed="true">1 A</button><button type="button" data-v="all">Tout</button></div>
-      </div>
-
-      <div class="card" id="c-mois">
-        <div class="month" id="month-home"><button type="button" data-step="-1" aria-label="Mois précédent">‹</button><b>—</b><button type="button" data-step="1" aria-label="Mois suivant">›</button></div>
-        <div class="kv"><span>Revenus</span><b class="amt" id="k-income">—</b></div>
-        <div class="kv"><span>Dépenses <span class="s" id="k-budget-sub"></span></span><b class="amt" id="k-expenses">—</b></div>
-        <div class="kv"><span>Épargne et investissements</span><b class="amt up" id="k-savings">—</b></div>
-        <div class="kv total"><span>Reste à vivre <span class="s" id="k-days"></span></span><b class="amt" id="k-rest">—</b></div>
-        <div class="bar mt"><i id="bar-budget"></i></div>
-        <div class="small muted mt-s" id="k-used">—</div>
-        <button class="link mt" id="go-budget" type="button">Voir le budget</button>
-      </div>
-
-      <div class="card" id="c-props" hidden>
-        <h2>À valider</h2>
-        <p class="note">Rien ne change au registre sans ton Face ID. Coche pour n'en valider qu'une partie.</p>
-        <div id="prop-list"></div>
-        <button class="btn" id="prop-accept" type="button" hidden>Valider avec Face ID</button>
-        <p class="message" id="prop-msg" role="status"></p>
-      </div>
-
-      <div class="card" id="c-todo">
-        <h2>À traiter</h2>
-        <p class="note">Ce qui attend une action de ta part.</p>
-        <div id="todo-list"></div>
-      </div>
+      </section>
+      <div id="homeBody"></div>
     </section>
 
     <!-- ================= PATRIMOINE ================= -->
-    <section id="patrimoine" class="stack" data-tab hidden>
-      <div class="chips" id="env-chips">
-        <button type="button" data-v="all" aria-pressed="true">Tout</button><button type="button" data-v="cash">Cash</button><button type="button" data-v="pilier3a">3e pilier</button><button type="button" data-v="titres">Titres</button><button type="button" data-v="crypto">Crypto</button>
-      </div>
-      <div class="card">
-        <span class="lbl" id="pat-lbl">Patrimoine net</span>
-        <div class="hero amt" id="pat-val">—</div>
-        <div><span class="delta" id="pat-delta"><span class="amt">—</span><span class="m">depuis janvier</span></span></div>
-        <div class="chart h160" id="ch-pat"><div class="tip"></div></div>
-      </div>
-      <div class="card">
-        <div class="head"><h2>Allocation</h2><span class="note">par enveloppe</span></div>
-        <div class="hbars" id="alloc"></div>
-      </div>
-      <div class="card">
-        <div class="head"><h2>D'où vient la progression</h2><span class="note">depuis janvier</span></div>
-        <div class="kv"><span>Versements nets</span><b class="amt" id="p-deposits">—</b></div>
-        <div class="kv"><span>Effet marché</span><b class="amt" id="p-market">—</b></div>
-        <div class="kv total"><span>Variation totale</span><b class="amt" id="p-total">—</b></div>
-        <p class="note mt">Effet marché : valeur des positions moins versements nets (dividendes, intérêts et frais compris).</p>
-      </div>
-      <div class="card" id="c-positions" hidden>
-        <div class="head"><h2>Positions</h2><span class="note" id="positions-note">—</span></div>
-        <div id="pos-list"></div>
-        <p class="note mt warn" id="pos-missing" hidden></p>
-      </div>
-      <div class="card" id="c-look" hidden>
-        <div class="head"><h2>Transparence</h2><span class="note" id="look-note">—</span></div>
-        <div class="seg sm" id="look-seg"><button type="button" data-v="region" aria-pressed="true">Régions</button><button type="button" data-v="sector">Secteurs</button><button type="button" data-v="currency">Devises</button><button type="button" data-v="holding">Top 10</button></div>
-        <div class="hbars mt" id="look-bars"></div>
-        <p class="note mt" id="look-foot"></p>
-      </div>
-      <div class="card">
-        <div class="head"><h2>Comptes</h2><span class="note" id="comptes-note">—</span></div>
-        <div id="acct-list"></div>
-      </div>
+    <section class="view" id="patrimoine" data-view="patrimoine" aria-labelledby="t-patrimoine" hidden>
+      <header class="topbar" id="pat-top">
+        <div class="topbar-row">
+          <h1 class="topbar-title" id="t-patrimoine">Patrimoine<span class="topbar-mini num" id="miniTotal"></span></h1>
+          <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
+          <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+        </div>
+        <div class="filterbar" id="filterbar"></div>
+      </header>
+      <div id="patBody"></div>
     </section>
 
     <!-- ================= BUDGET ================= -->
-    <section id="budget" class="stack" data-tab hidden>
-      <div class="card">
-        <div class="month" id="month-budget"><button type="button" data-step="-1" aria-label="Mois précédent">‹</button><b>—</b><button type="button" data-step="1" aria-label="Mois suivant">›</button></div>
-        <div class="head flush"><span class="lbl" id="bud-lbl">Reste à vivre</span><div class="seg sm" id="period-seg"><button type="button" data-v="m" aria-pressed="true">Ce mois</button><button type="button" data-v="q">3 mois</button></div></div>
-        <div class="hero amt" id="bud-val">—</div>
-        <div class="small muted" id="bud-sub">—</div>
-        <div class="bar mt"><i id="bar-bud"></i></div>
-      </div>
-      <div class="card">
-        <div class="head"><h2>Où va l'argent</h2><button class="link" id="btn-sankey" type="button">Voir le flux complet</button></div>
-        <div id="flow-lines"></div>
-        <div class="chart h360" id="ch-sankey" hidden><div class="tip"></div></div>
-      </div>
-      <div class="card">
-        <div class="head"><h2>Catégories</h2><span class="note" id="cat-note">—</span></div>
-        <div id="cat-list"></div>
-      </div>
-      <div class="card" id="c-subs" hidden>
-        <div class="head"><h2>Abonnements</h2><span class="note" id="subs-note">—</span></div>
-        <div id="subs-list"></div>
-        <p class="note mt">Paiements réguliers repérés dans le registre (même montant, même rythme). Les prochaines échéances sont estimées.</p>
-      </div>
-      <div class="card">
-        <div class="head"><h2>Tendance</h2><span class="note">6 mois</span></div>
-        <div class="chart h180" id="ch-months"><div class="tip"></div></div>
-        <div class="legend"><span><i class="c-fixed"></i>Fixe</span><span><i class="c-variable"></i>Variable</span><span><i class="c-savings"></i>Épargne</span></div>
-      </div>
+    <section class="view" id="budget" data-view="budget" aria-labelledby="t-budget" hidden>
+      <header class="topbar">
+        <div class="topbar-row">
+          <h1 class="topbar-title" id="t-budget">Budget</h1>
+          <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
+          <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+        </div>
+        <div class="ctxbar" id="budCtx"></div>
+      </header>
+      <div id="budBody"></div>
     </section>
 
     <!-- ================= JOURNAL ================= -->
-    <section id="journal" class="stack" data-tab hidden>
-      <div>
-        <input class="search" id="tx-search" type="search" placeholder="Rechercher (3 lettres au moins)" aria-label="Rechercher une écriture">
-        <div class="chips" id="tx-chips"><button type="button" data-v="all" aria-pressed="true">Toutes</button><button type="button" data-v="todo">À catégoriser<b id="todo-count"></b></button></div>
-      </div>
-      <div class="card" id="c-review" hidden>
-        <h2>À catégoriser</h2>
-        <p class="note">Par contrepartie. « Toujours » crée une règle qui servira aussi aux prochains imports.</p>
-        <div id="review-list"></div>
-        <p class="message" id="review-msg" role="status"></p>
-      </div>
-      <div class="card">
-        <div id="tx-list"></div>
-        <button class="more" id="tx-more" type="button" hidden>Plus d'écritures</button>
-      </div>
+    <section class="view" id="journal" data-view="journal" aria-labelledby="t-journal" hidden>
+      <header class="topbar">
+        <div class="topbar-row">
+          <h1 class="topbar-title" id="t-journal">Journal</h1>
+          <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
+          <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+        </div>
+        <div class="searchbox"><span id="search-ic"></span><input id="jq" type="search" placeholder="Contrepartie, libellé…" aria-label="Rechercher une écriture, 3 lettres au moins" autocomplete="off" enterkeyhint="search"></div>
+        <div class="filterbar" id="jChips" role="group" aria-label="Filtrer le journal"></div>
+      </header>
+      <div id="jBody"></div>
     </section>
 
     <!-- ================= SOURCES ET RÉGLAGES ================= -->
-    <section id="sources" class="stack" data-tab hidden>
-      <div class="card">
-        <div class="head"><h2>Connexions</h2><button class="link" id="conn-add" type="button">Ajouter</button></div>
+    <section class="view" id="sources" data-view="sources" aria-labelledby="t-sources" hidden>
+      <header class="topbar"><div class="topbar-row">
+        <button class="back-btn" type="button" data-a="back" aria-label="Retour"></button>
+        <h1 class="topbar-title" id="t-sources">Sources et réglages</h1>
+      </div></header>
+
+      <section class="card" aria-labelledby="t-conn">
+        <div class="head"><h2 id="t-conn">Connexions</h2><button class="link" id="conn-add" type="button">Ajouter</button></div>
         <p class="note">Banques, plateformes et cours que le hub collecte. Les identifiants sont chiffrés à la saisie et ne s'affichent plus jamais.</p>
         <div id="coll-list"></div>
-        <p id="coll-msg" class="note" role="status"></p>
-      </div>
-      <div class="card form" id="conn-editor" hidden></div>
-      <div class="card">
-        <div class="head"><h2>Comptes</h2><button class="link" id="acct-add" type="button">Ajouter</button></div>
+        <p id="coll-msg" class="message" role="status"></p>
+      </section>
+      <section class="card form" id="conn-editor" hidden></section>
+
+      <section class="card" aria-labelledby="t-pending">
+        <div class="head"><h2 id="t-pending">Comptes en attente</h2><button class="link" id="acct-add" type="button">Ajouter</button></div>
         <p class="note">Les relevés d'un compte inconnu attendent sa création, validée avec Face ID.</p>
         <div id="acct-pending"></div>
-        <p id="acct-msg" class="note" role="status"></p>
-      </div>
-      <div class="card form" id="acct-editor" hidden></div>
-      <div class="card">
-        <div class="head"><h2>Fraîcheur des comptes</h2><span class="note">au-delà de 45 jours : à rafraîchir</span></div>
+        <p id="acct-msg" class="message" role="status"></p>
+      </section>
+      <section class="card form" id="acct-editor" hidden></section>
+
+      <section class="card" aria-labelledby="t-fresh">
+        <div class="head"><h2 id="t-fresh">Fraîcheur des comptes</h2></div>
+        <p class="note">Au-delà de 45 jours sans relevé, un compte est à rafraîchir.</p>
         <div id="fresh-list"></div>
-      </div>
-      <div class="card form">
-        <h2>Profil</h2>
-        <p class="note">Le prénom qu'emploie l'assistant, et le pays, qui ouvre ses modules (pilier 3a en Suisse).</p>
+      </section>
+
+      <section class="card" aria-labelledby="t-display">
+        <h2 class="section-title" id="t-display">Affichage</h2>
+        <div id="display-rows"></div>
+      </section>
+
+      <section class="card form" aria-labelledby="t-profile">
+        <h2 class="section-title" id="t-profile">Profil</h2>
         <form id="form-profile">
           <label for="profile-name">Prénom</label>
           <input id="profile-name" maxlength="60" autocomplete="given-name">
           <label for="profile-country">Pays (code ISO à deux lettres)</label>
           <input id="profile-country" maxlength="2" pattern="[A-Za-z]{2}" required autocapitalize="characters">
+          <p class="hint">Le pays ouvre les modules locaux, comme le pilier 3a en Suisse.</p>
           <button type="submit" class="btn secondary">Enregistrer</button>
         </form>
-        <p id="profile-info" class="note"></p>
-      </div>
-      <div class="card">
-        <h2>Exporter</h2>
-        <p class="note">Le journal complet en CSV, tel qu'il est au registre.</p>
-        <a class="btn secondary" id="export-link" href="/api/finance/export.csv" download>Télécharger le journal (CSV)</a>
-      </div>
-      <div class="card">
-        <h2>État</h2>
-        <dl id="health" class="grid mt"></dl>
-      </div>
-      <div class="card form">
-        <div class="head"><h2>Session</h2><span id="badge" class="badge" hidden></span></div>
+        <p id="profile-info" class="hint"></p>
+      </section>
+
+      <section class="card form" aria-labelledby="t-security">
+        <div class="head"><h2 id="t-security">Sécurité</h2><span id="badge" class="badge" hidden></span></div>
         <p id="session-info" class="note"></p>
-        <h3>Passkeys</h3>
-        <ul id="passkeys" class="list"></ul>
+        <ul id="passkeys" class="plain"></ul>
         <form id="form-backup">
           <label for="backup-name">Ajouter une passkey de secours</label>
           <input id="backup-name" maxlength="60" placeholder="Clé de secours">
           <button type="submit" class="btn secondary">Ajouter</button>
         </form>
-        <button id="btn-logout" type="button" class="btn secondary">Se déconnecter</button>
-      </div>
+        <div class="stack-v"><button id="btn-logout" type="button" class="secondary danger">Se déconnecter</button></div>
+      </section>
+
+      <section class="card" aria-labelledby="t-data">
+        <h2 class="section-title" id="t-data">Données</h2>
+        <p class="note">Le journal complet en CSV, tel qu'il est au registre.</p>
+        <a class="secondary" id="export-link" href="/api/finance/export.csv" download>Exporter le journal (CSV)</a>
+        <h3>État</h3>
+        <dl id="health" class="grid"></dl>
+      </section>
+      <div class="endspace"></div>
     </section>
+  </div>
 
-    <p id="message" class="message" role="status" aria-live="polite"></p>
-  </main>
+  <nav class="tabbar" id="tabbar" aria-label="Navigation principale" hidden><div class="in" id="tabs"></div></nav>
 
-  <nav class="tabbar" id="tabbar" aria-label="Navigation" hidden><div class="in">
-    <button type="button" data-tab="accueil" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Accueil</button>
-    <button type="button" data-tab="patrimoine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Patrimoine</button>
-    <button type="button" data-tab="budget"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Budget</button>
-    <button type="button" data-tab="journal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>Journal</button>
-  </div></nav>
+  <div class="backdrop" id="backdrop"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="sheet-title"></h2><span class="sheet-act" id="sheet-act"></span></div>
+    <div class="sheet-body" id="sheet-body"></div>
+    <div class="sheet-foot" id="sheet-foot"></div>
+  </div>
+  <div class="toast" id="toast" role="status"><span id="toast-msg"></span><button id="toast-undo" type="button" hidden>Annuler</button></div>
+  <div class="sr" id="live" aria-live="polite"></div>
 </body>
 </html>

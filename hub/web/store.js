@@ -48,7 +48,8 @@ export function shiftMonth(month, delta) {
   return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`;
 }
 
-const DEFAULTS = { tab: "accueil", range: "12", mode: "chf", env: "all", period: "m", tx: "all", q: "", look: "region" };
+// tx : all, todo, in, out ; txcat : { id, month } quand le journal suit une catégorie du budget
+const DEFAULTS = { tab: "accueil", period: "m", tx: "all", q: "", txcat: null };
 
 function remembered() {
   try {
@@ -62,8 +63,8 @@ class Store {
   constructor() {
     this.cache = new Map();
     this.listeners = new Set();
-    const saved = remembered();
-    this.params = { ...DEFAULTS, ...saved, month: currentMonth() };
+    const { period, tab } = remembered();
+    this.params = { ...DEFAULTS, ...(period ? { period } : {}), ...(tab ? { tab } : {}), month: currentMonth() };
     this.today = currentMonth();
     this.pending = false;
   }
@@ -95,8 +96,8 @@ class Store {
   set(changes) {
     Object.assign(this.params, changes);
     try {
-      const { range, mode, env, period, tab } = this.params;
-      localStorage.setItem("hub.params", JSON.stringify({ range, mode, env, period, tab }));
+      const { period, tab } = this.params;
+      localStorage.setItem("hub.params", JSON.stringify({ period, tab }));
     } catch {
       /* navigation privée : rien à retenir */
     }
