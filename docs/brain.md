@@ -101,6 +101,8 @@ hubc exec brain hub-brain direct                 # une carte par catégorie, san
 `catchup` sert à vider une longue file « À classer » : une règle par commerçant (le motif est le
 nom du groupe, le sens celui du groupe), qui classe le passé et les imports suivants. Un
 commerçant déjà proposé ne revient pas ; relance-le une heure plus tard pour les 50 suivants.
+Pour tout rattraper d'un coup, monte `HUB_PROPOSALS_PER_HOUR` dans `deploy/.env` (par exemple
+300), relance `hubc up -d`, puis `catchup --limit 300` ; remets 60 ensuite.
 
 `direct` finit la file quand il n'y reste que des achats uniques (un commerçant vu une seule
 fois ; `--max-count 2` pour deux) : une règle n'y servirait à rien. Le modèle choisit une

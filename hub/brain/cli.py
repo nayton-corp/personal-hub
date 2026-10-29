@@ -127,7 +127,7 @@ def suggest_cmd(
 
 @app.command("catchup")
 def catchup_cmd(
-    limit: Annotated[int, typer.Option(min=1, max=CATCHUP_MAX, help="commerçants")] = CATCHUP_MAX,
+    limit: Annotated[int, typer.Option(min=1, max=1000, help="commerçants")] = CATCHUP_MAX,
     dry_run: Annotated[bool, typer.Option(help="affiche sans créer de carte")] = False,
 ) -> None:
     """Rattrapage de « À classer » : une règle proposée par commerçant, toutes validées d'un

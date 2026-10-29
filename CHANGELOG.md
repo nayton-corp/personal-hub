@@ -9,6 +9,8 @@
   `finance_to_review` prend `offset` pour parcourir toute la file.
 - IA locale : `hub-brain direct` classe les commerçants vus une seule fois, sans créer de
   règle ; les cartes se déplient dans « À valider » pour décocher une écriture.
+- `HUB_PROPOSALS_PER_HOUR` (deploy/.env) règle la limite de cartes par heure et par jeton ;
+  `catchup --limit` va au-delà de 50 quand elle est relevée.
 
 ### Classer plus vite : commerçant lu dans le libellé, revenus à confirmer, rattrapage par l'IA
 
