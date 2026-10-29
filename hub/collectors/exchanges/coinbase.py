@@ -120,6 +120,7 @@ ROLES: dict[str, str | None] = {
     "vault_withdrawal": None,
     "staking_transfer": None,
     "unstaking_transfer": None,
+    "retail_eth2_deprecation": None,  # ETH2 rendu en ETH : compté comme ETH des deux côtés
     "transfer": None,
 }
 KIND = {"transfer": "deposit", "trade": "trade", "income": "reward"}

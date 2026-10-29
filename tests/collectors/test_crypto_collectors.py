@@ -93,7 +93,7 @@ def chain(
             return 200, {"prices": []}
         if "/txs/chain" in url:
             return 200, []  # pas d'historique
-        if "blockscout" in url:
+        if "etherscan" in url:  # Routescan (Ethereum) ou Etherscan V2 (autres réseaux)
             q = query(url)
             rows = (eth_txs or {}).get(q["action"], []) if q["page"] == "1" else []
             if not rows:
@@ -321,7 +321,7 @@ def test_eth_and_sol_wallets_read_their_history(make_env: Any) -> None:
         ("crypto:phantom", "2026-03-03", "SigA", "SOL", Decimal("-1.000005"), Decimal("0.000005")),
         ("crypto:phantom", "2026-03-04", "SigB", "USDC", Decimal(2), Decimal(0)),
     ]
-    assert env.memory.get("chain_txs") == ["crypto:metamask", "crypto:phantom"]
+    assert env.memory.get("chain_txs") == ["crypto:metamask", "crypto:phantom@solana"]
 
 
 KILN = "0x30a4aa1d14D44f0f5BFe887447AB6FAcc94A549F"
@@ -345,7 +345,7 @@ def test_an_eth_wallet_reads_its_networks_and_staking(make_env: Any) -> None:
                 return 200, {"result": hex(512 * 10**15)}  # 0.512 ETH avec les récompenses
             if to == WETH_POLYGON:
                 return 200, {"result": hex(31 * 10**15 if call != "0x313ce567" else 18)}
-        if "base.blockscout" in url and query(url)["action"] == "txlist":
+        if "chainid=8453" in url and query(url)["action"] == "txlist":
             row = {
                 "hash": "0xb1",
                 "from": "0x" + "cd" * 20,
@@ -357,7 +357,7 @@ def test_an_eth_wallet_reads_its_networks_and_staking(make_env: Any) -> None:
                 "timeStamp": "1772280000",
             }
             return 200, {"status": "1", "message": "OK", "result": [row]}
-        if "eth.blockscout" in url and query(url)["action"] == "tokentx":
+        if "routescan" in url and query(url)["action"] == "tokentx":
             row = {  # parts reçues au staking
                 "hash": "0xk1",
                 "from": "0x" + "00" * 20,
@@ -376,7 +376,8 @@ def test_an_eth_wallet_reads_its_networks_and_staking(make_env: Any) -> None:
         "addresses": [ETH_ME],
         "networks": ["ethereum", "base", "polygon"],
     }
-    env = make_env("market", creds={"wallets": [wallet]}, market={"erc20_tokens": {}})
+    creds = {"wallets": [wallet], "etherscan_key": "cle-gratuite"}
+    env = make_env("market", creds=creds, market={"erc20_tokens": {}})
     fake = Fake(route)
     assert market.run(env, "run", Http(fake)).detail is None
     (doc,) = dropped(env)
@@ -387,8 +388,42 @@ def test_an_eth_wallet_reads_its_networks_and_staking(make_env: Any) -> None:
     ]
     got = [(t.txid, t.symbol, t.quantity) for t in doc.transactions]
     assert got == [("0xb1", "ETH", Decimal("0.05")), ("0xk1", "ETH", Decimal("0.488379"))]
-    scans = {urlsplit(u).netloc for _m, u, _h in fake.calls if "blockscout" in u}
-    assert scans == {"eth.blockscout.com", "base.blockscout.com", "polygon.blockscout.com"}
+    scans = {
+        (urlsplit(u).netloc, query(u).get("chainid"), query(u).get("apikey"))
+        for _m, u, _h in fake.calls
+        if "etherscan" in u
+    }
+    assert scans == {
+        ("api.routescan.io", None, None),  # Ethereum sans clé
+        ("api.etherscan.io", "8453", "cle-gratuite"),
+        ("api.etherscan.io", "137", "cle-gratuite"),
+    }
+    assert env.memory.get("chain_txs") == [
+        "crypto:coinbase-wallet",
+        "crypto:coinbase-wallet@base",
+        "crypto:coinbase-wallet@polygon",
+    ]
+
+
+def test_a_network_without_etherscan_key_is_flagged_and_read_later(make_env: Any) -> None:
+    wallet = {
+        "account": "crypto:coinbase-wallet",
+        "asset": "ETH",
+        "addresses": [ETH_ME],
+        "networks": ["ethereum", "arbitrum"],
+    }
+    env = make_env("market", creds={"wallets": [wallet]})
+    fake = chain()
+    result = market.run(env, "run", Http(fake))
+    # le solde Arbitrum est lu (nœud public), son historique attend la clé
+    assert result.detail == "partial history.coinbase-wallet.arbitrum:needs_key"
+    assert not [u for _m, u, _h in fake.calls if "api.etherscan.io" in u]
+    assert env.memory.get("chain_txs") == ["crypto:coinbase-wallet"]
+    env.creds["etherscan_key"] = "cle-gratuite"
+    market.run(env, "run", Http(fake))
+    arbitrum = [query(u) for _m, u, _h in fake.calls if "chainid=42161" in u]
+    assert len(arbitrum) == 3  # relu en entier : une page par liste, toutes courtes
+    assert "crypto:coinbase-wallet@arbitrum" in env.memory.get("chain_txs")
 
 
 def test_an_unknown_network_is_refused(make_env: Any) -> None:
@@ -1217,14 +1252,18 @@ def test_mempool_rate_limit_is_paced_and_retried(make_env: Any, pauses: list[int
         status, body = inner.route(method, url, headers, data)
         return status, body
 
-    env = make_env("market", creds=creds)
+    env = make_env("market", creds=creds, market={"coingecko_pause_seconds": 0})
     assert market.run(env, "run", Http(Fake(route))).detail is None
     # une seconde avant chaque requête, 10 s puis 30 s ; la dernière lit l'historique
     assert pauses == [1, 10, 1, 30, 1, 1]
     assert held(dropped(env)[0]) == [("crypto:ledger", "CRYPTO:BTC", Decimal("1"))]
     pauses.clear()
     refusals.extend([429] * 4)
-    again = market.run(make_env("market", creds=creds), "run", Http(Fake(route)))
+    again = market.run(
+        make_env("market", creds=creds, market={"coingecko_pause_seconds": 0}),
+        "run",
+        Http(Fake(route)),
+    )
     assert again.detail == "partial wallet.ledger:site_unavailable"
     assert [p for p in pauses if p > 1] == [10, 30, 60]
 
@@ -1338,3 +1377,38 @@ def test_btc_history_pages_and_failures(make_env: Any, monkeypatch: pytest.Monke
     assert env.memory.get("btc_history") is None  # relu au prochain passage
     down = market.run(make_env("market", creds=creds), "run", Http(history_api(broken="/txs/")))
     assert down.detail == "partial history.ledger:site_unavailable"
+
+
+def test_coingecko_without_key_is_paced_and_retried(make_env: Any, pauses: list[int]) -> None:
+    refusals = [429]
+    inner = chain()
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if "coingecko" in url and "solana" in url and refusals:
+            return refusals.pop(), b""
+        return inner.route(method, url, headers, data)
+
+    crypto = {"BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana"}
+    env = make_env("market", market={"crypto": crypto})
+    assert market.run(env, "run", Http(Fake(route))).detail is None
+    # trois secondes entre deux cours ; le refus attend 10 s et réessaie
+    assert pauses == [3, 3, 10, 3]
+    pauses.clear()
+    keyed = make_env("market", creds={"coingecko_key": "demo"}, market={"crypto": crypto})
+    market.run(keyed, "run", Http(Fake(inner.route)))
+    assert pauses == []  # avec une clé, pas d'attente
+
+
+def test_an_etherscan_rate_limit_is_retried(make_env: Any, pauses: list[int]) -> None:
+    said = [{"status": "0", "message": "NOTOK", "result": "Max rate limit reached"}]
+    inner = chain()
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if "etherscan" in url and said:
+            return 200, said.pop()
+        return inner.route(method, url, headers, data)
+
+    wallet = {"account": "crypto:metamask", "asset": "ETH", "addresses": [ETH_ME]}
+    env = make_env("market", creds={"wallets": [wallet]}, market={"coingecko_pause_seconds": 0})
+    assert market.run(env, "run", Http(Fake(route))).detail is None
+    assert 10 in pauses

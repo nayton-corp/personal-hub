@@ -154,7 +154,7 @@ def market_api(broken: str | None = None) -> Fake:
             return 200, json.dumps(chart).encode()
         if "/txs/chain" in url:
             return 200, b"[]"
-        if "blockscout" in url:
+        if "etherscan" in url:
             return 200, b'{"status":"0","message":"No transactions found","result":[]}'
         if "mempool" in url:
             stats = {"funded_txo_sum": 150_000_000, "spent_txo_sum": 25_000_000}
