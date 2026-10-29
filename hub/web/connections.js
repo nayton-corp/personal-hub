@@ -6,6 +6,7 @@
 // La liste se redessine à chaque réponse ; les formulaires, eux, ne sont construits qu'à
 // l'ouverture, pour ne jamais effacer une saisie en cours.
 import { base, date, el, initials } from "./format.js";
+import { instLook } from "./meta.js";
 import { approve, propose } from "./proposals.js";
 import { api, store } from "./store.js";
 
@@ -19,6 +20,15 @@ export const paths = {
   pending: "/finance/accounts/pending",
 };
 
+// sigle et teinte de l'institution quand on la connaît, sinon initiales
+function instAv(key, label, cls = "av") {
+  const l = instLook(key) || instLook(label);
+  if (!l) return el("div", cls, initials(label));
+  const av = el("div", `ibox tint${l.t.length > 2 ? " wm-box" : ""}`, l.t);
+  av.style.setProperty("--c", l.c);
+  av.setAttribute("aria-hidden", "true");
+  return av;
+}
 const MODE_LABEL = { enabled: "actif", degraded: "suspendu", disabled: "désactivé" };
 const OUTCOME_LABEL = {
   ok: "réussi", nothing_new: "rien de nouveau", auth_pending_timeout: "validation non faite",
@@ -134,7 +144,7 @@ export function connectionsCard() {
     const s = states[c.id];
     const mode = s ? s.mode : "enabled";
     const r = el("div", "row");
-    const av = el("div", "av", initials(c.label));
+    const av = instAv(c.connector, c.label);
     const n = el("div", "n");
     const line = el("span", !c.ready || mode !== "enabled" ? "warn" : "", sub(c, s));
     n.append(el("b", "", c.label), line);
@@ -539,7 +549,7 @@ export function accountsCard() {
     n.append(el("b", "", t.title), el("span", "", t.sub));
     const v = el("div", "v");
     v.append(link("Créer", () => openAccount(t.preset)));
-    r.append(el("div", "av g", initials(t.preset.institution)), n, v);
+    r.append(instAv(t.preset.institution, t.preset.institution, "av g"), n, v);
     list.append(r);
   }
 }

@@ -658,3 +658,7 @@ button:not(:disabled):active, a.secondary:active, [role="button"]:active { trans
 .chart.debtcurve { height: 46px; margin: 2px 0 8px; }
 .chart.debtcurve .fillneg { fill: var(--neg); fill-opacity: .12; }
 .chart.debtcurve .lineneg { fill: none; stroke: var(--neg); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+/* sigles d'institution (BCF, VIAC…) : plus serrés pour tenir dans la pastille */
+.ibox .wm, .ibox.wm-box { font-size: .58rem; letter-spacing: -.02em; }
+.ibox.sm .wm { font-size: .53rem; }
+.ibox.xs .wm { font-size: .45rem; letter-spacing: -.04em; }

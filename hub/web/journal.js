@@ -3,7 +3,7 @@
 // « À classer » groupe par contrepartie avec ses libellés, comptes, dates et montants, un choix
 // par groupe, une validation pour tout le lot.
 import { MOIS, dayName, date } from "./format.js";
-import { GROUP_LABEL, catIc, catMark } from "./meta.js";
+import { GROUP_LABEL, catIc, catMark, txMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { api, monthSpan, shiftMonth, store } from "./store.js";
 import { SHEETS, SH, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, n2, openSheet, qty, renderSheet, skel, toast } from "./ui.js";
@@ -226,7 +226,7 @@ function txRow(e, cats, accName, dated = false) {
   const what = e.category ? esc(c ? c.name : e.category.id) : e.kind === "movement" ? '<b class="todo-txt">À classer</b>' : "";
   const ccy = e.amount.currency;
   return `<button class="row tx-row" type="button" data-a="tx" data-v="${esc(e.id)}" aria-label="${esc(title(e))}, ${amt > 0 ? "plus" : "moins"} ${n2(amt)} ${esc(ccy)}, ${e.category ? esc(c ? c.name : e.category.id) : "à classer"}">
-    ${catMark(e.category ? e.category.id : null, c?.group)}
+    ${txMark(title(e), e.category ? e.category.id : null, c?.group)}
     <span class="row-main"><span class="row-title">${esc(title(e))}</span><span class="row-sub">${dated ? `${esc(shortY(e.booking_date))} · ` : ""}${[what, esc(accName[e.account_id] || "")].filter(Boolean).join(" · ")}</span></span>
     <span class="row-num"><span class="row-val num ${internal(e) ? "amt-int" : amt > 0 ? "amt-in" : ""}">${amt > 0 ? "+" : "−"}${amount2(Math.abs(amt))}</span>${ccy !== "CHF" ? `<span class="row-sub">${esc(ccy)}</span>` : ""}</span></button>`;
 }
@@ -278,7 +278,7 @@ function renderReview(cats) {
       const raw = [...g.labels.filter((l) => normal(l) !== g.counterparty), ...g.remittances];
       const accs = g.accounts.map((a) => accName[a] || a).join(", ");
       return `<section class="rgroup" aria-labelledby="rg-${i}">
-        <div class="ihead">${catMark(ch || null, cats[ch]?.group, "")}<span class="row-main"><span class="row-title" id="rg-${i}">${esc(capital(g.counterparty))}</span><span class="row-sub">${g.count} écriture${g.count > 1 ? "s" : ""} · ${esc(when)}${g.guess ? ` · d'office en ${esc(cats[g.guess]?.name || g.guess)}` : ""}</span></span><span class="row-val num ${tot > 0 ? "amt-in" : ""}">${tot > 0 ? "+" : "−"}${amount2(Math.abs(tot))}</span></div>
+        <div class="ihead">${txMark(g.counterparty, ch || null, cats[ch]?.group, "")}<span class="row-main"><span class="row-title" id="rg-${i}">${esc(capital(g.counterparty))}</span><span class="row-sub">${g.count} écriture${g.count > 1 ? "s" : ""} · ${esc(when)}${g.guess ? ` · d'office en ${esc(cats[g.guess]?.name || g.guess)}` : ""}</span></span><span class="row-val num ${tot > 0 ? "amt-in" : ""}">${tot > 0 ? "+" : "−"}${amount2(Math.abs(tot))}</span></div>
         <dl class="rfacts"><dt>Compte</dt><dd>${esc(accs)}</dd>${range ? `<dt>Montants</dt><dd class="num">${esc(range)}</dd>` : ""}${raw.length ? `<dt>Libellé</dt><dd class="mono">${raw.slice(0, 3).map(esc).join("<br>")}</dd>` : ""}</dl>
         <button class="link rtoggle" type="button" data-a="rgopen" data-v="${i}" aria-expanded="${open}" aria-controls="rg-tx-${i}">${ic("chev")}${open ? "Masquer" : g.count > 1 ? `Voir ${g.count > g.samples.length ? `les ${g.samples.length} dernières` : `les ${g.count}`} écritures` : "Voir l'écriture"}</button>
         ${open ? `<div class="txlist rtx" id="rg-tx-${i}">${g.samples.map((x) => sampleRow(x, accName)).join("")}</div>` : ""}
