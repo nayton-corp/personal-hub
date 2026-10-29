@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### Binance : récompenses Earn relues
+
+- Les historiques de récompenses Simple Earn refusent une période de plus de 30 jours
+  (`-6021`) : fenêtres de 29 jours. Les récompenses manquées depuis la v0.9.9 sont relues une
+  fois depuis la première opération (mémoire `rewards_since`, `first_day`).
+
 ### Historique Binance dans le Journal, mouvements crypto reliés entre mes comptes
 
 - Le collecteur Binance lit, en plus des soldes, les dépôts et retraits crypto (txId, adresse),

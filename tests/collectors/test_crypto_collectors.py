@@ -495,6 +495,8 @@ def binance_history_route(
             return [[t, "0", "0", "0", CLOSES[asset]] for t in range(day, stop, 86_400_000)]
         if path == "/sapi/v1/asset/dribblet":
             return DUST
+        if "rewardsRecord" in path and int(q["endTime"]) - int(q["startTime"]) > 30 * 86_400_000:
+            return 400  # -6021 « Query time range too large »
         if path == "/api/v3/myTrades":
             return [f for f in FILLS if f["symbol"] == q["symbol"] and f["id"] >= int(q["fromId"])]
         rows = BINANCE_ROWS.get(path, [])
@@ -604,6 +606,8 @@ def test_binance_history_reads_every_stream_once(make_env: Any, binance_pauses: 
     assert pairs == {"BTCUSDT", "ETHBTC", "BNBUSDT"}
     assert env.memory.get("history_since") == "2026-10-27"
     assert env.memory.get("trade_ids") == {"BTCUSDT": 102}
+    assert env.memory.get("first_day") == "2026-03-01"
+    assert env.memory.get("rewards_since") == "2026-10-27"
     later = binance_api(history=binance_history_route())
     assert binance.run(env, "run", Http(later)).outcome == "ok"
     # ensuite : quelques jours de recouvrement, les exécutions suivantes, ni cours ni change
@@ -613,6 +617,25 @@ def test_binance_history_reads_every_stream_once(make_env: Any, binance_pauses: 
     assert {q["symbol"]: q["fromId"] for q in trades}["BTCUSDT"] == "102"
     assert not [u for _m, u, _h in later.calls if "klines" in u or "frankfurter" in u]
     assert [bool(d.operations) for d in dropped(env)].count(False) == 1
+
+
+def test_binance_rewards_missed_before_are_read_again(make_env: Any) -> None:
+    """Un historique lu sans ses récompenses (fenêtres refusées jusqu'à la v0.9.9) : le passage
+    suivant les relit depuis la première opération, le reste en recouvrement seulement."""
+    env = make_env("binance")
+    env.memory.put("history_since", "2026-10-26")
+    env.memory.put("first_day", "2026-03-01")
+    fake = binance_api(history=binance_history_route())
+    assert binance.run(env, "run", Http(fake)).detail is None
+    ops = [o.id for d in dropped(env) for o in d.operations if o.kind == "reward"]
+    assert ops == ["reward:flexible:USDT:2026-04-02", "reward:locked:ETH:2026-04-10"]
+    earn = [query(u) for _m, u, _h in fake.calls if "locked/history" in u]
+    assert int(earn[0]["startTime"]) == at("2026-03-01", 0)
+    assert env.memory.get("rewards_since") == "2026-10-27"
+    again = binance_api(history=binance_history_route())
+    binance.run(env, "run", Http(again))
+    earn = [query(u) for _m, u, _h in again.calls if "locked/history" in u]
+    assert [int(q["startTime"]) for q in earn] == [at("2026-10-24", 0)]
 
 
 def test_binance_first_history_is_all_or_nothing(make_env: Any) -> None:
