@@ -1,4 +1,5 @@
-"""Journaux JSON sur stdout, filtrés : jamais de montant, libellé, IBAN, solde ni contrepartie.
+"""Journaux JSON sur stdout, filtrés : jamais de montant, libellé, IBAN, solde ni contrepartie,
+ni le texte d'une question ou d'une réponse de l'assistant.
 
 Un événement qui porte une clé interdite (ou une valeur qui ressemble à un IBAN, ou un `Money`)
 n'est pas écrit : il est remplacé par `log.rejected`, qui ne garde que le nom de l'événement et
@@ -30,6 +31,11 @@ FORBIDDEN_KEYS: frozenset[str] = frozenset(
         "counterparty",
         "counterparty_iban",
         "counterparty_name",
+        "description",
+        "merchant",
+        "question",
+        "answer",
+        "prompt",
         "password",
         "secret",
         "token",

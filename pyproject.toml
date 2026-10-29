@@ -113,7 +113,8 @@ exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\.$"]
 
 [tool.importlinter]
 root_package = "hub"
-include_external_packages = false
+# vrai : les contrats ci-dessous interdisent aussi des bibliothèques (sqlalchemy, fastapi, typer)
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Le cœur ne dépend d'aucun domaine (couches core → domains)"
@@ -144,3 +145,54 @@ type = "independence"
 modules = ["hub.domains.*"]
 ignore_imports = ["hub.domains.** -> hub.domains.*.public"]
 unmatched_ignore_imports_alerting = "none"
+
+# --- Architecture cible (chantier S0 du plan « Socle du hub ») ---------------------------------
+# Les contrats suivants décrivent le découpage visé (noyau, plateforme, cœur, domaines en couches).
+# Les écarts d'aujourd'hui sont listés dans `ignore_imports` : la liste ne peut que rétrécir
+# (`unmatched_ignore_imports_alerting = "error"` refuse un écart qui n'existe plus). On n'y
+# ajoute jamais une ligne : un nouvel écart se corrige dans le code.
+
+[[tool.importlinter.contracts]]
+name = "Noyau (futur hub.kernel) : pur, sans E/S ni autre module du hub"
+type = "forbidden"
+source_modules = ["hub.core.money", "hub.core.canonical", "hub.core.clock", "hub.core.ids", "hub.core.text"]
+forbidden_modules = ["sqlalchemy", "fastapi", "starlette", "typer", "httpx", "structlog", "pydantic", "hub.api", "hub.cli", "hub.domains", "hub.core.db", "hub.core.coredb", "hub.core.settings", "hub.core.logging"]
+
+[[tool.importlinter.contracts]]
+name = "Plateforme (futur hub.platform) : bases, réglages, secrets, journaux, sans le métier du cœur"
+type = "forbidden"
+source_modules = ["hub.core.db", "hub.core.coredb", "hub.core.settings", "hub.core.secrets", "hub.core.logging", "hub.core.cron"]
+forbidden_modules = ["hub.core.proposals", "hub.core.tokens", "hub.core.auth", "hub.core.passkeys", "hub.core.sessions", "hub.core.registry", "hub.core.domain", "hub.core.tools", "hub.core.profile", "hub.core.connectors", "hub.core.connections", "hub.core.collectors", "hub.core.install", "hub.core.notify", "hub.core.maintenance", "hub.core.context"]
+
+[[tool.importlinter.contracts]]
+name = "Le cœur n'importe ni FastAPI ni Typer : HTTP et ligne de commande sont des bords"
+type = "forbidden"
+source_modules = ["hub.core"]
+forbidden_modules = ["fastapi", "starlette", "typer"]
+ignore_imports = [
+    "hub.core.auth -> fastapi",
+    "hub.core.domain -> fastapi",
+    "hub.core.domain -> typer",
+    "hub.core.errors -> fastapi",
+    "hub.core.errors -> starlette",
+]
+unmatched_ignore_imports_alerting = "error"
+
+[[tool.importlinter.contracts]]
+name = "Finance : les modules purs (futur model) ne touchent ni SQL, ni HTTP, ni le cœur"
+type = "forbidden"
+source_modules = ["hub.domains.finance.hashing", "hub.domains.finance.period", "hub.domains.finance.merchant", "hub.domains.finance.institutions", "hub.domains.finance.camt", "hub.domains.finance.viac.models", "hub.domains.finance.viac.notice", "hub.domains.finance.viac.report", "hub.domains.finance.viac.text", "hub.domains.finance.xlsx", "hub.domains.finance.dedup", "hub.domains.finance.revolut"]
+forbidden_modules = ["sqlalchemy", "fastapi", "typer", "httpx", "hub.core.db", "hub.core.coredb", "hub.core.proposals"]
+ignore_imports = ["hub.domains.finance.dedup -> hub.domains.finance.ledger"]
+unmatched_ignore_imports_alerting = "error"
+
+[[tool.importlinter.contracts]]
+name = "Finance : personne n'importe l'interface (api, cli, tools) ni le manifeste"
+type = "forbidden"
+source_modules = ["hub.domains.finance.handlers", "hub.domains.finance.importer", "hub.domains.finance.reads", "hub.domains.finance.ledger", "hub.domains.finance.rules", "hub.domains.finance.insights", "hub.domains.finance.rebuild", "hub.domains.finance.sentinels", "hub.domains.finance.snapshots", "hub.domains.finance.valuation", "hub.domains.finance.performance"]
+forbidden_modules = ["hub.domains.finance.api", "hub.domains.finance.cli", "hub.domains.finance.tools", "hub.domains.finance.domain"]
+ignore_imports = [
+    "hub.domains.finance.handlers -> hub.domains.finance.domain",
+    "hub.domains.finance.rebuild -> hub.domains.finance.domain",
+]
+unmatched_ignore_imports_alerting = "error"
