@@ -485,3 +485,13 @@ code { font-family: var(--mono); font-size: .9em; }
 .select-full { display: block; width: 100%; min-height: 44px; margin-top: 6px; border-radius: 12px; border: 1px solid var(--line); padding: 8px 12px; font: inherit; font-size: 16px; font-weight: 400; background: var(--surface-2); color: var(--ink); }
 .cad-seg { margin: 4px 0 10px; }
 .crow-top b .pill { font-size: 10.5px; padding: 1px 6px; margin-left: 4px; vertical-align: 1px; }
+
+/* « À classer » : packs à installer, « seulement depuis ce compte », tout l'ancien */
+.check-in { margin-top: 0; padding-left: 30px; }
+.rbanner { align-items: center; margin: 4px 16px 12px; padding: 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.rbanner span { flex: 1; }
+.rest-open { display: inline-flex; align-items: center; gap: 6px; margin: 14px 16px 4px; }
+#jBody > .section-title { margin: 22px 16px 0; }
+#jBody > .section-title + .hint { margin: 4px 16px 0; }
+.primary.small { width: auto; min-height: 40px; font-size: 13.5px; border-radius: 12px; flex: none; }
+#jBody > .hint:first-child { margin: 10px 16px 0; }

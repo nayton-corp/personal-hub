@@ -1,6 +1,6 @@
 # Pack de règles de départ (chantier « hub générique », G2) : voir hub/domains/finance/packs.py.
 name: base
-version: 1
+version: 2
 label: Règles de base
 description: Mots génériques (loyer, salaire, pharmacie, restaurant…) et services internationaux.
 categories:
@@ -15,6 +15,15 @@ categories:
   group: income
 - id: remboursements
   name: Remboursements
+  group: income
+- id: interets-dividendes
+  name: Intérêts et dividendes
+  group: income
+- id: ventes
+  name: Ventes d'occasion
+  group: income
+- id: allocations
+  name: Aides et allocations
   group: income
 - id: autres-revenus
   name: Autres revenus
@@ -76,6 +85,9 @@ categories:
 - id: a-qualifier
   name: Virements à qualifier
   group: variable
+- id: divers
+  name: Divers
+  group: variable
 rules:
 - category: investissements
   direction: any
@@ -104,6 +116,41 @@ rules:
   - salary
   - lohn
   - traitement
+- category: salaire
+  direction: credit
+  priority: 19
+  field: bank_tx_code
+  keywords:
+  - PMNT/RCDT/SALA
+- category: interets-dividendes
+  direction: credit
+  priority: 22
+  keywords:
+  - interets crediteurs
+  - interets
+  - interest
+  - dividende
+  - dividend
+  - zins
+- category: ventes
+  direction: credit
+  priority: 23
+  keywords:
+  - ricardo
+  - vinted
+  - tutti
+  - anibis
+  - leboncoin
+  - ebay
+- category: allocations
+  direction: credit
+  priority: 24
+  keywords:
+  - allocation
+  - chomage
+  - caisse de compensation
+  - indemnite
+  - bourse d'etude
 - category: remboursements
   direction: credit
   priority: 21

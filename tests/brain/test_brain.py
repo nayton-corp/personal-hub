@@ -18,7 +18,7 @@ from hub.brain import agent
 from hub.brain.hubapi import HubApi, HubError
 from hub.brain.llm import LlmError, OpenAICompatible, Reply, ToolCall, clean
 from hub.brain.mcp import McpServer
-from hub.brain.suggest import Memory, parse_choice, suggest
+from hub.brain.suggest import Memory, catchup, parse_choice, suggest
 from hub.brain.toolbox import CAPABILITIES, LOAD, Toolbox
 from hub.core import proposals
 from hub.core.context import HubContext
@@ -302,6 +302,52 @@ def test_suggest_stops_cleanly(
         box, Scripted(lambda _m: Reply('{"category": "divers", "reason": "x"}')), Memory(tmp_path)
     )
     assert report.stopped == "limite de propositions par heure atteinte"
+
+
+class Every:
+    """Modèle factice qui répond à chaque appel avec la même fonction."""
+
+    def __init__(self, turn: Callable[[list[dict[str, Any]]], Reply]) -> None:
+        self.turn = turn
+        self.prompts: list[str] = []
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        *,
+        json_mode: bool = False,
+    ) -> Reply:
+        self.prompts.append(messages[0]["content"])
+        return self.turn(messages)
+
+
+def test_catchup_proposes_one_rule_per_merchant(
+    client: TestClient, ctx: HubContext, year: FinanceDomain, tmp_path: Path
+) -> None:
+    def choose(messages: list[dict[str, Any]]) -> Reply:
+        if "kiosque" in messages[0]["content"]:
+            return Reply('{"category": "loisirs", "reason": "Un kiosque."}')
+        return Reply('{"category": null, "reason": "incertain"}')
+
+    box = box_for(client, ctx, "brain")
+    model = Every(choose)
+    report = catchup(box, model, Memory(tmp_path / "brain"))
+    assert report.merchants == len(model.prompts) >= 2
+    assert (report.suggested, report.proposals) == (1, 1)
+    with ctx.core.engine.connect() as conn:
+        (p,) = proposals.list_by_status(conn, "pending")
+    # une règle (pas une carte par écriture), avant les packs et la règle « tout le reste »
+    assert p.kind == "create_rule"
+    assert "kiosque" in p.params["pattern"]
+    assert (p.params["direction"], p.params["priority"]) == ("debit", 10)
+    assert p.reason == "Un kiosque."
+    # proposée une fois : le passage suivant ne la redemande pas
+    again = Every(choose)
+    catchup(box, again, Memory(tmp_path / "brain"))
+    assert not [x for x in again.prompts if "kiosque" in x]
+    dry = catchup(box, Every(choose), Memory(tmp_path / "dry"), dry_run=True, limit=1)
+    assert (dry.merchants, dry.proposals) == (1, 0)
 
 
 # --- client du modèle -------------------------------------------------------------------------

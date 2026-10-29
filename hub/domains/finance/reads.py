@@ -16,7 +16,7 @@ from sqlalchemy import Connection, text
 
 from hub.core.money import Money, base_currency
 from hub.core.text import mask_iban, normalize
-from hub.domains.finance import ledger, period, valuation
+from hub.domains.finance import ledger, merchant, period, valuation
 
 OTHERS = "autres"
 MIN_COUNT_FOR_AGGREGATES = 3
@@ -225,6 +225,8 @@ def _entry(r: Any) -> dict[str, Any]:
         "value_date": r[5],
         "amount": money(r[6], r[7]),
         "counterparty": ledger.party(r[8]),
+        # commerçant lu dans le libellé (carte, TWINT) : motif de « Toujours », titre dans l'app
+        "merchant": merchant.key(r[10]),
         "counterparty_iban": mask_iban(r[9]),
         "label": r[10],
         "remittance": r[11],
@@ -546,30 +548,50 @@ def _distinct(values: list[str | None], n: int = 3) -> list[str]:
     return seen
 
 
+# écriture classée par une règle « tout le reste » (motif vide, sans compte) : « Autres revenus »
+# pour tout crédit inconnu. Elle compte comme classée, mais « À classer » la montre à confirmer.
+CATCH_ALL = (
+    "vc.source = 'rule' AND r.field = 'search_text' AND trim(r.pattern) = '' "
+    "AND r.account_id IS NULL"
+)
+
+
+def review_key(counterparty: str | None, label: str) -> str:
+    """Groupe d'« À classer » : le commerçant lu dans le libellé (paiements par carte, TWINT),
+    sinon la contrepartie, sinon le libellé. Sans vraie contrepartie, on groupe par libellé : un
+    nom de remplissage réunirait des marchands sans rapport, et « Toujours » en ferait une règle
+    beaucoup trop large. La clé est un morceau du texte de l'écriture : motif d'une règle."""
+    return merchant.key(label) or normalize(ledger.party(counterparty) or label) or "(inconnu)"
+
+
 def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
-    """Écritures sans catégorie, groupées par contrepartie, avec de quoi décider : libellés
-    bancaires, communications, comptes, période et fourchette des montants."""
+    """Écritures sans catégorie (puis celles d'une règle « tout le reste »), groupées par
+    commerçant ou contrepartie, avec de quoi décider : libellés bancaires, communications,
+    comptes, période et fourchette des montants."""
     rows = conn.execute(
         text(
             "SELECT e.counterparty, e.label, e.currency, e.amount_minor, e.id, e.account_id, "
-            "e.booking_date, e.remittance, e.bank_tx_code FROM entries e "
+            "e.booking_date, e.remittance, e.bank_tx_code, vc.category_id FROM entries e "
             "LEFT JOIN v_entry_shown vc ON vc.entry_seq = e.seq "
-            "WHERE vc.category_id IS NULL AND e.kind = 'movement' "
+            "LEFT JOIN categorizations c ON c.seq = vc.categorization_seq "
+            "LEFT JOIN rules r ON r.id = c.rule_id "
+            "WHERE e.kind = 'movement' AND (vc.category_id IS NULL OR ("
+            f"{CATCH_ALL}))"
             "ORDER BY e.booking_date DESC, e.seq DESC"
         )
     ).fetchall()
-    groups: dict[tuple[str, str], list[Any]] = {}
+    groups: dict[tuple[str, str, str | None], list[Any]] = {}
     for r in rows:
-        # sans vraie contrepartie, on groupe par libellé : un nom de remplissage réunirait
-        # des marchands sans rapport, et « Toujours » en ferait une règle beaucoup trop large
-        key = normalize(ledger.party(r[0]) or r[1]) or "(inconnu)"
-        groups.setdefault((key, r[2]), []).append(r)
+        groups.setdefault((review_key(r[0], r[1]), r[2], r[9]), []).append(r)
     out: list[dict[str, Any]] = []
-    for (key, ccy), v in groups.items():
+    for (key, ccy, guess), v in groups.items():
         amounts = [int(r[3]) for r in v]
         out.append(
             {
+                "key": f"{key}|{ccy}|{guess or ''}",
                 "counterparty": key,
+                # classée d'office par une règle « tout le reste » : à confirmer
+                "guess": guess,
                 "count": len(v),
                 "total": money(sum(amounts), ccy),
                 "direction": _direction(amounts),
@@ -595,7 +617,7 @@ def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
                 ],
             }
         )
-    out.sort(key=lambda g: (-g["count"], g["counterparty"]))
+    out.sort(key=lambda g: (g["guess"] is not None, -g["count"], g["counterparty"]))
     return out[:limit]
 
 

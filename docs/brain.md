@@ -91,7 +91,13 @@ Depuis le clone du dépôt (`~/personal-hub/personal-hub`), avec l'alias `hubc` 
 hubc exec brain hub-brain ask "Où en est mon budget alimentation ?"
 hubc exec brain hub-brain suggest --dry-run      # voir les suggestions sans créer de carte
 hubc exec brain hub-brain suggest                # créer les cartes maintenant
+hubc exec brain hub-brain catchup --dry-run      # rattrapage : la règle qu'il proposerait par commerçant
+hubc exec brain hub-brain catchup                # jusqu'à 50 règles, à valider ensemble (« À valider »)
 ```
+
+`catchup` sert à vider une longue file « À classer » : une règle par commerçant (le motif est le
+nom du groupe, le sens celui du groupe), qui classe le passé et les imports suivants. Un
+commerçant déjà proposé ne revient pas ; relance-le une heure plus tard pour les 50 suivants.
 
 Le Mac éteint ou Ollama arrêté, le passage de 8 h 30 échoue sans rien casser ; il reprend le
 lendemain.

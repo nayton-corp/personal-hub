@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -249,6 +249,86 @@ def test_placeholder_counterparty_is_hidden(
     ]
 
 
+def test_review_groups_card_payments_by_merchant(
+    client: TestClient, ctx: HubContext, fin: FinanceDomain
+) -> None:
+    """Le commerçant est lu dans le libellé de carte BCF (la contrepartie est vide ou le nom du
+    titulaire) ; un crédit classé par la règle « tout le reste » reste à confirmer ; l'ancien se
+    classe d'un coup."""
+    from hub.domains.finance.cli import propose_and_accept
+
+    ready_account(fin, 100_000)
+    with begin_immediate(fin.engine()) as conn:  # la règle « tout le reste » des crédits
+        conn.execute(text("UPDATE rules SET active = 1 WHERE pattern = '' AND direction='credit'"))
+    stmt = Stmt(
+        opening=Decimal("1000.00"),
+        opening_date=D,
+        entries=[
+            Tx(
+                "12.50",
+                True,
+                D,
+                counterparty="NOTPROVIDED",
+                label="Paiement 02.10.2026 12:01 Zorglub Market Fribourg Numéro de carte: 1",
+            ),
+            Tx(
+                "8.20",
+                True,
+                D,
+                counterparty="NOTPROVIDED",
+                label="Paiement 03.10.2026 18:44 Zorglub Market Bulle Numéro de carte: 1",
+            ),
+            Tx(
+                "5.00",
+                True,
+                D,
+                counterparty="Titulaire Fictif",
+                label="Paiement - BIDULE SHOP, LAUSANNE - 10:00:00 - N° carte xxxx1234",
+            ),
+            Tx("50.00", False, D, counterparty="Ami Fictif", label="Crédit Ami Fictif"),
+        ],
+    )
+    fin.importer.process([Incoming("a.xml", camt053(stmt))])
+    h = token(ctx, "brain")
+    groups = {
+        g["counterparty"]: g for g in client.get("/api/finance/review", headers=h).json()["groups"]
+    }
+    assert groups["zorglub market"]["count"] == 2
+    assert groups["zorglub market"]["guess"] is None
+    assert "bidule shop" in groups
+    assert "titulaire fictif" not in groups
+    # crédit inconnu : « Autres revenus » d'office, à confirmer, après ce qui est sans catégorie
+    assert groups["ami fictif"]["guess"] == "autres-revenus"
+    order = [
+        g["counterparty"] for g in client.get("/api/finance/review", headers=h).json()["groups"]
+    ]
+    assert order[-1] == "ami fictif"
+    entries = client.get("/api/finance/entries", headers=h).json()["items"]
+    assert {e["merchant"] for e in entries if e["kind"] == "movement"} >= {"zorglub market"}
+    # « Toujours » sur le commerçant : la règle retrouve les deux achats
+    done = propose_and_accept(
+        fin,
+        "create_rule",
+        {
+            "pattern": "zorglub market",
+            "direction": "debit",
+            "category_id": "loisirs",
+            "priority": 4,
+        },
+    )
+    assert done["changed"] == 2
+    # tout ce qui reste d'avant une date, d'un coup (ici, la dernière dépense sans catégorie)
+    after = (D + timedelta(days=1)).isoformat()
+    rest = propose_and_accept(
+        fin, "categorize_rest", {"before": after, "direction": "debit", "category_id": "loisirs"}
+    )
+    assert rest["changed"] == 1
+    left = [
+        g["counterparty"] for g in client.get("/api/finance/review", headers=h).json()["groups"]
+    ]
+    assert left == ["ami fictif"]
+
+
 def test_upload_and_import_detail(client: TestClient, ctx: HubContext, fin: FinanceDomain) -> None:
     app_session(ctx, client)
     ready_account(fin, 100_000)
@@ -381,7 +461,7 @@ def test_rule_packs_listed_then_installed_from_a_proposal(
     assert body["suggested"] == ["base", "ch"]
     assert body["active_rules"] == 0
     found = {p["name"]: p for p in body["items"]}
-    assert found["base"]["installed"] == 1
+    assert found["base"]["installed"] == found["base"]["version"]
     assert found["ch"]["installed"] is None
     assert found["ch"]["country"] == "CH"
     assert found["ch"]["rules"] > 0
@@ -392,7 +472,7 @@ def test_rule_packs_listed_then_installed_from_a_proposal(
     result = propose_and_accept(fin, "install_pack", {"name": "ch"})
     assert result["added"] == found["ch"]["rules"]
     body = client.get("/api/finance/rules/packs", headers=reader).json()
-    assert {p["name"]: p["installed"] for p in body["items"]}["ch"] == 1
+    assert {p["name"]: p["installed"] for p in body["items"]}["ch"] == found["ch"]["version"]
     assert body["active_rules"] == found["ch"]["rules"]
 
 

@@ -13,9 +13,12 @@ const P = store.params;
 const catsPath = "/finance/categories";
 const accountsPath = "/finance/accounts";
 const reviewPath = "/finance/review";
+const packsPath = "/finance/rules/packs";
+// tout le reste d'avant une date : catégorie proposée d'abord
+const REST_DEFAULT = "divers";
 const kpisPath = () => `/finance/kpis?month=${store.today}`;
 const tx = { key: null, items: [], cursor: null, loading: false, error: null };
-const picks = {}; // contrepartie → catégorie choisie
+const picks = {}; // groupe (clé) → catégorie choisie
 const always = new Set();
 const opened = new Set(); // groupes « À classer » dépliés
 let busy = false;
@@ -153,7 +156,12 @@ export function render() {
   fill($("jBody"), h + '<div class="endspace"></div>');
 }
 
-const title = (e) => e.counterparty || e.label || (e.kind === "opening" ? "Solde d'ouverture" : "Écriture");
+// le commerçant lu dans le libellé passe avant la contrepartie : l'ancien format de carte BCF
+// y met le nom du titulaire
+const capital = (s) => s.replace(/(^|[\s,(-])(\p{L})/gu, (_m, a, b) => a + b.toUpperCase());
+const title = (e) => (e.merchant && capital(e.merchant)) || e.counterparty || e.label || (e.kind === "opening" ? "Solde d'ouverture" : "Écriture");
+// motif de « Toujours » : un morceau du texte de l'écriture
+const ruleKey = (e) => e.merchant || e.counterparty;
 
 function txRow(e, cats, accName, dated = false) {
   const c = e.category ? cats[e.category.id] : null;
@@ -179,8 +187,8 @@ function suggestions(g, cats) {
     const used = b ? b.lines.filter((l) => l.category !== "a-categoriser" && cats[l.category]).map((l) => l.category) : [];
     ids = [...used, ...all.filter((c) => c.group === "variable").map((c) => c.id)];
   }
-  ids = [...new Set(ids)].slice(0, 3);
-  const ch = picks[g.counterparty];
+  ids = [...new Set(g.guess ? [g.guess, ...ids] : ids)].slice(0, 3);
+  const ch = picks[g.key];
   if (ch && !ids.includes(ch)) ids.push(ch);
   return ids;
 }
@@ -191,28 +199,43 @@ function renderReview(cats) {
   if (re.status === "error") return fill($("jBody"), `<div class="err-box" role="alert">Impossible de charger : ${esc(re.error.message)}</div>`);
   if (!re.data || !Object.keys(cats).length) return fill($("jBody"), '<div class="loading">Chargement…</div>');
   const gs = re.data.groups;
-  for (const cp of Object.keys(picks)) if (!gs.some((g) => g.counterparty === cp)) delete picks[cp];
+  for (const k of Object.keys(picks)) if (!gs.some((g) => g.key === k)) delete picks[k];
   const n = Object.keys(picks).length;
   if (!gs.length) return fill($("jBody"), `<div class="empty">${ic("check")}<br>Tout est classé.<br><button type="button" data-a="jmode" data-v="all">Voir le journal</button></div>`);
   const accName = accNames();
-  fill($("jBody"), '<p class="hint">Un choix par contrepartie. « Toujours » crée une règle qui servira aussi aux prochains imports.</p>' +
+  fill($("jBody"), '<p class="hint">Un choix par commerçant ou contrepartie. « Toujours » crée une règle qui servira aussi aux prochains imports.</p>' + packBanner() +
     gs.map((g, i) => {
-      const tot = u(g.total), ch = picks[g.counterparty], open = opened.has(g.counterparty);
+      const tot = u(g.total), ch = picks[g.key], open = opened.has(g.key);
       const when = g.first_date === g.last_date ? shortY(g.last_date) : `${g.first_date.slice(0, 4) === g.last_date.slice(0, 4) ? short(g.first_date) : shortY(g.first_date)} – ${shortY(g.last_date)}`;
       const lo = Math.abs(u(g.min)), hi = Math.abs(u(g.max));
       const range = g.count < 2 ? "" : lo === hi ? `${n2(hi)} chaque fois` : `de ${n2(lo)} à ${n2(hi)}`;
       const raw = [...g.labels.filter((l) => normal(l) !== g.counterparty), ...g.remittances];
       const accs = g.accounts.map((a) => accName[a] || a).join(", ");
-      return `<section class="rgroup" aria-labelledby="rg-${i}">
-        <div class="ihead">${catMark(ch || null, cats[ch]?.group, "")}<span class="row-main"><span class="row-title" id="rg-${i}">${esc(g.counterparty)}</span><span class="row-sub">${g.count} écriture${g.count > 1 ? "s" : ""} · ${esc(when)}</span></span><span class="row-val num ${tot > 0 ? "amt-in" : ""}">${tot > 0 ? "+" : "−"}${amount2(Math.abs(tot))}</span></div>
+      const head = g.guess && !gs[i - 1]?.guess ? `<h2 class="section-title">À confirmer</h2><p class="hint">Classées d'office par la règle « tout le reste ». Confirme la catégorie ou corrige-la.</p>` : "";
+      return `${head}<section class="rgroup" aria-labelledby="rg-${i}">
+        <div class="ihead">${catMark(ch || null, cats[ch]?.group, "")}<span class="row-main"><span class="row-title" id="rg-${i}">${esc(capital(g.counterparty))}</span><span class="row-sub">${g.count} écriture${g.count > 1 ? "s" : ""} · ${esc(when)}${g.guess ? ` · d'office en ${esc(cats[g.guess]?.name || g.guess)}` : ""}</span></span><span class="row-val num ${tot > 0 ? "amt-in" : ""}">${tot > 0 ? "+" : "−"}${amount2(Math.abs(tot))}</span></div>
         <dl class="rfacts"><dt>Compte</dt><dd>${esc(accs)}</dd>${range ? `<dt>Montants</dt><dd class="num">${esc(range)}</dd>` : ""}${raw.length ? `<dt>Libellé</dt><dd class="mono">${raw.slice(0, 3).map(esc).join("<br>")}</dd>` : ""}</dl>
         <button class="link rtoggle" type="button" data-a="rgopen" data-v="${i}" aria-expanded="${open}" aria-controls="rg-tx-${i}">${ic("chev")}${open ? "Masquer" : g.count > 1 ? `Voir ${g.count > g.samples.length ? `les ${g.samples.length} dernières` : `les ${g.count}`} écritures` : "Voir l'écriture"}</button>
         ${open ? `<div class="txlist rtx" id="rg-tx-${i}">${g.samples.map((x) => sampleRow(x, accName)).join("")}</div>` : ""}
         <div class="sugg" role="radiogroup" aria-label="Catégorie pour ${esc(g.counterparty)}">${suggestions(g, cats).map((id) => `<button type="button" role="radio" aria-checked="${ch === id}" data-a="pick" data-v="${i}|${esc(id)}">${catIc(id, cats[id]?.group)}${esc(cats[id] ? cats[id].name : id)}</button>`).join("")}<button type="button" data-a="pickmore" data-v="${i}" aria-haspopup="dialog">Autre…</button></div>
-        ${g.counterparty !== "(inconnu)" ? `<label class="check"><input type="checkbox" data-always="${i}" ${always.has(g.counterparty) ? "checked" : ""}>Toujours classer « ${esc(g.counterparty)} » ainsi</label>` : ""}
+        ${g.counterparty !== "(inconnu)" ? `<label class="check"><input type="checkbox" data-always="${i}" ${always.has(g.key) ? "checked" : ""}>Toujours classer « ${esc(capital(g.counterparty))} » ainsi</label>` : ""}
       </section>`;
     }).join("") +
+    `<button class="link rest-open" type="button" data-a="rest" aria-haspopup="dialog">${ic("clock")}Classer d'un coup tout l'ancien…</button>` +
     `<div class="stickyfoot"><button class="primary" type="button" data-a="review-ok" ${n && !busy ? "" : "disabled"}>${ic("faceid")}${busy ? "Validation…" : n ? `Valider ${n} choix avec Face ID` : "Choisis au moins une catégorie"}</button></div><div class="endspace"></div>`);
+}
+
+// packs de règles livrés plus récents que ceux de la base (ou suggérés et absents)
+function packsToUpdate() {
+  const p = store.use(packsPath).data;
+  if (!p) return [];
+  return p.items.filter((i) => (i.installed != null && i.installed < i.version) || (i.installed == null && p.suggested.includes(i.name)));
+}
+
+function packBanner() {
+  const up = packsToUpdate();
+  if (!up.length) return "";
+  return `<div class="status rbanner">${ic("info")}<span><b>Nouvelles règles de départ</b> : ${esc(up.map((i) => i.label).join(" et "))}. Davantage de commerçants et de revenus reconnus d'office.</span><button class="primary small" type="button" data-a="packs-up">Installer</button></div>`;
 }
 
 // même normalisation que le serveur pour le groupe : un libellé égal au nom n'apprend rien
@@ -233,8 +256,8 @@ document.addEventListener("change", (e) => {
   if (i == null) return;
   const g = groupAt(i);
   if (!g) return;
-  if (e.target.checked) always.add(g.counterparty);
-  else always.delete(g.counterparty);
+  if (e.target.checked) always.add(g.key);
+  else always.delete(g.key);
 });
 
 // --- panneaux ---------------------------------------------------------------------------------
@@ -267,7 +290,8 @@ SHEETS.tx = (id, sh) => {
       <dl class="dl"><dt>Date</dt><dd>${dayName(e.booking_date)} ${e.booking_date.slice(0, 4)}</dd><dt>Compte</dt><dd>${esc(a ? `${a.institution} · ${a.name}` : "")}</dd>${e.counterparty_iban ? `<dt>IBAN</dt><dd class="mono">${esc(e.counterparty_iban)}</dd>` : ""}${raw ? `<dt>Libellé bancaire</dt><dd class="mono">${esc(raw)}</dd>` : ""}${e.notes && e.notes.length ? `<dt>Note</dt><dd>${esc(e.notes.map((n) => n.text).join(" · "))}</dd>` : ""}</dl>
       ${internal(e) ? `<div class="status">${ic("info")}<span>Virement entre tes comptes : exclu des revenus et des dépenses.</span></div>` : ""}
       ${e.kind === "movement" ? `<h3>Catégorie</h3>${grid(cats, direction, sh.tmp, "txcat")}
-      ${e.counterparty ? `<label class="check"><input type="checkbox" id="tx-always" ${sh.always ? "checked" : ""}>Toujours classer « ${esc(e.counterparty)} » ainsi</label>` : ""}
+      ${ruleKey(e) ? `<label class="check"><input type="checkbox" id="tx-always" ${sh.always ? "checked" : ""}>Toujours classer « ${esc(ruleKey(e))} » ainsi</label>` : ""}
+      ${ruleKey(e) && sh.always ? `<label class="check check-in"><input type="checkbox" id="tx-only" ${sh.only ? "checked" : ""}>Seulement depuis ${esc(a ? a.name : "ce compte")}</label>` : ""}
       ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}` : ""}`,
     foot: e.kind === "movement" ? `<button class="primary" type="button" data-a="tx-ok" ${changed && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer avec Face ID"}</button>` : "",
   };
@@ -278,7 +302,7 @@ SHEETS.catpick = (i) => {
   if (!g) return null;
   return {
     title: `Catégorie pour « ${esc(g.counterparty)} »`,
-    body: grid(catMap(), g.direction === "credit" ? "credit" : "debit", picks[g.counterparty], "pickset"),
+    body: grid(catMap(), g.direction === "credit" ? "credit" : "debit", picks[g.key], "pickset"),
     foot: '<button class="secondary" type="button" data-a="sheet-close">Fermer</button>',
   };
 };
@@ -293,6 +317,21 @@ function periodOf(k) {
   if (k === "m3") return [monthSpan(shiftMonth(m, -2))[0], monthSpan(m)[1]];
   return [`${m.slice(0, 4)}-01-01`, `${m.slice(0, 4)}-12-31`];
 }
+
+SHEETS.rest = (_arg, sh) => {
+  const cats = catMap();
+  if (!sh.tmp) sh.tmp = { year: new Date().getFullYear() - 2, cat: cats[REST_DEFAULT] ? REST_DEFAULT : "" };
+  const t = sh.tmp, now = new Date().getFullYear();
+  const years = Array.from({ length: now - 2014 }, (_, k) => now - k);
+  return {
+    title: "Classer tout l'ancien",
+    body: `<p class="hint">Les dépenses encore sans catégorie d'avant l'année choisie prennent toutes la même catégorie. Les revenus et ce qui est déjà classé ne bougent pas. L'aperçu donne le nombre exact avant ton Face ID.</p>
+      <div class="form"><label for="rest-year">Avant le 1er janvier</label><select id="rest-year">${years.map((y) => `<option value="${y}" ${y === t.year ? "selected" : ""}>${y}</option>`).join("")}</select></div>
+      <h3>Catégorie</h3>${grid(cats, "debit", t.cat, "restcat")}
+      ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}`,
+    foot: `<button class="primary" type="button" data-a="rest-ok" ${t.cat && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : "Classer avec Face ID"}</button>`,
+  };
+};
 
 SHEETS.jfilter = (_arg, sh) => {
   if (!sh.tmp) sh.tmp = { ...F() };
@@ -334,7 +373,12 @@ document.addEventListener("input", jfInput);
 document.addEventListener("change", jfInput);
 
 document.addEventListener("change", (e) => {
-  if (e.target.id === "tx-always" && SH.kind === "tx") SH.always = e.target.checked;
+  if (e.target.id === "tx-always" && SH.kind === "tx") {
+    SH.always = e.target.checked;
+    renderSheet();
+  }
+  if (e.target.id === "tx-only" && SH.kind === "tx") SH.only = e.target.checked;
+  if (e.target.id === "rest-year" && SH.kind === "rest") SH.tmp.year = Number(e.target.value);
 });
 
 async function run(fn) {
@@ -400,8 +444,8 @@ export const actions = {
   rgopen: (i) => {
     const g = groupAt(i);
     if (!g) return;
-    if (opened.has(g.counterparty)) opened.delete(g.counterparty);
-    else opened.add(g.counterparty);
+    if (opened.has(g.key)) opened.delete(g.key);
+    else opened.add(g.key);
     store.notify();
   },
   jmore: () => load(true),
@@ -409,14 +453,22 @@ export const actions = {
     store.use(catsPath);
     openSheet("tx", id);
     SH.always = false;
+    SH.only = false;
   },
   txcat: (v) => { SH.tmp = v; renderSheet(); },
   "tx-ok": async () => {
     const e = store.data(`/finance/entries/${encodeURIComponent(SH.arg)}`);
     if (!e) return;
     const cat = SH.tmp;
-    const items = [["recategorize", { entry_id: e.id, category_id: cat }]];
-    if (SH.always && e.counterparty) items.push(["create_rule", { pattern: e.counterparty, direction: e.amount.minor > 0 ? "credit" : "debit", category_id: cat, priority: ALWAYS_PRIORITY }]);
+    // avec « Toujours », la règle classe aussi cette écriture, sauf un choix déjà fait à la main
+    // (qu'une règle ne remplace jamais) : proposer les deux ensemble rendait la règle périmée
+    // dès que la catégorie de l'écriture passait la première
+    const rule = SH.always && ruleKey(e);
+    const manual = e.category && !["rule", "transfer"].includes(e.category.source);
+    const items = rule && !manual ? [] : [["recategorize", { entry_id: e.id, category_id: cat }]];
+    // « seulement depuis ce compte » : la mensualité payée depuis la poche, pas tout ce qui
+    // part vers la même personne
+    if (rule) items.push(["create_rule", { pattern: rule, direction: e.amount.minor > 0 ? "credit" : "debit", category_id: cat, priority: ALWAYS_PRIORITY, ...(SH.only ? { account_id: e.account_id } : {}) }]);
     SH.busy = true;
     SH.err = "";
     renderSheet();
@@ -427,7 +479,7 @@ export const actions = {
         const name = catMap()[cat]?.name || cat;
         closeSheet();
         tx.key = null;
-        toast(SH.always ? `Classée en ${name}, règle créée pour « ${e.counterparty} »` : `Classée en ${name}`);
+        toast(SH.always ? `Classée en ${name}, règle créée pour « ${rule} »` : `Classée en ${name}`);
       }
     } catch (err) {
       SH.err = failure(err);
@@ -442,30 +494,61 @@ export const actions = {
     const g = groupAt(v.slice(0, k));
     if (!g) return;
     const id = v.slice(k + 1);
-    if (picks[g.counterparty] === id) delete picks[g.counterparty];
-    else picks[g.counterparty] = id;
+    if (picks[g.key] === id) delete picks[g.key];
+    else picks[g.key] = id;
     store.notify();
   },
   pickmore: (i) => openSheet("catpick", i),
   pickset: (v) => {
     const g = groupAt(SH.arg);
-    if (g) picks[g.counterparty] = v;
+    if (g) picks[g.key] = v;
     closeSheet();
     store.notify();
   },
+  rest: () => openSheet("rest"),
+  restcat: (v) => { SH.tmp.cat = v; renderSheet(); },
+  "rest-ok": async () => {
+    const t = SH.tmp;
+    SH.busy = true;
+    SH.err = "";
+    renderSheet();
+    try {
+      const [text, bad] = outcome(await proposeAndApprove([["categorize_rest", { before: `${t.year}-01-01`, direction: "debit", category_id: t.cat }]]));
+      if (bad) SH.err = text;
+      else {
+        closeSheet();
+        toast(`Ancien classé · ${text}`);
+      }
+    } catch (err) {
+      SH.err = failure(err);
+    } finally {
+      SH.busy = false;
+      if (SH.kind) renderSheet();
+    }
+  },
+  "packs-up": () => run(async () => {
+    const up = packsToUpdate();
+    if (!up.length) return;
+    try {
+      const [text, bad] = outcome(await proposeAndApprove(up.map((i) => ["install_pack", { name: i.name }])));
+      toast(bad ? text : `Règles installées · ${text}`, { error: bad });
+    } catch (err) {
+      toast(failure(err), { error: true });
+    }
+  }),
   "review-ok": () => run(async () => {
-    const gs = (store.data(reviewPath)?.groups || []).filter((g) => picks[g.counterparty]);
+    const gs = (store.data(reviewPath)?.groups || []).filter((g) => picks[g.key]);
     const items = [];
     for (const g of gs) {
-      const cat = picks[g.counterparty];
+      const cat = picks[g.key];
       // la règle catégorise aussi, à l'application, les écritures en attente qui lui correspondent
-      if (always.has(g.counterparty) && g.counterparty !== "(inconnu)") items.push(["create_rule", { pattern: g.counterparty, direction: g.direction, category_id: cat, priority: ALWAYS_PRIORITY }]);
+      if (always.has(g.key) && g.counterparty !== "(inconnu)") items.push(["create_rule", { pattern: g.counterparty, direction: g.direction, category_id: cat, priority: ALWAYS_PRIORITY }]);
       else for (const id of g.entry_ids) items.push(["recategorize", { entry_id: id, category_id: cat }]);
     }
     if (!items.length) return;
     try {
       const [text, bad] = outcome(await proposeAndApprove(items));
-      if (!bad) for (const g of gs) { delete picks[g.counterparty]; always.delete(g.counterparty); }
+      if (!bad) for (const g of gs) { delete picks[g.key]; always.delete(g.key); }
       toast(bad ? text : `${gs.length} contrepartie${gs.length > 1 ? "s" : ""} classée${gs.length > 1 ? "s" : ""} · ${text}`, { error: bad });
     } catch (err) {
       toast(failure(err), { error: true });

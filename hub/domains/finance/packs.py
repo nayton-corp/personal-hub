@@ -116,7 +116,11 @@ def parse(raw: str) -> Pack:
             raise PackError(f"rules.{i} : liste de mots-clés attendue")
         direction = g.get("direction", "any")
         fld = g.get("field", "search_text")
-        if direction not in DIRECTIONS or fld not in ("search_text", "counterparty_iban"):
+        if direction not in DIRECTIONS or fld not in (
+            "search_text",
+            "counterparty_iban",
+            "bank_tx_code",
+        ):
             raise PackError(f"rules.{i} : sens ou champ inconnu")
         if not isinstance(g.get("priority", 100), int):
             raise PackError(f"rules.{i} : priorité entière attendue")
@@ -249,7 +253,7 @@ def export(conn: Connection, name: str = "perso", *, origins: Iterable[str] = ()
         for r in rules.list_rules(conn, active_only=True)
         if not r.id.startswith("system-")
         and r.account_id is None  # une règle d'un compte ne vaut que dans ce hub
-        and r.field in ("search_text", "counterparty_iban")
+        and r.field in ("search_text", "counterparty_iban", "bank_tx_code")
         and (not wanted or r.id.startswith(wanted))
     ]
     grouped: dict[tuple[str, str, int, str], list[str]] = {}
