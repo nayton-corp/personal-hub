@@ -236,6 +236,17 @@ def create(
         raise Problem("validation.params", "identifiant : minuscules, chiffres et tirets")
     if get(conn, connection_id) is not None:
         raise Problem("connection.exists")
+    if spec.single:
+        taken = conn.execute(
+            text("SELECT id FROM connections WHERE connector = :c LIMIT 1"), {"c": connector}
+        ).scalar()
+        if taken:
+            raise Problem(
+                "connection.single",
+                f"« {spec.label} » existe déjà ({taken}) : un portefeuille crypto s'ajoute dans "
+                "ses réglages, section Portefeuilles",
+                connection=taken,
+            )
     at = now_iso()
     conn.execute(
         text(
