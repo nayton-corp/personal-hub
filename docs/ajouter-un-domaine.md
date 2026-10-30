@@ -44,7 +44,7 @@ invalide.
 - `description` et `assistant` : ce que l'assistant lit du domaine, et ses consignes.
 - `app` : `tabs` (onglets : identifiant, libellé, icône, module, ordre), `home_cards` (blocs
   de l'accueil, lus sur une route du domaine), `settings` (rubriques de « Sources et
-  réglages », rangées par groupe), `cards` (module qui dessine ses cartes à valider), `home`
+  réglages », dans la section du domaine, ordonnées par groupe), `cards` (module qui dessine ses cartes à valider), `home`
   (module de ses blocs d'accueil), `module` (son module : démarrage, rendu commun, liens des
   notifications). Un écran ne reprend jamais celui de la coquille ni d'un autre domaine.
 - `importers` : les fichiers de la boîte d'entrée qu'il réclame (extensions, et `claims`
@@ -81,7 +81,7 @@ invalide.
   coquille (`../../ui.js`, `../../store.js`…) et les modules de son dossier ; jamais un autre
   domaine (`tests/web/test_front_boundaries.py`). Un onglet exporte
   `render()` et `actions` (et, au besoin, `todoCount()`, `todoLabel`) ; un bloc d'accueil
-  exporte `render(box)`, et au besoin `lead` (son bloc passe avant « À faire ») et `rows()` (ses
+  exporte `render(box)` (son bloc, sous son titre), et au besoin `rows()` (ses
   lignes de « À faire » et « À savoir », `null` tant que ses données manquent) ; le module de
   cartes exporte au besoin `detail(p)` (ce qui se déplie sous une carte) et `prepare(ids)`
   (cartes retouchées avant le Face ID) ; une rubrique exporte `rubric(id)` et `rubricStatus(id)` ; le module

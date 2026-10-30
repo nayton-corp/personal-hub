@@ -1,9 +1,9 @@
-// Accueil de la coquille (cœur) : les blocs des domaines, avec au milieu « À faire » (ce qui se
-// règle d'un geste, dont les propositions à valider) et « À savoir ». Chaque ligne mène à
-// l'écran où l'on agit.
+// Accueil de la coquille (cœur), neutre : aucun domaine ne passe en tête. D'abord « À faire »
+// (ce qui se règle d'un geste, dont les propositions à valider) et « À savoir », tous domaines
+// confondus, où chaque ligne porte le nom de son domaine et mène à l'écran où l'on agit ; puis
+// le bloc de chaque domaine sous son titre, dans l'ordre des domaines.
 // Le module d'accueil d'un domaine (manifeste `home`) exporte render(box) ; il peut exporter
-// lead (son bloc passe avant les listes), et rows() : ses lignes { ic, c, mark, t, s, a, v,
-// info }, ou null tant que ses données manquent.
+// rows() : ses lignes { ic, c, mark, t, s, a, v, info }, ou null tant que ses données manquent.
 import { pendingCount, pendingPath } from "./approvals.js";
 import { store } from "./store.js";
 import { esc, fill, ibox, ic } from "./ui.js";
@@ -15,12 +15,11 @@ export function add(domain, module) {
   HOMES.push([domain, module]);
 }
 
-// un conteneur par domaine, et celui des listes après les blocs de tête ; créés au premier rendu
+// le conteneur des listes, puis un par domaine ; créés au premier rendu
 function boxes() {
   const body = $("homeBody");
   if (!body.childElementCount) {
-    const keys = [...HOMES.filter(([, m]) => m.lead), [""], ...HOMES.filter(([, m]) => !m.lead)].map(([d]) => d);
-    for (const key of keys) {
+    for (const key of ["", ...HOMES.map(([d]) => d)]) {
       const b = Object.assign(document.createElement("div"), { className: "home-domain" });
       if (key) b.dataset.home = key;
       else b.dataset.lists = "";
@@ -36,11 +35,11 @@ function rows() {
   const out = [];
   const n = pendingCount();
   if (n) out.push({ ic: "faceid", c: "var(--accent)", t: `${n} proposition${n > 1 ? "s" : ""} à valider`, s: "Un seul Face ID pour tout le lot", a: "props" });
-  for (const [, m] of HOMES) {
+  for (const [d, m] of HOMES) {
     if (!m.rows) continue;
     const r = m.rows();
     if (r == null) return null;
-    out.push(...r);
+    out.push(...r.map((x) => ({ ...x, d })));
   }
   return out;
 }
@@ -50,9 +49,12 @@ export function todoCount() {
   return all ? all.filter((x) => !x.info).length : pendingCount();
 }
 
+const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const sub = (x) => (x.d ? `${capital(x.d)} · ${x.s}` : x.s);
+
 const row = (x) => `<button class="trow press" type="button" data-a="${x.a}" ${x.v ? `data-v="${esc(x.v)}"` : ""}>
     ${x.mark || ibox(ic(x.ic), x.c)}
-    <span class="row-main"><span class="row-title">${esc(x.t)}</span><span class="row-sub">${esc(x.s)}</span></span>
+    <span class="row-main"><span class="row-title">${esc(x.t)}</span><span class="row-sub">${esc(sub(x))}</span></span>
     <span class="chev-r">${ic("chev")}</span></button>`;
 
 function lists() {

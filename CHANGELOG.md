@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+### App
+
+- L'accueil est neutre : aucun domaine ne passe plus en tête. « À faire » et « À savoir »
+  viennent d'abord, chaque ligne avec le nom de son domaine (« Finance · … »), puis le bloc de
+  chaque domaine sous son titre (Agenda, Documents, Finance).
+- « Sources et réglages » est rangé par domaine : une section par domaine (Finance : connexions,
+  comptes, dettes, export, budget, impôts), puis la section du hub (affichage, profil, sécurité,
+  état), au lieu de « Données », « Préférences », « Compte ».
+- Les lignes de l'agenda et des documents sur l'accueil ne sont plus coupées après trois lettres :
+  sans pastille, leur titre tombait dans la colonne de l'icône.
+
 ## [0.13.6] · 2026-10-30
 
 ### App

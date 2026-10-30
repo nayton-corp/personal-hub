@@ -25,7 +25,11 @@ import pytest
 
 from hub.core import sessions
 from hub.core.context import HubContext
+from hub.core.registry import Registry
+from hub.domains.agenda.domain import AgendaDomain
 from hub.platform.settings import Paths, Secrets, Server, Settings
+from tests.agenda.test_agenda import FakeBridge
+from tests.documents.test_documents import library
 
 playwright = pytest.importorskip("playwright.sync_api")
 
@@ -105,13 +109,17 @@ def instance(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, st
         iban, name, options = line.split("\t")
         _hub(env, "finance", "accounts", "add", name, "--iban", iban, *options.split())
     _hub(env, "finance", "import-history", str(demo))
+    _hub(env, "documents", "import-library", str(library(home / "Bibliothèque")))
 
     settings = Settings(
         paths=Paths(**paths),
         server=Server(public_origin=origin, web_root=ROOT / "hub" / "web"),
         secrets=Secrets(age_key_file=key),
     )
-    hub = HubContext.build(settings)
+    # l'agenda lit un pont factice : son bloc d'accueil a des lignes, comme sur le Mac
+    found = Registry.discover(settings)
+    agenda = AgendaDomain(settings, FakeBridge())
+    hub = HubContext.build(settings, Registry(agenda if d.name == "agenda" else d for d in found))
     with serve(hub, port):
         yield origin, bootstrap(hub)
     hub.dispose()
@@ -200,6 +208,19 @@ def test_sources_and_settings_render_at_375px(page: Any) -> None:
     page.click('#tabs button[data-v="accueil"]')
     page.locator('#accueil [data-a="settings"]').click()
     _screen_ok(page, "sources")
+
+
+def test_home_rows_of_every_domain_use_the_full_width(page: Any) -> None:
+    """Une ligne sans pastille (agenda, documents) prend toute la largeur : son titre tombait
+    dans la colonne de 38 px de l'icône (« Soi… »)."""
+    page.click('#tabs button[data-v="accueil"]')
+    for d in ("agenda", "documents"):
+        title = page.locator(f'#accueil [data-home="{d}"] .row-title').first
+        title.wait_for()
+        assert title.evaluate("e => e.getBoundingClientRect().width") > 200, d
+    assert "Lave-linge" in page.inner_text('#accueil [data-home="documents"]')
+    subs = page.locator("#accueil [data-lists] .row-sub").all_text_contents()
+    assert any(x.startswith("Finance · ") for x in subs), subs
 
 
 def test_the_year_of_demo_data_reaches_the_screens(page: Any) -> None:

@@ -136,13 +136,19 @@ class DocumentsDomain:
         }
 
     def overview(self) -> dict[str, Any]:
+        """Le bloc de l'accueil ; un document y porte le nom de sa fiche (`card`), plus parlant
+        que celui de son fichier."""
         with self._engine.connect() as conn:
             recent = store.documents(conn)[:5]
+            cards = store.cards(conn)
         keep = ("id", "title", "card_id", "household", "at")
         return {
             **self.counts(),
             "due": self.due(),
-            "recent": [{k: d[k] for k in keep} for d in recent],
+            "recent": [
+                {**{k: d[k] for k in keep}, "card": cards.get(d["card_id"] or "", {}).get("name")}
+                for d in recent
+            ],
         }
 
     # --- écritures et reconstruction ----------------------------------------------------------

@@ -106,6 +106,9 @@ def test_the_library_is_taken_over_once(imported: DocumentsDomain, tmp_path: Pat
     assert imported.counts() == {"cards": 1, "documents": 2, "household": 2, "maintenance_due": 1}
     (seen,) = imported.observations(5)
     assert (seen.kind, seen.on_date) == ("maintenance_due", "2026-10-01")
+    # à l'accueil, un document porte le nom de sa fiche plutôt que celui de son fichier
+    names = {d["card"] for d in imported.overview()["recent"] if d["card_id"]}
+    assert names == {"Lave-linge"}
     assert seen.title == "Entretien : Lave-linge (nettoyer le filtre)"
 
 

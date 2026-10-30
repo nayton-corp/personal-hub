@@ -50,7 +50,8 @@ class HomeCard:
 
 @dataclass(frozen=True)
 class SettingsSection:
-    """Une rubrique de « Sources et réglages », rangée dans `group` (Données, Préférences)."""
+    """Une rubrique de « Sources et réglages », dans la section de son domaine ; `group` (Données,
+    Préférences) l'y ordonne."""
 
     id: str
     label: str
