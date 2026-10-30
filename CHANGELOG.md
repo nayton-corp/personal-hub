@@ -12,6 +12,10 @@
 - L'assistant reprend les outils des domaines du hub (`hub_capabilities`), un type de demande
   par domaine : montrés et ouverts aux seules personnes de `hub.owners` (jamais à Kim ni à une
   voix de pièce), avec le jeton des agrégats ; un domaine lu en entier est écarté.
+- Plus de conteneur `brain` : l'assistant tourne en natif sur le Mac et fait aussi le
+  classement du matin (`classify`, jeton `brain`, même modèle résident). Les jetons restent
+  chiffrés par age (`brain.enc.yaml`). À retirer de `deploy/.env` : `,brain` dans
+  `COMPOSE_PROFILES`, `HUB_BRAIN_SECRETS`, `HUB_BRAIN_MODEL`.
 
 ### Recherche, liens et constats (chantier S9)
 

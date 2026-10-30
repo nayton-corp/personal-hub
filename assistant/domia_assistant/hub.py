@@ -9,6 +9,10 @@ L'assistant lit les domaines que son jeton ouvre (`hub_capabilities`) et en repr
   question d'argent n'obtient que des agrégats ;
 - le jeton vient du fichier de secrets chiffré du hub (section `brain`, clé `aggregates`), jamais du dépôt.
 
+Il fait aussi le travail de l'ancien conteneur `brain` du hub : chaque matin (`hub.classify_at`), il propose une
+catégorie pour les commerçants jamais vus, avec le jeton `brain` et le modèle résident ; ce sont des cartes, que le
+propriétaire valide dans l'app.
+
 Le client et la boîte à outils sont ceux du hub (`hub.brain`) : ce module n'existe que si le paquet du hub est
 installé à côté de l'assistant (`pip install -e ..`).
 """
@@ -36,6 +40,8 @@ class HubSettings:
     secrets: Path | None = None  # brain.enc.yaml, chiffré par age
     age_key: Path | None = None
     token: str | None = field(default=None, repr=False)  # HUB_ASSISTANT_TOKEN, pour un essai
+    classify_at: str | None = "08:30"  # suggestions de catégorie du matin ; None : jamais
+    state: Path = Path.home() / "PersonalHub" / "brain"  # commerçants déjà proposés
 
 
 def settings(raw: dict | None, env: dict[str, str]) -> HubSettings | None:
@@ -56,21 +62,49 @@ def settings(raw: dict | None, env: dict[str, str]) -> HubSettings | None:
         secrets=path("secrets"),
         age_key=path("age_key"),
         token=env.get("HUB_ASSISTANT_TOKEN", "").strip() or None,
+        classify_at=raw.get("classify_at", HubSettings.classify_at),
+        state=path("state") or HubSettings.state,
     )
 
 
-def token(cfg: HubSettings) -> str:
-    """Le jeton « agrégats » : celui de l'essai, sinon la section `brain` du fichier de secrets chiffré."""
-    if cfg.token:
+def token(cfg: HubSettings, name: str = "aggregates") -> str:
+    """Le jeton `aggregates` (la conversation) ou `brain` (le classement) : celui de l'essai pour la conversation,
+    sinon la section `brain` du fichier de secrets chiffré."""
+    if cfg.token and name == "aggregates":
         return cfg.token
     if cfg.secrets is None or cfg.age_key is None:
         raise RuntimeError("hub : ni HUB_ASSISTANT_TOKEN, ni hub.secrets et hub.age_key")
     from hub.platform import secrets  # le paquet du hub, installé à côté
 
-    value = secrets.section(cfg.secrets, cfg.age_key, "brain").get("aggregates")
+    value = secrets.section(cfg.secrets, cfg.age_key, "brain").get(name)
     if not isinstance(value, str) or not value:
-        raise RuntimeError("hub : jeton « aggregates » absent de la section brain des secrets")
+        raise RuntimeError(f"hub : jeton « {name} » absent de la section brain des secrets")
     return value
+
+
+MODES = ("suggest", "catchup", "direct")
+
+
+def classify(cfg: HubSettings, model_url: str, model: str, mode: str = "suggest", dry_run: bool = False) -> dict:
+    """Le classement du brain du hub, avec le modèle résident de l'assistant (un seul modèle chargé) : `suggest` les
+    commerçants jamais vus (le matin), `catchup` une règle par commerçant, `direct` les achats uniques. Rend des
+    compteurs, jamais un montant ni un libellé."""
+    from hub.brain import suggest as brain
+    from hub.brain.hubapi import HubApi
+    from hub.brain.llm import OpenAICompatible
+    from hub.brain.toolbox import Toolbox as HubToolbox
+
+    box = HubToolbox(HubApi(cfg.url, token(cfg, "brain")))
+    box.start()
+    run = {"suggest": brain.suggest, "catchup": brain.catchup, "direct": brain.direct}[mode]
+    report = run(box, OpenAICompatible(model_url, model), brain.Memory(cfg.state), dry_run=dry_run)
+    return {
+        "merchants": report.merchants,
+        "suggested": report.suggested,
+        "proposals": report.proposals,
+        "skipped": report.skipped,
+        "stopped": report.stopped,
+    }
 
 
 @dataclass

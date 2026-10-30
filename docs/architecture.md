@@ -22,7 +22,7 @@ flowchart TB
   platform["Plateforme (hub.platform)<br/>SQLite, migrations, réglages, secrets, journaux"]
   kernel["Noyau (hub.kernel)<br/>Money, URN, horloge, JSON canonique, chaîne"]
   collectors["hub.collectors<br/>déposent des fichiers"]
-  brain["hub.brain<br/>assistant local, par l'API seulement"]
+  brain["assistant/ et hub.brain<br/>assistant local (natif), par l'API seulement"]
   bords --> core
   domaines --> core
   core --> platform --> kernel
@@ -130,6 +130,7 @@ onglets, feuilles) et `sources.js` (réglages) ne nomment aucun domaine : ils li
 
 Sur le Mac (phase 1), en conteneurs (`deploy/compose.yaml`) : `api`, `web` (Caddy : fichiers
 de l'app, CSP, proxy `/api`), `tailscale`, `importer` (`hub watch-inbox`), `scheduler`
-(crontab), `litestream`, deux collecteurs (`collector-browser`, `collector-api`) et `brain`
-(l'assistant) ; le modèle local (Ollama) en natif. Voir
-[exploitation/](exploitation/README.md).
+(crontab), `litestream` et deux collecteurs (`collector-browser`, `collector-api`). En natif,
+lancés par launchd : l'assistant (`assistant/`, voix, maison, outils du hub, classement du
+matin), qui joint le hub par Tailscale, et le modèle local (Ollama). Voir
+[exploitation/](exploitation/README.md) et [brain.md](brain.md).

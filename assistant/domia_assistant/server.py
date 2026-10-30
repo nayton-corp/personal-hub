@@ -225,14 +225,29 @@ def serve(
 
 
 def clock(
-    observer: Observer, zone: str, brief_at: str | None, stop: threading.Event, tick: float = 30.0, engagements=None
+    observer: Observer,
+    zone: str,
+    brief_at: str | None,
+    stop: threading.Event,
+    tick: float = 30.0,
+    engagements=None,
+    daily: dict[str, Callable[[], Any]] | None = None,
 ) -> None:
     """L'horloge de l'observateur : à chaque heure pile, un réveil ; à `brief_at`, le brief du soir ; à chaque tour, les
-    engagements dus. Une erreur est journalisée, l'horloge continue."""
+    engagements dus ; `daily` : une tâche par jour à son heure (HH:MM), le classement du hub. Une erreur est
+    journalisée, l'horloge continue."""
     tz = ZoneInfo(zone)
     done: set[str] = set()
     while not stop.wait(tick):
         local = datetime.now(tz)
+        for at, job in (daily or {}).items():
+            key = f"daily-{at}-{local:%Y%m%d}"
+            if local.strftime("%H:%M") == at and key not in done:
+                done.add(key)
+                try:
+                    LOG.info("daily at=%s %s", at, job())
+                except Exception:
+                    LOG.exception("daily_failed at=%s", at)
         hour_key = local.strftime("obs-%Y%m%d%H")
         try:
             if brief_at and local.strftime("%H:%M") == brief_at and f"brief-{local:%Y%m%d}" not in done:

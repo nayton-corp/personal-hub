@@ -29,3 +29,4 @@ assistant:
 #   secrets: ~/.config/hub/brain.enc.yaml  # jetons « aggregates » et « brain », chiffrés par age
 #   age_key: ~/.config/hub/age.key
 #   full_domains: []                   # domaines repris même lus en entier : jamais la finance
+#   classify_at: "08:30"               # suggestions de catégorie du matin (jeton brain) ; null : jamais

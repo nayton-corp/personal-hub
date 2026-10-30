@@ -203,3 +203,60 @@ def test_the_real_hub_client_fits(monkeypatch):
     assert module is not None
     assert module.tools[0].run({"month": "2026-10"}, ROBIN) == TOTALS
     assert seen[-1] == ("POST", "http://hub/api/tools/finance/finance_month_totals")
+
+
+def test_the_morning_classification_uses_the_brain_token_and_the_resident_model(monkeypatch, tmp_path):
+    """Le classement de l'ancien conteneur brain : le jeton « brain », le modèle de l'assistant, des compteurs."""
+    import pytest
+
+    pytest.importorskip("hub.brain.suggest")
+    from hub.brain import suggest as brain
+
+    seen = {}
+
+    def fake_suggest(box, model, memory, *, dry_run=False):
+        seen.update(token=box.api.token, model=model.model, url=model.base, state=memory.path.parent, dry=dry_run)
+        return brain.Report(merchants=3, suggested=2, proposals=2)
+
+    monkeypatch.setattr(brain, "suggest", fake_suggest)
+    monkeypatch.setattr(hub, "token", lambda cfg, name="aggregates": f"jeton-{name}")
+    monkeypatch.setattr("hub.brain.toolbox.Toolbox.start", lambda self: None)
+    cfg = hub.HubSettings("http://hub", ("robin",), state=tmp_path)
+    out = hub.classify(cfg, "http://127.0.0.1:11434/v1", "domia-mistral", dry_run=True)
+    assert out == {"merchants": 3, "suggested": 2, "proposals": 2, "skipped": 0, "stopped": None}
+    assert seen == {
+        "token": "jeton-brain",
+        "model": "domia-mistral",
+        "url": "http://127.0.0.1:11434/v1",
+        "state": tmp_path,
+        "dry": True,
+    }
+
+
+def test_the_clock_runs_a_daily_job_once_at_its_time(monkeypatch):
+    import threading
+    from datetime import datetime as real
+
+    from domia_assistant import server
+
+    class Fixed(real):
+        @classmethod
+        def now(cls, tz=None):
+            return real(2026, 10, 30, 8, 30, tzinfo=tz)
+
+    monkeypatch.setattr(server, "datetime", Fixed)
+    runs = []
+    stop = threading.Event()
+
+    class Observer:
+        def run_once(self):
+            return None
+
+    def job():
+        runs.append(1)
+        if len(runs) == 1:
+            threading.Timer(0.05, stop.set).start()
+        return {"proposals": 0}
+
+    server.clock(Observer(), "Europe/Zurich", None, stop, tick=0.01, daily={"08:30": job})
+    assert runs == [1]

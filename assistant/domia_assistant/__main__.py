@@ -7,6 +7,7 @@ index     (ré)indexe la bibliothèque
 observe   un réveil de l'observateur, tout de suite
 say       une phrase, comme si elle venait de Domia (--person, --room)
 voice     la voix est-elle prête ? Charge Whisper (le télécharge la première fois), transcrit et dit une phrase
+classify  le classement du hub, tout de suite : --mode suggest (défaut), catchup ou direct ; --dry-run
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from .assistant import Assistant
 from .config import Settings, load
 from .domia import Domia, DomiaError, Noting
 from .engagements import Engagements
-from .hub import HubModule, connect
+from .hub import MODES, HubModule, classify, connect
 from .library import Library
 from .llm import ModelError, OpenAICompatible
 from .memory import Memory
@@ -79,6 +80,17 @@ class Parts:
             self._hub_retry = time.monotonic() + HUB_RETRY_S
         return self._hub
 
+    def classify(self, mode: str = "suggest", dry_run: bool = False) -> dict:
+        s = self.settings
+        if s.hub is None:
+            raise SystemExit("classify : pas de section hub dans config.yaml")
+        return classify(s.hub, s.model_url, s.model, mode, dry_run)
+
+    def daily(self) -> dict:
+        """Les tâches du matin : le classement du hub, à `hub.classify_at`."""
+        cfg = self.settings.hub
+        return {cfg.classify_at: self.classify} if cfg is not None and cfg.classify_at else {}
+
     def toolbox(self):
         vision = self.settings.vision_model
         look = (lambda image, mime, question: self.model.look(image, mime, question, vision)) if vision else None
@@ -123,11 +135,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="domia_assistant", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("command", choices=["serve", "mcp", "check", "index", "observe", "say", "voice"])
+    parser.add_argument("command", choices=["serve", "mcp", "check", "index", "observe", "say", "voice", "classify"])
     parser.add_argument("text", nargs="?")
     parser.add_argument("--config", type=Path, default=HERE / "config.yaml")
     parser.add_argument("--person")
     parser.add_argument("--room")
+    parser.add_argument("--mode", choices=MODES, default="suggest")
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s", stream=sys.stderr)
     parts = Parts(load(args.config))
@@ -140,7 +154,9 @@ def main(argv: list[str] | None = None) -> int:
         logging.getLogger("assistant").info("listening host=%s port=%d model=%s", s.listen_host, s.listen_port, s.model)
         threading.Thread(target=server.warm, args=(parts.assistant, stop), name="warm", daemon=True).start()
         with contextlib.suppress(KeyboardInterrupt):
-            server.clock(parts.observer, s.timezone, s.brief_at, stop, engagements=parts.engagements)
+            server.clock(
+                parts.observer, s.timezone, s.brief_at, stop, engagements=parts.engagements, daily=parts.daily()
+            )
         httpd.shutdown()
         return 0
     if args.command == "mcp":
@@ -181,6 +197,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "voice":
         return voice_check(parts.voice)
+    if args.command == "classify":
+        print(json.dumps(parts.classify(args.mode, args.dry_run), ensure_ascii=False))
+        return 0
     if args.command == "say":
         if not args.text:
             parser.error("say demande une phrase")

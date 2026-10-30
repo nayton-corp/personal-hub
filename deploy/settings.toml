@@ -21,14 +21,6 @@ home = "/var/lib/hub-collector"
 # G4 : horaires, banque Enable Banking, devises et cryptos suivies sont des réglages de chaque
 # connexion (app ou `hub connections set`), plus de ce fichier.
 
-# lot 7 : IA locale, lu par le conteneur « brain » seulement. Le modèle tourne en natif sur le Mac
-# (Ollama, GPU) ; MLX : llm_url = "http://host.docker.internal:8080/v1" et model = le dépôt MLX.
-[brain]
-api_url = "http://api:8710"
-llm_url = "http://host.docker.internal:11434/v1"
-model = "qwen3:32b"
-state_dir = "/srv/hub/brain"
-
 [secrets]
 file = "/srv/hub/config/secrets.enc.yaml"
 age_key_file = "/run/secrets/age_key"

@@ -7,6 +7,19 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-022 · Plus de conteneur pour l'IA locale (30.10.2026)
+
+- **Contexte** : le conteneur `brain` joignait Ollama par `host.docker.internal` et chargeait son
+  propre modèle (qwen3:32b) à côté de celui de l'assistant de Domia : deux gros modèles qui se
+  chassaient de la mémoire du Mac.
+- **Décision** : l'assistant (`assistant/`) tourne en natif sur le Mac et fait le travail du
+  brain : la conversation avec le jeton des agrégats, le classement du matin
+  (`hub.classify_at`) avec le jeton `brain` et le même modèle résident, la passerelle MCP. Les
+  jetons restent dans `brain.enc.yaml`, chiffré par age. `hub.brain` reste une bibliothèque du
+  hub, que l'assistant installe à côté de lui ; `hub-brain` reste pour les gestes à la main.
+- **Conséquence** : le service `brain`, son volume, `deploy/brain-crontab` et la section
+  `[brain]` de `deploy/settings.toml` disparaissent ; le profil compose `brain` n'existe plus.
+
 ## D-021 · L'assistant de Domia devient celui du hub, en paquet à part (30.10.2026)
 
 - **Contexte** : deux assistants (celui de Domia, mesuré au banc, et le brain du hub), deux

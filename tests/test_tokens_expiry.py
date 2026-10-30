@@ -54,7 +54,11 @@ def test_rotation_keeps_scopes_and_lifetime_and_revokes_the_old(hub: HubContext)
         new, new_secret = tokens.rotate(conn, old.id, "system:test") or (None, "")
         assert new is not None
         assert (new.name, new.scopes) == (old.name, old.scopes)
-        assert new.expires_at > old.expires_at
+        # même durée de vie, comptée depuis la rotation (la même milliseconde en CI rapide)
+        assert new.expires_at >= old.expires_at
+        assert parse_iso(new.expires_at) - parse_iso(new.created_at) == (
+            parse_iso(old.expires_at) - parse_iso(old.created_at)
+        )
         assert tokens.verify(conn, old_secret) is None
         assert tokens.verify(conn, new_secret) is not None
         assert tokens.rotate(conn, old.id, "system:test") is None  # déjà révoqué
