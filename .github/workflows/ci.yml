@@ -147,12 +147,25 @@ jobs:
       # la même barrière que la release, avant le tag : une faille critique corrigeable
       # bloque la PR plutôt que de griller une version
       - name: Vulnérabilités des images (Trivy, critiques corrigeables)
+        # chaque image est scannée, et chaque faille donne le chemin du paquet dans l'image
         run: |
+          failed=0
           for image in hub:ci hub-web:ci hub-collector:ci; do
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
               aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
-              image --scanners vuln --ignore-unfixed --severity CRITICAL --exit-code 1 "$image"
+              image --scanners vuln --ignore-unfixed --severity CRITICAL --format json --quiet \
+              "$image" > trivy.json
+            found=$(jq -r '.Results[]? | .Target as $t | .Vulnerabilities[]?
+              | "\(.VulnerabilityID) \(.PkgName) \(.InstalledVersion) -> \(.FixedVersion) (\(.PkgPath // $t))"' trivy.json)
+            if [ -n "$found" ]; then
+              echo "::error title=$image::failles critiques corrigeables"
+              echo "$found"
+              failed=1
+            else
+              echo "$image : aucune faille critique corrigeable"
+            fi
           done
+          exit "$failed"
       - name: Le compose reste valide
         run: |
           cp deploy/.env.example deploy/.env
