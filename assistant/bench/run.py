@@ -11,6 +11,7 @@ import argparse
 import dataclasses
 import logging
 import sys
+import tempfile
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -22,7 +23,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 from domia_assistant.__main__ import Parts  # noqa: E402
-from domia_assistant.config import load  # noqa: E402
+from domia_assistant.config import Settings, load  # noqa: E402
 from domia_assistant.grammar import normalize  # noqa: E402
 from domia_assistant.tools import Speaker, Toolbox  # noqa: E402
 
@@ -113,6 +114,14 @@ def expand(spec: dict, variants: dict, which: str) -> list[dict]:
     return out
 
 
+def isolated(settings: Settings) -> Settings:
+    """Le banc a son propre dossier (base, à-trier), jamais celui du foyer, et ne joint jamais le hub :
+    le seul hub est le vrai, ses outils y créeraient des propositions. Le 25.10, un banc a écrit trois
+    fiches de test dans la vraie bibliothèque, par le dossier partagé."""
+    home = Path(tempfile.mkdtemp(prefix="banc-"))
+    return dataclasses.replace(settings, home=home, database_file="banc.sqlite", hub=None)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=HERE.parent / "config.essai.yaml")
@@ -127,8 +136,7 @@ def main() -> int:
     args = parser.parse_args()
     spec = yaml.safe_load((HERE / "cases.yaml").read_text(encoding="utf-8"))
     variants = yaml.safe_load((HERE / "variants.yaml").read_text(encoding="utf-8")) or {}
-    # le banc écrit ses conversations dans sa propre base, jamais dans la mémoire du foyer
-    parts = Parts(dataclasses.replace(load(args.config), database_file="banc.sqlite"))
+    parts = Parts(isolated(load(args.config)))
     logging.basicConfig(level=logging.INFO, format="    %(message)s")  # la durée de chaque appel au modèle
     if not parts.settings.domia_url.endswith(":3001") and not args.not_the_essai:
         print("le banc tourne contre l'essai (port 3001), jamais contre la vraie maison", file=sys.stderr)

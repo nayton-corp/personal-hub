@@ -3,11 +3,15 @@
 // (fichier de hub/web) est chargé puis monté.
 //   - onglet (`tabs[].module`) : render(), actions ; facultatifs todoCount(), todoLabel,
 //     unlink(lien) quand l'historique quitte un lien suivi ;
-//   - accueil (`home`) : render(), actions, todoCount() ; il dessine dans [data-home=<domaine>] ;
+//   - accueil (`home`) : render(box), actions ; facultatifs lead, rows() (accueil.js) ; il
+//     dessine dans [data-home=<domaine>] ;
+//   - cartes (`cards`) : facultatifs detail(p), prepare(ids) (approvals.js) ;
 //   - rubrique (`settings[].module`) : rubric(id) dessine la page, rubricStatus(id) l'état en
 //     mots ([texte, ton] ou null) ;
 //   - module du domaine (`module`) : init(), after() après chaque rendu, deeplink(hash).
 // Tout module peut exporter init() (appelé une fois) et actions (distribuées par data-a).
+import * as accueil from "./accueil.js";
+import * as approvals from "./approvals.js";
 import * as sources from "./sources.js";
 import { api, store } from "./store.js";
 import {
@@ -18,24 +22,9 @@ const $ = (id) => document.getElementById(id);
 const P = store.params;
 const CACHED = "hub.domains"; // les manifestes du dernier lancement, pour démarrer hors ligne
 const TABS = [];
-const HOMES = []; // [domaine, module] : l'accueil empile les blocs de chaque domaine
-const home = {
-  render: () => {
-    for (const [name, m] of HOMES) {
-      let box = document.querySelector(`#accueil [data-home="${CSS.escape(name)}"]`);
-      if (!box) {
-        box = Object.assign(document.createElement("div"), { className: "home-domain" });
-        box.dataset.home = name;
-        $("accueil").append(box);
-      }
-      m.render(box);
-    }
-  },
-  todoCount: () => HOMES.reduce((n, [, m]) => n + (m.todoCount ? m.todoCount() : 0), 0),
-};
-const VIEWS = { accueil: home.render, sources: sources.render };
+const VIEWS = { accueil: accueil.render, sources: sources.render };
 const LABEL = { accueil: "Accueil", sources: "Sources et réglages" };
-const ACTIONS = { ...sources.actions };
+const ACTIONS = { ...sources.actions, ...approvals.actions };
 const MODULES = []; // modules de domaine (champ `module`), dans l'ordre des domaines
 const TODO = {}; // onglet → module qui compte ce qui reste à faire
 const LINKED = []; // modules qui savent rendre les filtres d'un lien suivi
@@ -85,13 +74,14 @@ async function mount() {
   for (const d of domains) {
     const app = d.app;
     if (app.module) MODULES.push(loaded[app.module]);
-    if (app.home) HOMES.push([d.name, loaded[app.home]]);
+    if (app.home) accueil.add(d.name, loaded[app.home]);
+    if (app.cards) approvals.addCards(d.name, loaded[app.cards]);
     for (const t of app.tabs) tabs.push({ ...t, m: loaded[t.module] });
     sources.add(app.settings.map((s) => ({ ...s, m: loaded[s.module] })));
   }
   tabs.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
   TABS.push(["accueil", "Accueil", "home"]);
-  TODO.accueil = home;
+  TODO.accueil = accueil;
   for (const t of tabs) {
     viewFor(t);
     TABS.push([t.id, t.label, t.icon]);

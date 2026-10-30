@@ -76,3 +76,28 @@ def test_the_demo_adds_a_home_block_and_a_rubric(page: Any) -> None:
     page.wait_for_selector('#sources [data-rubric="demo-prefs"]:not(.off-rubric)')
     assert "Une rubrique venue du manifeste" in page.inner_text("#sources")
     assert page.problems == []
+
+
+def test_the_home_and_its_approvals_belong_to_the_shell(page: Any) -> None:
+    """L'accueil et « À valider » sont au cœur : la carte d'un autre domaine que la finance s'y
+    valide, et « À faire » vient après les tuiles de la finance, avant les blocs des autres."""
+    page.click('#tabs button[data-v="accueil"]')
+    page.evaluate(
+        """fetch('/api/proposals', {method: 'POST', headers: {'Content-Type': 'application/json'},
+           body: JSON.stringify({domain: 'demo', kind: 'add_item', params: {name: 'lampe'}})})"""
+    )
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")  # tout se relit
+    row = page.locator('#accueil [data-lists] [data-a="props"]')
+    row.wait_for()
+    order = page.locator("#homeBody > div").evaluate_all(
+        "ds => ds.map(d => d.dataset.home ?? (d.dataset.lists === undefined ? '' : 'listes'))"
+    )
+    assert order == ["finance", "listes", "demo", ""]
+    row.click()
+    sheet = page.locator("#sheet")
+    sheet.wait_for()
+    assert "ajouter lampe" in sheet.inner_text()
+    assert "Rien ne change sans ton Face ID" in sheet.inner_text()
+    sheet.locator('[data-a="prop-reject"]').click()
+    page.wait_for_selector('#accueil [data-lists] [data-a="props"]', state="detached")
+    assert page.problems == []

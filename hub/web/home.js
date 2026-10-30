@@ -1,26 +1,21 @@
-// Accueil : le bilan du mois passé les premiers jours, deux tuiles (patrimoine, reste à vivre),
-// « À faire » (ce qui se règle d'un geste), puis « À savoir ». Chaque ligne mène à l'écran où
-// l'on agit.
+// Bloc d'accueil de la finance : le bilan du mois passé les premiers jours, deux tuiles
+// (patrimoine, reste à vivre), en tête de l'accueil ; ses lignes « À faire » et « À savoir »
+// rejoignent celles des autres domaines (accueil.js).
 import { hiddenIds } from "./accounts.js";
 import { budgetPath, model } from "./budget.js";
 import { go } from "./shell.js";
 import { base, date, monthName } from "./format.js";
 import { catMark, taxRate } from "./meta.js";
-import { approve, outcome, pendingPath, propose } from "./proposals.js";
-import { api, shiftMonth, store } from "./store.js";
-import { SHEETS, closeSheet, esc, failure, fill, ibox, ic, n0, n2, nf, openSheet, pctOnly, pf, pref, setPref, sgn, skel, toast } from "./ui.js";
+import { shiftMonth, store } from "./store.js";
+import { esc, fill, ic, n0, nf, pctOnly, pf, pref, setPref, sgn, skel } from "./ui.js";
 import * as wealth from "./wealth.js";
 
-const $ = (id) => document.getElementById(id);
 const STALE_DAYS = 45;
 const RESERVE_MONTHS = 6;
 const BILAN_DAYS = 7; // le bilan du mois passé reste sur l'accueil la première semaine
 const kpisPath = () => `/finance/kpis?month=${store.today}`;
 const alertsPath = "/observations?domain=finance"; // les constats des sentinelles
 const connPath = "/collectors/connections";
-const unchecked = new Set(); // propositions décochées dans le panneau « À valider »
-const dropped = new Map(); // carte à plusieurs écritures → écritures décochées
-let busy = false;
 
 function sparkPath(k) {
   if (!k) return null;
@@ -37,14 +32,14 @@ function spark(vals, w = 140, h = 30) {
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path d="M${pts.map((p) => p.map((x) => x.toFixed(1)).join(",")).join("L")}"/><circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3"/></svg>`;
 }
 
-function items() {
+export const lead = true;
+
+// les lignes de la finance pour « À faire » et « À savoir » ; null tant que les chiffres manquent
+export function rows() {
   const k = store.data(kpisPath());
-  if (!k) return [];
+  if (!k) return null;
   const out = [];
   // à faire : ce qui se règle d'un geste
-  const pending = store.data(pendingPath);
-  const np = pending ? pending.items.length : 0;
-  if (np) out.push({ ic: "faceid", c: "var(--accent)", t: `${np} proposition${np > 1 ? "s" : ""} à valider`, s: "Un seul Face ID pour tout le lot", a: "props" });
   if (k.to_categorize > 0) out.push({ ic: "help", c: "var(--accent)", t: `${k.to_categorize} écriture${k.to_categorize > 1 ? "s" : ""} à classer`, s: "Par contrepartie, en un Face ID", a: "gotodo" });
   const cs = store.data(connPath);
   const missing = cs ? cs.items.filter((c) => !c.ready) : [];
@@ -106,25 +101,20 @@ function bilan(cur) {
 
 const amount2Text = (m) => Math.abs(m.minor / 100).toFixed(2);
 
-export function todoCount() {
-  return items().filter((x) => !x.info).length;
-}
-
-export function render() {
+export function render(box) {
   const ke = store.use(kpisPath());
   const k = ke.data;
-  store.use(pendingPath);
   store.use(alertsPath);
   store.use(connPath);
   const be = store.use(budgetPath(store.today, "m"));
   const sp = sparkPath(k);
   const se = sp ? store.use(sp) : null;
   if (ke.status === "error") {
-    fill($("homeBody"), `<div class="err-box" role="alert">Impossible de charger l'accueil : ${esc(ke.error.message)}</div>`);
+    fill(box, `<div class="err-box" role="alert">Impossible de charger l'accueil : ${esc(ke.error.message)}</div>`);
     return;
   }
   if (!k) {
-    fill($("homeBody"), skel());
+    fill(box, skel());
     return;
   }
   // un compte masqué sort aussi du patrimoine de l'accueil
@@ -137,12 +127,6 @@ export function render() {
   const p30 = sum30 && sum30.twr != null ? Number(sum30.twr) : null;
   const g30 = sum30 ? sum30.gain.minor / 100 : null;
   const m = be.data ? model(be.data, true) : null;
-  const all = items();
-  const acts = all.filter((x) => !x.info), infos = all.filter((x) => x.info);
-  const row = (x) => `<button class="trow press" type="button" data-a="${x.a}" ${x.v ? `data-v="${esc(x.v)}"` : ""}>
-      ${x.mark || ibox(ic(x.ic), x.c)}
-      <span class="row-main"><span class="row-title">${esc(x.t)}</span><span class="row-sub">${esc(x.s)}</span></span>
-      <span class="chev-r">${ic("chev")}</span></button>`;
   let budgetTile;
   if (!m) budgetTile = `<span class="tile-lbl">${ic("wallet")}Reste à vivre</span>${skel("block")}`;
   else if (m.T == null) {
@@ -157,7 +141,7 @@ export function render() {
       <span class="pbar thin" data-css="--c:${st.color};margin-top:12px"><i data-css="width:${Math.min(100, m.ratio * 100).toFixed(1)}%"></i>${m.expected != null ? `<span class="pace" data-css="left:${(m.expected * 100).toFixed(1)}%"></span>` : ""}</span>`;
   }
   const budgetLabel = m && m.T != null ? `Reste à vivre ce mois ${nf(m.rest)} ${base()}, ${m.state.short}, ${m.daysLeft} jours restants. Ouvrir le budget` : "Ouvrir le budget";
-  fill($("homeBody"), `${bilan(be.data)}
+  fill(box, `${bilan(be.data)}
     <div class="tiles">
       <button class="tile" type="button" data-a="tab" data-v="patrimoine" aria-label="Patrimoine ${n0(net)} ${base()}${g30 != null ? `, gain ${sgn(g30)}${n0(g30)} ${base()}${p30 != null ? `, rendement ${sgn(p30)}${pf(Math.abs(p30))} %` : ""} sur 30 jours` : ""}. Ouvrir le patrimoine">
         <span class="tile-lbl">${ic("trend")}Patrimoine</span>
@@ -166,120 +150,10 @@ export function render() {
         ${spark(vals)}
       </button>
       <button class="tile" type="button" data-a="tab" data-v="budget" aria-label="${budgetLabel}">${budgetTile}</button>
-    </div>
-    <section class="card" aria-labelledby="t-todo">
-      <div class="section-head"><h2 class="section-title" id="t-todo">À faire</h2>${acts.length ? `<span class="pill info">${acts.length}</span>` : ""}</div>
-      ${acts.length ? acts.map(row).join("") : `<div class="status good">${ic("check")}<span>Rien à faire, tout est à jour.</span></div>`}
-    </section>
-    ${infos.length ? `<section class="card" aria-labelledby="t-info"><h2 class="section-title" id="t-info">À savoir</h2>${infos.map(row).join("")}</section>` : ""}
-    <div class="endspace"></div>`);
-}
-
-// --- propositions en attente ------------------------------------------------------------------
-
-function by(principal) {
-  if (principal.startsWith("system")) return "proposée par le hub";
-  if (principal.startsWith("token:")) return "proposée par un assistant";
-  return "proposée depuis l'app";
-}
-
-// carte « plusieurs écritures, une catégorie » : la liste se déplie, chaque écriture se décoche
-const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-function entriesOf(p) {
-  if (p.kind !== "categorize_entries") return "";
-  const off = dropped.get(p.id) || new Set();
-  const list = p.preview.details.entries || [];
-  return `<details class="prop-more"${off.size ? " open" : ""}><summary>Voir les ${list.length} écritures${off.size ? ` · ${off.size} retirée${off.size > 1 ? "s" : ""}` : ""}</summary>
-    ${list.map((e) => `<label class="check-in"><input type="checkbox" data-pentry="${esc(p.id)}" data-eid="${esc(e.id)}" ${off.has(e.id) ? "" : "checked"}>
-      <span>${esc(e.merchant ? capital(e.merchant) : e.counterparty || "Écriture")}</span><span class="num">${date(e.booking_date)} · ${n2(e.amount.minor / 100)}</span></label>`).join("")}
-  </details>`;
-}
-
-SHEETS.props = () => {
-  const pe = store.data(pendingPath);
-  const list = pe ? pe.items : [];
-  if (!list.length && !busy) return null;
-  const ids = list.filter((p) => !unchecked.has(p.id)).map((p) => p.id);
-  return {
-    title: "À valider",
-    body: `<p class="hint">Rien ne change au registre sans ton Face ID. Décoche ce que tu veux garder pour plus tard.</p>` + list.map((p) => `
-      <div class="prop"><input type="checkbox" id="prop-${esc(p.id)}" data-prop="${esc(p.id)}" ${unchecked.has(p.id) ? "" : "checked"}>
-        <label for="prop-${esc(p.id)}"><b>${esc(p.preview.summary)}</b><span><span>${p.revision > 1 ? `révision ${p.revision} · a changé, relis-la` : by(p.created_by)}</span>${p.reason && p.created_by.startsWith("token:") ? `<span>« ${esc(p.reason)} »</span>` : ""}</span></label>
-        <button class="reject" type="button" data-a="prop-reject" data-v="${esc(p.id)}">Refuser</button></div>${entriesOf(p)}`).join(""),
-    foot: `<button class="primary" type="button" data-a="props-ok" ${ids.length && !busy ? "" : "disabled"}>${ic("faceid")}${busy ? "Validation…" : ids.length ? `Valider ${ids.length} avec Face ID` : "Rien de coché"}</button>`,
-  };
-};
-
-document.addEventListener("change", (e) => {
-  const pid = e.target.dataset && e.target.dataset.pentry;
-  if (pid) {
-    const off = dropped.get(pid) || new Set();
-    if (e.target.checked) off.delete(e.target.dataset.eid);
-    else off.add(e.target.dataset.eid);
-    dropped.set(pid, off);
-    store.notify();
-    return;
-  }
-  const id = e.target.dataset && e.target.dataset.prop;
-  if (!id) return;
-  if (e.target.checked) unchecked.delete(id);
-  else unchecked.add(id);
-  store.notify();
-});
-
-// une carte dont on a retiré des écritures est remplacée par une carte sans elles, validée du
-// même Face ID ; toutes retirées, elle est refusée
-async function trimmed(ids) {
-  const pe = store.data(pendingPath);
-  const byId = new Map((pe ? pe.items : []).map((p) => [p.id, p]));
-  const out = [];
-  for (const id of ids) {
-    const p = byId.get(id);
-    const off = dropped.get(id);
-    if (!p || !off || !off.size) {
-      out.push(id);
-      continue;
-    }
-    const keep = p.params.entry_ids.filter((e) => !off.has(e));
-    if (keep.length) out.push((await propose(p.kind, { ...p.params, entry_ids: keep }, `app-${Date.now()}`)).id);
-    await api(`/proposals/${id}/reject`, {});
-    dropped.delete(id);
-  }
-  return out;
-}
-
-async function validate(ids) {
-  busy = true;
-  store.notify();
-  try {
-    const [text, bad] = outcome(await approve(await trimmed(ids)));
-    toast(text, { error: bad });
-    if (!bad) closeSheet();
-  } catch (e) {
-    toast(failure(e), { error: true });
-  } finally {
-    busy = false;
-    window.dispatchEvent(new Event("hub:changed"));
-    store.invalidate();
-  }
+    </div>`);
 }
 
 export const actions = {
-  props: () => openSheet("props"),
-  "props-ok": () => {
-    const pe = store.data(pendingPath);
-    const ids = (pe ? pe.items : []).filter((p) => !unchecked.has(p.id)).map((p) => p.id);
-    if (ids.length) validate(ids);
-  },
-  "prop-reject": async (id) => {
-    try {
-      await api(`/proposals/${id}/reject`, {});
-      toast("Proposition refusée.");
-    } catch (e) {
-      toast(e.message, { error: true });
-    }
-    store.invalidate();
-  },
   gotodo: () => {
     store.set({ tx: "todo", q: "", txcat: null });
     go("journal", { top: true });
