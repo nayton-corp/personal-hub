@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+## [0.13.2] · 2026-10-30
+
+### Sécurité
+
+- Les trois images (hub, web, collecteurs) appliquent les correctifs de sécurité des paquets
+  de leur base à la construction : brotli-libs (CVE-2026-111497) bloquait la publication de
+  0.13.1.
+
 ## [0.13.1] · 2026-10-30
 
 ### Sécurité
