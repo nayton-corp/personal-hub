@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+## [0.13.4] · 2026-10-30
+
+### Sécurité
+
+- L'image des collecteurs ne garde plus aucun cache (`/root/.cache`, celui de uv et celui de
+  la base Playwright) : il portait certifi 2026.6.17 (GHSA-6q48-6c7w-9gw2, autorités emSign
+  compromises), relevé par la barrière de la CI ajoutée en 0.13.3, qui bloquait sa publication.
+
 ## [0.13.3] · 2026-10-30
 
 ### Sécurité

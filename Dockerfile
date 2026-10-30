@@ -72,7 +72,9 @@ COPY hub/web /srv/web
 FROM ${PLAYWRIGHT_IMAGE} AS collector
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 COPY --from=build /usr/local/bin/uv /usr/local/bin/uv
-ENV UV_COMPILE_BYTECODE=1 \
+# aucun cache dans l'image : celui de la base (pip, virtualenv) portait un vieux certifi
+ENV UV_NO_CACHE=1 \
+    UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never \
     UV_PYTHON=/usr/bin/python3.12 \
@@ -84,7 +86,7 @@ COPY --from=src /hub ./hub
 COPY deploy/settings.toml ./deploy/
 RUN UV_COMPILE_BYTECODE=0 uv sync --frozen --no-dev --extra collectors --no-editable \
  && python3.12 -m compileall -q /srv/hub/venv/lib/python3.12/site-packages/hub \
- && rm /usr/local/bin/uv
+ && rm -rf /usr/local/bin/uv /root/.cache
 RUN groupadd --gid 10001 hub \
  && useradd --uid 10001 --gid 10001 --home-dir /var/lib/hub-collector --shell /usr/sbin/nologin hub \
  && mkdir -p /var/lib/hub-collector /srv/hub/inbox \
