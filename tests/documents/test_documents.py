@@ -248,3 +248,26 @@ def test_the_cli(hub: HubContext, imported: DocumentsDomain, tmp_path: Path) -> 
     assert imported.verify().detail["not_archived"] == {"marks": 2}
     assert runner.invoke(cli, ["rebuild", "--check"]).exit_code == 0  # rattrapées d'abord
     assert imported.verify().detail["not_archived"] == {}
+
+
+def test_a_file_too_large_is_skipped_not_fatal(
+    hub: HubContext, documents: DocumentsDomain, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from hub.domains.documents import text
+
+    folder = library(tmp_path / "Bibliothèque")
+    (folder / "lave-linge" / "notice-scannée.pdf").write_bytes(b"%PDF-" + b"x" * 200)
+    monkeypatch.setattr(text, "MAX_BYTES", 100)
+    found = documents.import_library(folder)
+    assert found == {"ignored_fields": 1, "cards": 1, "documents": 2, "too_large": 1}
+    inbox = documents.settings.paths.inbox_of("documents")
+    inbox.mkdir(parents=True)
+    (inbox / "gros.pdf").write_bytes(b"%PDF-" + b"x" * 200)
+    assert documents.process_inbox() == {"too_large": 1}
+    assert (inbox / "gros.pdf").exists()  # laissé là, rien de lu
+
+
+def test_a_scanned_manual_fits() -> None:
+    from hub.domains.documents import text
+
+    assert text.MAX_BYTES >= 80 * 1024 * 1024  # les notices de 54 et 70 Mo de la bibliothèque

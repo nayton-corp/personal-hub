@@ -17,7 +17,7 @@ import subprocess
 
 TEXT = frozenset({".txt", ".md"})
 SUFFIXES = frozenset({*TEXT, ".eml", ".pdf", ".jpg", ".jpeg", ".png", ".heic"})
-MAX_BYTES = 30 * 1024 * 1024
+MAX_BYTES = 100 * 1024 * 1024  # une notice scannée dépasse souvent 50 Mo
 MAX_TEXT = 5 * 1024 * 1024
 TIMEOUT_SECONDS = 30
 MEMORY_BYTES = 512 * 1024 * 1024

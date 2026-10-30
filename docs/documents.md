@@ -11,7 +11,8 @@ sa source et sa page.
   de `inbox/` part tout seul dans `inbox/documents/`. Un PDF ou une photo se dépose directement
   dans `inbox/documents/` (la finance réclame les PDF de la racine : relevés, rapports).
 - Le fichier est archivé chiffré, son texte indexé, puis il quitte la boîte d'entrée. Le même
-  fichier reçu deux fois n'en fait qu'un.
+  fichier reçu deux fois n'en fait qu'un. Un fichier de plus de 100 Mo reste dans la boîte
+  d'entrée, compté `too_large`.
 - Un document reçu est **privé** : seuls les propriétaires le lisent. Le marquer « foyer » (une
   carte, réversible d'un geste) le rend lisible par l'assistant pour tout le foyer.
 
@@ -37,7 +38,8 @@ docker compose --project-directory deploy -f deploy/compose.yaml --env-file depl
 Les fiches gardent leurs champs connus (un champ inconnu est compté, pas repris) ; les documents
 sont marqués « foyer » (tout le foyer les lisait déjà) et rattachés à leur fiche (liste
 `documents` de la fiche, ou dossier au nom de la fiche). Le dossier `à-trier/` n'est pas repris.
-La commande se rejoue sans rien doubler.
+La commande se rejoue sans rien doubler ; un fichier de plus de 100 Mo est sauté et compté
+(`too_large`).
 
 ## Reconstruire
 
