@@ -57,12 +57,13 @@ du matin s'en sert aussi : plus de second gros modèle qui chasserait le premier
 1. **L'assistant** : son installation, Ollama et son modèle compris :
    [assistant/README.md](../assistant/README.md). Dans son venv, le paquet du hub :
    `.venv/bin/pip install -e ..`.
-2. **Deux jetons** (affichés une seule fois, chacun avec sa date de fin : 90 jours par défaut,
+2. **Trois jetons** (affichés une seule fois, chacun avec sa date de fin : 90 jours par défaut,
    `--days` jusqu'à 366), depuis le clone du dépôt avec l'alias `hubc` de
    [mac.md](exploitation/mac.md) :
    ```
    hubc run --rm --no-deps scheduler hub token create brain-mac -s brain=finance --days 180
    hubc run --rm --no-deps scheduler hub token create assistant-aggregates -s aggregates --days 180
+   hubc run --rm --no-deps scheduler hub token create assistant-library -s documents:household -s documents:propose --days 180
    ```
    Quatorze jours avant la fin, ntfy prévient ; `hub token rotate ID` donne un nouveau secret
    (mêmes portées, l'ancien révoqué) à remettre dans `brain.enc.yaml`.
@@ -75,6 +76,7 @@ du matin s'en sert aussi : plus de second gros modèle qui chasserait le premier
    brain:
      brain: "hub_…"          # jeton brain-mac (le classement)
      aggregates: "hub_…"     # jeton assistant-aggregates (la conversation)
+     library: "hub_…"        # jeton assistant-library (la bibliothèque du foyer, S12)
    ```
 4. **La section `hub:`** de `assistant/config.yaml` (modèle dans `config.example.yaml`) : l'adresse
    du hub par Tailscale, `owners` (ton identifiant de personne dans Domia), `secrets` et `age_key`.

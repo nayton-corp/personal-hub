@@ -9,6 +9,9 @@ L'assistant lit les domaines que son jeton ouvre (`hub_capabilities`) et en repr
   question d'argent n'obtient que des agrégats ;
 - le jeton vient du fichier de secrets chiffré du hub (section `brain`, clé `aggregates`), jamais du dépôt.
 
+La bibliothèque du foyer (fiches d'objets, notices) fait exception : elle vit dans le hub (domaine Documents) et
+répond à tout le foyer, avec un jeton à elle (clé `library`) qui n'ouvre que la part marquée « foyer ».
+
 Il fait aussi le travail de l'ancien conteneur `brain` du hub : chaque matin (`hub.classify_at`), il propose une
 catégorie pour les commerçants jamais vus, avec le jeton `brain` et le modèle résident ; ce sont des cartes, que le
 propriétaire valide dans l'app.
@@ -26,6 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .library import Library
 from .tools import Speaker, Tool
 
 LOG = logging.getLogger("assistant.hub")
@@ -68,8 +72,8 @@ def settings(raw: dict | None, env: dict[str, str]) -> HubSettings | None:
 
 
 def token(cfg: HubSettings, name: str = "aggregates") -> str:
-    """Le jeton `aggregates` (la conversation) ou `brain` (le classement) : celui de l'essai pour la conversation,
-    sinon la section `brain` du fichier de secrets chiffré."""
+    """Le jeton `aggregates` (la conversation), `brain` (le classement) ou `library` (la bibliothèque du foyer) :
+    celui de l'essai pour la conversation, sinon la section `brain` du fichier de secrets chiffré."""
     if cfg.token and name == "aggregates":
         return cfg.token
     if cfg.secrets is None or cfg.age_key is None:
@@ -159,6 +163,21 @@ def _tool(api: Any, domain: str, spec: dict, allowed: Callable[[Speaker | None],
         family=domain,
         allowed=allowed,
     )
+
+
+def library(cfg: HubSettings, inbox_dir: Path) -> Library | None:
+    """La bibliothèque du foyer, lue au hub avec le jeton `library` (`documents:household,documents:propose`) ; None
+    sans le paquet du hub ou sans ce jeton."""
+    try:
+        from hub.brain.hubapi import HubApi
+    except ImportError:
+        LOG.warning("library skipped=not_installed (pip install -e .. dans le venv de l'assistant)")
+        return None
+    try:
+        return Library(HubApi(cfg.url, token(cfg, "library")), inbox_dir)
+    except Exception as e:
+        LOG.warning("library skipped=%s", type(e).__name__)
+        return None
 
 
 def connect(cfg: HubSettings) -> HubModule | None:

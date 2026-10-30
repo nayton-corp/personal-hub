@@ -2,8 +2,7 @@
 
 serve     le service (POST /talk, l'observateur, le brief du soir) ; ce que lance launchd
 mcp       le serveur MCP sur stdio (pour Claude Desktop ou un autre client), --person pour qui il parle
-check     Domia, le modèle, la bibliothèque et le pont Rappels répondent-ils ?
-index     (ré)indexe la bibliothèque
+check     Domia, le modèle, la bibliothèque du hub et le pont Rappels répondent-ils ?
 observe   un réveil de l'observateur, tout de suite
 say       une phrase, comme si elle venait de Domia (--person, --room)
 voice     la voix est-elle prête ? Charge Whisper (le télécharge la première fois), transcrit et dit une phrase
@@ -29,8 +28,8 @@ from .assistant import Assistant
 from .config import Settings, load
 from .domia import Domia, DomiaError, Noting
 from .engagements import Engagements
-from .hub import MODES, HubModule, classify, connect
-from .library import Library
+from .hub import MODES, HubModule, classify, connect, library
+from .library import INBOX, LibraryUnavailable
 from .llm import ModelError, OpenAICompatible
 from .memory import Memory
 from .observer import Observer
@@ -51,9 +50,8 @@ class Parts:
         # Noting relaie tout à Domia (__getattr__) : pour le typage, c'est un Domia
         self.domia = cast(Domia, Noting(Domia(s.domia_url, s.domia_token, config_auth=auth), self.memory))
         self.model = OpenAICompatible(s.model_url, s.model, keep_alive=s.keep_alive, reasoning=s.reasoning)
-        embedding = s.embedding_model
-        embed = (lambda texts: self.model.embed(texts, embedding)) if embedding else None
-        self.library = Library(s.library_dir, s.home / "library.sqlite", embed)
+        # la bibliothèque vit dans le hub (domaine Documents) ; seules les photos à trier restent ici
+        self.library = library(s.hub, s.library_dir / INBOX) if s.hub is not None else None
         self.voice = Voice(s.stt_model, "fr", s.say_voice) if s.voice else None
         self.agenda = Agenda(s.eventkit_url)
         self.engagements = Engagements(self.domia, self.memory, self.agenda, s.timezone)
@@ -135,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="domia_assistant", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("command", choices=["serve", "mcp", "check", "index", "observe", "say", "voice", "classify"])
+    parser.add_argument("command", choices=["serve", "mcp", "check", "observe", "say", "voice", "classify"])
     parser.add_argument("text", nargs="?")
     parser.add_argument("--config", type=Path, default=HERE / "config.yaml")
     parser.add_argument("--person")
@@ -177,20 +175,12 @@ def main(argv: list[str] | None = None) -> int:
                 status["embeddings_ok"] = True
             except ModelError as e:
                 status["embeddings_ok"] = f"{e} : ollama pull {parts.settings.embedding_model} ?"
-        status["library_cards"] = len(parts.library.cards())
+        try:
+            status["library_cards"] = len(parts.library.cards()) if parts.library else "pas de bibliothèque (hub)"
+        except LibraryUnavailable as e:
+            status["library_cards"] = str(e)
         print(json.dumps(status, ensure_ascii=False, indent=2))
         return 0 if status["domia"]["ok"] else 1
-    if args.command == "index":
-        try:
-            print(f"{parts.library.index()} passages indexés")
-        except ModelError as e:
-            print(
-                f"index impossible, le modèle d'embeddings {parts.settings.embedding_model} ne répond pas ({e}) : "
-                f"est-il téléchargé (ollama pull {parts.settings.embedding_model}) ?",
-                file=sys.stderr,
-            )
-            return 1
-        return 0
     if args.command == "observe":
         remark = parts.observer.run_once()
         print(remark.message if remark else "rien à dire")

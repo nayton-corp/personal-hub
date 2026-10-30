@@ -1,23 +1,27 @@
-"""La ligne de commande : un modèle d'embeddings absent se dit, sans trace de pile."""
+"""La ligne de commande : sans trace de pile ; la bibliothèque ne se lit plus en local (S12 du hub)."""
+
+import pytest
 
 from domia_assistant.__main__ import Parts, main
 
 
-def test_index_without_the_embeddings_model_says_which_one(tmp_path, monkeypatch, capsys):
+def test_the_local_library_is_no_longer_read(tmp_path, monkeypatch):
+    """La bibliothèque vit dans le hub (S12) : un ~/Domia/Bibliothèque/ resté sur le disque n'est plus lu, et sans
+    jeton `library` l'assistant n'a pas de bibliothèque du tout."""
+    from domia_assistant.config import load
+
     monkeypatch.setenv("DOMIA_ASSISTANT_TOKEN", "t")
     home = tmp_path / "Domia"
-    (home / "Bibliothèque" / "foyer").mkdir(parents=True)
-    (home / "Bibliothèque" / "foyer" / "bail.md").write_text("Résiliation : quatre mois à l'avance.", encoding="utf-8")
+    (home / "Bibliothèque").mkdir(parents=True)
+    (home / "Bibliothèque" / "bail.md").write_text("Résiliation : quatre mois à l'avance.", encoding="utf-8")
     config = tmp_path / "config.yaml"
-    config.write_text(
-        "domia: {url: 'http://127.0.0.1:9'}\n"
-        "model: {url: 'http://127.0.0.1:9/v1', name: m, embeddings: bge-m3}\n"
-        f"assistant: {{home: '{home}'}}\n",
-        encoding="utf-8",
-    )
-
-    assert main(["index", "--config", str(config)]) == 1
-    assert "ollama pull bge-m3" in capsys.readouterr().err
+    config.write_text(f"domia: {{url: 'http://127.0.0.1:9'}}\nassistant: {{home: '{home}'}}\n", encoding="utf-8")
+    assert Parts(load(config)).library is None
+    with config.open("a", encoding="utf-8") as f:
+        f.write("hub: {url: 'http://127.0.0.1:9', owners: [robin]}\n")
+    assert Parts(load(config)).library is None  # ni hub.secrets ni hub.age_key : pas de jeton library
+    with pytest.raises(SystemExit):
+        main(["index", "--config", str(config)])
 
 
 def test_check_says_when_the_bridge_answers_without_the_macos_access(tmp_path, monkeypatch):

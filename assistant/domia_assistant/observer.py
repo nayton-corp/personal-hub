@@ -14,7 +14,7 @@ from . import planner
 from .agenda import Agenda, AgendaUnavailable
 from .domia import Domia, DomiaError
 from .engagements import Engagements
-from .library import Library
+from .library import Library, LibraryUnavailable
 from .memory import Memory
 
 ZONE = ZoneInfo("Europe/Zurich")
@@ -71,6 +71,10 @@ def phrase(o: dict) -> Remark:
 def maintenance_observations(library: Library | None, today: date) -> list[dict]:
     if library is None:
         return []
+    try:
+        due = library.maintenance_due(today)
+    except LibraryUnavailable:  # le hub ne répond pas : la maison continue sans cette remarque
+        return []
     return [
         {
             "id": f"MAINTENANCE_DUE:{d['card']}:{d['what']}",
@@ -80,7 +84,7 @@ def maintenance_observations(library: Library | None, today: date) -> list[dict]
             "what": d["what"],
             "since": d["since"],
         }
-        for d in library.maintenance_due(today)
+        for d in due
     ]
 
 

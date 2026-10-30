@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 from . import reading
 from .agenda import Agenda, AgendaUnavailable
 from .domia import Domia, DomiaError
-from .library import Library
+from .library import Library, LibraryUnavailable
 from .memory import Memory
 from .settings import NOUNS, Settler
 
@@ -467,6 +467,15 @@ MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".heic
 
 
 def library_tools(library: Library, look: Callable[[bytes, str, str], str] | None = None) -> list[Tool]:
+    def guarded(fn: Callable[[dict, Speaker], Any]) -> Callable[[dict, Speaker], Any]:
+        def run(args: dict, who: Speaker) -> Any:
+            try:
+                return fn(args, who)
+            except LibraryUnavailable as e:
+                return {"error": str(e)}
+
+        return run
+
     def search(args: dict, who: Speaker) -> Any:
         return [{"source": p.cite(), "text": p.text} for p in library.search(args["question"], int(args.get("k", 5)))]
 
@@ -485,35 +494,35 @@ def library_tools(library: Library, look: Callable[[bytes, str, str], str] | Non
             "search_library",
             "Cherche dans les manuels, factures et documents du foyer ; rend les passages avec leur source et page. Toujours citer la source.",
             obj({"question": {"type": "string"}, "k": {"type": "integer", "minimum": 1, "maximum": 10}}, ["question"]),
-            search,
+            guarded(search),
         ),
         Tool(
             "list_cards",
             "Les fiches des objets du ménage (id et nom).",
             obj({}),
-            lambda a, w: {k: v.get("name", k) for k, v in library.cards().items()},
+            guarded(lambda a, w: {k: v.get("name") or k for k, v in library.cards().items()}),
         ),
         Tool(
             "object_card",
             "La fiche d'un objet : marque, modèle, achat, garantie, entretien, pièces, documents.",
             obj({"id": {"type": "string"}}, ["id"]),
-            card,
+            guarded(card),
         ),
         Tool(
             "update_card",
-            "Crée ou complète la fiche d'un objet (champs : name, room, brand, model, serial, bought_at, shop, price_chf, warranty_until, domia, maintenance, parts, documents, notes).",
+            "Propose de créer ou de compléter la fiche d'un objet (champs : name, room, brand, model, serial, bought_at, shop, price_chf, warranty_until, domia, maintenance, parts, notes) : une carte à valider dans l'app du hub.",
             obj({"id": {"type": "string"}, "fields": {"type": "object"}}, ["id", "fields"]),
-            lambda a, w: library.save_card(a["id"], a["fields"]),
+            guarded(lambda a, w: library.save_card(a["id"], a["fields"])),
         ),
         Tool(
             "maintenance_due",
             "Les tâches d'entretien des objets dont l'échéance est passée.",
             obj({}),
-            lambda a, w: library.maintenance_due(datetime.now().date()),
+            guarded(lambda a, w: library.maintenance_due(datetime.now().date())),
         ),
         Tool(
             "inbox",
-            "Les photos et documents déposés dans « à-trier » (inventaire en photos).",
+            "Les photos déposées dans « à-trier » (inventaire en photos).",
             obj({}),
             lambda a, w: [p.name for p in library.inbox()],
         ),

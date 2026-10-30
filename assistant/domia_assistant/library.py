@@ -1,265 +1,83 @@
-"""La bibliothèque des objets du ménage (spec §8) : `~/Domia/Bibliothèque/`, une fiche YAML par objet et ses documents à
-côté, plus les documents du foyer (bail, assurances, décomptes). Les documents sont découpés en passages et indexés en
-local (SQLite ; embeddings par le serveur de modèle s'il en sert, sinon par mots) ; une réponse cite sa source et sa
-page. Les photos et PDF à classer attendent dans `à-trier/`."""
+"""La bibliothèque des objets du ménage (spec §8), lue au hub (domaine Documents, chantier S12 du hub).
+
+Les fiches des objets et les documents du foyer (notices, bail, assurances, décomptes) vivent dans le hub depuis la
+reprise unique de `~/Domia/Bibliothèque/` (`hub documents import-library`) : l'assistant ne lit plus ce dossier. Il
+appelle les outils du domaine avec le jeton `library` (section `brain` des secrets chiffrés), dont la portée
+`documents:household` n'ouvre que les fiches et les documents marqués « foyer » : ce que Kim et les invités lisaient
+déjà. Une fiche se complète par une proposition, validée dans l'app. Une réponse cite toujours sa source et sa page.
+
+Seul le dossier `à-trier/` reste local : les photos d'une plaque signalétique, que le modèle de vision lit avant de
+proposer la fiche.
+"""
 
 from __future__ import annotations
 
-import email
-import email.policy
-import math
-import re
-import sqlite3
-import struct
-import threading
-from collections.abc import Callable
+import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date
 from pathlib import Path
+from typing import Any, Protocol
 
-import yaml
-
+LOG = logging.getLogger("assistant.library")
 INBOX = "à-trier"
-TEXT_EXT = {".txt", ".md"}
-DOC_EXT = TEXT_EXT | {".pdf", ".eml"}
-PHOTO_EXT = {".jpg", ".jpeg", ".png", ".heic"}
-CARD_FIELDS = {
-    "name",
-    "room",
-    "brand",
-    "model",
-    "serial",
-    "bought_at",
-    "shop",
-    "price_chf",
-    "warranty_until",
-    "domia",
-    "maintenance",
-    "parts",
-    "documents",
-    "notes",
-}
-CHUNK_CHARS = 1200
-EVERY = re.compile(r"^\s*(\d+)\s*(jour|jours|semaine|semaines|mois|an|ans|annee|annees)\s*$")
+DOMAIN = "documents"
 
-Embedder = Callable[[list[str]], list[list[float]]]
+
+class Api(Protocol):
+    """`hub.brain.hubapi.HubApi`, ou un faux pour les tests."""
+
+    def call(self, domain: str, name: str, args: dict[str, Any]) -> Any: ...
 
 
 @dataclass(frozen=True)
 class Passage:
-    source: str
+    source: str  # « notice, p. 3 » : ce que le hub rend à citer
     page: int | None
     text: str
-    score: float
 
     def cite(self) -> str:
-        return f"{self.source}, p. {self.page}" if self.page else self.source
+        return self.source
 
 
-def every(text: str) -> timedelta | None:
-    """« 1 mois », « 2 semaines », « 1 an » en durée ; None si illisible."""
-    m = EVERY.match(str(text).lower().replace("é", "e"))
-    if not m:
-        return None
-    n, unit = int(m.group(1)), m.group(2)
-    days = {
-        "jour": 1,
-        "jours": 1,
-        "semaine": 7,
-        "semaines": 7,
-        "mois": 30,
-        "an": 365,
-        "ans": 365,
-        "annee": 365,
-        "annees": 365,
-    }[unit]
-    return timedelta(days=n * days)
+class LibraryUnavailable(RuntimeError):
+    pass
 
 
 class Library:
-    def __init__(self, folder: Path, database: Path | str, embed: Embedder | None = None):
-        self.folder = folder
-        self.embed = embed
-        self.folder.mkdir(parents=True, exist_ok=True)
-        (self.folder / INBOX).mkdir(exist_ok=True)
-        if str(database) != ":memory:":
-            Path(database).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(str(database), check_same_thread=False)
-        self.db.execute(
-            "CREATE TABLE IF NOT EXISTS passages (source TEXT, page INTEGER, text TEXT, mtime REAL, vector BLOB)"
-        )
-        self.lock = threading.Lock()
+    def __init__(self, api: Api, inbox_dir: Path):
+        self.api = api
+        self.inbox_dir = inbox_dir
 
-    # fiches
-    def cards(self) -> dict[str, dict]:
-        out = {}
-        for path in sorted(self.folder.glob("*.yaml")):
-            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            out[path.stem] = data
-        return out
-
-    def card(self, card_id: str) -> dict | None:
-        path = self._card_path(card_id)
-        return yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None
-
-    def save_card(self, card_id: str, fields: dict) -> dict:
-        """Crée ou complète une fiche ; seuls les champs connus (§8.1) sont gardés."""
-        unknown = set(fields) - CARD_FIELDS
-        if unknown:
-            raise ValueError(f"champs inconnus : {', '.join(sorted(unknown))}")
-        card = self.card(card_id) or {}
-        card.update({k: v for k, v in fields.items() if v is not None})
-        self._card_path(card_id).write_text(yaml.safe_dump(card, allow_unicode=True, sort_keys=False), encoding="utf-8")
-        return card
-
-    def _card_path(self, card_id: str) -> Path:
-        if not re.fullmatch(r"[\w\- ]{1,80}", card_id):
-            raise ValueError("un id de fiche : lettres, chiffres, espaces, - et _")
-        return self.folder / f"{card_id}.yaml"
-
-    def maintenance_due(self, today: date) -> list[dict]:
-        """Les tâches d'entretien des fiches dont l'échéance est passée (constat MAINTENANCE_DUE, spec §11)."""
-        due = []
-        for card_id, card in self.cards().items():
-            for task in card.get("maintenance", []) or []:
-                period = every(task.get("every", ""))
-                last = task.get("last")
-                if period is None or last is None:
-                    continue
-                last = last if isinstance(last, date) else date.fromisoformat(str(last))
-                if last + period <= today:
-                    due.append(
-                        {
-                            "card": card_id,
-                            "name": card.get("name", card_id),
-                            "what": task.get("what"),
-                            "since": (last + period).isoformat(),
-                        }
-                    )
-        return due
-
-    def inbox(self) -> list[Path]:
-        return sorted(p for p in (self.folder / INBOX).iterdir() if p.is_file() and not p.name.startswith("."))
-
-    # documents
-    def index(self) -> int:
-        """(Ré)indexe les documents changés ; rend le nombre de passages écrits."""
-        written = 0
-        seen = set()
-        for path in sorted(self.folder.rglob("*")):
-            if not path.is_file() or path.suffix.lower() not in DOC_EXT or INBOX in path.parts:
-                continue
-            source = str(path.relative_to(self.folder))
-            seen.add(source)
-            mtime = path.stat().st_mtime
-            with self.lock:
-                row = self.db.execute("SELECT mtime FROM passages WHERE source = ? LIMIT 1", (source,)).fetchone()
-            if row and row[0] == mtime:
-                continue
-            chunks = [(page, c) for page, text in read_pages(path) for c in chunk(text)]
-            vectors = self.embed([c for _, c in chunks]) if (self.embed and chunks) else [None] * len(chunks)
-            with self.lock:
-                self.db.execute("DELETE FROM passages WHERE source = ?", (source,))
-                self.db.executemany(
-                    "INSERT INTO passages VALUES (?, ?, ?, ?, ?)",
-                    [(source, page, c, mtime, pack(v)) for (page, c), v in zip(chunks, vectors, strict=False)],
-                )
-                self.db.commit()
-            written += len(chunks)
-        with self.lock:
-            for (source,) in self.db.execute("SELECT DISTINCT source FROM passages").fetchall():
-                if source not in seen:
-                    self.db.execute("DELETE FROM passages WHERE source = ?", (source,))
-            self.db.commit()
-        return written
+    def _call(self, name: str, args: dict[str, Any] | None = None) -> Any:
+        try:
+            return self.api.call(DOMAIN, name, args or {})
+        except Exception as e:  # HubError du client : son type, jamais un contenu
+            kind = getattr(e, "type", type(e).__name__)
+            if kind == "not_found":
+                return None
+            raise LibraryUnavailable(f"bibliothèque du hub : {kind}") from None
 
     def search(self, question: str, k: int = 5) -> list[Passage]:
-        with self.lock:
-            rows = self.db.execute("SELECT source, page, text, vector FROM passages").fetchall()
-        if not rows:
+        if len(question.strip()) < 3:
             return []
-        if self.embed and all(r[3] for r in rows):
-            q = self.embed([question])[0]
-            # un code (E24, WM14N2B0CH) ne se ressemble pas par le sens : le passage qui le porte passe devant
-            codes = {t for t in _terms(question) if any(c.isdigit() for c in t)}
-            scored = [
-                (cosine(q, unpack(r[3])) + (len(codes & set(_terms(r[2]))) / len(codes) if codes else 0.0), r)
-                for r in rows
-            ]
-        else:
-            terms = set(_terms(question))
-            scored = [(lexical(terms, r[2]), r) for r in rows]
-        scored = [s for s in scored if s[0] > 0]
-        scored.sort(key=lambda s: -s[0])
-        return [Passage(r[0], r[1], r[2], round(score, 3)) for score, r in scored[:k]]
+        found = self._call("documents_search", {"q": question[:200], "limit": max(1, min(k, 20))}) or {}
+        return [Passage(p["cite"], p.get("page"), p["text"]) for p in found.get("passages", [])]
 
+    def cards(self) -> dict[str, dict]:
+        return {c["card_id"]: c for c in self._call("documents_cards") or []}
 
-def read_pages(path: Path) -> list[tuple[int | None, str]]:
-    ext = path.suffix.lower()
-    if ext in TEXT_EXT:
-        return [(None, path.read_text(encoding="utf-8", errors="replace"))]
-    if ext == ".eml":
-        message = email.message_from_bytes(path.read_bytes(), policy=email.policy.default)
-        body = message.get_body(preferencelist=("plain", "html"))
-        text = body.get_content() if body else ""
-        return [(None, f"{message.get('subject', '')}\n{message.get('from', '')}\n{message.get('date', '')}\n{text}")]
-    if ext == ".pdf":
-        from pypdf import PdfReader
+    def card(self, card_id: str) -> dict | None:
+        return self._call("documents_card", {"card_id": card_id})
 
-        reader = PdfReader(str(path))
-        return [(i + 1, page.extract_text() or "") for i, page in enumerate(reader.pages)]
-    return []
+    def save_card(self, card_id: str, fields: dict) -> dict:
+        """Propose de créer ou de compléter une fiche : une carte dans l'app, pas une écriture."""
+        return self._call("documents_propose_card", {"card_id": card_id, "fields": fields}) or {}
 
+    def maintenance_due(self, today: date | None = None) -> list[dict]:
+        """Les entretiens dus, à la date du hub (`today` est gardé pour l'appel d'avant)."""
+        return list(self._call("documents_maintenance_due") or [])
 
-def chunk(text: str, size: int = CHUNK_CHARS) -> list[str]:
-    """Des passages d'environ `size` caractères, coupés entre paragraphes quand c'est possible."""
-    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
-    out, current = [], ""
-    for p in paragraphs:
-        while len(p) > size:
-            if current:
-                out.append(current)
-                current = ""
-            out.append(p[:size])
-            p = p[size:]
-        if len(current) + len(p) + 2 > size and current:
-            out.append(current)
-            current = p
-        else:
-            current = f"{current}\n\n{p}" if current else p
-    if current:
-        out.append(current)
-    return out
-
-
-def _terms(text: str) -> list[str]:
-    from .grammar import normalize
-
-    return [w for w in normalize(text).split() if len(w) > 2]
-
-
-def lexical(terms: set[str], text: str) -> float:
-    words = _terms(text)
-    if not words or not terms:
-        return 0.0
-    hits = sum(1 for w in words if w in terms)
-    return len(terms & set(words)) + hits / (len(words) + 10)
-
-
-def pack(vector: list[float] | None) -> bytes | None:
-    return None if vector is None else struct.pack(f"{len(vector)}f", *vector)
-
-
-def unpack(blob: bytes) -> list[float]:
-    return list(struct.unpack(f"{len(blob) // 4}f", blob))
-
-
-def cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b, strict=False))
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(y * y for y in b))
-    return dot / (na * nb) if na and nb else 0.0
-
-
-def today_local() -> date:
-    return datetime.now().date()
+    def inbox(self) -> list[Path]:
+        if not self.inbox_dir.is_dir():
+            return []
+        return sorted(p for p in self.inbox_dir.iterdir() if p.is_file() and not p.name.startswith("."))

@@ -17,7 +17,7 @@ iPhone / app Domia ──POST /api/talk──▶ Domia (Pi) ──POST /talk─�
                                                                     ├─ voie rapide (grammaire, sans modèle)
                                                                     ├─ modèle local (Ollama / LM Studio, :11434)
                                                                     ├─ outils ──▶ API de Domia (gestes, lectures)
-                                                                    ├─ bibliothèque, mémoire (~/Domia)
+                                                                    ├─ mémoire (~/Domia), bibliothèque (le hub)
                                                                     └─ pont Rappels/Calendrier (:8771, EventKit)
 ```
 
@@ -29,7 +29,7 @@ iPhone / app Domia ──POST /api/talk──▶ Domia (Pi) ──POST /talk─�
 | `domia_assistant/reading.py` | savoir la maison : des lectures ciblées (pièce, sorte, objet, période), le journal en agrégats, les réglages en index puis en fiche, et le plafond d'une réponse (`fit`) |
 | `domia_assistant/settings.py` | régler avec un oui : les changements typés sur une copie de la config, le résumé en unités de l'écran, la vérification par Domia, l'écriture après le oui (`If-Match`) et l'annulation |
 | `parity/coverage.yaml` | rien d'impossible : pour chaque route de Domia, l'outil qui la sert, le lot qui l'apportera, ou pourquoi elle reste à l'écran |
-| `domia_assistant/library.py` | `~/Domia/Bibliothèque/` : fiches des objets, documents indexés, entretien dû |
+| `domia_assistant/library.py` | la bibliothèque du foyer, lue au hub (domaine Documents) : fiches des objets, passages cités, entretien dû ; `à-trier/` (photos) reste local |
 | `domia_assistant/memory.py` | `~/Domia/assistant.sqlite` : notes, synonymes, conversations (90 jours), refus |
 | `domia_assistant/observer.py` | une remarque par heure au plus, jamais la nuit ni pendant la TV ; le brief du soir |
 | `domia_assistant/mcp_server.py` | les mêmes outils au protocole MCP (Claude Desktop pour le banc) |
@@ -66,7 +66,7 @@ iPhone / app Domia ──POST /api/talk──▶ Domia (Pi) ──POST /talk─�
    LaunchAgent ouvre. Au premier lancement, accepter les deux fenêtres de macOS (Rappels, Calendrier).
    `curl http://127.0.0.1:8771/health` doit dire `true` deux fois ; sinon Réglages Système → Confidentialité et
    sécurité → Rappels, puis Calendriers : autoriser « Domia Rappels ».
-7. **Vérifier.** `.venv/bin/python -m domia_assistant check` : Domia, le modèle, la bibliothèque et le pont.
+7. **Vérifier.** `.venv/bin/python -m domia_assistant check` : Domia, le modèle, la bibliothèque du hub et le pont.
 8. **Le Mac reste allumé** : Réglages Système → Économiseur d'énergie → empêcher la suspension automatique.
 
 ## Lancer avec launchd
@@ -150,28 +150,22 @@ retente toutes les 5 minutes. `check` dit s'il répond et quels domaines il ouvr
 
 ## La bibliothèque
 
-`~/Domia/Bibliothèque/` : une fiche par objet (`lave-vaisselle.yaml`) et ses documents à côté, en sous-dossier
-(`lave-vaisselle/manuel.pdf`), plus les documents du foyer (bail, assurances, décomptes). Les photos de plaques et les
-e-mails de commande (`.eml`, PDF) se déposent dans `à-trier/` : l'assistant les lit (« regarde ce qu'il y a à
-trier ») et crée les fiches. Après un ajout de documents : `python -m domia_assistant index`.
+Les fiches des objets et les documents du foyer (manuels, bail, assurances, décomptes) vivent dans le hub, domaine
+Documents ([docs/documents.md](../docs/documents.md)) : `~/Domia/Bibliothèque/` y est repris une fois
+(`hub documents import-library`), puis n'est plus lu. L'assistant les lit avec le jeton `library` (section `brain` de
+`brain.enc.yaml`), dont les portées `documents:household,documents:propose` n'ouvrent que les fiches et les documents
+marqués « foyer » : la bibliothèque répond à tout le foyer, Kim comprise, sans jamais montrer un document privé.
+`update_card` propose la fiche (une carte dans l'app du hub) au lieu de l'écrire. Sans hub ou sans ce jeton,
+l'assistant n'a pas de bibliothèque ; un hub qui ne répond pas le dit, la maison continue.
 
-```yaml
-# lave-vaisselle.yaml
-name: Lave-vaisselle
-room: Cuisine
-brand: V-Zug
-model: Adora 60 V4000
-bought_at: 2024-03-12
-shop: Galaxus
-maintenance:
-  - {what: nettoyer le filtre, every: 1 mois, last: 2026-10-01}
-```
+Seules les photos de plaques restent ici, dans `~/Domia/Bibliothèque/à-trier/` : l'assistant les lit (« regarde ce
+qu'il y a à trier ») et propose les fiches. Un document (PDF, `.eml`) se dépose dans `inbox/documents/` du hub.
 
 ## Le banc d'essai
 
 Avant tout usage quotidien, le modèle se choisit sur des chiffres (spec §13), contre l'essai, jamais contre la vraie
 maison : `cp config.example.yaml config.essai.yaml` avec `domia.url: http://192.168.0.63:3001` et le jeton d'un
-appareil autorisé ASSISTANT **de l'essai**, des manuels réels dans la bibliothèque, puis
+appareil autorisé ASSISTANT **de l'essai**, des manuels réels dans la bibliothèque (le domaine Documents du hub), puis
 `.venv/bin/python bench/run.py`. Le résultat va dans `bench/results/`. Erreurs graves (un geste non demandé) : zéro,
 sinon le modèle est écarté. On change `model.name` et on recommence.
 

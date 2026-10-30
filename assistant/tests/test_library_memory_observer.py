@@ -1,82 +1,120 @@
 """La bibliothèque (fiches, passages cités, entretien dû), la mémoire (refus qui doublent le silence) et l'observateur
 (au plus une remarque, jamais la nuit ni pendant la TV)."""
 
+import json
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
+import pyrage
 import pytest
+from hub.core import tools
+from hub.core.auth import Principal
+from hub.core.context import HubContext
+from hub.core.registry import Registry
+from hub.domains.documents.domain import DocumentsDomain
+from hub.domains.documents.model import chunk, every
+from hub.platform.settings import Paths, Secrets, Settings
 
-from domia_assistant.library import Library, chunk, every
+from domia_assistant.library import Library, LibraryUnavailable
 from domia_assistant.memory import Memory
 from domia_assistant.observer import Observer, phrase
 from tests.fakes import FakeDomia
 
 T = datetime(2026, 10, 24, 18, 0, tzinfo=UTC)
+HOUSEHOLD = Principal("token:library", frozenset({"documents:household", "documents:propose"}))
+CARD = """name: Lave-vaisselle
+room: Cuisine
+brand: V-Zug
+maintenance:
+  - {what: nettoyer le filtre, every: 1 mois, last: 2026-09-01}
+"""
+
+
+class HubApi:
+    """`hub.brain.hubapi.HubApi`, branché sur un vrai hub en mémoire avec le jeton de la bibliothèque : ses outils, ses
+    portées, ses erreurs (le type seulement), ses réponses passées par JSON."""
+
+    def __init__(self, ctx: HubContext, principal: Principal = HOUSEHOLD):
+        self.ctx, self.principal, self.up = ctx, principal, True
+
+    def call(self, domain: str, name: str, args: dict) -> object:
+        if not self.up:
+            raise ConnectionError("hub éteint")
+        return json.loads(json.dumps(tools.call(self.ctx, self.principal, domain, name, args)))
+
+
+def hub_settings(root: Path) -> Settings:
+    root.mkdir(parents=True)
+    key = root / "age.key"
+    key.write_text(f"{pyrage.x25519.Identity.generate()}\n")
+    paths = Paths(data=root / "data", inbox=root / "inbox", archive=root / "archive", backup=root / "backup")
+    return Settings(paths=paths, secrets=Secrets(file=root / "absent.enc.yaml", age_key_file=key))
 
 
 @pytest.fixture
-def library(tmp_path):
+def hub(tmp_path):
+    """Le hub, sa bibliothèque reprise de ~/Domia/Bibliothèque/ (la notice et la fiche « foyer », un bulletin privé)."""
     folder = tmp_path / "Bibliothèque"
-    lib = Library(folder, ":memory:")
-    (folder / "lave-vaisselle").mkdir()
+    (folder / "lave-vaisselle").mkdir(parents=True)
     (folder / "lave-vaisselle" / "manuel.md").write_text(
         "Codes d'erreur\n\nE24 : l'eau ne s'évacue pas. Nettoyer le filtre et vérifier le tuyau d'évacuation.\n\n"
         "E15 : fuite détectée dans le socle. Couper l'eau.",
         encoding="utf-8",
     )
     (folder / "bail.txt").write_text("Le loyer est payable d'avance le premier du mois.", encoding="utf-8")
-    lib.save_card(
-        "lave-vaisselle",
-        {
-            "name": "Lave-vaisselle",
-            "room": "Cuisine",
-            "brand": "V-Zug",
-            "maintenance": [{"what": "nettoyer le filtre", "every": "1 mois", "last": "2026-09-01"}],
-        },
-    )
-    return lib
+    (folder / "lave-vaisselle.yaml").write_text(CARD, encoding="utf-8")
+    settings = hub_settings(tmp_path / "hub")
+    documents = DocumentsDomain(settings)
+    documents.today = lambda: date(2026, 10, 2)  # type: ignore[method-assign]
+    ctx = HubContext.build(settings, Registry([documents]))
+    ctx.migrate_all()
+    documents.import_library(folder)
+    inbox = settings.paths.inbox_of("documents")
+    inbox.mkdir(parents=True)
+    (inbox / "salaire.txt").write_text("Bulletin de salaire : le loyer est retenu.", encoding="utf-8")
+    documents.process_inbox()  # privé : jamais lu par la bibliothèque du foyer
+    yield ctx
+    ctx.dispose()
+
+
+@pytest.fixture
+def library(hub, tmp_path):
+    (tmp_path / "à-trier").mkdir()
+    return Library(HubApi(hub), tmp_path / "à-trier")
 
 
 def test_a_passage_comes_back_with_its_source(library):
-    assert library.index() == 2  # le manuel tient en un passage, le bail aussi
     found = library.search("le lave-vaisselle affiche E24")
-    assert found[0].source == "lave-vaisselle/manuel.md"
+    assert found[0].cite() == "manuel"
     assert "E24" in found[0].text
-    assert library.index() == 0  # rien n'a changé : rien à réindexer
+    assert [p.cite() for p in library.search("loyer")] == ["bail"]  # le bulletin privé reste au hub
+    assert library.search("E2") == []
 
 
-def test_embeddings_are_used_when_the_model_serves_them(tmp_path):
-    vectors = {"chat": [1.0, 0.0], "chien": [0.0, 1.0]}
-    lib = Library(
-        tmp_path / "B", ":memory:", embed=lambda texts: [vectors["chat" if "chat" in t else "chien"] for t in texts]
-    )
-    (tmp_path / "B" / "a.txt").write_text("le chat dort", encoding="utf-8")
-    (tmp_path / "B" / "b.txt").write_text("le chien court", encoding="utf-8")
-    lib.index()
-    assert lib.search("un chat ?")[0].source == "a.txt"
-
-
-def test_an_error_code_beats_a_passage_that_only_sounds_alike(tmp_path):
-    # mesuré sur la vraie maison : « E24 » ramenait une page de la notice qui parle de pompe, pas la ligne du code
-    lib = Library(
-        tmp_path / "B",
-        ":memory:",
-        embed=lambda texts: [[1.0, 0.0] if "pompe" in t or "affiche" in t else [0.6, 0.8] for t in texts],
-    )
-    (tmp_path / "B" / "notice.txt").write_text("Nettoyer la pompe de vidange et les filtres.", encoding="utf-8")
-    (tmp_path / "B" / "codes.md").write_text("E:24 (E24) : l'eau ne se vidange pas.", encoding="utf-8")
-    lib.index()
-    assert lib.search("le lave-vaisselle affiche E24")[0].source == "codes.md"
-    assert lib.search("le lave-vaisselle affiche quoi")[0].source == "notice.txt"  # sans code, le sens seul
-
-
-def test_cards_and_maintenance(library):
+def test_cards_and_maintenance_come_from_the_hub(library, hub):
     assert library.card("lave-vaisselle")["brand"] == "V-Zug"
-    with pytest.raises(ValueError):
+    assert library.card("frigo") is None
+    assert library.cards()["lave-vaisselle"]["name"] == "Lave-vaisselle"
+    assert library.maintenance_due()[0]["what"] == "nettoyer le filtre"
+    proposed = library.save_card("lave-vaisselle", {"serial": "S-1"})
+    assert (proposed["status"], proposed["summary"]) == ("pending", "Fiche « Lave-vaisselle » : serial")
+    assert "serial" not in library.card("lave-vaisselle")  # une carte dans l'app, pas une écriture
+    with pytest.raises(LibraryUnavailable):
         library.save_card("lave-vaisselle", {"couleur": "blanc"})
-    with pytest.raises(ValueError):
-        library.save_card("../bail", {"name": "x"})
-    assert library.maintenance_due(date(2026, 9, 30)) == []
-    assert library.maintenance_due(date(2026, 10, 1))[0]["what"] == "nettoyer le filtre"
+
+
+def test_the_house_goes_on_without_the_hub(library):
+    library.api.up = False
+    with pytest.raises(LibraryUnavailable):
+        library.search("E24")
+    from domia_assistant.tools import Speaker, library_tools
+
+    found = {t.name: t for t in library_tools(library)}["search_library"].run({"question": "E24"}, Speaker())
+    assert found == {"error": "bibliothèque du hub : ConnectionError"}
+    assert Observer(FakeDomia(), Memory(":memory:"), library).run_once(T) is None
+
+
+def test_every_counts_weeks_and_years():
     assert (
         every("2 semaines") == timedelta(days=14) and every("1 an") == timedelta(days=365) and every("bientôt") is None
     )
@@ -162,7 +200,7 @@ def test_maintenance_joins_the_observations(library):
 def test_a_nameplate_photo_is_read_by_the_vision_model(library):
     from domia_assistant.tools import Speaker, library_tools
 
-    (library.folder / "à-trier" / "plaque.jpg").write_bytes(b"\xff\xd8photo")
+    (library.inbox_dir / "plaque.jpg").write_bytes(b"\xff\xd8photo")
     seen = []
     tools = {
         t.name: t
