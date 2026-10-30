@@ -34,8 +34,10 @@ RUN UV_COMPILE_BYTECODE=0 uv sync --frozen --no-dev --no-editable \
 # --- API, importeur, planificateur : une seule image, des commandes différentes ---
 FROM ${PYTHON_IMAGE} AS hub
 COPY --from=restic /usr/bin/restic /usr/local/bin/restic
-# pdftotext (poppler) lit les PDF VIAC, comme les scripts du Mac (lot 4)
+# pdftotext (poppler) lit les PDF VIAC, comme les scripts du Mac (lot 4) ; les paquets de la
+# base reçoivent leurs correctifs de sécurité (la barrière Trivy de la release les exige)
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install --no-install-recommends -y poppler-utils \
  && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 hub \
@@ -58,7 +60,9 @@ CMD ["hub", "serve", "--workers", "1"]
 FROM ${CADDY_IMAGE} AS web
 # le binaire officiel porte la capacité cap_net_bind_service, refusée par no-new-privileges :
 # une copie sans attributs étendus suffit, puisqu'on écoute sur 8080 en utilisateur 10001
-RUN cp /usr/bin/caddy /usr/local/bin/caddy && rm /usr/bin/caddy \
+# les paquets alpine reçoivent leurs correctifs (brotli-libs, CVE-2026-111497, en 0.13.1)
+RUN apk upgrade --no-cache \
+ && cp /usr/bin/caddy /usr/local/bin/caddy && rm /usr/bin/caddy \
  && ln -s /usr/local/bin/caddy /usr/bin/caddy
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY hub/web /srv/web
@@ -66,6 +70,7 @@ COPY hub/web /srv/web
 # --- Collecteurs (lot 5) : bots BCF et VIAC, Revolut via Enable Banking ---
 # Ubuntu noble apporte Python 3.12 : le venv est construit ici, pas copié de l'étape build.
 FROM ${PLAYWRIGHT_IMAGE} AS collector
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 COPY --from=build /usr/local/bin/uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
