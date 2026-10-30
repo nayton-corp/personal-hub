@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.13.6] · 2026-10-30
+
 ### App
 
 - La finance est séparée de la coquille de l'app : ses écrans, ses rubriques, ses styles et
