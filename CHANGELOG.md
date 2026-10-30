@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.13.0] · 2026-10-30
+
 ### Domaine Documents (chantier S12)
 
 - Les fiches d'objets de la maison et leurs documents (notices, contrats, garanties, courriels)
