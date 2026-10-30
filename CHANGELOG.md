@@ -6,9 +6,12 @@
 
 ### Sécurité
 
-- L'image des collecteurs ne garde plus aucun cache (`/root/.cache`, celui de uv et celui de
-  la base Playwright) : il portait certifi 2026.6.17 (GHSA-6q48-6c7w-9gw2, autorités emSign
-  compromises), relevé par la barrière de la CI ajoutée en 0.13.3, qui bloquait sa publication.
+- L'image des collecteurs n'a plus le pip système de sa base Playwright, inutile (uv installe
+  tout) : il embarquait certifi 2026.6.17 (GHSA-6q48-6c7w-9gw2, autorités emSign compromises),
+  relevé par la barrière de la CI ajoutée en 0.13.3, qui bloquait sa publication. Elle ne
+  garde plus non plus de cache (`/root/.cache`).
+- Le scan des images de la CI donne le chemin de chaque paquet en faille et passe toujours les
+  trois images.
 
 ## [0.13.3] · 2026-10-30
 
