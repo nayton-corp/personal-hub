@@ -2,6 +2,13 @@
 
 ## [Non publié]
 
+## [0.13.1] · 2026-10-30
+
+### Sécurité
+
+- L'image web passe à Caddy 2.11.7 : la 2.10.2 portait quatre failles critiques corrigées
+  (smallstep/certificates, grpc, crypto/tls de Go), qui bloquaient la publication de 0.13.0.
+
 ## [0.13.0] · 2026-10-30
 
 ### Domaine Documents (chantier S12)
