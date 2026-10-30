@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.13.5] · 2026-10-30
+
 ### App
 
 - La finance est séparée de la coquille de l'app : ses écrans, ses rubriques, ses styles et
@@ -19,8 +21,6 @@
 
 - Le banc a son propre dossier et ne joint jamais le hub : il avait écrit trois fiches de test
   dans la vraie bibliothèque.
-
-## [0.13.5] · 2026-10-30
 
 ### Documents
 
