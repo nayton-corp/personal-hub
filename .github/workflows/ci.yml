@@ -129,6 +129,7 @@ jobs:
           target: web
           platforms: linux/arm64
           push: false
+          load: true
           tags: hub-web:ci
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
@@ -139,9 +140,19 @@ jobs:
           target: collector
           platforms: linux/arm64
           push: false
+          load: true
           tags: hub-collector:ci
           cache-from: type=gha,scope=collector
           cache-to: type=gha,mode=max,scope=collector
+      # la même barrière que la release, avant le tag : une faille critique corrigeable
+      # bloque la PR plutôt que de griller une version
+      - name: Vulnérabilités des images (Trivy, critiques corrigeables)
+        run: |
+          for image in hub:ci hub-web:ci hub-collector:ci; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+              image --scanners vuln --ignore-unfixed --severity CRITICAL --exit-code 1 "$image"
+          done
       - name: Le compose reste valide
         run: |
           cp deploy/.env.example deploy/.env

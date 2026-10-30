@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+## [0.13.3] · 2026-10-30
+
+### Sécurité
+
+- L'image hub passe à restic 0.19.1 : le binaire de la 0.18.1, compilé avec Go 1.25.1, portait
+  deux failles critiques corrigées (grpc CVE-2026-33186, crypto/tls CVE-2025-68121), qui
+  bloquaient la publication de 0.13.2.
+- La CI des pull requests passe les trois images à la même barrière Trivy que la release
+  (critiques corrigeables) : une faille bloque la PR avant le tag, plus une version publiée.
+
 ## [0.13.2] · 2026-10-30
 
 ### Sécurité
