@@ -70,9 +70,13 @@ COPY hub/web /srv/web
 # --- Collecteurs (lot 5) : bots BCF et VIAC, Revolut via Enable Banking ---
 # Ubuntu noble apporte Python 3.12 : le venv est construit ici, pas copié de l'étape build.
 FROM ${PLAYWRIGHT_IMAGE} AS collector
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+# le pip système de la base embarque son propre certifi, périmé (GHSA-6q48-6c7w-9gw2) ;
+# uv fait tout ici, pip n'a rien à faire dans l'image
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/python3.12/dist-packages/pip /usr/local/lib/python3.12/dist-packages/pip-*.dist-info \
+    /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12
 COPY --from=build /usr/local/bin/uv /usr/local/bin/uv
-# aucun cache dans l'image : celui de la base (pip, virtualenv) portait un vieux certifi
+# aucun cache dans l'image
 ENV UV_NO_CACHE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
