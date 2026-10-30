@@ -11,7 +11,7 @@ from typing import Annotated, Any
 import typer
 import yaml
 
-from hub import cli_inbox, cli_ops, cli_tokens
+from hub import cli_inbox, cli_ops, cli_proposals, cli_tokens
 from hub.core import connections, connectors, profile, proposals, sessions, tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
@@ -26,8 +26,6 @@ db_app = typer.Typer(no_args_is_help=True, help="Bases et migrations")
 auth_app = typer.Typer(no_args_is_help=True, help="Passkeys")
 app.add_typer(db_app, name="db")
 app.add_typer(auth_app, name="auth")
-proposals_app = typer.Typer(no_args_is_help=True, help="Propositions (Double Sas)")
-app.add_typer(proposals_app, name="proposals")
 profile_app = typer.Typer(no_args_is_help=True, help="Profil de l'instance (prénom, pays)")
 app.add_typer(profile_app, name="profile")
 connections_app = typer.Typer(no_args_is_help=True, help="Connexions des collecteurs (G4)")
@@ -327,83 +325,8 @@ def _problem_exit(exc: Problem) -> typer.Exit:
     return typer.Exit(1)
 
 
-@proposals_app.command("list")
-def proposals_list(
-    status: Annotated[str, typer.Option(help="pending, applied, rejected… ou all")] = "pending",
-    limit: Annotated[int, typer.Option(min=1, max=200)] = 50,
-) -> None:
-    hub = _ready()
-    proposals.sync_events(hub)
-    with hub.core.engine.connect() as conn:
-        items = proposals.list_by_status(conn, None if status == "all" else status, limit)
-    for p in items:
-        typer.echo(
-            f"{p.id}  {p.domain}/{p.kind:<16} {p.status:<10} r{p.revision}  "
-            f"{p.preview.get('summary', '')}"
-        )
-
-
-@proposals_app.command("show")
-def proposals_show(proposal_id: str) -> None:
-    hub = _ready()
-    try:
-        with hub.core.engine.connect() as conn:
-            p = proposals.get(conn, proposal_id)
-    except Problem as exc:
-        raise _problem_exit(exc) from exc
-    typer.echo(json.dumps(p.public(), ensure_ascii=False, indent=1))
-
-
-@proposals_app.command("accept")
-def proposals_accept(ids: Annotated[list[str], typer.Argument()]) -> None:
-    """Valide depuis le terminal ; chaque proposition s'applique seule. Code 1 si l'une échoue."""
-    hub = _ready()
-    try:
-        items = proposals.load_many(hub, ids)
-    except Problem as exc:
-        raise _problem_exit(exc) from exc
-    results = proposals.accept(hub, _cli_principal(), items, None)
-    for r in results:
-        typer.echo(json.dumps(r.public(), ensure_ascii=False))
-    if any(r.status != "applied" for r in results):
-        raise typer.Exit(1)
-
-
-@proposals_app.command("reject")
-def proposals_reject(proposal_id: str) -> None:
-    hub = _ready()
-    try:
-        p = proposals.reject(hub, _cli_principal(), proposal_id)
-    except Problem as exc:
-        raise _problem_exit(exc) from exc
-    typer.echo(json.dumps({"id": p.id, "status": p.status}))
-
-
-@proposals_app.command("create")
-def proposals_create(
-    domain: str,
-    kind: str,
-    params: Annotated[str, typer.Option(help="paramètres en JSON")] = "{}",
-    reason: Annotated[str | None, typer.Option()] = None,
-    accept: Annotated[bool, typer.Option(help="valider aussitôt")] = False,
-) -> None:
-    """Crée une proposition (aperçu affiché) ; `--accept` la valide dans la foulée."""
-    hub = _ready()
-    try:
-        values = json.loads(params)
-    except json.JSONDecodeError as exc:
-        typer.echo("paramètres : JSON invalide", err=True)
-        raise typer.Exit(1) from exc
-    try:
-        p, _created = proposals.create(hub, _cli_principal(), domain, kind, values, reason=reason)
-        typer.echo(json.dumps(p.public(), ensure_ascii=False, indent=1))
-        if accept and p.status == "pending":
-            (outcome,) = proposals.accept(hub, _cli_principal(), [p], None)
-            typer.echo(json.dumps(outcome.public(), ensure_ascii=False))
-            if outcome.status != "applied":
-                raise typer.Exit(1)
-    except Problem as exc:
-        raise _problem_exit(exc) from exc
+proposals_app = cli_proposals.build(lambda: _ready(), _cli_principal, _problem_exit)  # relu
+app.add_typer(proposals_app, name="proposals")
 
 
 @app.command()

@@ -61,7 +61,8 @@ invalide.
 - `mcp_tools()` : ses outils pour l'assistant, chacun avec sa portée ; un outil qui écrit
   crée une proposition, jamais un effet.
 - `proposal_kinds` : ses types de proposition (paramètres validés, aperçu avec empreinte,
-  `apply()` dans la transaction du cœur) : le Double Sas.
+  `apply()` dans la transaction du cœur) : le Double Sas. `tier` donne le palier par défaut
+  d'un type (`human` sauf raison écrite) ; la personne le change par `hub proposals policy`.
 - `search(q, limit, scopes)` et `resolve(urn)` : sa part de la recherche et des liens. Le
   score d'un `Hit` ne sert qu'à classer ses propres résultats (le cœur fusionne par rang) ;
   `excerpt` porte le passage trouvé (`hub.core.search.excerpt`), jamais un montant. Un objet que

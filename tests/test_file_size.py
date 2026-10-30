@@ -13,13 +13,13 @@ LIMIT = 400
 # chemin relatif à hub/ → taille maximale tolérée, en attendant le découpage (S5, S6)
 TOO_LONG: dict[str, int] = {
     "core/collectors.py": 460,
-    "cli.py": 522,
+    "cli.py": 445,
     "collectors/exchanges/binance_history.py": 583,
     "web/budget.js": 600,
     "web/journal.js": 662,
     "web/connections.js": 730,
     "web/wealth.js": 827,
-    "core/proposals.py": 832,
+    "core/proposals.py": 818,
     "collectors/market/flow.py": 1047,
 }
 

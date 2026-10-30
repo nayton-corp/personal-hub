@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### Paliers d'approbation réglables (chantier S11)
+
+- Un type de proposition déclare son palier par défaut (`human`, `auto_digest` ou `auto`) ;
+  `hub proposals policy` montre et change les paliers. Un modèle reste à la carte tant qu'il
+  ne déclare pas « pas de texte externe ».
+
 ### Un seul assistant, venu de Domia (chantier S10)
 
 - L'assistant de Domia arrive dans `assistant/`, avec ses 149 tests, son banc, ses gabarits de

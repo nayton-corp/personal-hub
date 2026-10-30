@@ -16,6 +16,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import Connection, Row, text
 from sqlalchemy.exc import IntegrityError
 
+from hub.core import policies
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.coredb import audit
@@ -188,22 +189,6 @@ def _preview(hub: HubContext, domain: str, kind: ProposalKind, params: BaseModel
         return local.preview(conn, params)
 
 
-def _tier(conn: Connection, domain: str, kind: str) -> str:
-    row = conn.execute(
-        text("SELECT tier FROM approval_policies WHERE domain = :d AND kind = :k"),
-        {"d": domain, "k": kind},
-    ).first()
-    return str(row[0]) if row is not None else "human"
-
-
-def tier_for(
-    conn: Connection, principal: Principal, domain: str, kind: str, external_text: bool | None
-) -> str:
-    if not principal.is_app and external_text is not False:
-        return "human"
-    return _tier(conn, domain, kind)
-
-
 def _existing(
     conn: Connection, domain: str, kind: str, params_hash: str, create_key: str | None
 ) -> Proposal | None:
@@ -241,10 +226,9 @@ def create(
     """Renvoie (proposition, créée ?). Une même clé, ou une proposition identique encore en
     attente, renvoie la proposition existante au lieu d'en créer une seconde.
 
-    Le palier vient de `approval_policies`. Un jeton (un modèle) reste au palier `human` tant
-    qu'il ne déclare pas `external_text = False` : une proposition tirée d'un texte externe
-    passe toujours par une carte. Aux paliers `auto` et `auto_digest`, l'effet est appliqué
-    tout de suite."""
+    Le palier vient de `hub.core.policies` (défaut du type, ou `approval_policies`) ; un texte
+    externe passe toujours par une carte. Aux paliers `auto` et `auto_digest`, l'effet est
+    appliqué tout de suite."""
     d = owner(hub, domain)
     kind = d.proposal_kinds.get(kind_name)
     if kind is None:
@@ -281,7 +265,9 @@ def create(
                     "h": params_hash,
                     "pv": canonical.dumps({"summary": preview.summary, "details": preview.details}),
                     "fp": preview.fingerprint,
-                    "tier": tier_for(conn, principal, domain, kind_name, external_text),
+                    "tier": policies.tier_for(
+                        conn, principal, domain, kind_name, kind.tier, external_text
+                    ),
                     "by": principal.actor,
                     "reason": reason,
                     "bundle": bundle_id,

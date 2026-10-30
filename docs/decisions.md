@@ -7,6 +7,18 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-023 · Le palier par défaut vient du type, la personne le change (30.10.2026)
+
+- **Contexte** : `approval_policies` existait, vide et sans commande pour la remplir : tout
+  passait par une carte, même un article de plus sur la liste de courses.
+- **Décision** : un type de proposition déclare son palier par défaut (`ProposalKind.tier`,
+  `human` sauf mention) ; `hub proposals policy [DOMAINE [TYPE [PALIER|default]]]` les montre
+  et les change (`hub.core.policies`). Un jeton qui ne déclare pas `external_text = false`
+  reste à la carte, quel que soit le palier.
+- **Conséquence** : la liste de courses de l'agenda passe au palier `auto` ; tout autre effet
+  externe reste à la carte. Les commandes `hub proposals …` quittent `hub/cli.py`
+  (`hub/cli_proposals.py`).
+
 ## D-022 · Plus de conteneur pour l'IA locale (30.10.2026)
 
 - **Contexte** : le conteneur `brain` joignait Ollama par `host.docker.internal` et chargeait son

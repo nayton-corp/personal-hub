@@ -61,6 +61,7 @@ class ExternalHandler(Protocol):
 
 
 Inverse = Callable[[dict[str, Any], dict[str, Any]], tuple[str, dict[str, Any]]]
+Tier = Literal["human", "auto_digest", "auto"]
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ class ProposalKind:
     inverse: Inverse | None = None  # (params, result) -> (kind, params) qui annule
     ai_allowed: bool = False  # la portée <domaine>:propose peut-elle le créer ?
     external: bool = False  # vrai pour un ExternalHandler (le Protocol n'est pas discriminant)
+    tier: Tier = "human"  # palier par défaut ; `hub proposals policy` le change (core.policies)
 
     def __post_init__(self) -> None:
         if self.reversible and self.inverse is None:
