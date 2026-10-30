@@ -1,6 +1,6 @@
 // Libellés, pictogrammes et teintes des catégories, des facettes du patrimoine et des actifs.
 import { BRANDS } from "./brands.js";
-import { cv, esc, ibox, ic, monogram, pref } from "./ui.js";
+import { cv, esc, ibox, ic, monogram, pref } from "../../ui.js";
 
 // catégories du registre (base, packs) : pictogramme et teinte ; les autres prennent ceux de
 // leur groupe

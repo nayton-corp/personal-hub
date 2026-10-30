@@ -1,7 +1,9 @@
 """Manifeste de la finance (chantier S2) : ce qu'elle apporte à l'app, à la boîte d'entrée et à
-l'assistant. Les modules nommés sont des fichiers de `hub/web`."""
+l'assistant. Les modules nommés sont des fichiers de son dossier `web/`."""
 
 from __future__ import annotations
+
+from pathlib import Path
 
 from hub.core.manifest import AppModule, HomeCard, Importer, Manifest, SettingsSection, Tab
 from hub.domains.finance.sources.app.connectors import NAMES
@@ -63,6 +65,7 @@ MANIFEST = Manifest(
         cards="proposals.js",
         home="home.js",
         module="finance.js",
+        web=Path(__file__).parent / "web",
     ),
     importers=(
         Importer(

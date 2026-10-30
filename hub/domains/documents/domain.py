@@ -41,7 +41,9 @@ SCHEMA_VERSION = 1  # 0001_documents
 MANIFEST = Manifest(
     description="Documents : fiches d'objets de la maison, notices, contrats et garanties.",
     app=AppModule(
-        home_cards=(HomeCard("documents", "Documents", "/overview"),), home="documents-home.js"
+        home_cards=(HomeCard("documents", "Documents", "/overview"),),
+        home="home.js",
+        web=Path(__file__).parent / "web",
     ),
     # la finance réclame les PDF : un PDF arrive par inbox/documents/ (raccourci, AirDrop)
     importers=(Importer("documents", "Courriels et notes", frozenset({".eml", ".md", ".txt"})),),

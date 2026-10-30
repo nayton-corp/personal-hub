@@ -39,7 +39,11 @@ WEEK = 7
 
 MANIFEST = Manifest(
     description="Agenda : rappels, liste de courses et calendrier du Mac (Rappels, Calendrier).",
-    app=AppModule(home_cards=(HomeCard("agenda", "Agenda", "/overview"),), home="agenda-home.js"),
+    app=AppModule(
+        home_cards=(HomeCard("agenda", "Agenda", "/overview"),),
+        home="home.js",
+        web=Path(__file__).parent / "web",
+    ),
     protected_tables=frozenset({"events", "applied_proposals"}),
     assistant=(
         "Les rappels et les événements vivent dans Rappels et Calendrier : un ajout ou une case "

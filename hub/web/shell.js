@@ -1,6 +1,6 @@
 // Coquille de l'app (chantier S5) : navigation, barre d'onglets, feuilles, page des réglages.
 // Elle ne connaît aucun domaine : /api/domains lui donne les manifestes, et chaque module nommé
-// (fichier de hub/web) est chargé puis monté.
+// (fichier du dossier web/ du domaine) est chargé puis monté.
 //   - onglet (`tabs[].module`) : render(), actions ; facultatifs todoCount(), todoLabel,
 //     unlink(lien) quand l'historique quitte un lien suivi ;
 //   - accueil (`home`) : render(box), actions ; facultatifs lead, rows() (accueil.js) ; il
@@ -9,7 +9,10 @@
 //   - rubrique (`settings[].module`) : rubric(id) dessine la page, rubricStatus(id) l'état en
 //     mots ([texte, ton] ou null) ;
 //   - module du domaine (`module`) : init(), after() après chaque rendu, deeplink(hash).
-// Tout module peut exporter init() (appelé une fois) et actions (distribuées par data-a).
+// Tout module peut exporter init() (appelé une fois), actions (distribuées par data-a) et
+// markup : ses balises, [sélecteur, position d'insertAdjacentHTML, html], posées avant tout
+// rendu. Les modules d'un domaine sont servis sous /d/<domaine>/ ; ils n'importent que ceux
+// de la coquille (../../ui.js…) et les leurs.
 import * as accueil from "./accueil.js";
 import * as approvals from "./approvals.js";
 import * as sources from "./sources.js";
@@ -62,22 +65,27 @@ function viewFor(tab) {
 
 async function mount() {
   const domains = await manifests();
+  // les modules d'un domaine sont servis sous /d/<domaine>/, à côté de son code
+  const path = (d, f) => `./d/${d.name}/${f}`;
   const files = new Set();
   for (const d of domains) {
     const app = d.app;
-    for (const f of [app.module, app.home, app.cards, ...app.tabs.map((t) => t.module), ...app.settings.map((s) => s.module)]) if (f) files.add(f);
+    for (const f of [app.module, app.home, app.cards, ...app.tabs.map((t) => t.module), ...app.settings.map((s) => s.module)]) if (f) files.add(path(d, f));
   }
   const loaded = {};
-  await Promise.all([...files].map(async (f) => { loaded[f] = await import(`./${f}`); }));
-  for (const m of Object.values(loaded)) Object.assign(ACTIONS, m.actions || {});
+  await Promise.all([...files].map(async (f) => { loaded[f] = await import(f); }));
+  for (const m of Object.values(loaded)) {
+    Object.assign(ACTIONS, m.actions || {});
+    for (const [sel, where, html] of m.markup || []) document.querySelector(sel).insertAdjacentHTML(where, html);
+  }
   const tabs = [];
   for (const d of domains) {
-    const app = d.app;
-    if (app.module) MODULES.push(loaded[app.module]);
-    if (app.home) accueil.add(d.name, loaded[app.home]);
-    if (app.cards) approvals.addCards(d.name, loaded[app.cards]);
-    for (const t of app.tabs) tabs.push({ ...t, m: loaded[t.module] });
-    sources.add(app.settings.map((s) => ({ ...s, m: loaded[s.module] })));
+    const app = d.app, mod = (f) => loaded[path(d, f)];
+    if (app.module) MODULES.push(mod(app.module));
+    if (app.home) accueil.add(d.name, mod(app.home));
+    if (app.cards) approvals.addCards(d.name, mod(app.cards));
+    for (const t of app.tabs) tabs.push({ ...t, m: mod(t.module) });
+    sources.add(app.settings.map((s) => ({ ...s, m: mod(s.module) })));
   }
   tabs.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
   TABS.push(["accueil", "Accueil", "home"]);

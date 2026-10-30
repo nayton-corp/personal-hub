@@ -24,8 +24,6 @@ from tests.finance.test_finance_api import app_session
 from tests.support.demo_domain import MANIFEST as DEMO
 from tests.support.demo_domain import DemoDomain
 
-WEB = Path(__file__).resolve().parents[1] / "hub" / "web"
-
 
 def test_the_app_mounts_what_the_demo_declares(hub: HubContext, client: TestClient) -> None:
     app_session(hub, client)
@@ -154,8 +152,9 @@ def test_the_finance_manifest_matches_the_code(settings: Settings) -> None:
     assert FINANCE.problems() == []
     assert FINANCE.connectors == connectors.names()
     modules = {t.module for t in FINANCE.app.tabs} | {s.module for s in FINANCE.app.settings}
+    assert FINANCE.app.web is not None
     for module in {*modules, FINANCE.app.cards, FINANCE.app.home, FINANCE.app.module}:
-        assert (WEB / str(module)).is_file(), module
+        assert (FINANCE.app.web / str(module)).is_file(), module
     finance = FinanceDomain(settings)
     finance.migrate()
     with finance.engine().connect() as conn:

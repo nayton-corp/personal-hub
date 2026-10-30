@@ -3,11 +3,11 @@
 // rejoignent celles des autres domaines (accueil.js).
 import { hiddenIds } from "./accounts.js";
 import { budgetPath, model } from "./budget.js";
-import { go } from "./shell.js";
-import { base, date, monthName } from "./format.js";
+import { go } from "../../shell.js";
+import { base, date, monthName } from "../../format.js";
 import { catMark, taxRate } from "./meta.js";
-import { shiftMonth, store } from "./store.js";
-import { esc, fill, ic, n0, nf, pctOnly, pf, pref, setPref, sgn, skel } from "./ui.js";
+import { shiftMonth, store } from "../../store.js";
+import { esc, fill, ic, n0, nf, pctOnly, pf, pref, setPref, sgn, skel } from "../../ui.js";
 import * as wealth from "./wealth.js";
 
 const STALE_DAYS = 45;

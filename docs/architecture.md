@@ -12,7 +12,7 @@ flowchart TB
   subgraph bords["Bords"]
     api["hub.api<br/>routes du cœur"]
     cli["hub.cli<br/>commande hub"]
-    web["hub/web<br/>coquille de l'app"]
+    web["hub/web<br/>coquille de l'app<br/>(modules des domaines : hub/domains/*/web)"]
   end
   subgraph domaines["Domaines (hub.domains.*)"]
     finance["finance"]
@@ -123,9 +123,12 @@ dans [hub/domains/finance/README.md](../hub/domains/finance/README.md) et
 
 ## L'app
 
-`hub/web/` est une PWA sans framework ni script en ligne (CSP stricte). `shell.js` (navigation,
-onglets, feuilles) et `sources.js` (réglages) ne nomment aucun domaine : ils lisent
-`/api/domains` et chargent les modules du manifeste ([D-018](decisions.md)).
+`hub/web/` est la coquille d'une PWA sans framework ni script en ligne (CSP stricte) :
+`shell.js` (navigation, onglets, feuilles), `accueil.js` (l'accueil, « À faire »),
+`approvals.js` (« À valider » et le Face ID) et `sources.js` (réglages) ne nomment aucun
+domaine. Ils lisent `/api/domains` et chargent les modules de chaque domaine, servis depuis
+`hub/domains/<nom>/web/` sous `/d/<nom>/` ([D-018](decisions.md)). La finance y pose ses
+écrans, ses rubriques et ses styles comme les autres ; sans elle, l'app démarre.
 
 ## Ce qui tourne
 

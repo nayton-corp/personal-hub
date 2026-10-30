@@ -1,12 +1,12 @@
 // Les cartes de la finance (manifeste `cards`) : créer une proposition du domaine, la valider
 // aussitôt, et la carte « plusieurs écritures, une catégorie » dont chaque écriture se décoche
 // dans « À valider » (approvals.js).
-import { approve, pendingPath } from "./approvals.js";
-import { date } from "./format.js";
-import { api, store } from "./store.js";
-import { esc, n2 } from "./ui.js";
+import { approve, pendingPath } from "../../approvals.js";
+import { date } from "../../format.js";
+import { api, store } from "../../store.js";
+import { esc, n2 } from "../../ui.js";
 
-export { approve, outcome } from "./approvals.js";
+export { approve, outcome } from "../../approvals.js";
 
 const dropped = new Map(); // carte à plusieurs écritures → écritures décochées
 

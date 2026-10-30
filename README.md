@@ -46,8 +46,8 @@ hub/core/           cœur : accès (passkeys, jetons), propositions, contrat de 
 hub/api/            application FastAPI et routes du cœur
 hub/domains/        domaines, isolés par import-linter ; finance/ : registre, classement,
                     patrimoine, sources (chacun interface → app → infra → model) ; agenda/,
-                    documents/
-hub/web/            l'app (PWA) : coquille (shell.js) et modules des domaines
+                    documents/ ; chacun a son dossier web/ (ses modules de l'app)
+hub/web/            l'app (PWA) : la coquille seule (shell.js, accueil, « À valider »)
 hub/collectors/     collecteurs : robots et clients d'API qui déposent des fichiers
 hub/brain/          IA locale : passerelle MCP, assistant et suggestions (`hub-brain`)
 assistant/          l'assistant venu de Domia (paquet à part) : voix, maison, pont Rappels

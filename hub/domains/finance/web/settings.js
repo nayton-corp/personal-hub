@@ -4,10 +4,10 @@
 import { accountsList } from "./accounts.js";
 import { accountsCard, connectionsCard } from "./connections.js";
 import { debtsList } from "./debts.js";
-import { STALE_DAYS, daysSince } from "./format.js";
+import { STALE_DAYS, daysSince } from "../../format.js";
 import { TAX_RATES, taxRate } from "./meta.js";
-import { api, monthStartDay, store } from "./store.js";
-import { esc, failure, fill, pf, setPref, toast } from "./ui.js";
+import { api, monthStartDay, store } from "../../store.js";
+import { esc, failure, fill, pf, setPref, toast } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
 const SETTINGS = "/finance/settings";

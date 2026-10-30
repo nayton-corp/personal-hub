@@ -1,8 +1,8 @@
 // Bloc d'accueil de l'agenda (S11) : la semaine, les rappels ouverts, la liste de courses. Le
 // pont Rappels/Calendrier absent (Mac en veille, accès retiré), le bloc le dit sans erreur.
-import { date } from "./format.js";
-import { store } from "./store.js";
-import { esc, fill } from "./ui.js";
+import { date } from "../../format.js";
+import { store } from "../../store.js";
+import { esc, fill } from "../../ui.js";
 
 const PATH = "/agenda/overview";
 const SHOWN = 5;

@@ -1,8 +1,8 @@
 // Bloc d'accueil des documents (S12) : les entretiens dus d'après les fiches d'objets, puis les
 // derniers documents reçus. Rien à montrer, le bloc reste vide.
-import { date } from "./format.js";
-import { store } from "./store.js";
-import { esc, fill } from "./ui.js";
+import { date } from "../../format.js";
+import { store } from "../../store.js";
+import { esc, fill } from "../../ui.js";
 
 const PATH = "/documents/overview";
 

@@ -1,7 +1,7 @@
 # Ajouter un domaine
 
-Un domaine, c'est un paquet Python sous `hub/domains/<nom>/` et un module de l'app sous
-`hub/web/`. On n'écrit pas une ligne du cœur, de la finance ni de la coquille de l'app : le
+Un domaine, c'est un paquet Python sous `hub/domains/<nom>/` et ses modules de l'app dans
+`hub/domains/<nom>/web/`. On n'écrit pas une ligne du cœur, de la finance ni de la coquille de l'app : le
 cœur lit le contrat (`hub.core.domain.Domain`) et le manifeste (`hub.core.manifest`), l'app
 lit `/api/domains`. Le domaine factice des tests (`tests/support/demo_domain.py`, modules
 `tests/web/modules/`) suit cette recette pas à pas ; `tests/test_domain_recipe.py` vérifie
@@ -75,7 +75,11 @@ invalide.
 
 ## 5. Son module dans l'app
 
-- Un fichier par module nommé au manifeste, dans `hub/web/` (`<nom>.js`). Un onglet exporte
+- Un fichier par module nommé au manifeste, dans le dossier `web/` du domaine, que
+  `AppModule.web` déclare (`Path(__file__).parent / "web"`). Il est servi sous `/d/<nom>/` :
+  l'image `web` l'y copie, et l'API le monte en développement. Un module n'importe que la
+  coquille (`../../ui.js`, `../../store.js`…) et les modules de son dossier ; jamais un autre
+  domaine (`tests/web/test_front_boundaries.py`). Un onglet exporte
   `render()` et `actions` (et, au besoin, `todoCount()`, `todoLabel`) ; un bloc d'accueil
   exporte `render(box)`, et au besoin `lead` (son bloc passe avant « À faire ») et `rows()` (ses
   lignes de « À faire » et « À savoir », `null` tant que ses données manquent) ; le module de
@@ -85,9 +89,12 @@ invalide.
 - L'accueil, « À faire », « À valider » et le Face ID appartiennent à la coquille (`accueil.js`,
   `approvals.js`) : un domaine y apporte ses blocs, ses lignes et le détail de ses cartes, jamais
   l'écran lui-même.
-- Un onglet ou une rubrique sans balisage dans `index.html` reçoit une page générique : il
-  dessine dans `#<onglet>-body` ou `#rub-<rubrique>`.
-- Ajouter le fichier à la liste du service worker (`sw.js`) pour qu'il marche hors ligne.
+- `index.html` et `styles.css` ne connaissent aucun domaine. Un module pose ses balises par
+  `markup` ([sélecteur, position, html], avant tout rendu), sa feuille de style comprise ; un
+  onglet ou une rubrique sans balisage reçoit une page générique : il dessine dans
+  `#<onglet>-body` ou `#rub-<rubrique>`.
+- Le service worker garde les modules du domaine au premier chargement : rien à déclarer.
+- Sans aucun autre domaine, l'app démarre (`tests/web/test_app_without_finance.py`).
 
 ## 6. Ses garde-fous
 

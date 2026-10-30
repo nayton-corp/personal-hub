@@ -4,15 +4,15 @@
 // six mois, repliés sur une ligne de résumé. Les
 // montants viennent de /finance/budget, /flows, /budget/months ; seul le rythme (part du mois
 // écoulée) et la projection se calculent ici.
-import { go, reveal } from "./shell.js";
-import { MOIS, base, date, monthName } from "./format.js";
+import { go, reveal } from "../../shell.js";
+import { MOIS, base, date, monthName } from "../../format.js";
 import { GROUP_LABEL, catLook, catMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
-import { monthStartDay, shiftMonth, store } from "./store.js";
+import { monthStartDay, shiftMonth, store } from "../../store.js";
 import {
   SHEETS, SH, amount, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, money, n0, nf, openSheet, pf, pref,
   renderSheet, setPref, skel, toast,
-} from "./ui.js";
+} from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
 const P = store.params;

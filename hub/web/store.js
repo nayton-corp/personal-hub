@@ -64,9 +64,8 @@ export function shiftMonth(month, delta) {
   return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`;
 }
 
-// tx : all, todo, in, out ; txcat : { id, month } quand le journal suit une catégorie du budget ;
-// jf : filtres du journal (compte, catégorie, from, to, min, max en unités, tri)
-const DEFAULTS = { tab: "accueil", period: "m", tx: "all", q: "", txcat: null, jf: {} };
+// les domaines ajoutent leurs propres paramètres d'écran (la finance : ceux du journal)
+const DEFAULTS = { tab: "accueil", period: "m" };
 
 function remembered() {
   try {
