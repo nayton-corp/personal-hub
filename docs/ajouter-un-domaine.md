@@ -77,8 +77,14 @@ invalide.
 
 - Un fichier par module nommé au manifeste, dans `hub/web/` (`<nom>.js`). Un onglet exporte
   `render()` et `actions` (et, au besoin, `todoCount()`, `todoLabel`) ; un bloc d'accueil
-  exporte `render(box)` ; une rubrique exporte `rubric(id)` et `rubricStatus(id)` ; le module
+  exporte `render(box)`, et au besoin `lead` (son bloc passe avant « À faire ») et `rows()` (ses
+  lignes de « À faire » et « À savoir », `null` tant que ses données manquent) ; le module de
+  cartes exporte au besoin `detail(p)` (ce qui se déplie sous une carte) et `prepare(ids)`
+  (cartes retouchées avant le Face ID) ; une rubrique exporte `rubric(id)` et `rubricStatus(id)` ; le module
   du domaine exporte `init()`, `after()`, `deeplink(hash)`.
+- L'accueil, « À faire », « À valider » et le Face ID appartiennent à la coquille (`accueil.js`,
+  `approvals.js`) : un domaine y apporte ses blocs, ses lignes et le détail de ses cartes, jamais
+  l'écran lui-même.
 - Un onglet ou une rubrique sans balisage dans `index.html` reçoit une page générique : il
   dessine dans `#<onglet>-body` ou `#rub-<rubrique>`.
 - Ajouter le fichier à la liste du service worker (`sw.js`) pour qu'il marche hors ligne.

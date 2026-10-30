@@ -1,0 +1,74 @@
+// Accueil de la coquille (cœur) : les blocs des domaines, avec au milieu « À faire » (ce qui se
+// règle d'un geste, dont les propositions à valider) et « À savoir ». Chaque ligne mène à
+// l'écran où l'on agit.
+// Le module d'accueil d'un domaine (manifeste `home`) exporte render(box) ; il peut exporter
+// lead (son bloc passe avant les listes), et rows() : ses lignes { ic, c, mark, t, s, a, v,
+// info }, ou null tant que ses données manquent.
+import { pendingCount, pendingPath } from "./approvals.js";
+import { store } from "./store.js";
+import { esc, fill, ibox, ic } from "./ui.js";
+
+const $ = (id) => document.getElementById(id);
+const HOMES = []; // [domaine, module], dans l'ordre des domaines
+
+export function add(domain, module) {
+  HOMES.push([domain, module]);
+}
+
+// un conteneur par domaine, et celui des listes après les blocs de tête ; créés au premier rendu
+function boxes() {
+  const body = $("homeBody");
+  if (!body.childElementCount) {
+    const keys = [...HOMES.filter(([, m]) => m.lead), [""], ...HOMES.filter(([, m]) => !m.lead)].map(([d]) => d);
+    for (const key of keys) {
+      const b = Object.assign(document.createElement("div"), { className: "home-domain" });
+      if (key) b.dataset.home = key;
+      else b.dataset.lists = "";
+      body.append(b);
+    }
+    body.insertAdjacentHTML("beforeend", '<div class="endspace"></div>');
+  }
+  return (key) => body.querySelector(key ? `:scope > [data-home="${CSS.escape(key)}"]` : ":scope > [data-lists]");
+}
+
+// null tant qu'un domaine attend ses données : les listes ne s'affichent pas à moitié
+function rows() {
+  const out = [];
+  const n = pendingCount();
+  if (n) out.push({ ic: "faceid", c: "var(--accent)", t: `${n} proposition${n > 1 ? "s" : ""} à valider`, s: "Un seul Face ID pour tout le lot", a: "props" });
+  for (const [, m] of HOMES) {
+    if (!m.rows) continue;
+    const r = m.rows();
+    if (r == null) return null;
+    out.push(...r);
+  }
+  return out;
+}
+
+export function todoCount() {
+  const all = rows();
+  return all ? all.filter((x) => !x.info).length : pendingCount();
+}
+
+const row = (x) => `<button class="trow press" type="button" data-a="${x.a}" ${x.v ? `data-v="${esc(x.v)}"` : ""}>
+    ${x.mark || ibox(ic(x.ic), x.c)}
+    <span class="row-main"><span class="row-title">${esc(x.t)}</span><span class="row-sub">${esc(x.s)}</span></span>
+    <span class="chev-r">${ic("chev")}</span></button>`;
+
+function lists() {
+  const all = rows();
+  if (!all) return "";
+  const acts = all.filter((x) => !x.info), infos = all.filter((x) => x.info);
+  return `<section class="card" aria-labelledby="t-todo">
+      <div class="section-head"><h2 class="section-title" id="t-todo">À faire</h2>${acts.length ? `<span class="pill info">${acts.length}</span>` : ""}</div>
+      ${acts.length ? acts.map(row).join("") : `<div class="status good">${ic("check")}<span>Rien à faire, tout est à jour.</span></div>`}
+    </section>
+    ${infos.length ? `<section class="card" aria-labelledby="t-info"><h2 class="section-title" id="t-info">À savoir</h2>${infos.map(row).join("")}</section>` : ""}`;
+}
+
+export function render() {
+  store.use(pendingPath);
+  const at = boxes();
+  for (const [d, m] of HOMES) m.render(at(d));
+  fill(at(""), lists());
+}

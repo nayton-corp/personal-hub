@@ -1,44 +1,17 @@
-// Double Sas dans l'app (L3-04) : les propositions en attente se valident par lot avec un seul
-// Face ID. Le défi WebAuthn porte l'empreinte du lot (révisions et empreintes comprises) ; une
-// proposition qui a changé entre-temps revient avec une nouvelle révision, jamais appliquée.
+// Les cartes de la finance (manifeste `cards`) : créer une proposition du domaine, la valider
+// aussitôt, et la carte « plusieurs écritures, une catégorie » dont chaque écriture se décoche
+// dans « À valider » (approvals.js).
+import { approve, pendingPath } from "./approvals.js";
+import { date } from "./format.js";
 import { api, store } from "./store.js";
-import { credentialJSON, requestOptions } from "./webauthn.js";
+import { esc, n2 } from "./ui.js";
 
-const BATCH = 50; // plafond de /approvals/challenge
+export { approve, outcome } from "./approvals.js";
 
-export const pendingPath = "/proposals?status=pending";
-
-// un Face ID par tranche de 50 ; renvoie les résultats de chaque proposition
-export async function approve(ids, action = "accept") {
-  const results = [];
-  for (let i = 0; i < ids.length; i += BATCH) {
-    const part = ids.slice(i, i + BATCH);
-    const ch = await api("/approvals/challenge", { proposal_ids: part, action });
-    const cred = await navigator.credentials.get({ publicKey: requestOptions(ch.options) });
-    const out = await api("/proposals/accept", {
-      proposal_ids: part, challenge_id: ch.challenge_id, assertion: credentialJSON(cred),
-    });
-    results.push(...out.results);
-  }
-  return results;
-}
+const dropped = new Map(); // carte à plusieurs écritures → écritures décochées
 
 export function propose(kind, params, bundle) {
   return api("/proposals", { domain: "finance", kind, params, bundle_id: bundle });
-}
-
-// texte du résultat d'un lot, et s'il contient un échec
-export function outcome(results) {
-  const applied = results.filter((r) => r.status === "applied").length;
-  const changed = results.filter((r) => r.status === "superseded" || r.status === "pending").length;
-  const failed = results.length - applied - changed;
-  const parts = [`${applied} appliquée${applied > 1 ? "s" : ""}`];
-  if (changed) parts.push(`${changed} ont changé entre-temps : relis-les`);
-  if (failed) {
-    const p = results.find((r) => r.problem)?.problem;
-    parts.push(`${failed} en échec${p ? ` (${p.detail || p.title})` : ""}`);
-  }
-  return [parts.join(", "), failed > 0 || changed > 0];
 }
 
 // propose puis valide d'un seul Face ID ; le registre a changé : tout se relit
@@ -56,4 +29,47 @@ export async function proposeAndApprove(items) {
     window.dispatchEvent(new Event("hub:changed"));
     store.invalidate();
   }
+}
+
+// la liste des écritures se déplie sous la carte, chaque écriture se décoche
+const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+export function detail(p) {
+  if (p.kind !== "categorize_entries") return "";
+  const off = dropped.get(p.id) || new Set();
+  const list = p.preview.details.entries || [];
+  return `<details class="prop-more"${off.size ? " open" : ""}><summary>Voir les ${list.length} écritures${off.size ? ` · ${off.size} retirée${off.size > 1 ? "s" : ""}` : ""}</summary>
+    ${list.map((e) => `<label class="check-in"><input type="checkbox" data-pentry="${esc(p.id)}" data-eid="${esc(e.id)}" ${off.has(e.id) ? "" : "checked"}>
+      <span>${esc(e.merchant ? capital(e.merchant) : e.counterparty || "Écriture")}</span><span class="num">${date(e.booking_date)} · ${n2(e.amount.minor / 100)}</span></label>`).join("")}
+  </details>`;
+}
+
+document.addEventListener("change", (e) => {
+  const pid = e.target.dataset && e.target.dataset.pentry;
+  if (!pid) return;
+  const off = dropped.get(pid) || new Set();
+  if (e.target.checked) off.delete(e.target.dataset.eid);
+  else off.add(e.target.dataset.eid);
+  dropped.set(pid, off);
+  store.notify();
+});
+
+// une carte dont on a retiré des écritures est remplacée par une carte sans elles, validée du
+// même Face ID ; toutes retirées, elle est refusée
+export async function prepare(ids) {
+  const pe = store.data(pendingPath);
+  const byId = new Map((pe ? pe.items : []).map((p) => [p.id, p]));
+  const out = [];
+  for (const id of ids) {
+    const p = byId.get(id);
+    const off = dropped.get(id);
+    if (!p || !off || !off.size) {
+      out.push(id);
+      continue;
+    }
+    const keep = p.params.entry_ids.filter((e) => !off.has(e));
+    if (keep.length) out.push((await propose(p.kind, { ...p.params, entry_ids: keep }, `app-${Date.now()}`)).id);
+    await api(`/proposals/${id}/reject`, {});
+    dropped.delete(id);
+  }
+  return out;
 }

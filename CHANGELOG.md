@@ -2,6 +2,18 @@
 
 ## [Non publié]
 
+### App
+
+- L'accueil, « À faire », « À valider » et le Face ID appartiennent à la coquille, plus à la
+  finance : la finance y pose ses tuiles et ses lignes comme les autres domaines, et une carte
+  d'un autre domaine se valide au même endroit, avec un texte neutre (« Rien ne change sans
+  ton Face ID ») et le nom de son domaine quand plusieurs domaines attendent.
+
+### Assistant
+
+- Le banc a son propre dossier et ne joint jamais le hub : il avait écrit trois fiches de test
+  dans la vraie bibliothèque.
+
 ## [0.13.5] · 2026-10-30
 
 ### Documents
