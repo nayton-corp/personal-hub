@@ -13,7 +13,13 @@ FROM ${RESTIC_IMAGE} AS restic
 # BuildKit (cache par empreinte du contenu copié) garde les images hub et collector.
 FROM ${PYTHON_IMAGE} AS src
 COPY hub /hub
-RUN rm -rf /hub/web
+RUN rm -rf /hub/web /hub/domains/*/web
+
+# Fichiers de l'app : la coquille, et les modules de chaque domaine sous d/<domaine>/
+FROM ${PYTHON_IMAGE} AS webfiles
+COPY hub /hub
+RUN mkdir -p /out/d && cp -r /hub/web/. /out/ \
+ && for w in /hub/domains/*/web; do cp -r "$w" "/out/d/$(basename "$(dirname "$w")")"; done
 
 FROM ${PYTHON_IMAGE} AS build
 RUN pip install --no-cache-dir uv==0.13.6
@@ -65,7 +71,7 @@ RUN apk upgrade --no-cache \
  && cp /usr/bin/caddy /usr/local/bin/caddy && rm /usr/bin/caddy \
  && ln -s /usr/local/bin/caddy /usr/bin/caddy
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
-COPY hub/web /srv/web
+COPY --from=webfiles /out /srv/web
 
 # --- Collecteurs (lot 5) : bots BCF et VIAC, Revolut via Enable Banking ---
 # Ubuntu noble apporte Python 3.12 : le venv est construit ici, pas copié de l'étape build.

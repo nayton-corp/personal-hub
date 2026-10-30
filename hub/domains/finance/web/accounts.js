@@ -1,11 +1,11 @@
 // Réglages d'un compte : nom, objectif, disponibilité, catégorie, masquage et catégorie de toutes
 // ses dépenses (une poche Vacances), enregistrés par un seul Face ID. Le panneau s'ouvre depuis le patrimoine (détail d'un
 // compte) ou depuis la carte « Comptes » des réglages, qui montre aussi la fraîcheur.
-import { date, daysSince } from "./format.js";
+import { date, daysSince } from "../../format.js";
 import { FACET, GROUP_LABEL, facetMark, facetName, setInstitutions } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
-import { store } from "./store.js";
-import { SHEETS, SH, closeSheet, esc, failure, fill, ibox, ic, openSheet, renderSheet, toast } from "./ui.js";
+import { store } from "../../store.js";
+import { SHEETS, SH, closeSheet, esc, failure, fill, ibox, ic, openSheet, renderSheet, toast } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
 const ACCOUNTS = "/finance/accounts", FRESH = "/finance/freshness", CATS = "/finance/categories";

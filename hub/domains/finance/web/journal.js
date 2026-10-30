@@ -2,11 +2,11 @@
 // période, montant) et tri, écritures par jour, détail d'une écriture et classement avec Face ID ;
 // « À classer » groupe par contrepartie avec ses libellés, comptes, dates et montants, un choix
 // par groupe, une validation pour tout le lot.
-import { MOIS, dayName, date } from "./format.js";
+import { MOIS, dayName, date } from "../../format.js";
 import { GROUP_LABEL, catIc, catMark, txMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
-import { api, monthSpan, shiftMonth, store } from "./store.js";
-import { SHEETS, SH, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, n2, openSheet, qty, renderSheet, skel, toast } from "./ui.js";
+import { api, monthSpan, shiftMonth, store } from "../../store.js";
+import { SHEETS, SH, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, n2, openSheet, qty, renderSheet, skel, toast } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
 const P = store.params;

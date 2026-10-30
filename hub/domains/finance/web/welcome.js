@@ -2,9 +2,9 @@
 // l'installation, lu dans les données et non retenu à part. Passkey de secours, profil, règles
 // de catégorisation, première connexion, premier compte ; la carte disparaît quand tout est fait,
 // ou quand on la masque.
-import { el } from "./format.js";
+import { el } from "../../format.js";
 import { approve, propose } from "./proposals.js";
-import { store } from "./store.js";
+import { store } from "../../store.js";
 
 const $ = (id) => document.getElementById(id);
 const HIDDEN_KEY = "hub.welcome";

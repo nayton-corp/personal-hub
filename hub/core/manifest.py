@@ -17,12 +17,13 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 
 from sqlalchemy import Connection, text
 
 ID = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
-MODULE = re.compile(r"^[a-z][a-z0-9_-]{0,31}\.js$")  # fichier de hub/web, sans dossier
+MODULE = re.compile(r"^[a-z][a-z0-9_-]{0,31}\.js$")  # fichier du dossier `web`, sans sous-dossier
 SUFFIX = re.compile(r"^\.[a-z0-9]{1,8}$")
 Severity = Literal["info", "warning", "alert"]
 
@@ -66,6 +67,7 @@ class AppModule:
     cards: str | None = None  # module qui dessine les cartes à valider du domaine
     home: str | None = None  # module qui ajoute ses blocs à l'accueil de la coquille
     module: str | None = None  # module du domaine : démarrage, rendu commun, liens (S5)
+    web: Path | None = None  # le dossier de ses modules, servi sous /d/<domaine>/
 
 
 @dataclass(frozen=True)
@@ -125,6 +127,8 @@ class Manifest:
         modules = [t.module for t in self.app.tabs] + [s.module for s in self.app.settings]
         modules += [m for m in (self.app.cards, self.app.home, self.app.module) if m]
         out += [f"module invalide : {m!r}" for m in modules if not MODULE.match(m)]
+        if modules and self.app.web is None:
+            out.append("modules sans dossier web")
         out += [
             f"chemin invalide : {c.endpoint!r}"
             for c in self.app.home_cards

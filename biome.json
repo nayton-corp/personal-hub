@@ -1,6 +1,6 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
-  "files": { "includes": ["hub/web/**/*.js", "tests/web/**/*.mjs"] },
+  "files": { "includes": ["hub/web/**/*.js", "hub/domains/*/web/**/*.js", "tests/web/**/*.mjs"] },
   "formatter": { "enabled": false },
   "assist": { "enabled": false },
   "linter": {

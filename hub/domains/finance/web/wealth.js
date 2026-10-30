@@ -5,15 +5,15 @@
 // choisies (les versements n'y sont pas du gain). Les dettes (/finance/debts) sont des lignes
 // négatives de catégorie « Dettes » : le total est net.
 import { DEBT_KIND, debtDetail, debtMark } from "./debts.js";
-import { go, reveal } from "./shell.js";
+import { go, reveal } from "../../shell.js";
 import { linkTo } from "./journal.js";
-import { MOIS, MOIS_L, base } from "./format.js";
+import { MOIS, MOIS_L, base } from "../../format.js";
 import { gainSpan, perfSection, perfSummary, rate, ratePct, signedMoney, tone, units } from "./perf.js";
 import { CCY_NAME, FACET, FACETS, assetMark, facetColor, facetIc, facetMark, facetName, lookMark, setInstitutions } from "./meta.js";
-import { store } from "./store.js";
+import { store } from "../../store.js";
 import {
   SHEETS, amount, announce, closeSheet, cv, esc, fill, ic, money, n0, n2, openSheet, pctOnly, pf, pref, qty, setPref, sgn, share, skel, toast,
-} from "./ui.js";
+} from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
 const paths = { accounts: "/finance/accounts", holdings: "/finance/holdings", history: "/finance/networth/history", fresh: "/finance/freshness", debts: "/finance/debts" };

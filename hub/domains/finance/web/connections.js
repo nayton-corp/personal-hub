@@ -6,10 +6,10 @@
 //
 // La liste se redessine à chaque réponse ; les formulaires, eux, ne sont construits qu'à
 // l'ouverture, pour ne jamais effacer une saisie en cours.
-import { ago, base, date, el, initials } from "./format.js";
+import { ago, base, date, el, initials } from "../../format.js";
 import { brandColors, brandSvg, instLook } from "./meta.js";
 import { approve, propose } from "./proposals.js";
-import { api, store } from "./store.js";
+import { api, store } from "../../store.js";
 
 const $ = (id) => document.getElementById(id);
 

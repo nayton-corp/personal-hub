@@ -1,12 +1,10 @@
 """L'app modulaire (chantier S5) : le domaine factice ajoute un onglet, un bloc d'accueil et une
-rubrique à la coquille sans toucher à `shell.js` ni à `index.html` ; ses modules sont copiés à
-côté de ceux de l'app, comme le ferait le paquet d'un domaine."""
+rubrique à la coquille sans toucher à `shell.js` ni à `index.html` ; ses modules sont servis
+depuis le dossier que déclare son manifeste, sous /d/demo/, comme ceux d'un vrai domaine."""
 
 from __future__ import annotations
 
-import shutil
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -18,18 +16,13 @@ from hub.platform.settings import Paths, Secrets, Server, Settings
 from tests.support.demo_domain import DemoDomain
 from tests.web.test_app_mobile import ROOT, _free_port, _screen_ok, bootstrap, browse, serve
 
-HERE = Path(__file__).parent
-
 
 @pytest.fixture(scope="module")
 def page(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Any]:
     import pyrage
 
     home = tmp_path_factory.mktemp("modules")
-    web = home / "web"
-    shutil.copytree(ROOT / "hub" / "web", web)
-    for f in (HERE / "modules").glob("*.js"):
-        shutil.copy(f, web / f.name)
+    web = ROOT / "hub" / "web"  # les modules du domaine factice sont servis depuis son dossier
     key = home / "age.key"
     key.write_text(f"{pyrage.x25519.Identity.generate()}\n")
     port = _free_port()

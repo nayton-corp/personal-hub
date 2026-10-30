@@ -4,6 +4,12 @@
 
 ### App
 
+- La finance est séparée de la coquille de l'app : ses écrans, ses rubriques, ses styles et
+  son accueil vivent dans `hub/domains/finance/web/`, servis sous `/d/finance/` ; de même pour
+  l'agenda et les documents. `index.html`, `styles.css` et la coquille ne nomment plus aucun
+  domaine, et l'app démarre sans la finance. Des tests tiennent la frontière : la coquille
+  n'importe aucun domaine, un domaine n'importe que la coquille et lui-même. À l'écran, rien ne
+  change (captures identiques au pixel).
 - L'accueil, « À faire », « À valider » et le Face ID appartiennent à la coquille, plus à la
   finance : la finance y pose ses tuiles et ses lignes comme les autres domaines, et une carte
   d'un autre domaine se valide au même endroit, avec un texte neutre (« Rien ne change sans

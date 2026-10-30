@@ -1,7 +1,7 @@
 // Module du domaine factice des tests (chantier S5) : un onglet, une rubrique et des cartes,
 // montés par la coquille sans qu'une ligne de shell.js ou d'index.html change.
-import { store } from "./store.js";
-import { fill } from "./ui.js";
+import { store } from "../../store.js";
+import { fill } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
 let started = 0;

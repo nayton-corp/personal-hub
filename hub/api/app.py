@@ -57,6 +57,13 @@ def create_app(hub_ctx: HubContext, *, migrate: bool = False) -> FastAPI:
 
     web_root = hub_ctx.settings.server.web_root
     if web_root is not None:
-        # développement seulement : en production, Caddy sert l'app et pose la CSP
+        # développement seulement : en production, Caddy sert l'app et pose la CSP ; les
+        # modules d'un domaine sont servis sous /d/<domaine>/, comme dans l'image web
+        for domain in hub_ctx.registry:
+            web = domain.manifest().app.web
+            if web is not None:
+                app.mount(
+                    f"/d/{domain.name}", StaticFiles(directory=web), name=f"web-{domain.name}"
+                )
         app.mount("/", StaticFiles(directory=web_root, html=True), name="web")
     return app

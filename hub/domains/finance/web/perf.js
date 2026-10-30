@@ -3,8 +3,8 @@
 // écriture n'est lue ici. La période et les filtres de l'écran s'appliquent partout. La réserve
 // et la marge 3a sont sur l'Accueil, le taux d'épargne dans le Budget, la composition par
 // devise dans la Répartition.
-import { MOIS, base, date } from "./format.js";
-import { esc, ic, money, n0, pf, sgn, skel } from "./ui.js";
+import { MOIS, base, date } from "../../format.js";
+import { esc, ic, money, n0, pf, sgn, skel } from "../../ui.js";
 
 export const units = (m) => (m ? m.minor / 100 : 0);
 export const rate = (s) => (s == null ? null : Number(s));

@@ -56,6 +56,7 @@ MANIFEST = Manifest(
         cards="demo.js",
         home="demo-home.js",
         module="demo.js",
+        web=Path(__file__).parents[1] / "web" / "modules",
     ),
     importers=(
         Importer(

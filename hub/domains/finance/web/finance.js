@@ -6,15 +6,22 @@
 import * as accounts from "./accounts.js";
 import * as debts from "./debts.js";
 import { initConnections } from "./connections.js";
-import { freshLine } from "./format.js";
+import { freshLine } from "../../format.js";
 import * as journal from "./journal.js";
-import { action, go } from "./shell.js";
-import { api, store } from "./store.js";
+import { action, go } from "../../shell.js";
+import { api, store } from "../../store.js";
 import { initWelcome } from "./welcome.js";
+
+export { markup } from "./markup.js";
 
 export const actions = { ...accounts.actions, ...debts.actions };
 
+// tx : all, todo, in, out ; txcat : { id, month } quand le journal suit une catégorie du budget ;
+// jf : filtres du journal (compte, catégorie, from, to, min, max en unités, tri)
+const PARAMS = { tx: "all", q: "", txcat: null, jf: {} };
+
 export function init() {
+  for (const [k, v] of Object.entries(PARAMS)) if (!(k in store.params)) store.params[k] = v;
   initConnections();
   initWelcome();
   window.addEventListener("hub:changed", () => journal.reset());

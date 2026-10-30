@@ -3,11 +3,11 @@
 // sa catégorie (depuis son compte s'il est choisi), et un relevé du prêteur le corrige. La
 // mensualité et l'échéance sont facultatives : sans mensualité, la fin projetée suit les
 // derniers paiements. Tout s'enregistre avec un seul Face ID.
-import { date } from "./format.js";
+import { date } from "../../format.js";
 import { GROUP_LABEL } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
-import { store } from "./store.js";
-import { SHEETS, SH, amount2, closeSheet, esc, failure, fill, ibox, ic, openSheet, renderSheet, toast } from "./ui.js";
+import { store } from "../../store.js";
+import { SHEETS, SH, amount2, closeSheet, esc, failure, fill, ibox, ic, openSheet, renderSheet, toast } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
 export const DEBTS = "/finance/debts";
