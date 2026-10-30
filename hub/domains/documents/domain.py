@@ -138,11 +138,19 @@ class DocumentsDomain:
     def overview(self) -> dict[str, Any]:
         with self._engine.connect() as conn:
             recent = store.documents(conn)[:5]
+            cards = store.cards(conn)
         keep = ("id", "title", "card_id", "household", "at")
         return {
             **self.counts(),
             "due": self.due(),
-            "recent": [{k: d[k] for k in keep} for d in recent],
+            # le nom de la fiche dit de quoi parle un fichier nommé « manuel.pdf »
+            "recent": [
+                {
+                    **{k: d[k] for k in keep},
+                    "card_name": (cards.get(d["card_id"]) or {}).get("name"),
+                }
+                for d in recent
+            ],
         }
 
     # --- écritures et reconstruction ----------------------------------------------------------

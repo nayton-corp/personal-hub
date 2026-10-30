@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+### App
+
+- Les réglages se rangent par propriétaire : « Hub » (profil, affichage, sécurité, état), puis
+  une section par domaine (« Finance » : connexions, comptes, dettes, export, budget, impôts).
+- Accueil : une ligne sans icône prend toute la largeur (les titres de l'agenda et des
+  documents étaient coupés à trois lettres) ; l'agenda ne liste plus que les rappels en retard
+  ou du jour, avec le compte des rappels ouverts ; un document s'affiche avec le nom de sa
+  fiche (« Lave-vaisselle · notice-SN-SX ») au lieu du seul nom de fichier.
+
 ## [0.13.6] · 2026-10-30
 
 ### App

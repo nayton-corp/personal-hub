@@ -9,12 +9,12 @@ import { SHEETS, closeSheet, esc, failure, fill, ibox, ic, openSheet, pref, toas
 const $ = (id) => document.getElementById(id);
 const P = store.params;
 const THEMES = [["system", "Système"], ["light", "Clair"], ["dark", "Sombre"]];
-const GROUPS = ["Données", "Préférences", "Compte"]; // les groupes d'un domaine suivent
+const HUB = "Hub"; // les rubriques de la coquille d'abord, puis une section par domaine
 const OWN = [
-  { id: "display", label: "Affichage", icon: "eye", group: "Préférences" },
-  { id: "profile", label: "Profil", icon: "user", group: "Préférences" },
-  { id: "security", label: "Sécurité", icon: "faceid", group: "Compte" },
-  { id: "health", label: "État du hub", icon: "info", group: "Compte" },
+  { id: "profile", label: "Profil", icon: "user", group: HUB },
+  { id: "display", label: "Affichage", icon: "eye", group: HUB },
+  { id: "security", label: "Sécurité", icon: "faceid", group: HUB },
+  { id: "health", label: "État du hub", icon: "info", group: HUB },
 ];
 const RUBRICS = []; // { id, label, icon, group, m } ; m absent : rubrique de la coquille
 let ordered = null;
@@ -24,11 +24,11 @@ export function add(sections) {
   ordered = null;
 }
 
-// les rubriques des domaines d'abord dans chaque groupe, celles de la coquille ensuite
+// la section de la coquille, puis celle de chaque domaine, dans l'ordre des domaines
 function groups() {
   if (ordered) return ordered;
-  const all = [...RUBRICS, ...OWN];
-  const names = [...GROUPS, ...all.map((r) => r.group).filter((g) => !GROUPS.includes(g))];
+  const all = [...OWN, ...RUBRICS];
+  const names = all.map((r) => r.group);
   ordered = [...new Set(names)].map((g) => [g, all.filter((r) => r.group === g)]).filter(([, rs]) => rs.length);
   return ordered;
 }

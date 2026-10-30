@@ -7,14 +7,14 @@ import { esc, fill } from "../../ui.js";
 const PATH = "/documents/overview";
 
 function row(title, sub) {
-  return `<div class="row"><span class="row-main"><span class="row-title">${esc(title)}</span><span class="row-sub">${esc(sub)}</span></span></div>`;
+  return `<div class="row plain"><span class="row-main"><span class="row-title">${esc(title)}</span><span class="row-sub">${esc(sub)}</span></span></div>`;
 }
 
 export function render(box) {
   const o = store.use(PATH).data;
   if (!o || (!o.due.length && !o.recent.length)) return;
   const due = o.due.map((d) => row(`${d.name} : ${d.what}`, `dû depuis le ${date(d.since)}`)).join("");
-  const recent = o.recent.map((d) => row(d.title, `${date(d.at.slice(0, 10))}${d.household ? " · foyer" : ""}`)).join("");
+  const recent = o.recent.map((d) => row(d.card_name ? `${d.card_name} · ${d.title}` : d.title,`${date(d.at.slice(0, 10))}${d.household ? " · foyer" : ""}`)).join("");
   fill(
     box,
     `<section class="card" aria-labelledby="t-documents">

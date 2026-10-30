@@ -64,7 +64,8 @@ def test_the_demo_adds_a_home_block_and_a_rubric(page: Any) -> None:
     row = page.locator('#rubrics [data-a="rubric"][data-v="demo-prefs"]')
     assert "prête" in row.inner_text()
     groups = page.locator("#rubrics .grp-title").all_text_contents()
-    assert groups == ["Données", "Préférences", "Compte"]
+    # la coquille d'abord, puis une section par domaine : on voit qui possède chaque rubrique
+    assert groups == ["Hub", "Finance", "Demo"]
     row.click()
     page.wait_for_selector('#sources [data-rubric="demo-prefs"]:not(.off-rubric)')
     assert "Une rubrique venue du manifeste" in page.inner_text("#sources")

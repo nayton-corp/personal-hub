@@ -109,6 +109,7 @@ button:disabled { cursor: default; }
 .row { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; text-align: left;
   padding: 10px 0; min-height: 60px; border-bottom: 1px solid var(--line); }
 .row:last-child { border-bottom: 0; }
+.row.plain { grid-template-columns: minmax(0, 1fr) auto; min-height: 52px; } /* une ligne sans icône */
 .row-main, .row .n { min-width: 0; display: flex; flex-direction: column; }
 .row-title, .row .n b { font-weight: 600; font-size: .853rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-sub, .row .n span { font-size: .735rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

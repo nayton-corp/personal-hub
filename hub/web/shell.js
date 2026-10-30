@@ -85,7 +85,9 @@ async function mount() {
     if (app.home) accueil.add(d.name, mod(app.home));
     if (app.cards) approvals.addCards(d.name, mod(app.cards));
     for (const t of app.tabs) tabs.push({ ...t, m: mod(t.module) });
-    sources.add(app.settings.map((s) => ({ ...s, m: mod(s.module) })));
+    // une rubrique se range sous le nom de son domaine : on voit qui la possède
+    const owner = d.name.charAt(0).toUpperCase() + d.name.slice(1);
+    sources.add(app.settings.map((s) => ({ ...s, group: owner, m: mod(s.module) })));
   }
   tabs.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
   TABS.push(["accueil", "Accueil", "home"]);
