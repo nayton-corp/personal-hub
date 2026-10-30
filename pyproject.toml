@@ -37,6 +37,7 @@ hub-brain = "hub.brain.cli:main"
 [project.entry-points."hub.domains"]
 finance = "hub.domains.finance:create"
 agenda = "hub.domains.agenda:create"
+documents = "hub.domains.documents:create"
 
 # ce que la finance apporte au cœur sans qu'il l'importe (chantier S1)
 [project.entry-points."hub.connectors"]

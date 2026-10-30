@@ -3,7 +3,8 @@
 Chaque jeton a une date de fin (chantier S8) : il ne s'utilise plus après, se renouvelle par
 `rotate` (nouveau secret, mêmes portées, l'ancien révoqué) et la tâche de nuit prévient 14 jours
 avant. Le raccourci `brain` n'ouvre que les agrégats ; `brain=finance,agenda` ajoute la lecture
-et les propositions des domaines nommés.
+et les propositions des domaines nommés. `<domaine>:household` ouvre ce que tout le foyer peut
+lire (les documents marqués « foyer », S12), ce que `…:read` ouvre aussi.
 """
 
 from __future__ import annotations
@@ -29,7 +30,9 @@ SHORTCUTS: dict[str, tuple[str, ...]] = {
     "aggregates": ("*:aggregates",),
     "collector": ("core:collector",),
 }
-DOMAIN_SCOPE = re.compile(r"^(?P<domain>[a-z][a-z0-9_-]*|\*):(?P<verb>read|propose|aggregates)$")
+DOMAIN_SCOPE = re.compile(
+    r"^(?P<domain>[a-z][a-z0-9_-]*|\*):(?P<verb>read|propose|aggregates|household)$"
+)
 DOMAIN_NAME = re.compile(r"^[a-z][a-z0-9_-]*$")
 CORE_SCOPES = frozenset({"core:collector"})
 DEFAULT_DAYS = 90

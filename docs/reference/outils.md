@@ -15,6 +15,17 @@ Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hu
 | `agenda_propose_complete` | `agenda:propose` | `reminder_id`, `title` | Propose de cocher un rappel (son identifiant, tel que rendu par agenda_upcoming). |
 | `agenda_add_shopping` | `agenda:propose` | `title` | Ajoute un article à la liste de courses (palier automatique, sans carte). |
 
+## Documents
+
+| Outil | Portée | Paramètres | Rôle |
+|---|---|---|---|
+| `documents_search` | `documents:household` | `q`, `limit`? | Cherche dans les documents (notices, contrats, garanties, factures) et les fiches d'objets : les passages trouvés, avec leur source et leur page à citer. |
+| `documents_cards` | `documents:household` | — | Les fiches d'objets de la maison (identifiant, nom, pièce). |
+| `documents_card` | `documents:household` | `card_id` | Une fiche d'objet entière (marque, modèle, numéro de série, garantie, entretien, pièces) et ses documents. |
+| `documents_maintenance_due` | `documents:household` | — | Les entretiens dont l'échéance est passée, d'après les fiches d'objets. |
+| `documents_counts` | `documents:aggregates` | — | Combien de fiches, de documents, de documents du foyer et d'entretiens dus. |
+| `documents_propose_card` | `documents:propose` | `card_id`, `fields` | Propose de créer ou de compléter une fiche d'objet (champs : name, room, brand, model, serial, bought_at, shop, price_chf, warranty_until, maintenance, parts, notes) : une carte à valider dans l'app. |
+
 ## Finance
 
 | Outil | Portée | Paramètres | Rôle |

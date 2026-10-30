@@ -19,11 +19,11 @@ from hub.core.errors import Problem
 
 
 def tool_allowed(principal: Principal, tool: McpTool) -> bool:
-    """La lecture complète d'un domaine ouvre aussi ses agrégats."""
+    """La lecture complète d'un domaine ouvre aussi ses agrégats et sa part « foyer »."""
     if principal.allows(tool.scope):
         return True
     domain, _, verb = tool.scope.partition(":")
-    return verb == "aggregates" and principal.allows(f"{domain}:read")
+    return verb in ("aggregates", "household") and principal.allows(f"{domain}:read")
 
 
 def visible_tools(principal: Principal, domain: Domain) -> list[McpTool]:

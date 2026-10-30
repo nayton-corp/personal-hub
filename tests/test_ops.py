@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_the_repository_litestream_file_is_generated(settings: Settings) -> None:
     hub = HubContext.build(settings)
     try:
-        assert ops.database_names(hub) == ["core", "agenda", "finance"]
+        assert ops.database_names(hub) == ["core", "agenda", "documents", "finance"]
         assert (ROOT / "deploy" / "litestream.yml").read_text() == ops.litestream_config(hub)
     finally:
         hub.dispose()
@@ -41,7 +41,7 @@ def test_ops_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HUB_PATHS__DATA", str(tmp_path / "data"))
     out = CliRunner().invoke(cli.app, ["ops", "databases"])
     assert out.exit_code == 0, out.output
-    assert out.output.split() == ["core", "agenda", "finance"]
+    assert out.output.split() == ["core", "agenda", "documents", "finance"]
     assert "dbs:" in CliRunner().invoke(cli.app, ["ops", "litestream"]).output
 
 

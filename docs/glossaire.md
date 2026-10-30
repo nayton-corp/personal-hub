@@ -65,6 +65,7 @@ quels, en français. Un mot nouveau entre ici dans la même PR que le code qui l
 | Mot | Sens | Dans le code |
 | --- | --- | --- |
 | **Jeton** | Un accès sans session, pour un programme, avec ses portées et sa date de fin (alerte 14 jours avant, `hub token rotate`). | `tokens`, `hub.core.tokens` |
-| **Portée** | Ce qu'un jeton peut faire : `<domaine>:read`, `:propose`, `:aggregates`. | `scopes` |
+| **Portée** | Ce qu'un jeton peut faire : `<domaine>:read`, `:propose`, `:aggregates`, `:household`. | `scopes` |
+| **Foyer** (marque) | Un document lisible par tout le foyer, et pas seulement par les propriétaires ; sans marque, il est privé ([D-025](decisions.md)). | `marks`, `documents:household` |
 | **Brain** | L'IA locale du hub (Ollama sur le Mac), qui ne voit le hub que par l'API. Remplacé plus tard par l'assistant unique. | `hub.brain` |
 | **Assistant** | La voix et la conversation du foyer, reprises de Domia (chantier S10). | à venir |

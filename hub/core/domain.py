@@ -102,9 +102,10 @@ class ToolCaller(Protocol):
 
 @dataclass(frozen=True)
 class McpTool:
-    """Outil pour l'assistant (lot 7). Une portée `<domaine>:aggregates` est aussi ouverte à
-    `<domaine>:read`. `call` reçoit des arguments déjà validés contre `input_schema` par le
-    domaine lui-même et renvoie du JSON (montants en texte, jamais de flottant)."""
+    """Outil pour l'assistant (lot 7). Une portée `<domaine>:aggregates` (ou `:household`) est
+    aussi ouverte à `<domaine>:read`. `call` reçoit des arguments déjà validés contre
+    `input_schema` par le domaine lui-même et renvoie du JSON (montants en texte, jamais de
+    flottant)."""
 
     name: str
     description: str

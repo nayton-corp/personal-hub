@@ -63,6 +63,16 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `GET` | `/api/agenda/overview` | Le bloc de l'accueil : la semaine, les rappels ouverts, la liste de courses ; le pont absent se dit (`available: false`). |
 | `GET` | `/api/agenda/upcoming` | Les événements des prochains jours, les rappels ouverts et la liste de courses. |
 
+## Documents
+
+| Méthode | Chemin | Rôle |
+|---|---|---|
+| `GET` | `/api/documents/cards` | Cards |
+| `GET` | `/api/documents/cards/{card_id}` | Card |
+| `GET` | `/api/documents/counts` | Des nombres seulement : fiches, documents, documents du foyer, entretiens dus. |
+| `GET` | `/api/documents/overview` | Le bloc de l'accueil : les nombres, les entretiens dus, les derniers documents. |
+| `GET` | `/api/documents/search` | Les passages et les fiches qui répondent, avec leur source et leur page. |
+
 ## Finance
 
 | Méthode | Chemin | Rôle |

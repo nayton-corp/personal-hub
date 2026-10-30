@@ -7,6 +7,20 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-025 · Les documents se reconstruisent de leur archive ; « foyer » se marque (30.10.2026)
+
+- **Contexte** : la bibliothèque de l'assistant de Domia vivait dans un dossier (fiches YAML,
+  documents à côté), lisible par tout le foyer, sans historique ni sauvegarde propre.
+- **Décision** : un domaine Documents dans le hub. Fiches, documents et marques sont des lignes
+  en ajout seul, chaînées ; chaque fichier et chaque ligne validée vont aussi dans une archive
+  chiffrée par age, dont la base se reconstruit seule. Un document est privé tant qu'il n'est
+  pas marqué « foyer » ; les fiches d'objets, elles, sont lisibles par tout le foyer. Une
+  portée de plus, `<domaine>:household`, ouvre cette part-là. La reprise de
+  `~/Domia/Bibliothèque/` se fait une fois ; l'assistant lit ensuite le hub.
+- **Conséquence** : `hub documents rebuild --check` prouve la reconstruction ; l'assistant ne
+  lit plus de dossier local. Un PDF de la racine de la boîte d'entrée reste à la finance : un
+  document PDF se dépose dans `inbox/documents/`.
+
 ## D-024 · L'agenda ne copie rien : il lit et écrit par le pont (30.10.2026)
 
 - **Contexte** : Rappels et Calendrier sont déjà synchronisés par iCloud sur tous les appareils

@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+### Domaine Documents (chantier S12)
+
+- Les fiches d'objets de la maison et leurs documents (notices, contrats, garanties, courriels)
+  dans le hub : un bloc d'accueil (entretiens dus, derniers documents), `/api/documents/…`, des
+  outils pour l'assistant qui citent source et page, la recherche et un constat « entretien ».
+- Une archive chiffrée dont la base se reconstruit seule (`hub documents rebuild --check`) ;
+  un index local des passages (FTS5).
+- Un document est privé tant qu'il n'est pas marqué « foyer » (une carte, réversible) ; la
+  portée `documents:household` n'ouvre que cette part et les fiches.
+- Reprise unique de la bibliothèque de Domia : `hub documents import-library DIR`.
+
 ### Domaine Agenda (chantier S11)
 
 - Rappels et Calendrier du Mac dans le hub, par le pont EventKit (`assistant/eventkit`) : un

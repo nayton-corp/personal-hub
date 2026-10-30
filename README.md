@@ -20,6 +20,7 @@ suivants. Les changements : [CHANGELOG.md](CHANGELOG.md).
 | installer, déployer, sauvegarder | [docs/exploitation/](docs/exploitation/README.md) |
 | la finance (usage), et son code | [docs/finance.md](docs/finance.md), [hub/domains/finance/README.md](hub/domains/finance/README.md) |
 | l'agenda (usage), et son code | [docs/agenda.md](docs/agenda.md), [hub/domains/agenda/README.md](hub/domains/agenda/README.md) |
+| les documents (usage), et leur code | [docs/documents.md](docs/documents.md), [hub/domains/documents/README.md](hub/domains/documents/README.md) |
 | les collecteurs, l'IA locale | [docs/collectors.md](docs/collectors.md), [docs/brain.md](docs/brain.md) |
 | l'assistant (voix, maison, outils du hub) | [assistant/README.md](assistant/README.md) |
 | routes, outils de l'assistant, connecteurs (générés) | [docs/reference/](docs/reference/) |
@@ -44,7 +45,8 @@ hub/core/           cœur : accès (passkeys, jetons), propositions, contrat de 
                     manifeste, registre, intégrité, boîte d'entrée, connexions, tâches de fond
 hub/api/            application FastAPI et routes du cœur
 hub/domains/        domaines, isolés par import-linter ; finance/ : registre, classement,
-                    patrimoine, sources (chacun interface → app → infra → model) ; agenda/
+                    patrimoine, sources (chacun interface → app → infra → model) ; agenda/,
+                    documents/
 hub/web/            l'app (PWA) : coquille (shell.js) et modules des domaines
 hub/collectors/     collecteurs : robots et clients d'API qui déposent des fichiers
 hub/brain/          IA locale : passerelle MCP, assistant et suggestions (`hub-brain`)

@@ -28,7 +28,9 @@ quittent pas sa machine, sauf les sauvegardes chiffrées qu'elle choisit d'envoy
 
 - **Lire** : un jeton `…:aggregates` (celui de Claude) ne voit que des totaux, jamais une
   écriture ; une catégorie ou un mois de moins de 3 écritures est fondu ou masqué. Claude ne
-  lit jamais les transactions individuelles.
+  lit jamais les transactions individuelles. Un jeton `documents:household` (celui de la
+  bibliothèque de l'assistant, qui répond à tout le foyer) ne lit que les fiches d'objets et
+  les documents marqués « foyer » ; un document reçu reste privé tant qu'on ne l'a pas marqué.
 - **Écrire** : jamais directement. Un outil de l'assistant crée une proposition ; l'effet
   n'a lieu qu'après validation dans l'app, un Face ID par lot, sur un défi qui porte
   l'empreinte du lot (le Double Sas, voir [architecture.md](architecture.md)). Une proposition

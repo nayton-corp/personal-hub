@@ -68,7 +68,12 @@ def test_full_cycle(tmp_path: Path) -> None:
     code, out = run("backup", "--stamp", "test")
     assert code == 0
     files = json.loads(out)["files"]
-    assert sorted(files) == ["agenda-test.db", "core-test.db", "finance-test.db"]
+    assert sorted(files) == [
+        "agenda-test.db",
+        "core-test.db",
+        "documents-test.db",
+        "finance-test.db",
+    ]
     assert (tmp_path / "backup" / "core-test.db").exists()
 
 
@@ -84,7 +89,7 @@ def test_backup_restore_roundtrip(tmp_path: Path) -> None:
     assert "lost" in run("token", "list")[1]
     code, out = run("restore", "before")
     assert code == 0
-    assert sorted(json.loads(out)["restored"]) == ["agenda", "core", "finance"]
+    assert sorted(json.loads(out)["restored"]) == ["agenda", "core", "documents", "finance"]
     listed = run("token", "list")[1]
     assert "keep" in listed
     assert "lost" not in listed

@@ -104,6 +104,7 @@ def test_registry_rules(settings: Settings, tmp_path: Path) -> None:
         reg.get("ghost")
     assert Registry.discover(settings).names() == [
         "agenda",
+        "documents",
         "finance",
     ]  # point d'entrée hub.domains
 

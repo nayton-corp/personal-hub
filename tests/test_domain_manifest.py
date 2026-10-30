@@ -123,7 +123,7 @@ def test_hub_domains_chooses_the_mounted_domains(settings: Settings) -> None:
     def only(value: str) -> Settings:
         return settings.model_copy(update={"domains": value})
 
-    assert Registry.discover(settings).names() == ["agenda", "finance"]
+    assert Registry.discover(settings).names() == ["agenda", "documents", "finance"]
     assert Registry.discover(only("finance")).names() == ["finance"]
     assert Registry.discover(only("finance, agenda")).names() == ["agenda", "finance"]
     assert Registry.discover(only("")).names() == []
