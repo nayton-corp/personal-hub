@@ -129,3 +129,21 @@ def test_without_the_right_to_write_a_setting_case_asks_only_where_to_change_it(
 
     case = read_only({"id": "r1", "family": "reglage", "text": "…", "tools": ["propose_settings"], "none": True})
     assert "tools" not in case and case["none"] and case["words"] == ["reglages"]
+
+
+def test_the_bench_never_writes_in_the_household_home_nor_reaches_the_hub(tmp_path):
+    import importlib.util
+
+    from domia_assistant.config import Settings
+    from domia_assistant.hub import HubSettings
+
+    spec = importlib.util.spec_from_file_location("bench_run", ROOT / "bench/run.py")
+    run = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(run)
+    hub = HubSettings(url="https://hub.example.ts.net", owners=("robin",))
+    real = Settings(domia_url="http://localhost:3001", domia_token="t", home=tmp_path / "Domia", hub=hub)
+    bench = run.isolated(real)
+    assert bench.hub is None
+    assert bench.home != real.home and bench.home.is_dir() and not list(bench.home.iterdir())
+    assert bench.library_dir.parent == bench.home
+    assert bench.database_file == "banc.sqlite"
