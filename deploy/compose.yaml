@@ -87,7 +87,7 @@ services:
 
   litestream:                            # réplication continue de core.db et des bases des domaines
     <<: *hardening
-    image: litestream/litestream:0.5.2@sha256:e4fd484cb1cd9d6fa58fff7127d551118e150ab75b389cf868a053152ba6c9c0
+    image: litestream/litestream:0.5.17@sha256:4b02b9859a6b6b4087d8b8944e15f7e984bd7957cba322bbeee38b0e27b9656a
     command: ["replicate", "-config", "/etc/litestream.yml"]
     volumes:
       - data:/srv/hub/data
@@ -106,7 +106,7 @@ services:
     depends_on: [api]
 
   tailscale:                             # nœud « hub » du tailnet ; tailscale serve termine le TLS
-    image: tailscale/tailscale:v1.90.6@sha256:8eb8b450a85856807e8a216c4697333e15f8701cb6d344bed851bf6aa6a9605c
+    image: tailscale/tailscale:v1.104.2@sha256:b11583ad2e93e4671128538c88cf11f460444a5d7e449311dd1933a400ab849d
     hostname: hub
     environment:
       TS_HOSTNAME: hub
