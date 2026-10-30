@@ -1,0 +1,32 @@
+# Copier en config.yaml (la vraie maison) ou config.essai.yaml (le banc, contre l'essai) ; le jeton dans .env :
+#   DOMIA_ASSISTANT_TOKEN=<le jeton de l'appareil autorisé « Assistant de maison »>
+domia:
+  url: http://192.168.0.63:3000        # l'essai : http://192.168.0.63:3001
+model:
+  url: http://127.0.0.1:11434/v1       # Ollama ; LM Studio : http://127.0.0.1:1234/v1
+  name: domia-mistral                  # Mistral Small 3.2, choisi par le banc, gabarit de ollama/domia-mistral.Modelfile
+  embeddings: bge-m3                   # vérifié par check ; la bibliothèque, elle, cherche au hub
+  vision: gemma3:27b                   # pour lire une plaque signalétique (inventaire en photos)
+  keep_alive: 24h                      # Ollama garde le modèle chargé ; null : son défaut (5 min)
+  # reasoning: low                     # seulement pour un modèle qui réfléchit (gpt-oss) : low, medium ou high
+listen:
+  host: 0.0.0.0
+  port: 8770
+  allow_from: [192.168.0.63, 127.0.0.1]  # le Pi (Domia relaie POST /api/talk) et le Mac
+assistant:
+  home: ~/Domia                        # assistant.sqlite, Bibliothèque/à-trier/ (photos) ; la bibliothèque vit au hub
+  eventkit_url: http://127.0.0.1:8771  # le pont Rappels/Calendrier
+  web_search_url: http://127.0.0.1:8888  # SearXNG sur le Mac (README, « La recherche web ») ; null : pas de recherche web
+  brief_at: "21:00"                    # null : pas de brief du soir
+  timezone: Europe/Zurich
+  voice: true                          # la voix (README, « La voix ») : Whisper sur le Mac, réponse dite par say
+  say_voice: null                      # une voix de `say -v '?'`, par ex. "Amélie (amélioré)" ; null : celle du système
+  settings_write: false                # true : le modèle propose des réglages avec un Oui ; false : il les lit et renvoie à Réglages
+# Les outils du hub (README, « Les outils du hub ») : absents, l'assistant sert la maison seule.
+# hub:
+#   url: https://hub.<tailnet>.ts.net  # le hub, par Tailscale (le Mac est un de tes appareils)
+#   owners: [robin]                    # les personnes de Domia (leur id) qui atteignent les outils du hub
+#   secrets: ~/.config/hub/brain.enc.yaml  # jetons « aggregates », « brain » et « library », chiffrés par age
+#   age_key: ~/.config/hub/age.key
+#   full_domains: []                   # domaines repris même lus en entier : jamais la finance
+#   classify_at: "08:30"               # suggestions de catégorie du matin (jeton brain) ; null : jamais

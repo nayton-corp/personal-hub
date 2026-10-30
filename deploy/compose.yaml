@@ -1,5 +1,5 @@
 # deploy/compose.yaml — identique sur le Mac (phase 1) et sur le Pi (après migration).
-# Usage : make up / make deploy TAG=… (voir docs/mac.md). Variables : deploy/.env.
+# Usage : make up / make deploy TAG=… (voir docs/exploitation/mac.md). Variables : deploy/.env.
 #
 # Règles de la phase 1 (spécification, section 10.0) :
 # - les bases SQLite vivent dans le volume nommé « data », jamais dans un dossier du Mac ;
@@ -49,6 +49,8 @@ services:
       - ${HUB_SECRETS:?HUB_SECRETS manquant}:/srv/hub/config/secrets.enc.yaml:ro   # sujet ntfy
     secrets: [age_key]
     networks: [hub]
+    # l'agenda (S11) joint le pont Rappels/Calendrier du Mac, à l'écoute du Mac seul
+    extra_hosts: ["host.docker.internal:host-gateway"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8710/api/health', timeout=3).status == 200 else 1)"]
       interval: 30s
@@ -59,7 +61,7 @@ services:
   importer:                              # lot 1 : surveille la boîte d'entrée (scrutation 30 s)
     <<: *hardening
     image: hub:${HUB_TAG:-dev}
-    command: ["hub", "finance", "watch-inbox", "--poll", "30"]
+    command: ["hub", "watch-inbox", "--poll", "30"]
     environment: *hub-env
     volumes:
       - data:/srv/hub/data
@@ -83,14 +85,15 @@ services:
     secrets: [age_key]
     networks: [hub]
 
-  litestream:                            # réplication continue de core.db et finance.db
+  litestream:                            # réplication continue de core.db et des bases des domaines
     <<: *hardening
     image: litestream/litestream:0.5.2@sha256:e4fd484cb1cd9d6fa58fff7127d551118e150ab75b389cf868a053152ba6c9c0
     command: ["replicate", "-config", "/etc/litestream.yml"]
     volumes:
       - data:/srv/hub/data
       - ${HUB_REPLICA}:/replica
-      - ./litestream.yml:/etc/litestream.yml:ro
+      # écrit par deploy.sh depuis le registre (hub ops litestream) ; le fichier du dépôt sinon
+      - ${HUB_LITESTREAM_CONFIG:-./litestream.yml}:/etc/litestream.yml:ro
     network_mode: none
 
   web:                                   # Caddy : fichiers de l'app, CSP, proxy /api
@@ -149,25 +152,8 @@ services:
       - collector-api:/var/lib/hub-collector
       - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}/collector-api.enc.yaml:/srv/hub/config/secrets.enc.yaml:ro
 
-  # --- lot 7 : IA locale, profil « brain » (COMPOSE_PROFILES=collectors,brain) ---
-  # Passerelle MCP et assistant. Ne voit le hub que par l'API, avec ses propres jetons (« brain »
-  # et « agrégats », dans brain.enc.yaml) ; joint Ollama, qui tourne en natif sur le Mac pour
-  # avoir le GPU, par host.docker.internal. Aucune base, aucun dossier du Mac.
-  brain:
-    <<: *hardening
-    image: hub:${HUB_TAG:-dev}
-    profiles: [brain]
-    command: ["hub-brain", "daemon"]
-    environment:
-      <<: *hub-env
-      HUB_BRAIN_MODEL: ${HUB_BRAIN_MODEL:-}  # modèle Ollama, à la place de celui de settings.toml
-    volumes:
-      - brain:/srv/hub/brain
-      - ${HUB_BRAIN_SECRETS:-./brain.enc.yaml}:/srv/hub/config/secrets.enc.yaml:ro
-    secrets: [age_key]
-    networks: [hub]
-    extra_hosts: ["host.docker.internal:host-gateway"]
-    depends_on: [api]
+  # L'IA locale ne tourne plus en conteneur (S10) : l'assistant (assistant/) tourne en natif sur
+  # le Mac, lancé par launchd, et joint le hub par Tailscale comme tes autres appareils.
 
 volumes:
   data: {}
@@ -176,7 +162,6 @@ volumes:
   ts-state: {}
   collector-browser: {}
   collector-api: {}
-  brain: {}
 
 networks:
   hub: {}

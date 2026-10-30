@@ -1,0 +1,29 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = []
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "LOG", "T20"]
+ignore = ["E501", "RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"domia_assistant/__main__.py" = ["T20"]
+"bench/*" = ["T20"]
+
+
+"eventkit/*" = ["T20"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["domia_assistant", "bench"]
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+no_implicit_optional = true
+ignore_missing_imports = true

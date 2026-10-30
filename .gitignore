@@ -24,4 +24,5 @@ deploy/*.key
 tests/fixtures/generated/
 .DS_Store
 deploy/.current-tag
+deploy/litestream.local.yml
 .audit-requirements.txt

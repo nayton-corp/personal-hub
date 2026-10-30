@@ -10,9 +10,13 @@ from xml.sax.saxutils import escape
 
 import pytest
 
-from hub.domains.finance import catalog, insights, market, swissborg, transfers, valuation, xlsx
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import ImportRefused, Incoming
+from hub.domains.finance.patrimoine.app import holdings, transfers, valuation
+from hub.domains.finance.registre.app import catalog
+from hub.domains.finance.registre.model.errors import ImportRefused
+from hub.domains.finance.sources.app import swissborg
+from hub.domains.finance.sources.infra import market_file, xlsx
+from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform.db import begin_immediate
 from tests.finance.conftest import rows
 
@@ -187,7 +191,7 @@ def test_import_values_history_and_arrival_cost(finance: FinanceDomain) -> None:
     with finance.engine().connect() as conn:
         v = valuation.value_at(conn, "2026-10-02")
         later = valuation.value_at(conn, "2026-10-27")
-        h = insights.holdings(conn, "2026-10-27")
+        h = holdings.holdings(conn, "2026-10-27")
     # 200 CHF en attente + 0.0199 BTC à 50 000 USD (0.8 CHF)
     assert v.by_envelope["crypto"] == 20_000 + 79_600
     # 0.0096 BTC au dernier cours du fichier (55 000 USD le 5)
@@ -268,7 +272,7 @@ def test_ledger_transactions_pair_with_swissborg_withdrawals(finance: FinanceDom
             )
     finance.importer.process([Incoming("account_statement.xlsx", statement())])
     doc = {
-        "format": market.FORMAT,
+        "format": market_file.FORMAT,
         "fetched_at": "2026-10-27",
         "prices": [
             {
@@ -323,7 +327,7 @@ def test_ledger_transactions_pair_with_swissborg_withdrawals(finance: FinanceDom
     )
     assert ("SWISSBORG/WITHDRAWAL", "CRYPTO/RECEIVE") in paired
     with finance.engine().connect() as conn:
-        h = insights.holdings(conn, "2026-10-27")
+        h = holdings.holdings(conn, "2026-10-27")
     btc = {(i["account"], i["isin"]): i for i in h["items"]}[("Ledger", "CRYPTO:BTC")]
     # 0.0048 restent : leur part du coût d'arrivée (43 120 × 0.0048 / 0.0098)
     assert (btc["quantity"], btc["cost"]["minor"], btc["value"]["minor"]) == (

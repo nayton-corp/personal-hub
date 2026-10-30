@@ -1,0 +1,105 @@
+"""Champs hachés des tables protégées de la finance, par version (revue d'architecture).
+
+Le calcul (empreinte, maillon) vient du noyau (`hub.kernel.chain`, chantier S3) ; la finance ne
+déclare que ses champs. Une ligne se vérifie toujours avec la liste de champs de sa version
+(`hash_v`). Ajouter une colonne crée la version suivante ; une version existante ne change jamais.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any
+
+from hub.kernel import chain
+from hub.kernel.chain import GENESIS, chain_hash
+
+__all__ = ["FIELDS", "GENESIS", "PROTECTED", "chain_hash", "current_version", "row_hash"]
+
+# champs du JSON canonique, par table puis par version
+FIELDS: dict[str, dict[int, tuple[str, ...]]] = {
+    "entries": {
+        1: (
+            "id",
+            "account_id",
+            "kind",
+            "booking_date",
+            "value_date",
+            "amount_minor",
+            "currency",
+            "counterparty",
+            "counterparty_iban",
+            "label",
+            "remittance",
+            "bank_ref",
+            "bank_tx_code",
+            "fx_json",
+            "dedup_key",
+            "corrects_seq",
+            "import_id",
+            "proposal_id",
+            "created_at",
+        )
+    },
+    "categorizations": {
+        1: ("entry_seq", "category_id", "source", "rule_id", "proposal_id", "created_at")
+    },
+    "categorization_lines": {1: ("categorization_seq", "line", "category_id", "amount_minor")},
+    "notes": {1: ("entry_seq", "text", "proposal_id", "created_at")},
+    "checkpoints": {1: ("account_id", "on_date", "kind", "amount_minor", "import_id")},
+    "budgets": {
+        1: ("category_id", "monthly_minor", "currency", "valid_from", "proposal_id", "created_at")
+    },
+    "tags": {1: ("id", "name", "kind", "created_at")},
+    "taggings": {1: ("entry_seq", "tag_id", "active", "proposal_id", "created_at")},
+    "applied_proposals": {1: ("proposal_id", "kind", "result_json", "applied_at")},
+    "events": {1: ("type", "urn", "payload_json", "created_at")},
+    # lot 4 : opérations sur titres, positions relevées et cours
+    "trades": {
+        1: (
+            "account_id",
+            "trade_date",
+            "isin",
+            "quantity",
+            "amount_minor",
+            "currency",
+            "dedup_key",
+            "import_id",
+            "created_at",
+        )
+    },
+    "holdings": {
+        1: (
+            "account_id",
+            "on_date",
+            "isin",
+            "quantity",
+            "value_minor",
+            "currency",
+            "cost_price",
+            "import_id",
+            "created_at",
+        )
+    },
+    "prices": {1: ("isin", "on_date", "price", "currency", "source", "import_id", "created_at")},
+}
+
+# colonnes volontairement hors empreinte : identité de ligne, dérivés recalculables, empreinte
+NOT_HASHED: dict[str, frozenset[str]] = {
+    "entries": frozenset({"seq", "search_text", "hash_v", "row_hash"}),
+    "notes": frozenset({"seq", "search_text", "hash_v"}),
+}
+DEFAULT_NOT_HASHED = frozenset({"seq", "hash_v"})
+
+PROTECTED = tuple(FIELDS)
+
+
+def current_version(table: str) -> int:
+    return chain.current_version(FIELDS, table)
+
+
+def not_hashed(table: str) -> frozenset[str]:
+    return NOT_HASHED.get(table, DEFAULT_NOT_HASHED)
+
+
+def row_hash(table: str, row: Mapping[str, Any], version: int | None = None) -> str:
+    return chain.row_hash(FIELDS, table, row, version)

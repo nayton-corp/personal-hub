@@ -2,6 +2,134 @@
 
 ## [Non publié]
 
+### Domaine Documents (chantier S12)
+
+- Les fiches d'objets de la maison et leurs documents (notices, contrats, garanties, courriels)
+  dans le hub : un bloc d'accueil (entretiens dus, derniers documents), `/api/documents/…`, des
+  outils pour l'assistant qui citent source et page, la recherche et un constat « entretien ».
+- Une archive chiffrée dont la base se reconstruit seule (`hub documents rebuild --check`) ;
+  un index local des passages (FTS5).
+- Un document est privé tant qu'il n'est pas marqué « foyer » (une carte, réversible) ; la
+  portée `documents:household` n'ouvre que cette part et les fiches.
+- Reprise unique de la bibliothèque de Domia : `hub documents import-library DIR`.
+
+### Domaine Agenda (chantier S11)
+
+- Rappels et Calendrier du Mac dans le hub, par le pont EventKit (`assistant/eventkit`) : un
+  bloc d'accueil (la semaine, les rappels ouverts, la liste de courses), `/api/agenda/…`, des
+  outils pour l'assistant, la recherche et un constat « rappels en retard ».
+- Ajouter un rappel, un événement, cocher : des cartes à valider ; un article sur la liste de
+  courses : automatique. Jamais de suppression. Aucune copie dans le hub ; les envois sont
+  tracés pour l'idempotence et la réconciliation.
+- L'API joint le pont par `host.docker.internal` (`[agenda]` de `deploy/settings.toml`).
+
+### Paliers d'approbation réglables (chantier S11)
+
+- Un type de proposition déclare son palier par défaut (`human`, `auto_digest` ou `auto`) ;
+  `hub proposals policy` montre et change les paliers. Un modèle reste à la carte tant qu'il
+  ne déclare pas « pas de texte externe ».
+
+### Un seul assistant, venu de Domia (chantier S10)
+
+- L'assistant de Domia arrive dans `assistant/`, avec ses 149 tests, son banc, ses gabarits de
+  modèle, ses LaunchAgents et le pont Rappels/Calendrier (`eventkit/`) : un paquet à part, testé
+  par sa propre tâche de CI (`make assistant-test`).
+- Le contrat avec l'API de Domia est figé dans `assistant/domia_assistant/contract/`
+  (`make domia-contract DOMIA=~/domia`).
+- L'assistant reprend les outils des domaines du hub (`hub_capabilities`), un type de demande
+  par domaine : montrés et ouverts aux seules personnes de `hub.owners` (jamais à Kim ni à une
+  voix de pièce), avec le jeton des agrégats ; un domaine lu en entier est écarté.
+- Plus de conteneur `brain` : l'assistant tourne en natif sur le Mac et fait aussi le
+  classement du matin (`classify`, jeton `brain`, même modèle résident). Les jetons restent
+  chiffrés par age (`brain.enc.yaml`). À retirer de `deploy/.env` : `,brain` dans
+  `COMPOSE_PROFILES`, `HUB_BRAIN_SECRETS`, `HUB_BRAIN_MODEL`.
+
+### Recherche, liens et constats (chantier S9)
+
+- `/api/search` fusionne les domaines par rang : chaque résultat dit son domaine, son rang dans
+  ce domaine et le passage trouvé ; un domaine aux scores plus grands ne prend plus toute la
+  page.
+- Lier deux objets de deux domaines passe par une carte : type de proposition `core/link`,
+  réversible d'un geste (`core/unlink`). `core.db` gagne le journal chaîné, `applied_proposals`
+  et `events` (migration `0008_core_ledger`), contrôlés par `hub verify`.
+- `GET /api/observations` réunit les constats de chaque domaine ; l'accueil et les liens des
+  notifications y lisent les sentinelles de la finance (`/api/finance/alerts` retirée).
+
+### Documentation (chantier S14)
+
+- `vision.md`, `docs/architecture.md` (anneaux, Double Sas, boîte d'entrée, finance en
+  sous-contextes, en schémas), `docs/ajouter-un-domaine.md`, `docs/securite.md`,
+  `docs/exploitation/` (installation, Mac, versions, kit de secours, gestes réguliers),
+  `hub/domains/finance/README.md` ; README réécrit en index.
+- Références générées depuis le code : routes de l'API, outils de l'assistant, connecteurs
+  (`docs/reference/`, `make reference`). Une référence périmée, un lien relatif cassé, ou une
+  recette d'ajout de domaine que le domaine factice ne suit plus font échouer la CI.
+
+### Finance en couches (chantier S6)
+
+- La finance est rangée en quatre sous-contextes (registre, classement, patrimoine, sources),
+  chacun en couches interface → app → infra → model ; import-linter les impose sans écart.
+- L'importeur, les propositions, les lectures, les outils, la CLI, IBKR, la performance et la
+  transparence des fonds sont découpés : plus aucun fichier de la finance au-delà de 400 lignes.
+- Imports circulaires cassés : les bords reçoivent `port.Finance`, l'ouverture d'un compte vit
+  dans le registre, la lecture des fichiers IBKR et `hub.market.v1` dans `sources/infra`.
+- `public.py` : la seule lecture de la finance permise aux autres domaines (agrégats).
+- Aucun changement de comportement : mêmes routes, commandes et outils ; une base d'avant,
+  reconstruite par `hub finance rebuild`, se compare sans écart.
+
+### App modulaire (chantier S5)
+
+- La coquille de l'app (`shell.js`, `sources.js`) monte les domaines d'après leurs manifestes :
+  barre d'onglets, blocs de l'accueil, rubriques de Sources et réglages, actions. La finance
+  devient un module comme un autre (`finance.js`, rubriques dans `settings.js`).
+- Le manifeste gagne `home` (bloc d'accueil) et `module` (module du domaine) ; un domaine qui
+  reprend un écran de la coquille ou d'un autre domaine est refusé au démarrage.
+- Écrans identiques à 375 px avant et après (captures comparées, chaque rubrique comprise).
+
+### Sauvegarde et exploitation sans liste en dur (chantier S7)
+
+- `hub ops databases` et `hub ops litestream` : les bases (core, puis chaque domaine monté)
+  viennent du registre. `deploy.sh` écrit `deploy/litestream.local.yml` à chaque déploiement
+  et le monte dans Litestream ; `deploy/litestream.yml` (le défaut) est vérifié par la CI.
+- `restore-test.sh` restaure chaque base de la liste, et plus seulement `core.db`.
+- Le contrôle de santé de `deploy.sh` exige `"status":"ok"` (core et chaque domaine monté),
+  plus seulement une réponse.
+- `deploy/tailscale-acl.hujson` : la politique Tailscale versionnée (seul le propriétaire
+  atteint le port 443 du hub).
+
+### Boîte d'entrée par domaine (chantier S4)
+
+- `hub watch-inbox` (service `importer`) confie chaque fichier posé à la racine de `inbox/` au
+  domaine qui le réclame (importeurs du manifeste) : il part dans `inbox/<domaine>/`, puis
+  chaque domaine traite son dossier (`Domain.process_inbox`). Un fichier réclamé par personne
+  reste à la racine ; un nom déjà pris devient `nom-2`.
+- Les collecteurs déposent dans `inbox/<domaine de leur connecteur>/` ; le catalogue sait de
+  quel domaine vient chaque connecteur.
+- L'archive chiffrée de la finance vit dans `archive/finance/` ; la migration déplace une fois
+  `archive/AAAA/` et `archive/duplicates/` (les chemins gardés en base restent valables).
+- `hub finance watch-inbox` lit désormais `inbox/finance/`.
+
+### Intégrité générique (chantier S3)
+
+- `hub.kernel.chain` (empreinte versionnée, maillon) et `hub.core.integrity` (`Ledger` :
+  ajout, vérification, `applied_proposals`, `events`, aides de migration `schema()` et
+  `append_only()`) : un domaine neuf a son registre d'ajout seul sans le réécrire.
+- La finance s'en sert : `ledger.append` et `ledger.verify` délèguent au cœur, ses champs
+  hachés restent dans `hashing.FIELDS`. Même tête de chaîne qu'avant (test de référence).
+- Le domaine factice tient ses propositions et événements dans le registre commun ; `hub
+  verify` le rejoue.
+
+### Jetons à date de fin, par domaine (chantier S8)
+
+- Chaque jeton a une date de fin (`--days`, 90 par défaut, 366 au plus) ; un jeton fini est
+  refusé. Migration `core` 0007 : les jetons existants reçoivent un an depuis leur création.
+- `hub token rotate ID` : nouveau secret, mêmes portées, l'ancien révoqué.
+- La tâche de nuit prévient par ntfy 14 jours avant la fin, une fois par jeton, avec la
+  commande à lancer (pour un service collecteur : recréer son fichier de secrets).
+- Le raccourci `brain` n'ouvre plus que les agrégats ; `brain=finance` ajoute lecture et
+  propositions des domaines nommés. Les jetons déjà créés gardent leurs portées.
+- Les commandes `hub token …` passent dans `hub/cli_tokens.py`.
+
 ### Contrat de domaine v2 (chantier S2)
 
 - Manifeste d'un domaine (`hub.core.manifest`) : onglets, cartes d'accueil, rubriques de
@@ -63,7 +191,7 @@
 - CI : migration depuis la dernière version taguée sur bases et relevé fictifs
   (`make upgrade-test`), cohérence de la version, `pip-audit` (`make audit`).
 - Dependabot : une PR groupée par semaine pour Python, les actions et les images du compose.
-- `docs/versions.md`, décision D-015.
+- `docs/exploitation/versions.md`, décision D-015.
 
 ### Garde-fous du socle (chantier S0)
 
@@ -289,7 +417,7 @@
   connexion, premier compte), qui remplace le texte « Pas encore de données ». Les packs de
   règles du pays s'installent par une proposition `install_pack` validée avec Face ID ;
   `GET /api/finance/rules/packs` les liste.
-- Guide générique [docs/installation.md](docs/installation.md) ; `docs/mac.md` reste pour ce
+- Guide générique [docs/exploitation/installation.md](docs/exploitation/installation.md) ; `docs/exploitation/mac.md` reste pour ce
   qui est propre au Mac.
 
 ### Cryptos au registre — SwissBorg et portefeuille BTC
@@ -391,7 +519,7 @@
   défaut en sont tirés ; `[collectors] schedules` ne remplace plus que les horaires qu'il nomme.
   Route `GET /api/collectors/catalog` (app). Des tests vérifient que compose, le code des
   collecteurs (secrets lus) et le planificateur suivent le catalogue.
-- `hub/domains/finance/institutions.py` déclare les codes d'opération VIAC et IBKR et leur rôle
+- `hub/domains/finance/registre/model/institutions.py` déclare les codes d'opération VIAC et IBKR et leur rôle
   (virement, mouvement interne, effet marché, versement 3a) ; l'appariement, la valorisation et
   le suivi du 3a les lisent au lieu de listes écrites en dur. Un test vérifie qu'ils concordent
   avec les règles système des migrations. Aucun changement de résultat.

@@ -1,0 +1,55 @@
+{
+  "build" : {
+    "git_sha" : "golden",
+    "schema_version" : 35,
+    "version" : "0.0.0"
+  },
+  "config_revision" : 0,
+  "current_cycle_ms" : null,
+  "ha" : "connected",
+  "ha_link" : "READY",
+  "ha_self_user" : "Domia",
+  "instance" : {
+    "seeded_at" : "2026-09-23T19:00:00Z",
+    "seed_path" : "/seeds/seed.yaml",
+    "seed_sha256" : "c8fce1053f74ee71517405cddd17e8fb755b0ec98c982345231bded59413e52a"
+  },
+  "loop_last_cycle_at" : "2026-09-23T19:00:00Z",
+  "outbound_last_error" : null,
+  "persist" : {
+    "last_error" : null,
+    "ok" : true
+  },
+  "queue_depth" : 0,
+  "snapshot" : {
+    "missing_entity_ids" : [ ],
+    "state" : "complete"
+  },
+  "started_at" : "2026-09-23T19:00:00Z",
+  "status" : "DEGRADED",
+  "warnings" : [ {
+    "code" : "SENSOR_STALE",
+    "details" : [ {
+      "path" : "rooms.living_room.sensors.living_occ",
+      "code" : "SENSOR_STALE",
+      "message" : "état : unavailable"
+    } ],
+    "message" : "capteur de présence décroché : sa pièce reste occupée ou vide sur la dernière valeur"
+  }, {
+    "code" : "SENSOR_BATTERY_LOW",
+    "details" : [ {
+      "path" : "rooms.hallway.sensors.hallway_occ",
+      "code" : "SENSOR_BATTERY_LOW",
+      "message" : "12 %"
+    } ],
+    "message" : "pile de capteur faible : la changer"
+  }, {
+    "code" : "SENSOR_SILENT",
+    "details" : [ {
+      "path" : "rooms.living_room.sensors.living_lux",
+      "code" : "SENSOR_SILENT",
+      "message" : "ne répond pas"
+    } ],
+    "message" : "capteur silencieux : il ne répond pas, ou n'a rien envoyé depuis trop longtemps"
+  } ]
+}

@@ -1,0 +1,60 @@
+# Rien d'impossible à l'assistant (spec de l'assistant complet §2, §8) : chaque route de l'API de Domia
+# (backend/src/test/resources/api/routes.golden.txt, figé par ApiRoutesGoldenTest) a ici sa ligne :
+#   tool: l'outil (ou les outils) qui la sert, par intention ;
+#   later: le lot qui l'apportera, et l'outil prévu ;
+#   excluded: pourquoi elle reste à l'écran ou à une autre porte.
+# Une route sans ligne fait échouer tests/test_parity.py.
+
+"GET /api/house": {tool: [house, why]}
+"GET /api/facts": {tool: [facts, estimates]}
+"GET /api/journal": {tool: [activity, why]}
+"GET /api/memory": {tool: [situations]}
+"GET /api/memory/summary": {tool: [system_status]}
+"GET /api/memory/habits": {tool: [habits, plan_tomorrow]}
+"GET /api/weather": {tool: [weather, plan_tomorrow]}
+"GET /api/observations": {tool: [observations]}
+"GET /api/config": {tool: [settings, activity, estimates, ha_entities]}
+"GET /api/health": {tool: [system_status]}
+"GET /api/notifications": {tool: [notifications]}
+"GET /api/notify/services": {tool: [notifications]}
+"POST /api/notify/test": {tool: [test_notification]}
+"GET /api/ha/entities": {tool: [ha_entities]}
+
+"POST /api/lights/{id}/commands": {tool: [light_command]}
+"POST /api/appliances/{id}/commands": {tool: [appliance_command]}
+"POST /api/covers/{id}/commands": {tool: [cover_command]}
+"POST /api/emitters/{id}/commands": {tool: [emitter_command]}
+"POST /api/machines/{id}/commands": {tool: [machine_command]}
+"POST /api/rooms/{id}/commands": {tool: [room_command]}
+"PUT /api/situation": {tool: [set_situation]}
+"POST /api/situation/next": {tool: [next_situation]}
+"POST /api/situation/proposal/{id}/accept": {tool: [accept_proposal]}
+"POST /api/situation/proposal/{id}/refuse": {tool: [refuse_proposal]}
+"POST /api/people/{id}/signals": {tool: [declare_signal]}
+
+"PUT /api/config": {tool: [apply_settings]}
+"POST /api/config/preview": {tool: [propose_settings, undo_settings]}
+"GET /api/ha/areas": {later: "lot 3 : l'installateur (la pièce d'une entité neuve)"}
+"GET /api/ha/devices/of/{entityId}": {later: "lot 3 : l'installateur (le capteur de puissance d'une prise)"}
+"POST /api/ha/entities/{id}/identify": {later: "lot 3 : l'installateur (faire clignoter pour reconnaître)"}
+"GET /api/buttons/heard": {later: "lot 3 : l'installateur (apprendre un bouton)"}
+"GET /api/machines/{id}/map": {later: "une image : pour un modèle qui voit, à décider avec le banc"}
+
+"GET /api/config/clients": {excluded: "la sécurité reste à l'écran (§7) : les appareils autorisés"}
+"POST /api/config/clients": {excluded: "la sécurité reste à l'écran (§7) : créer un jeton"}
+"PUT /api/config/clients/{id}": {excluded: "la sécurité reste à l'écran (§7) : les droits d'un appareil"}
+"DELETE /api/config/clients/{id}": {excluded: "la sécurité reste à l'écran (§7) : révoquer un appareil"}
+"ANY /auth/check": {excluded: "le contrôle d'accès de nginx"}
+"GET /api/plan": {excluded: "le plan 3D : de la géométrie posée à la main (§7)"}
+"GET /api/plan/export": {excluded: "le plan 3D (§7)"}
+"PUT /api/plan": {excluded: "le plan 3D (§7)"}
+"GET /api/config/export": {excluded: "le même document que settings, en YAML pour un fichier"}
+"POST /api/estimates/{id}": {excluded: "la porte d'un estimateur (un capteur qui devine), pas un geste"}
+"GET /api/commands/catalog": {excluded: "la porte de l'assistant : il en tire ses gestes"}
+"POST /api/talk": {excluded: "la porte de l'assistant lui-même"}
+"GET /api/talk": {excluded: "la porte de l'assistant lui-même"}
+"GET /api/talk/history": {excluded: "la porte de l'assistant lui-même"}
+"GET /api/talk/planned": {tool: [planned]}
+"POST /api/talk/planned/{id}": {tool: [accept_planned, cancel_planned]}
+"POST /api/talk/voice": {excluded: "la porte de l'assistant lui-même"}
+"POST /api/notify/assistant": {excluded: "la porte de l'assistant lui-même (ses remarques)"}

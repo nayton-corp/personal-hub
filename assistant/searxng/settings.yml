@@ -1,0 +1,16 @@
+# La recherche web de l'assistant (décision 5) : une instance SearXNG sur le Mac, à l'écoute du Mac seul. Elle ne
+# reçoit que la question (« lave-vaisselle Siemens E24 »), jamais l'état de la maison. La clé secrète vient de
+# SEARXNG_SECRET, tirée au démarrage par le LaunchAgent (launchd/ch.domia.searxng.plist).
+use_default_settings: true
+general:
+  instance_name: "Domia"
+search:
+  safe_search: 0
+  default_lang: "fr"
+  formats: [html, json]  # json : ce que lit l'outil web_search
+server:
+  bind_address: "127.0.0.1"
+  port: 8888
+  limiter: false  # personne d'autre que l'assistant ne l'appelle
+  image_proxy: false
+  public_instance: false

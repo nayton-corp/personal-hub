@@ -25,6 +25,14 @@ class Paths(BaseModel):
     archive: Path = Path("/srv/hub/archive")
     backup: Path = Path("/srv/hub/backup")
 
+    def inbox_of(self, domain: str) -> Path:
+        """Boîte d'entrée d'un domaine (chantier S4) : `hub watch-inbox` y range ce qu'il réclame
+        et les collecteurs y déposent directement."""
+        return self.inbox / domain
+
+    def archive_of(self, domain: str) -> Path:
+        return self.archive / domain
+
 
 class Server(BaseModel):
     bind: str = "127.0.0.1:8710"

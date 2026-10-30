@@ -4,8 +4,8 @@ l'assistant. Les modules nommés sont des fichiers de `hub/web`."""
 from __future__ import annotations
 
 from hub.core.manifest import AppModule, HomeCard, Importer, Manifest, SettingsSection, Tab
-from hub.domains.finance.connectors import NAMES
-from hub.domains.finance.importer import INBOX_SUFFIXES
+from hub.domains.finance.sources.app.connectors import NAMES
+from hub.domains.finance.sources.app.importer import INBOX_SUFFIXES
 
 DESCRIPTION = (
     "Finances personnelles : comptes, dépenses par catégorie, budget, patrimoine, "
@@ -53,13 +53,16 @@ MANIFEST = Manifest(
             HomeCard("budget", "Budget du mois", "/budget"),
         ),
         settings=(
-            SettingsSection("conn", "Connexions", "plug", "Données", "connections.js"),
-            SettingsSection("accounts", "Comptes", "wallet", "Données", "accounts.js"),
-            SettingsSection("debts", "Dettes", "landmark", "Données", "debts.js"),
-            SettingsSection("budget-period", "Budget", "piggy", "Préférences", "settings.js"),
+            SettingsSection("conn", "Connexions", "plug", "Données", "settings.js"),
+            SettingsSection("accounts", "Comptes", "wallet", "Données", "settings.js"),
+            SettingsSection("debts", "Dettes", "landmark", "Données", "settings.js"),
+            SettingsSection("export", "Exporter", "download", "Données", "settings.js"),
+            SettingsSection("budget", "Budget", "piggy", "Préférences", "settings.js"),
             SettingsSection("tax", "Impôts et 3a", "shield", "Préférences", "settings.js"),
         ),
         cards="proposals.js",
+        home="home.js",
+        module="finance.js",
     ),
     importers=(
         Importer(

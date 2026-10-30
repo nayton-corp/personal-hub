@@ -1,0 +1,590 @@
+{
+  "situations" : [ "DAY", "NIGHT", "AWAY" ],
+  "trigger_pattern" : "^[a-z0-9_]+$",
+  "actions" : [ {
+    "id" : "Toggle",
+    "kinds" : [ "LIGHT", "APPLIANCE" ],
+    "payload" : [ ]
+  }, {
+    "id" : "TurnOn",
+    "kinds" : [ "LIGHT", "APPLIANCE" ],
+    "payload" : [ ]
+  }, {
+    "id" : "TurnOff",
+    "kinds" : [ "LIGHT", "APPLIANCE" ],
+    "payload" : [ ]
+  }, {
+    "id" : "SetBrightness",
+    "kinds" : [ "LIGHT" ],
+    "payload" : [ "brightness_pct" ],
+    "requires_dimmable" : true
+  }, {
+    "id" : "Dim",
+    "kinds" : [ "LIGHT" ],
+    "payload" : [ "percent_per_turn", "off_after_deg" ],
+    "requires_dimmable" : true
+  }, {
+    "id" : "Open",
+    "kinds" : [ "COVER" ],
+    "payload" : [ ]
+  }, {
+    "id" : "Close",
+    "kinds" : [ "COVER" ],
+    "payload" : [ ]
+  }, {
+    "id" : "Stop",
+    "kinds" : [ "COVER", "MACHINE" ],
+    "payload" : [ ]
+  }, {
+    "id" : "SetPosition",
+    "kinds" : [ "COVER" ],
+    "payload" : [ "position" ]
+  }, {
+    "id" : "StartProgram",
+    "kinds" : [ "MACHINE" ],
+    "payload" : [ "program_id" ]
+  }, {
+    "id" : "Pause",
+    "kinds" : [ "MACHINE" ],
+    "payload" : [ ]
+  }, {
+    "id" : "Resume",
+    "kinds" : [ "MACHINE" ],
+    "payload" : [ ]
+  }, {
+    "id" : "ReturnToBase",
+    "kinds" : [ "MACHINE" ],
+    "payload" : [ ]
+  }, {
+    "id" : "ToggleRoom",
+    "kinds" : [ "MACHINE" ],
+    "payload" : [ "room_id" ]
+  }, {
+    "id" : "SetRecipe",
+    "kinds" : [ "MACHINE" ],
+    "payload" : [ "recipe" ]
+  }, {
+    "id" : "LaunchDraft",
+    "kinds" : [ "MACHINE" ],
+    "payload" : [ ]
+  }, {
+    "id" : "ClearDraft",
+    "kinds" : [ "MACHINE" ],
+    "payload" : [ ]
+  }, {
+    "id" : "SetSetpoint",
+    "kinds" : [ "EMITTER" ],
+    "payload" : [ "setpoint_c" ]
+  }, {
+    "id" : "SetMode",
+    "kinds" : [ "EMITTER" ],
+    "payload" : [ "mode" ]
+  }, {
+    "id" : "TurnOnRoom",
+    "kinds" : [ "ROOM" ],
+    "payload" : [ ]
+  }, {
+    "id" : "TurnOffRoom",
+    "kinds" : [ "ROOM" ],
+    "payload" : [ ]
+  }, {
+    "id" : "KeepAsIs",
+    "kinds" : [ "LIGHT", "APPLIANCE", "COVER", "EMITTER", "ROOM" ],
+    "payload" : [ ]
+  }, {
+    "id" : "Release",
+    "kinds" : [ "LIGHT", "APPLIANCE", "COVER", "EMITTER", "ROOM" ],
+    "payload" : [ ]
+  }, {
+    "id" : "SetSituation",
+    "kinds" : [ "HOUSE" ],
+    "payload" : [ "situation" ]
+  }, {
+    "id" : "NextSituation",
+    "kinds" : [ "HOUSE" ],
+    "payload" : [ ]
+  } ],
+  "target_kinds" : [ "LIGHT", "APPLIANCE", "COVER", "MACHINE", "EMITTER", "ROOM", "HOUSE" ],
+  "light_ha_prefixes" : [ "light.", "switch." ],
+  "sensor_kinds" : [ {
+    "kind" : "OCCUPANCY",
+    "ha_prefix" : "binary_sensor."
+  }, {
+    "kind" : "LUX",
+    "ha_prefix" : "sensor."
+  }, {
+    "kind" : "CONTACT",
+    "ha_prefix" : "binary_sensor."
+  }, {
+    "kind" : "TEMPERATURE",
+    "ha_prefix" : "sensor."
+  }, {
+    "kind" : "HUMIDITY",
+    "ha_prefix" : "sensor."
+  }, {
+    "kind" : "CO2",
+    "ha_prefix" : "sensor."
+  } ],
+  "button_ha_prefixes" : [ "sensor.", "event." ],
+  "appliance_ha_prefixes" : [ "light.", "switch." ],
+  "power_sensor_prefix" : "sensor.",
+  "cover_ha_prefix" : "cover.",
+  "cover_travel_sec" : {
+    "default" : 60,
+    "min" : 10,
+    "max" : 300
+  },
+  "cover_rules" : {
+    "sun_position" : 20,
+    "protect_above_c" : {
+      "default" : 25.0,
+      "min" : 15.0,
+      "max" : 40.0
+    },
+    "min_move_interval_sec" : {
+      "default" : 900,
+      "min" : 60,
+      "max" : 7200
+    },
+    "situations" : [ "NIGHT", "AWAY" ]
+  },
+  "emitter_ha_prefixes" : [ "climate.", "select." ],
+  "emitter_rules" : {
+    "setpoint_c" : {
+      "default" : null,
+      "min" : 5.0,
+      "max" : 28.0
+    },
+    "window_open_after_sec" : {
+      "default" : 60,
+      "min" : 0,
+      "max" : 1800
+    },
+    "frost_c" : {
+      "default" : 7.0,
+      "min" : 5.0,
+      "max" : 12.0
+    },
+    "min_change_interval_sec" : {
+      "default" : 900,
+      "min" : 60,
+      "max" : 7200
+    },
+    "preheat_max_sec" : {
+      "default" : 21600,
+      "min" : 0,
+      "max" : 43200
+    },
+    "preheat_hold_sec" : {
+      "default" : 7200,
+      "min" : 0,
+      "max" : 21600
+    },
+    "eco_delta_c" : {
+      "default" : null,
+      "min" : 0.5,
+      "max" : 5.0
+    },
+    "eco_after_sec" : {
+      "default" : 7200,
+      "min" : 600,
+      "max" : 43200
+    },
+    "cool_above_c" : {
+      "default" : null,
+      "min" : 18.0,
+      "max" : 35.0
+    },
+    "pilot_wire" : {
+      "comfort_c" : 20.0,
+      "eco_c" : 17.0,
+      "options" : {
+        "comfort" : "comfort",
+        "eco" : "eco",
+        "frost" : "frost_protection",
+        "off" : "off"
+      }
+    },
+    "modes" : [ "HEAT", "COOL", "OFF" ],
+    "situations" : [ "DAY", "NIGHT", "AWAY" ]
+  },
+  "appliance_actions" : [ "Toggle", "TurnOn", "TurnOff" ],
+  "light_defaults" : {
+    "auto_off" : true,
+    "off_warning_sec" : 60,
+    "restore_on_return" : false,
+    "restore_within_sec" : 1800,
+    "auto_on" : {
+      "DAY" : true,
+      "NIGHT" : true,
+      "AWAY" : false
+    }
+  },
+  "room_defaults" : {
+    "depart_after_sec" : 600
+  },
+  "lamp_models" : [ {
+    "model" : "PENDANT_BAR",
+    "default_size" : [ 1.2, 0.04, 0.84 ],
+    "on_ceiling" : true
+  }, {
+    "model" : "CEILING_ROUND",
+    "default_size" : [ 0.4, 0.4, 0.08 ],
+    "on_ceiling" : true
+  }, {
+    "model" : "MUSHROOM_LAMP",
+    "default_size" : [ 0.3, 0.3, 0.38 ],
+    "on_ceiling" : false
+  }, {
+    "model" : "GLOBE_LAMP",
+    "default_size" : [ 0.25, 0.25, 0.25 ],
+    "on_ceiling" : false
+  }, {
+    "model" : "PROJECTOR_LAMP",
+    "default_size" : [ 0.12, 0.12, 0.3 ],
+    "on_ceiling" : false
+  }, {
+    "model" : "LED_STRIP",
+    "default_size" : [ 1.0, 0.03, 0.01 ],
+    "on_ceiling" : false
+  }, {
+    "model" : "CEILING_RING",
+    "default_size" : [ 0.45, 0.45, 0.08 ],
+    "on_ceiling" : true
+  } ],
+  "appliance_icons" : [ "TV", "COMPUTER", "ROUTER", "CONSOLE", "SPEAKER", "WASHER", "COFFEE", "FAN", "PLUG" ],
+  "commands" : [ {
+    "kind" : "LIGHT",
+    "method" : "POST",
+    "path" : "/api/lights/{id}/commands",
+    "action_in_body" : true,
+    "gestures" : [ {
+      "id" : "Toggle",
+      "fields" : [ ],
+      "options" : [ "until" ],
+      "button" : true
+    }, {
+      "id" : "TurnOn",
+      "fields" : [ ],
+      "options" : [ "until" ],
+      "button" : true
+    }, {
+      "id" : "TurnOff",
+      "fields" : [ ],
+      "options" : [ "until" ],
+      "button" : true
+    }, {
+      "id" : "SetBrightness",
+      "fields" : [ "brightness_pct" ],
+      "options" : [ "until" ],
+      "button" : true
+    }, {
+      "id" : "SetColor",
+      "fields" : [ "color" ],
+      "options" : [ "until" ],
+      "button" : false
+    }, {
+      "id" : "KeepAsIs",
+      "fields" : [ ],
+      "options" : [ "until" ],
+      "button" : true
+    }, {
+      "id" : "Release",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    } ]
+  }, {
+    "kind" : "APPLIANCE",
+    "method" : "POST",
+    "path" : "/api/appliances/{id}/commands",
+    "action_in_body" : true,
+    "gestures" : [ {
+      "id" : "Toggle",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "TurnOn",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "TurnOff",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "KeepAsIs",
+      "fields" : [ ],
+      "options" : [ "until" ],
+      "button" : true
+    }, {
+      "id" : "Release",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    } ]
+  }, {
+    "kind" : "COVER",
+    "method" : "POST",
+    "path" : "/api/covers/{id}/commands",
+    "action_in_body" : true,
+    "gestures" : [ {
+      "id" : "SetPosition",
+      "fields" : [ "position" ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "Stop",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "KeepAsIs",
+      "fields" : [ ],
+      "options" : [ "until" ],
+      "button" : true
+    }, {
+      "id" : "Release",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    } ]
+  }, {
+    "kind" : "EMITTER",
+    "method" : "POST",
+    "path" : "/api/emitters/{id}/commands",
+    "action_in_body" : true,
+    "gestures" : [ {
+      "id" : "SetSetpoint",
+      "fields" : [ "setpoint_c" ],
+      "options" : [ "mode" ],
+      "button" : true
+    }, {
+      "id" : "SetMode",
+      "fields" : [ "mode" ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "KeepAsIs",
+      "fields" : [ ],
+      "options" : [ "until" ],
+      "button" : true
+    }, {
+      "id" : "Release",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    } ]
+  }, {
+    "kind" : "MACHINE",
+    "method" : "POST",
+    "path" : "/api/machines/{id}/commands",
+    "action_in_body" : true,
+    "gestures" : [ {
+      "id" : "StartProgram",
+      "fields" : [ "program_id" ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "StartCleaning",
+      "fields" : [ "room_ids" ],
+      "options" : [ "recipe" ],
+      "button" : false
+    }, {
+      "id" : "Pause",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "Resume",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "ReturnToBase",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "Stop",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "Locate",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : false
+    }, {
+      "id" : "PressButton",
+      "fields" : [ "button" ],
+      "options" : [ ],
+      "button" : false
+    }, {
+      "id" : "Release",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : false
+    }, {
+      "id" : "ToggleRoom",
+      "fields" : [ "room_id" ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "SetRecipe",
+      "fields" : [ "recipe" ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "LaunchDraft",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    }, {
+      "id" : "ClearDraft",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    } ]
+  }, {
+    "kind" : "ROOM",
+    "method" : "POST",
+    "path" : "/api/rooms/{id}/commands",
+    "action_in_body" : true,
+    "gestures" : [ {
+      "id" : "TurnOnRoom",
+      "fields" : [ ],
+      "options" : [ "until" ],
+      "button" : true
+    }, {
+      "id" : "TurnOffRoom",
+      "fields" : [ ],
+      "options" : [ "until" ],
+      "button" : true
+    }, {
+      "id" : "KeepAsIs",
+      "fields" : [ ],
+      "options" : [ "until" ],
+      "button" : true
+    }, {
+      "id" : "Release",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    } ]
+  }, {
+    "kind" : "HOUSE",
+    "method" : "PUT",
+    "path" : "/api/situation",
+    "action_in_body" : false,
+    "gestures" : [ {
+      "id" : "SetSituation",
+      "fields" : [ "value" ],
+      "options" : [ ],
+      "button" : true
+    } ]
+  }, {
+    "kind" : "HOUSE",
+    "method" : "POST",
+    "path" : "/api/situation/next",
+    "action_in_body" : false,
+    "gestures" : [ {
+      "id" : "NextSituation",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : true
+    } ]
+  }, {
+    "kind" : "PERSON",
+    "method" : "POST",
+    "path" : "/api/people/{id}/signals",
+    "action_in_body" : false,
+    "gestures" : [ {
+      "id" : "DeclareSignal",
+      "fields" : [ "kind" ],
+      "options" : [ ],
+      "button" : false
+    } ]
+  }, {
+    "kind" : "PROPOSAL",
+    "method" : "POST",
+    "path" : "/api/situation/proposal/{id}/accept",
+    "action_in_body" : false,
+    "gestures" : [ {
+      "id" : "AcceptProposal",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : false
+    } ]
+  }, {
+    "kind" : "PROPOSAL",
+    "method" : "POST",
+    "path" : "/api/situation/proposal/{id}/refuse",
+    "action_in_body" : false,
+    "gestures" : [ {
+      "id" : "RefuseProposal",
+      "fields" : [ ],
+      "options" : [ ],
+      "button" : false
+    } ]
+  } ],
+  "command_fields" : {
+    "brightness_pct" : {
+      "type" : "int",
+      "min" : 0,
+      "max" : 100
+    },
+    "color" : {
+      "type" : "color",
+      "min" : 1000,
+      "max" : 12000
+    },
+    "position" : {
+      "type" : "int",
+      "min" : 0,
+      "max" : 100
+    },
+    "setpoint_c" : {
+      "type" : "decimal",
+      "min" : 5,
+      "max" : 28
+    },
+    "mode" : {
+      "type" : "enum",
+      "values" : [ "HEAT", "COOL", "OFF" ]
+    },
+    "until" : {
+      "type" : "enum",
+      "values" : [ "DEPARTURE", "SITUATION_CHANGE", "NEVER" ]
+    },
+    "program_id" : {
+      "type" : "ref",
+      "of" : "program"
+    },
+    "room_ids" : {
+      "type" : "refs",
+      "of" : "room"
+    },
+    "button" : {
+      "type" : "ref",
+      "of" : "machine_button"
+    },
+    "room_id" : {
+      "type" : "ref",
+      "of" : "room"
+    },
+    "recipe" : {
+      "type" : "recipe"
+    },
+    "kind" : {
+      "type" : "enum",
+      "values" : [ "WOKE_UP", "LEFT", "ARRIVED" ]
+    },
+    "value" : {
+      "type" : "enum",
+      "values" : [ "DAY", "NIGHT", "AWAY" ]
+    }
+  }
+}

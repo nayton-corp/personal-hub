@@ -223,7 +223,7 @@ def fake_pdf(txt: str) -> bytes:
 
 def fake_text(data: bytes) -> str:
     """Remplace `pdftotext` dans les tests : relit le texte derrière l'en-tête."""
-    from hub.domains.finance.viac import ViacError
+    from hub.domains.finance.sources.infra.viac import ViacError
 
     if not data.startswith(HEADER):
         raise ViacError("viac.unreadable", "PDF illisible")

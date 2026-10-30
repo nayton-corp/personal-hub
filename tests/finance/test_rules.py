@@ -12,9 +12,10 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from sqlalchemy import text
 
-from hub.domains.finance import catalog, legacy, rules
+from hub.domains.finance.classement.app import legacy, rules
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.registre.app import catalog
+from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform.db import begin_immediate
 from tests.factories.camt import IBAN, IBAN_2, Stmt, Tx, camt053
 from tests.finance.conftest import (
@@ -169,7 +170,7 @@ def test_rules_never_override_a_human(finance: FinanceDomain) -> None:
         conn.execute(
             text("INSERT INTO categories (id, name, grp) VALUES ('cadeau-x', 'Cadeau', 'variable')")
         )
-        from hub.domains.finance import ledger
+        from hub.domains.finance.registre.app import ledger
 
         ledger.append(
             conn,

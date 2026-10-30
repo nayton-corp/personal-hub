@@ -13,8 +13,9 @@ import typer
 from typer.testing import CliRunner
 
 from hub.core.coredb import CoreDB
-from hub.domains.finance import importer, revolut
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.sources.app import outcomes
+from hub.domains.finance.sources.infra import revolut
 from tests.finance.conftest import rows
 
 ACCOUNT = {
@@ -200,8 +201,8 @@ def run(app: typer.Typer, *args: str) -> tuple[int, str]:
     return result.exit_code, result.stdout
 
 
-def drop(finance: FinanceDomain, name: str, data: bytes) -> importer.BatchReport:
-    inbox: Path = finance.settings.paths.inbox
+def drop(finance: FinanceDomain, name: str, data: bytes) -> outcomes.BatchReport:
+    inbox: Path = finance.settings.paths.inbox_of("finance")
     inbox.mkdir(parents=True, exist_ok=True)
     path = inbox / name
     path.write_bytes(data)

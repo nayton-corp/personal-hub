@@ -9,8 +9,8 @@ import pyrage
 import pytest
 from sqlalchemy import text
 
-from hub.domains.finance import catalog, importer
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.registre.app import catalog, opening
 from hub.platform.db import begin_immediate
 from hub.platform.settings import Paths, Secrets, Server, Settings
 from tests.factories.camt import IBAN, Stmt, Tx
@@ -55,7 +55,7 @@ def add_account(domain: FinanceDomain, iban: str = IBAN, **kw: object) -> catalo
 
 def open_account(domain: FinanceDomain, account: catalog.Account, on: str, minor: int) -> None:
     with begin_immediate(domain.engine()) as conn:
-        importer.open_account(conn, account.id, on, minor, account.currency)
+        opening.open_account(conn, account.id, on, minor, account.currency)
 
 
 def ready_account(domain: FinanceDomain, opening_minor: int = 100_000) -> catalog.Account:

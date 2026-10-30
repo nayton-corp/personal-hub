@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -50,13 +51,38 @@ def _hub(env: dict[str, str], *args: str) -> None:
     subprocess.run(cmd, env=env, check=True, capture_output=True)  # noqa: S603 - arguments du test
 
 
+@contextmanager
+def serve(hub: HubContext, port: int) -> Iterator[None]:
+    """L'API de `hub`, servant l'app, dans un fil, le temps du bloc."""
+    import uvicorn
+
+    from hub.api.app import create_app
+
+    server = uvicorn.Server(
+        uvicorn.Config(
+            create_app(hub), host="127.0.0.1", port=port, log_config=None, access_log=False
+        )
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 15
+    while not server.started:
+        assert time.monotonic() < deadline, "l'API ne démarre pas"
+        time.sleep(0.05)
+    yield
+    server.should_exit = True
+    thread.join(timeout=10)
+
+
+def bootstrap(hub: HubContext) -> str:
+    with hub.core.engine.begin() as conn:
+        return sessions.create_bootstrap_code(conn, 10, "system:test")
+
+
 @pytest.fixture(scope="module")
 def instance(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, str]]:
     """Une instance complète : bases migrées, deux comptes, un an de relevés, API servant l'app."""
     import pyrage
-    import uvicorn
-
-    from hub.api.app import create_app
 
     home = tmp_path_factory.mktemp("instance")
     key = home / "age.key"
@@ -86,28 +112,14 @@ def instance(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, st
         secrets=Secrets(age_key_file=key),
     )
     hub = HubContext.build(settings)
-    with hub.core.engine.begin() as conn:
-        code = sessions.create_bootstrap_code(conn, 10, "system:test")
-    server = uvicorn.Server(
-        uvicorn.Config(
-            create_app(hub), host="127.0.0.1", port=port, log_config=None, access_log=False
-        )
-    )
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    deadline = time.monotonic() + 15
-    while not server.started:
-        assert time.monotonic() < deadline, "l'API ne démarre pas"
-        time.sleep(0.05)
-    yield origin, code
-    server.should_exit = True
-    thread.join(timeout=10)
+    with serve(hub, port):
+        yield origin, bootstrap(hub)
     hub.dispose()
 
 
-@pytest.fixture(scope="module")
-def page(instance: tuple[str, str]) -> Iterator[Any]:
-    origin, code = instance
+@contextmanager
+def browse(origin: str, code: str) -> Iterator[Any]:
+    """Chromium à 375 px, la première passkey créée : la page est dans la coquille de l'app."""
     with playwright.sync_playwright() as p:
         browser = p.chromium.launch()
         context = browser.new_context(
@@ -154,7 +166,13 @@ def page(instance: tuple[str, str]) -> Iterator[Any]:
         browser.close()
 
 
-def _screen_ok(pg: Any, name: str) -> None:
+@pytest.fixture(scope="module")
+def page(instance: tuple[str, str]) -> Iterator[Any]:
+    with browse(*instance) as pg:
+        yield pg
+
+
+def _screen_ok(pg: Any, name: str, shot: str | None = None) -> None:
     pg.wait_for_load_state("networkidle")
     pg.wait_for_timeout(300)  # le rendu qui suit la dernière réponse
     view = pg.locator(f"#{name}")
@@ -167,7 +185,7 @@ def _screen_ok(pg: Any, name: str) -> None:
     shots = os.environ.get("HUB_SCREENSHOTS")
     if shots:
         Path(shots).mkdir(parents=True, exist_ok=True)
-        pg.screenshot(path=str(Path(shots) / f"{name}.png"), full_page=True)
+        pg.screenshot(path=str(Path(shots) / f"{shot or name}.png"), full_page=True)
     assert pg.problems == [], f"{name} : {pg.problems}"
 
 
@@ -188,3 +206,27 @@ def test_the_year_of_demo_data_reaches_the_screens(page: Any) -> None:
     page.click('#tabs button[data-v="journal"]')
     page.wait_for_load_state("networkidle")
     assert "Employeur Fictif SA" in page.locator("#journal").inner_text()
+
+
+RUBRICS = [
+    "conn",
+    "accounts",
+    "debts",
+    "export",
+    "budget",
+    "tax",
+    "display",
+    "profile",
+    "security",
+    "health",
+]
+
+
+@pytest.mark.parametrize("rubric", RUBRICS)
+def test_each_settings_rubric_renders_at_375px(page: Any, rubric: str) -> None:
+    page.click('#tabs button[data-v="accueil"]')
+    page.locator('#accueil [data-a="settings"]').click()
+    page.locator(f'#rubrics [data-a="rubric"][data-v="{rubric}"]').click()
+    page.wait_for_selector(f'#sources [data-rubric="{rubric}"]:not(.off-rubric)', state="attached")
+    _screen_ok(page, "sources", shot=f"sources-{rubric}")
+    page.locator('#sources [data-a="back"]').click()

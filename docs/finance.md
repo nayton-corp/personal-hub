@@ -11,7 +11,7 @@ alias fin='hubc run --rm --no-deps importer hub finance'
 
 ## Ce qui tourne
 
-- `importer` surveille `~/PersonalHub/inbox/` toutes les 30 s (`hub finance watch-inbox`).
+- `importer` surveille `~/PersonalHub/inbox/` toutes les 30 s (`hub watch-inbox`) : un fichier posé à la racine part dans `inbox/finance/` quand la finance le réclame (xml, zip, pdf, json, csv, xlsx), puis la finance traite son dossier. Les collecteurs déposent directement dans `inbox/finance/` ; l'archive chiffrée vit dans `archive/finance/`.
   Un `.xml` camt.053 (.001.04 ou .001.08), un `.pdf` VIAC ou un `.zip` y est validé contre le XSD
   ISO 20022, rapproché, puis appliqué s'il n'y a aucune anomalie. Le fichier est ensuite
   chiffré avec ta clé age vers le volume `archive` et retiré de la boîte d'entrée.
@@ -101,7 +101,7 @@ la plus prioritaire d'abord (priorité la plus basse, puis identifiant). Une rè
 jamais une écriture que tu as catégorisée toi-même.
 
 **Packs de règles.** Une base neuve reçoit les règles de départ des packs livrés dans
-`hub/domains/finance/packs/` : `base` (mots génériques et services internationaux) et le pack
+`hub/domains/finance/classement/app/packs/` : `base` (mots génériques et services internationaux) et le pack
 du pays du profil (`ch` pour la Suisse : commerces, transports, caisses maladie, opérateurs,
 prestataires 3a). Une base créée avant les packs garde ses règles `seed-` et n'en reçoit
 aucun sans qu'on le demande.

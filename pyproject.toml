@@ -36,16 +36,18 @@ hub-brain = "hub.brain.cli:main"
 
 [project.entry-points."hub.domains"]
 finance = "hub.domains.finance:create"
+agenda = "hub.domains.agenda:create"
+documents = "hub.domains.documents:create"
 
 # ce que la finance apporte au cœur sans qu'il l'importe (chantier S1)
 [project.entry-points."hub.connectors"]
-finance = "hub.domains.finance.connectors:CATALOG"
+finance = "hub.domains.finance.sources.app.connectors:CATALOG"
 
 [project.entry-points."hub.country_modules"]
-finance = "hub.domains.finance.connectors:COUNTRY_MODULES"
+finance = "hub.domains.finance.sources.app.connectors:COUNTRY_MODULES"
 
 [project.entry-points."hub.connection_imports"]
-finance = "hub.domains.finance.legacy_connections:import_legacy"
+finance = "hub.domains.finance.sources.app.legacy_connections:import_legacy"
 
 [dependency-groups]
 dev = [
@@ -94,7 +96,16 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # textes en français : apostrophes et 
 "tests/{brain/test_*,finance/test_tools,finance/test_sentinels}.py" = ["F811"]
 "hub/domains/*/migrations/**" = ["E501"]
 # SQL assemblé à partir de noms de tables et de marques :n internes ; les valeurs restent liées
-"hub/domains/finance/{ledger,reads,importer,domain,insights,handlers}.py" = ["S608"]
+"hub/domains/finance/classement/app/categorize_kinds.py" = ["S608"]
+"hub/domains/finance/classement/app/insights.py" = ["S608"]
+"hub/domains/finance/classement/app/review.py" = ["S608"]
+"hub/domains/finance/classement/app/rule_kinds.py" = ["S608"]
+"hub/domains/finance/classement/app/totals.py" = ["S608"]
+"hub/domains/finance/patrimoine/app/account_kinds.py" = ["S608"]
+"hub/domains/finance/patrimoine/app/debt_kinds.py" = ["S608"]
+"hub/domains/finance/patrimoine/app/holdings.py" = ["S608"]
+"hub/domains/finance/registre/app/reads.py" = ["S608"]
+"hub/domains/finance/sources/app/statements.py" = ["S608"]
 
 [tool.mypy]
 strict = true
@@ -134,7 +145,7 @@ layers = ["hub.domains", "hub.core", "hub.platform", "hub.kernel"]
 [[tool.importlinter.contracts]]
 name = "Ni l'API ni la CLI n'importent un domaine : elles passent par le registre"
 type = "forbidden"
-source_modules = ["hub.kernel", "hub.platform", "hub.core", "hub.api", "hub.cli"]
+source_modules = ["hub.kernel", "hub.platform", "hub.core", "hub.api", "hub.cli", "hub.cli_tokens", "hub.cli_inbox", "hub.cli_ops", "hub.cli_proposals"]
 forbidden_modules = ["hub.domains", "hub.collectors", "hub.brain"]
 
 [[tool.importlinter.contracts]]
@@ -189,20 +200,46 @@ ignore_imports = [
 unmatched_ignore_imports_alerting = "error"
 
 [[tool.importlinter.contracts]]
-name = "Finance : les modules purs (futur model) ne touchent ni SQL, ni HTTP, ni le cœur"
-type = "forbidden"
-source_modules = ["hub.domains.finance.hashing", "hub.domains.finance.period", "hub.domains.finance.merchant", "hub.domains.finance.institutions", "hub.domains.finance.camt", "hub.domains.finance.viac.models", "hub.domains.finance.viac.notice", "hub.domains.finance.viac.report", "hub.domains.finance.viac.text", "hub.domains.finance.xlsx", "hub.domains.finance.dedup", "hub.domains.finance.revolut"]
-forbidden_modules = ["sqlalchemy", "fastapi", "typer", "httpx", "hub.platform.db", "hub.core.coredb", "hub.core.proposals"]
-ignore_imports = ["hub.domains.finance.dedup -> hub.domains.finance.ledger"]
-unmatched_ignore_imports_alerting = "error"
+name = "Finance : le domaine, ses bords, puis les sous-contextes sources → patrimoine → classement → registre"
+type = "layers"
+layers = [
+    "hub.domains.finance.domain",
+    "hub.domains.finance.api : hub.domains.finance.cli : hub.domains.finance.tools : hub.domains.finance.handlers : hub.domains.finance.rebuild : hub.domains.finance.manifest : hub.domains.finance.public",
+    "hub.domains.finance.port : hub.domains.finance.compare",
+    "hub.domains.finance.sources",
+    "hub.domains.finance.patrimoine",
+    "hub.domains.finance.classement",
+    "hub.domains.finance.registre",
+]
 
 [[tool.importlinter.contracts]]
-name = "Finance : personne n'importe l'interface (api, cli, tools) ni le manifeste"
-type = "forbidden"
-source_modules = ["hub.domains.finance.handlers", "hub.domains.finance.importer", "hub.domains.finance.reads", "hub.domains.finance.ledger", "hub.domains.finance.rules", "hub.domains.finance.insights", "hub.domains.finance.rebuild", "hub.domains.finance.sentinels", "hub.domains.finance.snapshots", "hub.domains.finance.valuation", "hub.domains.finance.performance"]
-forbidden_modules = ["hub.domains.finance.api", "hub.domains.finance.cli", "hub.domains.finance.tools", "hub.domains.finance.domain"]
-ignore_imports = [
-    "hub.domains.finance.handlers -> hub.domains.finance.domain",
-    "hub.domains.finance.rebuild -> hub.domains.finance.domain",
+name = "Finance : chaque sous-contexte en couches interface → app → infra → model, rien d'autre"
+type = "layers"
+containers = [
+    "hub.domains.finance.registre",
+    "hub.domains.finance.classement",
+    "hub.domains.finance.patrimoine",
+    "hub.domains.finance.sources",
 ]
-unmatched_ignore_imports_alerting = "error"
+layers = ["(interface)", "app", "(infra)", "(model)"]
+exhaustive = true
+
+[[tool.importlinter.contracts]]
+name = "Finance : model est pur (ni SQL, ni HTTP, ni fichiers du cœur)"
+type = "forbidden"
+source_modules = ["hub.domains.finance.*.model"]
+forbidden_modules = ["sqlalchemy", "fastapi", "starlette", "typer", "httpx", "hub.platform.db", "hub.core.coredb", "hub.core.proposals", "hub.domains.finance.*.app", "hub.domains.finance.*.infra", "hub.domains.finance.*.interface"]
+
+[[tool.importlinter.contracts]]
+name = "Finance : infra lit et écrit des formats et des fichiers, sans base ni HTTP"
+type = "forbidden"
+source_modules = ["hub.domains.finance.*.infra"]
+forbidden_modules = ["sqlalchemy", "fastapi", "starlette", "typer", "hub.platform.db", "hub.domains.finance.*.app", "hub.domains.finance.*.interface"]
+
+[[tool.importlinter.contracts]]
+name = "Finance : app ne parle ni HTTP ni ligne de commande, et n'importe aucune interface"
+type = "forbidden"
+source_modules = ["hub.domains.finance.*.app"]
+forbidden_modules = ["fastapi", "starlette", "typer", "hub.domains.finance.*.interface"]
+# imports directs : le cœur porte encore FastAPI (contrat du cœur, liste d'écarts ci-dessus)
+allow_indirect_imports = true

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from hub.domains.finance.merchant import key
+from hub.domains.finance.registre.model.merchant import key
 from hub.kernel.text import normalize
 
 

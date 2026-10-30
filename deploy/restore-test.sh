@@ -15,9 +15,14 @@ trap cleanup EXIT
 
 # le volume « data » doit naître de l'image du hub (propriétaire 10001), pas de celle de Litestream
 "${P[@]}" run --rm --no-deps scheduler true
-echo "==> Restauration de core.db depuis $HUB_REPLICA"
-"${P[@]}" run --rm --no-deps --entrypoint litestream litestream \
-  restore -config /etc/litestream.yml -o /srv/hub/data/core.db /srv/hub/data/core.db
+# les bases à restaurer viennent du registre (core, puis chaque domaine monté), pas d'une liste
+[ -f "$HERE/litestream.local.yml" ] && export HUB_LITESTREAM_CONFIG=./litestream.local.yml
+DBS="$("${P[@]}" run --rm --no-deps -T scheduler hub ops databases)"  # bash 3.2 : pas de mapfile
+for db in $DBS; do
+  echo "==> Restauration de $db.db depuis $HUB_REPLICA"
+  "${P[@]}" run --rm --no-deps --entrypoint litestream litestream \
+    restore -config /etc/litestream.yml -o "/srv/hub/data/$db.db" "/srv/hub/data/$db.db"
+done
 echo "==> Vérification de la base restaurée"
 "${P[@]}" run --rm --no-deps scheduler hub verify
 "${P[@]}" run --rm --no-deps scheduler hub reconcile

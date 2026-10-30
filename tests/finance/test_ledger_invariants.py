@@ -22,7 +22,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.sources.infra.files import Incoming
 from tests.factories.camt import History, camt053, histories
 from tests.finance.conftest import add_account, finance_settings, ledger_state, open_account, rows
 

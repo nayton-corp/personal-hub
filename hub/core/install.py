@@ -72,7 +72,6 @@ class Choices:
             "HUB_AGE_KEY": str(self.config / "age.key"),
             "HUB_SECRETS": str(self.config / "secrets.enc.yaml"),
             "HUB_COLLECTOR_SECRETS": str(self.config / "collectors"),
-            "HUB_BRAIN_SECRETS": str(self.config / "brain.enc.yaml"),
         }
 
 

@@ -8,16 +8,19 @@ from pathlib import Path
 
 import pytest
 
-from hub.domains.finance import importer
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.registre.app import opening
+from hub.domains.finance.registre.model import errors
+from hub.domains.finance.sources.app import history
+from hub.domains.finance.sources.infra import files
+from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform import secrets
 from tests.factories.camt import IBAN, IBAN_2, Detail, Stmt, Tx, camt053, zipped
 from tests.finance.conftest import D, add_account, ledger_state, ready_account, rows, simple_stmt
 
 
 def drop(domain: FinanceDomain, name: str, data: bytes) -> Path:
-    inbox = domain.settings.paths.inbox
+    inbox = domain.settings.paths.inbox_of("finance")
     inbox.mkdir(parents=True, exist_ok=True)
     path = inbox / name
     path.write_bytes(data)
@@ -39,7 +42,7 @@ def test_inbox_import_applies_and_archives_encrypted(finance: FinanceDomain) -> 
     assert statuses(finance) == ["applied"]
     assert not path.exists()
     (archive_path,) = rows(finance, "SELECT archive_path FROM imports")
-    stored = finance.settings.paths.archive / str(archive_path[0])
+    stored = finance.settings.paths.archive_of("finance") / str(archive_path[0])
     assert stored.suffix == ".age"
     assert b"Jean Exemple" not in stored.read_bytes()  # chiffré
     key = finance.settings.secrets.age_key_file
@@ -59,7 +62,7 @@ def test_same_file_again_goes_to_duplicates(finance: FinanceDomain) -> None:
     finance.importer.process([Incoming("a.xml", data)])
     report = finance.importer.process([Incoming("b.xml", data)])
     assert [f.status for f in report.files] == ["duplicate"]
-    assert list((finance.settings.paths.archive / "duplicates").iterdir())
+    assert list((finance.settings.paths.archive_of("finance") / "duplicates").iterdir())
     assert len(rows(finance, "SELECT 1 FROM entries WHERE kind = 'movement'")) == 3
 
 
@@ -191,7 +194,7 @@ def test_inbox_skips_files_still_being_copied_and_pauses_during_history(
     finance: FinanceDomain,
 ) -> None:
     ready_account(finance)
-    inbox = finance.settings.paths.inbox
+    inbox = finance.settings.paths.inbox_of("finance")
     inbox.mkdir(parents=True)
     (inbox / "fresh.xml").write_bytes(camt053(simple_stmt()))
     (inbox / ".hidden.xml").write_bytes(b"")
@@ -200,24 +203,24 @@ def test_inbox_skips_files_still_being_copied_and_pauses_during_history(
     finance.importer.lock_file.touch()
     drop(finance, "old.xml", camt053(simple_stmt()))
     assert finance.importer.process_inbox().files == []
-    with pytest.raises(importer.ImportRefused):
+    with pytest.raises(errors.ImportRefused):
         finance.importer.receive("x.xml", b"")
 
 
 def test_archive_needs_a_key(tmp_path: Path, finance: FinanceDomain) -> None:
-    archiver = importer.Archiver(tmp_path, None, None)
-    with pytest.raises(importer.ImportRefused):
+    archiver = files.Archiver(tmp_path, None, None)
+    with pytest.raises(errors.ImportRefused):
         archiver.store(b"x", "sub", "name")
-    with pytest.raises(importer.ImportRefused):
+    with pytest.raises(errors.ImportRefused):
         archiver.load("x")
-    assert importer.recipient_from_key(tmp_path / "absent") is None
+    assert files.recipient_from_key(tmp_path / "absent") is None
     # archive illisible : refus explicite, ou rien en mode silencieux
     report = finance.importer.process([Incoming("a.xml", camt053(simple_stmt()))])
     assert report.statements[0].reasons == ["unknown_account"]
     (path,) = rows(finance, "SELECT archive_path FROM imports")
-    (finance.settings.paths.archive / str(path[0])).write_bytes(b"abime")
+    (finance.settings.paths.archive_of("finance") / str(path[0])).write_bytes(b"abime")
     assert finance.importer.retry_needs_review(quiet=True) == []
-    with pytest.raises(importer.ImportRefused):
+    with pytest.raises(errors.ImportRefused):
         finance.importer.retry_needs_review()
 
 
@@ -275,7 +278,7 @@ def _folder(tmp_path: Path, stmts: list[Stmt], names: list[str] | None = None) -
 def test_history_opens_and_applies_everything(finance: FinanceDomain, tmp_path: Path) -> None:
     add_account(finance)
     folder = _folder(tmp_path, _months(date(2016, 1, 1), 6))
-    report = importer.import_history(finance.importer, folder)
+    report = history.import_history(finance.importer, folder)
     assert report.ok, report.public()
     assert report.batch["applied"] == 6
     assert report.accounts[0]["entries"] == 12
@@ -284,7 +287,7 @@ def test_history_opens_and_applies_everything(finance: FinanceDomain, tmp_path: 
         ("2015-12-31", 50000)  # veille du premier jour du relevé le plus ancien
     ]
     assert not finance.importer.lock_file.exists()
-    again = importer.import_history(
+    again = history.import_history(
         finance.importer, _folder(tmp_path / "b", _months(date(2015, 1, 1), 2))
     )
     assert not again.ok
@@ -303,14 +306,14 @@ def test_history_takes_files_already_waiting_in_review(
         [Incoming(p.name, p.read_bytes()) for p in sorted(folder.iterdir())[:2]]
     )
     assert first.counters()["needs_review"] == 2
-    report = importer.import_history(finance.importer, folder)
+    report = history.import_history(finance.importer, folder)
     assert report.ok, report.public()
     assert report.batch["applied"] == 3
     assert report.accounts[0]["entries"] == 6
     waiting = "SELECT count(*) FROM import_statements WHERE status = 'needs_review'"
     assert rows(finance, waiting) == [(0,)]
     # rejouée, la reprise ne trouve plus rien à faire
-    again = importer.import_history(finance.importer, folder)
+    again = history.import_history(finance.importer, folder)
     assert again.ok
     assert again.batch["files"] == 0
 
@@ -330,7 +333,7 @@ def test_history_order_does_not_matter(tmp_path: Path) -> None:
         folder.mkdir()
         (folder / names[0]).write_bytes(camt053(early))
         (folder / names[1]).write_bytes(camt053(late, "04"))
-        assert importer.import_history(d.importer, folder).ok
+        assert history.import_history(d.importer, folder).ok
         states.append([s[2:] for s in ledger_state(d)])
         d.engine().dispose()
     assert states[0] == states[1]
@@ -340,7 +343,7 @@ def test_history_hole_stops_before_writing(finance: FinanceDomain, tmp_path: Pat
     add_account(finance)
     months = _months(date(2016, 1, 1), 4)
     folder = _folder(tmp_path, [months[0], months[1], months[3]])
-    report = importer.import_history(finance.importer, folder)
+    report = history.import_history(finance.importer, folder)
     assert not report.ok
     assert report.missing == [{"account": "CH93…957", "from": "2016-02-10", "to": "2016-04-01"}]
     assert rows(finance, "SELECT count(*) FROM entries") == [(0,)]
@@ -348,23 +351,23 @@ def test_history_hole_stops_before_writing(finance: FinanceDomain, tmp_path: Pat
 
 def test_history_refusals(finance: FinanceDomain, tmp_path: Path) -> None:
     folder = _folder(tmp_path, _months(date(2016, 1, 1), 1))
-    assert "inconnu" in (importer.import_history(finance.importer, folder).error or "")
+    assert "inconnu" in (history.import_history(finance.importer, folder).error or "")
     bad = tmp_path / "bad"
     bad.mkdir()
     (bad / "x.xml").write_bytes(b"<x/>")
-    assert "import.invalid_schema" in (importer.import_history(finance.importer, bad).error or "")
+    assert "import.invalid_schema" in (history.import_history(finance.importer, bad).error or "")
     finance.importer.lock_file.parent.mkdir(parents=True, exist_ok=True)
     finance.importer.lock_file.touch()
-    with pytest.raises(importer.ImportRefused):
-        importer.import_history(finance.importer, folder)
+    with pytest.raises(errors.ImportRefused):
+        history.import_history(finance.importer, folder)
 
 
 def test_opening_only_once(finance: FinanceDomain) -> None:
     a = ready_account(finance)
     from hub.platform.db import begin_immediate
 
-    with pytest.raises(importer.ImportRefused), begin_immediate(finance.engine()) as conn:
-        importer.open_account(conn, a.id, "2020-01-01", 1, "CHF")
+    with pytest.raises(errors.ImportRefused), begin_immediate(finance.engine()) as conn:
+        opening.open_account(conn, a.id, "2020-01-01", 1, "CHF")
     s = Stmt(Decimal("1000.00"), date(2026, 9, 1), [Tx("1.00", True, date(2026, 9, 2))])
     report = finance.importer.process([Incoming("old.xml", camt053(s))])
     assert "before_opening" in report.statements[0].reasons

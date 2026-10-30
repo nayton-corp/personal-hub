@@ -12,7 +12,7 @@ from sqlalchemy import text
 from hub.core import proposals
 from hub.core.context import HubContext
 from hub.core.notify import Message
-from hub.domains.finance import sentinels
+from hub.domains.finance.classement.app import sentinels
 from hub.domains.finance.domain import FinanceDomain
 from hub.platform.db import begin_immediate
 from tests.finance.test_app_reads import (  # noqa: F401 - fixtures
@@ -110,10 +110,14 @@ def test_pillar3a_in_november(year: FinanceDomain) -> None:
 
 def test_alerts_route(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
     year.nightly()
-    assert client.get("/api/finance/alerts", headers=token(ctx, "aggregates")).status_code == 403
-    items = client.get("/api/finance/alerts", headers=token(ctx, "brain")).json()["items"]
+    # les alertes passent par les constats du cœur (S9), réservés à la lecture du domaine
+    blind = client.get("/api/observations", headers=token(ctx, "aggregates")).json()
+    assert blind == {"items": []}
+    items = client.get("/api/observations", headers=token(ctx, "brain=finance")).json()["items"]
     assert [i["kind"] for i in items] == ["budget_over"]
     assert items[0]["title"] == "Budget Alimentation dépassé"
     assert items[0]["detail"]["spent"]["display"] == "300.00"
     app_session(ctx, client)
-    assert len(client.get("/api/finance/alerts").json()["items"]) == 1
+    (seen,) = client.get("/api/observations?domain=finance").json()["items"]
+    assert (seen["domain"], seen["severity"]) == ("finance", "alert")
+    assert len(seen["key"]) == 20  # identifiant opaque : la clé nommait la catégorie

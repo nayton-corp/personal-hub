@@ -1,4 +1,4 @@
-"""Reconstruction du registre par rejeu, et comparaison de deux bases (ticket L4-08).
+"""Reconstruction du registre par rejeu (ticket L4-08), `hub finance rebuild`.
 
 `rebuild` part d'une base neuve à la dernière migration et rejoue ce qui a construit la base
 d'origine : les données de référence (devises, catégories, comptes avec leurs identifiants,
@@ -8,11 +8,7 @@ et chaque proposition validée du domaine (même identifiant, paramètres lus da
 Les règles tournent une dernière fois à la fin. La base reconstruite ouvre une nouvelle époque
 du journal (`rebuild_meta`).
 
-`compare` met les deux bases côte à côte : soldes par compte, écritures, catégorie courante de
-chaque écriture, totaux mensuels par catégorie, notes, étiquettes, budgets, points de contrôle,
-statuts des imports, opérations, positions, cours, change, compositions des fonds, virements
-appariés et abonnements. Seuls des compteurs et des clés opaques (identifiants
-d'écriture, mois, catégories) sortent, jamais un montant ni un libellé.
+La comparaison des deux bases est dans compare.py.
 
 Écart attendu : une catégorie posée par une règle depuis désactivée ou modifiée, que la base
 d'origine garde et que le rejeu (avec les règles finales) ne reproduit pas.
@@ -28,8 +24,11 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import Connection, Engine, text
 
 from hub.core.errors import Problem
-from hub.domains.finance import hashing, importer, ledger, rules
-from hub.domains.finance.viac import ViacError
+from hub.domains.finance.classement.app import rules
+from hub.domains.finance.port import Finance
+from hub.domains.finance.registre.app import ledger, opening
+from hub.domains.finance.registre.model import errors, hashing
+from hub.domains.finance.sources.infra.viac import ViacError
 from hub.kernel.clock import now_iso
 from hub.platform import secrets
 from hub.platform.db import begin_immediate
@@ -37,7 +36,6 @@ from hub.platform.logging import get_logger
 
 if TYPE_CHECKING:
     from hub.core.domain import LocalHandler
-    from hub.domains.finance.domain import FinanceDomain
 
 log = get_logger("hub.finance.rebuild")
 
@@ -52,7 +50,6 @@ REFERENCE_KINDS = frozenset(
         "record_debt_balance",
     }
 )
-EXAMPLES = 5
 
 
 @dataclass(frozen=True)
@@ -173,14 +170,14 @@ def _openings(src: Connection, dst: Connection) -> int:
         )
     ).fetchall()
     for account_id, on, amount, currency in rows:
-        importer.open_account(dst, account_id, on, int(amount), currency)
+        opening.open_account(dst, account_id, on, int(amount), currency)
     return len(rows)
 
 
 # --- rejeu ----------------------------------------------------------------------------------
 
 
-def _replay_import(target: FinanceDomain, row: Mapping[str, Any], stmts: list[Any]) -> bool:
+def _replay_import(target: Finance, row: Mapping[str, Any], stmts: list[Any]) -> bool:
     """Recrée l'import sous le même identifiant puis l'applique depuis son archive. Un fichier
     refusé ou ignoré (attestation) est recopié tel quel : il n'a rien écrit."""
     service = target.importer
@@ -211,7 +208,7 @@ def _replay_import(target: FinanceDomain, row: Mapping[str, Any], stmts: list[An
     return True
 
 
-def _replay_proposal(target: FinanceDomain, p: Applied) -> str | None:
+def _replay_proposal(target: Finance, p: Applied) -> str | None:
     """None si rejouée, sinon le motif de l'abandon."""
     if p.kind in REFERENCE_KINDS:
         return "reference"
@@ -231,9 +228,7 @@ def _replay_proposal(target: FinanceDomain, p: Applied) -> str | None:
     return None
 
 
-def rebuild(
-    source: FinanceDomain, target: FinanceDomain, proposals: list[Applied]
-) -> RebuildReport:
+def rebuild(source: Finance, target: Finance, proposals: list[Applied]) -> RebuildReport:
     report = RebuildReport()
     target.migrate(seed=False)
     target.importer.on_applied = None  # instantanés recalculés une fois, à la fin
@@ -279,7 +274,7 @@ def rebuild(
             try:
                 if _replay_import(target, row, stmts.get(row["id"], [])):
                     report.imports += 1
-            except (importer.ImportRefused, secrets.SecretsError, OSError, ViacError) as exc:
+            except (errors.ImportRefused, secrets.SecretsError, OSError, ViacError) as exc:
                 report.ok = False
                 report.skip("archive_unavailable")
                 log.warning("rebuild.import_failed", import_id=row["id"], error=type(exc).__name__)
@@ -308,105 +303,3 @@ def rebuild(
 
 
 # --- comparaison ----------------------------------------------------------------------------
-
-
-Query = Callable[[Connection], dict[Any, Any]]
-
-
-def _q(sql: str) -> Query:
-    def run(conn: Connection) -> dict[Any, Any]:
-        out: dict[Any, Any] = {}
-        for r in conn.execute(text(sql)):
-            key = r[0] if len(r) == 2 else tuple(r[:-1])
-            out[key] = r[-1]
-        return out
-
-    return run
-
-
-def _lines(conn: Connection) -> dict[Any, Any]:
-    out: dict[str, list[tuple[str, int]]] = {}
-    for entry_id, category, amount in conn.execute(
-        text(
-            "SELECT e.id, a.category_id, a.amount_minor FROM v_entry_allocation a "
-            "JOIN entries e ON e.seq = a.entry_seq WHERE a.category_id IS NOT NULL"
-        )
-    ):
-        out.setdefault(entry_id, []).append((category, int(amount)))
-    return {k: sorted(v) for k, v in out.items()}
-
-
-CHECKS: dict[str, Query] = {
-    "balances": _q("SELECT account_id, sum(amount_minor) FROM entries GROUP BY account_id"),
-    "entries": _q(
-        "SELECT id, account_id || '|' || kind || '|' || booking_date || '|' || amount_minor "
-        "FROM entries"
-    ),
-    "categories": _lines,
-    "monthly_categories": _q(
-        "SELECT substr(booking_date, 1, 7), coalesce(category_id, ''), sum(amount_minor) "
-        "FROM v_entry_allocation GROUP BY 1, 2"
-    ),
-    "notes": _q(
-        "SELECT e.id, count(*) FROM notes n JOIN entries e ON e.seq = n.entry_seq GROUP BY e.id"
-    ),
-    "taggings": _q(
-        "SELECT e.id, t.tag_id, 1 FROM v_taggings t JOIN entries e ON e.seq = t.entry_seq"
-    ),
-    "budgets": _q("SELECT category_id, valid_from, monthly_minor || ' ' || currency FROM budgets"),
-    "checkpoints": _q("SELECT account_id, on_date, kind, amount_minor FROM checkpoints"),
-    "imports": _q("SELECT id, status FROM imports"),
-    "trades": _q(
-        "SELECT dedup_key, account_id || '|' || quantity || '|' || amount_minor FROM trades"
-    ),
-    "holdings": _q(
-        "SELECT account_id, on_date, isin, quantity || '|' || value_minor FROM holdings"
-    ),
-    "prices": _q("SELECT isin, on_date, source, price FROM prices"),
-    "fx": _q("SELECT on_date, base, quote, source, rate FROM fx_rates"),
-    "compositions": _q(
-        "SELECT isin, dimension, bucket, weight || '|' || on_date FROM compositions"
-    ),
-    # tables dérivées, recalculées après le rejeu
-    "transfers": _q(
-        "SELECT d.id, c.id, l.method FROM transfer_links l "
-        "JOIN entries d ON d.seq = l.debit_seq JOIN entries c ON c.seq = l.credit_seq"
-    ),
-    "recurring": _q(
-        "SELECT key, cadence || '|' || amount_minor || '|' || next_date FROM recurring"
-    ),
-}
-
-
-@dataclass
-class CompareReport:
-    checks: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-    @property
-    def ok(self) -> bool:
-        return all(c["differences"] == 0 for c in self.checks.values())
-
-    def public(self) -> dict[str, Any]:
-        return {"ok": self.ok, "checks": self.checks}
-
-
-def _key(k: Any) -> str:
-    return "/".join(map(str, k)) if isinstance(k, tuple) else str(k)
-
-
-def compare(a: Engine, b: Engine) -> CompareReport:
-    report = CompareReport()
-    with a.connect() as ca, b.connect() as cb:
-        for name, query in CHECKS.items():
-            left, right = query(ca), query(cb)
-            differing = sorted(
-                (_key(k) for k in left.keys() | right.keys() if left.get(k) != right.get(k)),
-            )
-            report.checks[name] = {
-                "source": len(left),
-                "rebuilt": len(right),
-                "differences": len(differing),
-                # clés seules : identifiants d'écriture, comptes, mois, catégories
-                "examples": differing[:EXAMPLES] if name not in ("balances",) else [],
-            }
-    return report

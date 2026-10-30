@@ -26,7 +26,7 @@ COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY alembic.ini ./
 COPY --from=src /hub ./hub
-COPY deploy/crontab deploy/brain-crontab deploy/settings.toml ./deploy/
+COPY deploy/crontab deploy/settings.toml ./deploy/
 # dépendances déjà compilées à l'étape précédente : seul le paquet hub l'est ici
 RUN UV_COMPILE_BYTECODE=0 uv sync --frozen --no-dev --no-editable \
  && python -m compileall -q /srv/hub/venv/lib/python3.12/site-packages/hub
@@ -40,9 +40,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 hub \
  && useradd --uid 10001 --gid 10001 --home-dir /srv/hub --shell /usr/sbin/nologin hub \
- && mkdir -p /srv/hub/data /srv/hub/archive /srv/hub/backup /srv/hub/inbox /srv/hub/brain \
+ && mkdir -p /srv/hub/data /srv/hub/archive /srv/hub/backup /srv/hub/inbox \
  && chown -R 10001:10001 /srv/hub \
- && chmod 0700 /srv/hub/data /srv/hub/archive /srv/hub/backup /srv/hub/brain
+ && chmod 0700 /srv/hub/data /srv/hub/archive /srv/hub/backup
 COPY --from=build /srv/hub/venv /srv/hub/venv
 COPY --from=build /srv/hub/app /srv/hub/app
 ENV PATH=/srv/hub/venv/bin:$PATH \

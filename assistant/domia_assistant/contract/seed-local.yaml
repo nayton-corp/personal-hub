@@ -1,0 +1,191 @@
+# Maison de démonstration (Mock) des tests et de l'e2e. Le Dev démarre sur seed-maison.yaml, la maison de Client 0.
+# Config version 15 (docs/config-reference.md) : la pièce observe, chaque lampe porte sa loi.
+# Couvre les cas de la revue : salon FP2 + meuble TV jamais allumé par la loi, couloir sans lux (C9),
+# chambre sans allumage la nuit, bureau sans capteur (R20), bouton sensor.*_action (H6) et
+# télécommande event.* à tokens button_N_* (H7′), et trois appareils (domain.md §3) : la box du salon, jamais éteinte
+# depuis Domia, la télé du salon, éteinte par sa loi (Nuit, Absent, 30 min de veille), et le PC du bureau sur une
+# prise qui mesure sa puissance, sans loi. Trois faux volets (spec des ouvrants §11), sur les ouvertures du plan de Client 0
+# qui n'en a pas encore : la baie du séjour (avec un contact, pour tester le garde-fou), la fenêtre de la chambre (qui ne
+# sait que monter et descendre) et les stores à lamelles du jardin d'hiver. Jamais dans le vrai HA. Sans règle ici :
+# l'e2e 23 donne à la baie une position en Nuit (jamais une règle qui dépend de l'heure du jour). Un thermomètre au
+# salon, pour le seuil de la protection solaire. Deux faux robots (spec des robots §12) : le robot de démo du salon sait
+# tout faire (zones, puissance, pause, localiser) et règle le mode et les passages de sa base ; le petit robot de la
+# chambre ne sait que démarrer, s'arrêter et rentrer. Le couloir n'a pas de zone HA : le robot ne peut pas y aller seul.
+# Le robot de démo a une carte (sa position, ses pièces, le plan de Client 0 tourné d'un quart de tour) et un capteur
+# d'erreur ; la télécommande de la chambre lance son programme « Quotidien ». Quatre faux émetteurs (spec du climat §3) :
+# le thermostat du salon (20 °C en Jour, 17 en Nuit, 7 en Absent), celui de la chambre, dont la fenêtre a un contact
+# (le hors-gel de CL1), le radiateur à fil pilote du bureau avec un thermomètre, et la clim du bureau, sans consigne
+# réglée (une commande seulement ; le froid est le lot 3.6). Jamais dans le vrai HA. Deux personnes (spec de la situation
+# proposée §4, §14) : Alex, suivie par l'app compagnon (TRUSTED), avec l'état de charge et le mode Sommeil de son téléphone,
+# et Sam, que le routeur voit (HINT) ; la porte d'entrée du couloir (entrance) ; la chambre (bedroom) ; les cinq auteurs
+# de situation, à leurs défauts. Le Mock les crée à la maison, téléphones ni en charge ni en Sommeil.
+version: 28
+
+house:
+  name: Maison Dev (Mock)
+  timezone: Europe/Zurich
+  situation_default: DAY
+
+rooms:
+  - id: living_room
+    name: Salon
+    ha_area: salon
+    vacant_after_sec: 120
+    depart_after_sec: 1800
+    lights:
+      - id: living_ceiling
+        name: Plafond
+        ha_entity_id: light.salon_plafond
+        dimmable: true
+        dark_below_lux: 20
+        situations:
+          DAY: { auto_on: true, brightness: 80 }
+          NIGHT: { auto_on: true, brightness: 20 }
+          AWAY: { auto_on: false, brightness: 50 }
+      - id: living_tv
+        name: Meuble TV
+        ha_entity_id: light.meuble_tv
+        dimmable: true
+        situations:                         # jamais allumé par la loi, éteint à la vacance
+          DAY: { auto_on: false }
+          NIGHT: { auto_on: false }
+          AWAY: { auto_on: false }
+    sensors:
+      - { id: living_occ, name: Présence salon, kind: OCCUPANCY, ha_entity_id: binary_sensor.salon_presence }
+      - { id: living_lux, name: Lux salon, kind: LUX, ha_entity_id: sensor.salon_light }
+      - { id: living_bay_contact, name: Contact baie, kind: CONTACT, ha_entity_id: binary_sensor.salon_baie_contact, opening: o_baie_sejour }
+      - { id: living_temp, name: Température salon, kind: TEMPERATURE, ha_entity_id: sensor.salon_temperature }
+      - { id: living_humidity, name: Humidité salon, kind: HUMIDITY, ha_entity_id: sensor.salon_humidite }
+    appliances:
+      - { id: living_box, name: Box internet, icon: ROUTER, ha_entity_id: switch.box_internet, never_off: true }
+      - { id: living_av, name: Télé, icon: TV, ha_entity_id: switch.salon_tv, power_sensor: sensor.salon_tv_power, standby_below_w: 10, standby_off_after_sec: 1800, situations: { NIGHT: { turn_off: true }, AWAY: { turn_off: true } } }
+    covers:
+      - { id: living_bay, name: Baie, ha_entity_id: cover.salon_baie, opening: o_baie_sejour, travel_sec: 40 }
+    emitters:
+      - { id: living_thermostat, name: Thermostat salon, ha_entity_id: climate.salon_thermostat, situations: { DAY: { setpoint_c: 20 }, NIGHT: { setpoint_c: 17 }, AWAY: { setpoint_c: 7 } } }
+    machines:
+      - id: robot_demo
+        name: Robot
+        ha_entity_id: vacuum.robot_demo
+        translation:                        # comment il entend Domia (spec des recettes §4, de l'ordre §3)
+          what:
+            VACUUM: { select.robot_demo_intelligent: Éteint, select.robot_demo_mode: Aspirer }
+            MOP: { select.robot_demo_intelligent: Éteint, select.robot_demo_mode: Laver }
+            BOTH: { select.robot_demo_intelligent: Éteint, select.robot_demo_mode: Aspirer et laver }
+            AUTO: { select.robot_demo_intelligent: Quotidien }
+          suction: { QUIET: { fan_speed: Silencieux }, NORMAL: { fan_speed: Standard }, STRONG: { fan_speed: Turbo }, MAX: { fan_speed: Max } }
+          water: { LOW: { select.robot_demo_eau: Peu }, MEDIUM: { select.robot_demo_eau: Moyen }, HIGH: { select.robot_demo_eau: Beaucoup } }
+          passes: { "1": { number.robot_demo_passages: "1" }, "2": { number.robot_demo_passages: "2" } }
+          room_order: { living_room: select.robot_demo_ordre_salon, bedroom: select.robot_demo_ordre_chambre }
+        programs:
+          - { id: quotidien, name: Quotidien, rooms: [living_room, bedroom], recipe: { what: VACUUM, suction: NORMAL } }
+          - { id: grand_menage, name: Grand ménage, rooms: [], recipe: { what: BOTH, suction: STRONG, water: HIGH, passes: 2 } }
+        show:
+          sensors: [sensor.robot_demo_brosse, sensor.robot_demo_filtre]
+          buttons: [button.robot_demo_vider]
+          current_room: sensor.robot_demo_piece
+          map: camera.robot_demo_carte
+          error: sensor.robot_demo_erreur
+
+  - id: hallway
+    name: Couloir
+    vacant_after_sec: 60
+    lights:
+      - id: hallway_ceiling
+        name: Plafond couloir
+        ha_entity_id: switch.couloir_plafond
+        dimmable: false
+        situations:
+          AWAY: { auto_on: true }           # le couloir s'allume même en absence (défaut : non)
+    sensors:
+      - { id: hallway_occ, name: Présence couloir, kind: OCCUPANCY, ha_entity_id: binary_sensor.couloir_presence }
+      - { id: entrance_door, name: Porte d'entrée, kind: CONTACT, ha_entity_id: binary_sensor.porte_entree_contact, entrance: true }
+
+  - id: bedroom
+    name: Chambre
+    ha_area: chambre
+    bedroom: true                           # les indices du Coucher ; exclue du Réveil
+    vacant_after_sec: 90
+    depart_after_sec: 900
+    lights:
+      - id: bedroom_lamp
+        name: Lampe chambre
+        ha_entity_id: light.lampe_chambre
+        dimmable: true
+        dark_below_lux: 15
+        situations:
+          NIGHT: { auto_on: false }         # pas d'allumage la nuit ; AWAY : défaut (non)
+    sensors:
+      - { id: bedroom_occ, name: Présence chambre, kind: OCCUPANCY, ha_entity_id: binary_sensor.chambre_presence }
+      - { id: bedroom_lux, name: Lux chambre, kind: LUX, ha_entity_id: sensor.chambre_light }
+      - { id: bedroom_co2, name: CO2 chambre, kind: CO2, ha_entity_id: sensor.chambre_co2 }
+      - { id: bedroom_window_contact, name: Contact fenêtre chambre, kind: CONTACT, ha_entity_id: binary_sensor.chambre_fenetre_contact, opening: o_fenetre_chambre }
+    covers:
+      - { id: bedroom_window, name: Fenêtre chambre, ha_entity_id: cover.chambre_fenetre, opening: o_fenetre_chambre }
+    emitters:
+      - { id: bedroom_thermostat, name: Thermostat chambre, ha_entity_id: climate.chambre_thermostat, situations: { DAY: { setpoint_c: 19 }, NIGHT: { setpoint_c: 17 }, AWAY: { setpoint_c: 7 } }, window_open_after_sec: 60 }
+    machines:
+      - { id: robot_basique, name: Petit robot, ha_entity_id: vacuum.robot_basique }
+
+  - id: office
+    name: Bureau
+    ha_area: bureau
+    vacant_after_sec: 60
+    lights:
+      - id: office_lamp
+        name: Lampe bureau
+        ha_entity_id: light.bureau
+        dimmable: true
+    appliances:
+      - { id: office_pc, name: Bureau (PC), icon: COMPUTER, ha_entity_id: switch.bureau_pc, power_sensor: sensor.bureau_pc_power, standby_below_w: 10 }
+    covers:
+      - { id: office_blinds, name: Stores, ha_entity_id: cover.bureau_stores, opening: o_baie_jardin }
+    emitters:
+      - { id: office_radiator, name: Radiateur bureau, ha_entity_id: select.bureau_fil_pilote, pilot_wire: { comfort_c: 20, eco_c: 17 }, situations: { DAY: { setpoint_c: 20 }, NIGHT: { setpoint_c: 17 }, AWAY: { setpoint_c: 7 } } }
+      - { id: office_ac, name: Clim bureau, ha_entity_id: climate.bureau_clim, cool: true, situations: { DAY: { cool_above_c: 26 } }, min_change_interval_sec: 60 }
+
+buttons:
+  - { id: entry_btn, name: Bouton entrée, ha_entity_id: sensor.entrance_button_action }
+  - { id: bedroom_remote, name: Télécommande chambre, ha_entity_id: event.telecommande_chambre }
+
+# Tokens bruts (H7′), relevés sur les appareils de Client 0 : Sonoff R5 = button_N_single | button_N_double | button_N_long ;
+# molettes Aqara (appui) = single | double | hold ; leur rotation : une association Dim sur leur event.* (domain.md §8).
+bindings:
+  - { id: entry_next, button_id: entry_btn, trigger: single, target: { kind: HOUSE }, action: NextSituation }
+  - { id: entry_away, button_id: entry_btn, trigger: double, target: { kind: HOUSE }, action: SetSituation, action_payload: { situation: AWAY } }
+  - { id: entry_hold_release, button_id: entry_btn, trigger: hold, target: { kind: ROOM, id: hallway }, action: Release }
+  - { id: remote_night, button_id: bedroom_remote, trigger: button_1_single, target: { kind: HOUSE }, action: SetSituation, action_payload: { situation: NIGHT } }
+  - { id: remote_day, button_id: bedroom_remote, trigger: button_1_double, target: { kind: HOUSE }, action: SetSituation, action_payload: { situation: DAY } }
+  - { id: remote_bedroom_lamp, button_id: bedroom_remote, trigger: button_2_single, target: { kind: LIGHT, ids: [bedroom_lamp] }, action: Toggle }
+  - { id: remote_bedroom_off, button_id: bedroom_remote, trigger: button_2_long, target: { kind: ROOM, id: bedroom }, action: TurnOffRoom }
+  - { id: remote_keep, button_id: bedroom_remote, trigger: button_3_single, target: { kind: ROOM, id: bedroom }, action: KeepAsIs }
+  - { id: remote_office_pc, button_id: bedroom_remote, trigger: button_4_single, target: { kind: APPLIANCE, id: office_pc }, action: Toggle }
+  - { id: remote_robot, button_id: bedroom_remote, trigger: button_4_double, target: { kind: MACHINE, id: robot_demo }, action: StartProgram, action_payload: { program_id: quotidien } }
+
+people:
+  - id: alex
+    name: Alex
+    presences: [{ entity: person.alex, via: APP }]   # l'app compagnon : elle a toujours raison
+    phone: { charging: sensor.iphone_alex_battery_state, focus: binary_sensor.iphone_alex_focus }
+  - id: sam
+    name: Sam
+    presences: [{ entity: device_tracker.iphone_sam, via: WIFI }]  # le routeur : ne compte qu'après la porte
+
+situation_changes:                          # les cinq, aux défauts de la spec (§5)
+  departure: { mode: AUTO, away_after_min: 10 }
+  arrival: { mode: AUTO }
+  bedtime:
+    mode: PROPOSE
+    window: { from: "21:30", to: "02:00" }
+    calm_for_sec: 1200
+    signals: [PHONE_CHARGING, SLEEP_FOCUS, BEDROOM_LAMP_OFF]
+    min_signals: 1
+  wake: { mode: PROPOSE, not_before: "05:30", calm_before_sec: 3600 }
+  schedule:
+    - { at: "01:00", from: DAY, to: NIGHT }
+  expires_after_sec: 1800
+  mute_after_refusal_sec: 3600
+
+estimates:                                  # ce que Domia devine (spec des faits estimés), en observation
+  - { id: salon_tv, kind: WATCHING_TV, room: living_room, appliance: living_av, mode: OBSERVE }
+  - { id: chambre_lit, kind: IN_BED, room: bedroom, mode: OBSERVE }

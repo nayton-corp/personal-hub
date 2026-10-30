@@ -70,6 +70,8 @@ class AppModuleOut(BaseModel):
     home_cards: list[HomeCardOut]
     settings: list[SettingsSectionOut]
     cards: str | None
+    home: str | None = None
+    module: str | None = None
 
 
 class ImporterOut(BaseModel):

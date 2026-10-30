@@ -1,6 +1,6 @@
-# Raccourcis. Développement : make install / make check. Installation : docs/installation.md.
+# Raccourcis. Développement : make install / make check. Installation : docs/exploitation/installation.md.
 .PHONY: init install check lint test migrations-test upgrade-test audit image deploy restore-test preflight dev openapi \
-	release tag web trial
+	release tag web trial reference
 
 install:
 	uv sync --frozen
@@ -36,6 +36,18 @@ audit:  # vulnérabilités connues des dépendances livrées (images hub et coll
 	  --progress-spinner off; status=$$?; rm -f .audit-requirements.txt; exit $$status
 
 check: lint test migrations-test
+
+assistant-test:  # l'assistant (assistant/) : ruff, mypy, pytest, dans assistant/.venv
+	cd assistant && python3.12 -m venv .venv && .venv/bin/pip -q install -r requirements-dev.txt -e .. && \
+	  .venv/bin/python -m ruff check . && .venv/bin/python -m ruff format --check . && \
+	  .venv/bin/python -m mypy && .venv/bin/python -m pytest -q
+	cd assistant/eventkit && ../.venv/bin/pip -q install -r requirements-dev.txt && ../.venv/bin/python -m pytest -q
+
+domia-contract:  # reprend le contrat avec Domia depuis un clone : make domia-contract DOMIA=~/domia
+	scripts/domia_contract.sh "$(DOMIA)"
+
+reference:  # docs/reference/ (routes, outils, connecteurs), après un changement voulu
+	UPDATE_REFERENCE=1 uv run pytest -q tests/test_reference_docs.py
 
 openapi:  # après un changement voulu du contrat d'API
 	UPDATE_OPENAPI=1 uv run pytest -q tests/test_openapi_snapshot.py

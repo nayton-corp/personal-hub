@@ -1,11 +1,11 @@
-"""Commande `hub-brain`, dans le conteneur `brain` (profil compose « brain »).
+"""Commande `hub-brain`, en natif sur le Mac (S10 : plus de conteneur ; le classement du matin
+passe par l'assistant, `python -m domia_assistant classify`).
 
 hub-brain mcp [--token brain|aggregates]   serveur MCP sur stdio (docker exec -i …)
 hub-brain ask "combien en restaurants ce mois ?"
 hub-brain suggest [--dry-run]              suggestions de catégorie (commerçants jamais vus)
 hub-brain catchup [--limit N] [--dry-run]  rattrapage : une règle proposée par commerçant à classer
 hub-brain check                            hub, modèle, et une question de contrôle
-hub-brain daemon                           tâches planifiées (deploy/brain-crontab)
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -34,12 +33,10 @@ from hub.brain.suggest import (
 )
 from hub.brain.toolbox import Toolbox
 from hub.kernel.clock import local_tz
-from hub.platform import cron
 from hub.platform import logging as hub_logging
 from hub.platform.logging import get_logger
 from hub.platform.settings import get_settings
 
-CRONTAB = Path("/srv/hub/app/deploy/brain-crontab")
 CHECK_QUESTION = "Combien ai-je dépensé en restaurants ce mois-ci ?"
 CHECK_CATEGORY = "restaurants"
 log = get_logger("hub.brain")
@@ -214,15 +211,6 @@ def check() -> None:
         ok = False
     if not ok:
         raise typer.Exit(1)
-
-
-@app.command()
-def daemon(
-    crontab: Annotated[Path, typer.Option(help="tâches du brain")] = CRONTAB,
-) -> None:
-    """Boucle du conteneur : suggestions de catégorie chaque matin."""
-    hub_logging.configure(get_settings().log_level)
-    cron.run_forever(crontab)
 
 
 def main() -> None:  # pragma: no cover - point d'entrée

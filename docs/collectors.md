@@ -3,7 +3,7 @@
 Les collecteurs déposent les exports officiels dans `~/PersonalHub/inbox/`, où l'importeur les
 traite comme un fichier déposé à la main. Depuis G4 (« hub générique »), ce que l'instance
 collecte est une liste de **connexions** gardée dans `core.db` : chaque connexion est l'usage
-d'un connecteur du catalogue (déclaré par la finance dans `hub/domains/finance/connectors.py`, lu par le cœur au point d'entrée `hub.connectors`), avec un identifiant (`bcf`,
+d'un connecteur du catalogue (déclaré par la finance dans `hub/domains/finance/sources/app/connectors.py`, lu par le cœur au point d'entrée `hub.connectors`), avec un identifiant (`bcf`,
 `revolut`, `n26`…), un nom, un horaire, des réglages sans secret et des secrets chiffrés.
 Deux services les exécutent :
 
@@ -76,7 +76,7 @@ opérations arrivent dans la journée. Un horaire réglé à la main reste celui
 
 **Depuis le terminal**, pour le dépannage :
 
-Les commandes supposent l'alias `hubc` de [mac.md](mac.md) et partent du clone du dépôt
+Les commandes supposent l'alias `hubc` de [mac.md](exploitation/mac.md) et partent du clone du dépôt
 (`~/personal-hub/personal-hub`). `hub` se lance dans le conteneur `scheduler`, qui a la clé age :
 
 ```
@@ -148,7 +148,7 @@ Si la banque a changé sa page, seul `hub/collectors/<banque>/selectors.toml` es
 
 ## Mise en place (une fois)
 
-Les commandes supposent l'alias `hubc` de [mac.md](mac.md) et partent du clone du dépôt
+Les commandes supposent l'alias `hubc` de [mac.md](exploitation/mac.md) et partent du clone du dépôt
 (`~/personal-hub/personal-hub`). Les étapes 3 et suivantes se font aussi dans l'app (carte
 Connexions), sauf les premiers passages qui demandent un code tapé au terminal.
 

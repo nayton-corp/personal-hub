@@ -61,6 +61,7 @@ class ExternalHandler(Protocol):
 
 
 Inverse = Callable[[dict[str, Any], dict[str, Any]], tuple[str, dict[str, Any]]]
+Tier = Literal["human", "auto_digest", "auto"]
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ class ProposalKind:
     inverse: Inverse | None = None  # (params, result) -> (kind, params) qui annule
     ai_allowed: bool = False  # la portée <domaine>:propose peut-elle le créer ?
     external: bool = False  # vrai pour un ExternalHandler (le Protocol n'est pas discriminant)
+    tier: Tier = "human"  # palier par défaut ; `hub proposals policy` le change (core.policies)
 
     def __post_init__(self) -> None:
         if self.reversible and self.inverse is None:
@@ -100,9 +102,10 @@ class ToolCaller(Protocol):
 
 @dataclass(frozen=True)
 class McpTool:
-    """Outil pour l'assistant (lot 7). Une portée `<domaine>:aggregates` est aussi ouverte à
-    `<domaine>:read`. `call` reçoit des arguments déjà validés contre `input_schema` par le
-    domaine lui-même et renvoie du JSON (montants en texte, jamais de flottant)."""
+    """Outil pour l'assistant (lot 7). Une portée `<domaine>:aggregates` (ou `:household`) est
+    aussi ouverte à `<domaine>:read`. `call` reçoit des arguments déjà validés contre
+    `input_schema` par le domaine lui-même et renvoie du JSON (montants en texte, jamais de
+    flottant)."""
 
     name: str
     description: str
@@ -116,7 +119,8 @@ class Hit:
     urn: str
     title: str
     date: str | None
-    score: int  # plus grand = plus pertinent ; entier, pas de flottant
+    score: int  # plus grand = plus pertinent, dans le domaine seulement (S9 fusionne par rang)
+    excerpt: str | None = None  # le passage trouvé, court ; jamais un montant
 
 
 @dataclass(frozen=True)
@@ -158,6 +162,10 @@ class Domain(Protocol):
 
     def observations(self, limit: int) -> list[Observation]:
         """Constats récents, les plus récents d'abord (budget dépassé, abonnement en hausse)."""
+        ...
+
+    def process_inbox(self) -> dict[str, int]:
+        """Traite ce qui attend dans `inbox/<domaine>/` (S4) ; compteurs seulement."""
         ...
 
     def engine(self) -> Engine:

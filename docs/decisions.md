@@ -7,6 +7,127 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-025 · Les documents se reconstruisent de leur archive ; « foyer » se marque (30.10.2026)
+
+- **Contexte** : la bibliothèque de l'assistant de Domia vivait dans un dossier (fiches YAML,
+  documents à côté), lisible par tout le foyer, sans historique ni sauvegarde propre.
+- **Décision** : un domaine Documents dans le hub. Fiches, documents et marques sont des lignes
+  en ajout seul, chaînées ; chaque fichier et chaque ligne validée vont aussi dans une archive
+  chiffrée par age, dont la base se reconstruit seule. Un document est privé tant qu'il n'est
+  pas marqué « foyer » ; les fiches d'objets, elles, sont lisibles par tout le foyer. Une
+  portée de plus, `<domaine>:household`, ouvre cette part-là. La reprise de
+  `~/Domia/Bibliothèque/` se fait une fois ; l'assistant lit ensuite le hub.
+- **Conséquence** : `hub documents rebuild --check` prouve la reconstruction ; l'assistant ne
+  lit plus de dossier local. Un PDF de la racine de la boîte d'entrée reste à la finance : un
+  document PDF se dépose dans `inbox/documents/`.
+
+## D-024 · L'agenda ne copie rien : il lit et écrit par le pont (30.10.2026)
+
+- **Contexte** : Rappels et Calendrier sont déjà synchronisés par iCloud sur tous les appareils
+  du foyer ; une copie dans le hub divergerait.
+- **Décision** : le domaine Agenda lit au pont EventKit (sur le Mac, joint par
+  `host.docker.internal`) et n'écrit que par des propositions à effet externe : ajouter un
+  rappel, un événement, cocher. Jamais de suppression. Sa base ne tient que la trace des envois
+  (`sent`), pour l'idempotence et la réconciliation. La liste de courses passe au palier `auto`.
+- **Conséquence** : le Mac en veille, l'agenda se dit indisponible sans que la santé du hub
+  baisse. Le domaine est monté sans une ligne du cœur : paquet, point d'entrée, module de l'app.
+
+## D-023 · Le palier par défaut vient du type, la personne le change (30.10.2026)
+
+- **Contexte** : `approval_policies` existait, vide et sans commande pour la remplir : tout
+  passait par une carte, même un article de plus sur la liste de courses.
+- **Décision** : un type de proposition déclare son palier par défaut (`ProposalKind.tier`,
+  `human` sauf mention) ; `hub proposals policy [DOMAINE [TYPE [PALIER|default]]]` les montre
+  et les change (`hub.core.policies`). Un jeton qui ne déclare pas `external_text = false`
+  reste à la carte, quel que soit le palier.
+- **Conséquence** : la liste de courses de l'agenda passe au palier `auto` ; tout autre effet
+  externe reste à la carte. Les commandes `hub proposals …` quittent `hub/cli.py`
+  (`hub/cli_proposals.py`).
+
+## D-022 · Plus de conteneur pour l'IA locale (30.10.2026)
+
+- **Contexte** : le conteneur `brain` joignait Ollama par `host.docker.internal` et chargeait son
+  propre modèle (qwen3:32b) à côté de celui de l'assistant de Domia : deux gros modèles qui se
+  chassaient de la mémoire du Mac.
+- **Décision** : l'assistant (`assistant/`) tourne en natif sur le Mac et fait le travail du
+  brain : la conversation avec le jeton des agrégats, le classement du matin
+  (`hub.classify_at`) avec le jeton `brain` et le même modèle résident, la passerelle MCP. Les
+  jetons restent dans `brain.enc.yaml`, chiffré par age. `hub.brain` reste une bibliothèque du
+  hub, que l'assistant installe à côté de lui ; `hub-brain` reste pour les gestes à la main.
+- **Conséquence** : le service `brain`, son volume, `deploy/brain-crontab` et la section
+  `[brain]` de `deploy/settings.toml` disparaissent ; le profil compose `brain` n'existe plus.
+
+## D-021 · L'assistant de Domia devient celui du hub, en paquet à part (30.10.2026)
+
+- **Contexte** : deux assistants (celui de Domia, mesuré au banc, et le brain du hub), deux
+  modèles qui se chassent de la mémoire du Mac. Domia est un produit pour d'autres foyers : un
+  foyer sans hub ne doit pas perdre son assistant.
+- **Décision** : l'assistant arrive dans `assistant/` tel quel, avec ses tests, son banc et le
+  pont Rappels/Calendrier. Il reste un paquet à part (`domia_assistant`, ses dépendances et sa
+  CI), utilisable avec Domia seul ; les outils du hub s'y ajoutent comme un module. Le contrat
+  avec l'API de Domia est figé dans `domia_assistant/contract/` (`DOMIA_VERSION` : la plus
+  ancienne version lue) et repris par `make domia-contract`. Les prénoms d'exemple deviennent
+  ceux des tests.
+- **Conséquence** : l'assistant du dépôt de Domia reste en service jusqu'à ce que celui-ci
+  passe le banc ; la bascule consiste à changer l'adresse que Domia relaie, le retour arrière à
+  la remettre.
+
+## D-020 · Recherche fusionnée par rang ; liens et constats tenus par le cœur (30.10.2026)
+
+- **Contexte** : `/api/search` triait les résultats de tous les domaines sur leurs scores bruts,
+  qui ne se comparent pas (bm25 de la finance, qui préfère les libellés courts, contre l'échelle
+  d'un autre domaine) : un domaine pouvait occuper toute la page. Les liens n'avaient pas de
+  geste pour se créer, et les alertes de la finance avaient leur route à elles.
+- **Décision** : chaque domaine classe ses résultats ; le cœur ne garde que le rang de chacun
+  dans son domaine et les fusionne (Reciprocal Rank Fusion, k = 60, en entiers). Un résultat
+  dit son domaine, son rang et le passage trouvé. Le cœur tient ses propres types de
+  proposition, `core/link` et son inverse `core/unlink`, appliqués dans `core.db` (qui gagne le
+  journal chaîné, `applied_proposals` et `events`) ; un jeton ne lie que des objets qu'il lit,
+  avec `core:propose`. `GET /api/observations` réunit les constats des domaines lisibles ; les
+  sentinelles de la finance y passent, `/api/finance/alerts` disparaît.
+- **Conséquence** : le premier résultat de chaque domaine passe avant le second de tous. Un
+  constat exige la lecture du domaine (il peut nommer une contrepartie). `hub verify` contrôle
+  aussi le journal de `core.db`.
+
+## D-019 · La finance en quatre sous-contextes, chacun en couches (29.10.2026)
+
+- **Contexte** : 45 modules à plat, douze au-delà de 400 lignes (l'importeur 1 424, les
+  propositions 1 281), des imports circulaires (`domain` ↔ `api`, importeur ↔ IBKR) cachés
+  dans des fonctions.
+- **Décision** : registre, classement (et budget), patrimoine, sources ; chacun en `interface`
+  → `app` → `infra` (formats et fichiers, sans base) → `model` (pur). Un sous-contexte n'importe
+  que ceux d'après lui : sources → patrimoine → classement → registre. Les bords du domaine
+  (`api`, `cli`, `tools`, `handlers`, `rebuild`) reçoivent un `port.Finance` au lieu de
+  `FinanceDomain` ; un autre domaine ne lit que `public.py`.
+- **Conséquence** : quatre contrats import-linter, sans écart ; plus aucun fichier de la finance
+  au-delà de 400 lignes. Une base construite avant le découpage, reconstruite après par
+  `hub finance rebuild`, se compare sans écart.
+
+## D-018 · L'app est une coquille qui monte les modules des domaines (29.10.2026)
+
+- **Contexte** : `finance.js` était à la fois la coquille et la finance : un nouveau domaine
+  aurait dû toucher la navigation, la barre d'onglets et la page des réglages.
+- **Décision** : `shell.js` (navigation, onglets, feuilles) et `sources.js` (page des
+  réglages, rubriques affichage, profil, sécurité, état du hub) ne nomment aucun domaine. Ils
+  lisent `/api/domains` et chargent les modules du manifeste : onglets, bloc d'accueil
+  (`home`), rubriques, module du domaine (`module` : démarrage, rendu commun, liens des
+  notifications). Un onglet ou une rubrique sans balisage reçoit une page générique. Les
+  manifestes du dernier lancement restent dans le navigateur pour démarrer hors ligne.
+- **Conséquence** : un domaine ajoute un onglet sans changer la coquille (test du domaine
+  factice). Ses écrans et ses rubriques ne reprennent ni ceux de la coquille ni ceux d'un
+  autre domaine (refusé au démarrage).
+
+## D-017 · Un jeton a toujours une date de fin (29.10.2026)
+
+- **Contexte** : un jeton de l'assistant volé lisait la finance sans limite de temps, et le
+  raccourci `brain` ouvrait le détail de la finance par défaut.
+- **Décision** : date de fin obligatoire (1 à 366 jours, 90 par défaut ; un an pour les jetons
+  d'avant et ceux des services collecteurs), alerte ntfy 14 jours avant, `hub token rotate`.
+  `brain` n'ouvre que `*:aggregates` ; `brain=finance,agenda` ajoute lecture et propositions des
+  domaines nommés.
+- **Conséquence** : un jeton fini est refusé (401) ; renouveler le jeton du brain fait partie
+  de l'exploitation, et l'alerte dit quelle commande lancer.
+
 ## D-016 · Le manifeste d'un domaine, v2 (29.10.2026)
 
 - **Contexte** : l'app, la boîte d'entrée et l'assistant connaissaient la finance par son nom.

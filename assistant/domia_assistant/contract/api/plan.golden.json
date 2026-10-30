@@ -1,0 +1,154 @@
+{
+  "revision" : 0,
+  "plan" : {
+    "plan_version" : 4,
+    "name" : "Maison de test",
+    "site" : {
+      "north_deg" : 0.0,
+      "latitude" : 46.8,
+      "longitude" : 7.15
+    },
+    "defaults" : {
+      "wall_height" : 2.5,
+      "wall_thickness" : 0.1
+    },
+    "walls" : [ {
+      "id" : "w_sud",
+      "from" : [ 0.0, 0.0 ],
+      "to" : [ 7.0, 0.0 ],
+      "thickness" : 0.2,
+      "height" : 2.5,
+      "kind" : "EXTERIOR"
+    }, {
+      "id" : "w_est",
+      "from" : [ 7.0, 0.0 ],
+      "to" : [ 7.0, 3.0 ],
+      "thickness" : 0.2,
+      "height" : 2.5,
+      "kind" : "EXTERIOR"
+    }, {
+      "id" : "w_nord",
+      "from" : [ 7.0, 3.0 ],
+      "to" : [ 0.0, 3.0 ],
+      "thickness" : 0.2,
+      "height" : 2.5,
+      "kind" : "EXTERIOR"
+    }, {
+      "id" : "w_ouest",
+      "from" : [ 0.0, 3.0 ],
+      "to" : [ 0.0, 0.0 ],
+      "thickness" : 0.2,
+      "height" : 2.5,
+      "kind" : "EXTERIOR"
+    }, {
+      "id" : "w_milieu",
+      "from" : [ 4.0, 0.0 ],
+      "to" : [ 4.0, 3.0 ],
+      "thickness" : 0.1,
+      "height" : 2.5,
+      "kind" : "INTERIOR"
+    }, {
+      "id" : "w_cave",
+      "from" : [ 5.55, 0.0 ],
+      "to" : [ 5.55, 3.0 ],
+      "thickness" : 0.1,
+      "height" : 2.5,
+      "kind" : "INTERIOR"
+    } ],
+    "openings" : [ {
+      "id" : "o_fenetre",
+      "wall" : "w_sud",
+      "offset" : 1.0,
+      "width" : 2.0,
+      "height" : 1.2,
+      "sill" : 0.9,
+      "kind" : "WINDOW",
+      "swing" : null,
+      "panes" : 2,
+      "door" : null
+    }, {
+      "id" : "o_porte",
+      "wall" : "w_milieu",
+      "offset" : 1.0,
+      "width" : 0.9,
+      "height" : 2.05,
+      "sill" : 0.0,
+      "kind" : "DOOR",
+      "swing" : "IN_LEFT",
+      "panes" : 1,
+      "door" : null
+    }, {
+      "id" : "o_verriere",
+      "wall" : "w_cave",
+      "offset" : 0.2,
+      "width" : 2.6,
+      "height" : 2.2,
+      "sill" : 0.0,
+      "kind" : "GLAZED_PARTITION",
+      "swing" : null,
+      "panes" : 3,
+      "door" : {
+        "offset" : 1.6,
+        "width" : 0.8,
+        "swing" : "OUT_RIGHT"
+      }
+    } ],
+    "spaces" : [ {
+      "id" : "s_salon",
+      "name" : "Salon",
+      "outline" : [ [ 0.1, 0.1 ], [ 3.95, 0.1 ], [ 3.95, 2.9 ], [ 0.1, 2.9 ] ],
+      "finish" : {
+        "floor" : "OAK_PARQUET",
+        "walls" : "WHITE_PAINT"
+      }
+    }, {
+      "id" : "s_couloir",
+      "name" : "Couloir",
+      "outline" : [ [ 4.05, 0.1 ], [ 5.5, 0.1 ], [ 5.5, 2.9 ], [ 4.05, 2.9 ] ],
+      "finish" : {
+        "floor" : "OAK_PARQUET",
+        "walls" : "WHITE_PAINT"
+      }
+    }, {
+      "id" : "s_cave",
+      "name" : "Cave",
+      "outline" : [ [ 5.6, 0.1 ], [ 6.9, 0.1 ], [ 6.9, 2.9 ], [ 5.6, 2.9 ] ],
+      "finish" : {
+        "floor" : "OAK_PARQUET",
+        "walls" : "WHITE_PAINT"
+      }
+    } ],
+    "objects" : [ {
+      "id" : "f_armoire",
+      "kind" : "FIXTURE",
+      "at" : [ 4.8, 2.5, 0.0 ],
+      "rotation" : 180.0,
+      "model" : "WARDROBE",
+      "size" : [ 1.2, 0.6, 2.2 ],
+      "options" : { },
+      "name" : null,
+      "color" : null
+    } ]
+  },
+  "places" : {
+    "rooms" : { },
+    "lights" : { },
+    "appliances" : { },
+    "covers" : {
+      "living_bay" : {
+        "opening" : "o_baie_sejour",
+        "status" : "UNKNOWN_OPENING"
+      },
+      "bedroom_window" : {
+        "opening" : "o_fenetre_chambre",
+        "status" : "UNKNOWN_OPENING"
+      },
+      "office_blinds" : {
+        "opening" : "o_baie_jardin",
+        "status" : "UNKNOWN_OPENING"
+      }
+    },
+    "machines" : { },
+    "emitters" : { }
+  }
+}

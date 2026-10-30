@@ -9,14 +9,16 @@ from pathlib import Path
 
 import pytest
 
-from hub.domains.finance import catalog, importer
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
-from hub.domains.finance.viac import ViacError
-from hub.domains.finance.viac import notice as viac_notice
-from hub.domains.finance.viac import report as viac_report
-from hub.domains.finance.viac import text as viac_text
-from hub.domains.finance.viac.apply import cash_ref, titles_ref
+from hub.domains.finance.patrimoine.app import account_list, holdings
+from hub.domains.finance.registre.app import catalog, opening
+from hub.domains.finance.sources.app import history, outcomes
+from hub.domains.finance.sources.app.viac import cash_ref, titles_ref
+from hub.domains.finance.sources.infra.files import Incoming
+from hub.domains.finance.sources.infra.viac import ViacError
+from hub.domains.finance.sources.infra.viac import notice as viac_notice
+from hub.domains.finance.sources.infra.viac import report as viac_report
+from hub.domains.finance.sources.infra.viac import text as viac_text
 from hub.platform.db import begin_immediate
 from tests.factories import viac as f
 from tests.finance.conftest import rows
@@ -173,11 +175,11 @@ def open_portfolio(domain: FinanceDomain, number: str = f.PORTFOLIO) -> tuple[st
     cash, titles = add_portfolio(domain, number)
     with begin_immediate(domain.engine()) as conn:
         for a in (cash, titles):
-            importer.open_account(conn, a, "2026-01-01", 0, "CHF")
+            opening.open_account(conn, a, "2026-01-01", 0, "CHF")
     return cash, titles
 
 
-def send(domain: FinanceDomain, *docs: str) -> importer.BatchReport:
+def send(domain: FinanceDomain, *docs: str) -> outcomes.BatchReport:
     return domain.importer.process(
         [Incoming(f"doc{i}.pdf", f.fake_pdf(t)) for i, t in enumerate(docs)]
     )
@@ -213,7 +215,7 @@ def test_buy_moves_cash_to_titles(viac: FinanceDomain) -> None:
     assert rows(viac, "SELECT price, source FROM prices") == [("100", "viac_notice")]
     assert viac.verify_ledger().ok
     # l'app liste les ordres d'un actif (journal d'un actif)
-    from hub.domains.finance import reads
+    from hub.domains.finance.registre.app import reads
 
     with viac.engine().connect() as conn:
         (t,) = reads.trades(conn, f.FUND_WORLD[1])
@@ -331,7 +333,7 @@ def test_viac_history(viac: FinanceDomain, tmp_path: Path) -> None:
     }
     for name, txt in docs.items():
         (folder / name).write_bytes(f.fake_pdf(txt))
-    report = importer.import_viac_history(viac.importer, folder)
+    report = history.import_viac_history(viac.importer, folder)
     assert report.ok, report.public()
     assert report.warnings == []
     (acc,) = report.accounts
@@ -345,14 +347,14 @@ def test_viac_history(viac: FinanceDomain, tmp_path: Path) -> None:
     openings = rows(viac, "SELECT booking_date, amount_minor FROM entries WHERE kind = 'opening'")
     assert openings == [("2026-03-01", 0), ("2026-03-01", 0)]
     # une deuxième reprise ne trouve rien de nouveau et n'écrit rien
-    again = importer.import_viac_history(viac.importer, folder)
+    again = history.import_viac_history(viac.importer, folder)
     assert again.ok
     assert again.batch["files"] == 0
 
 
 def test_viac_history_refuses_unknown_portfolio(viac: FinanceDomain, tmp_path: Path) -> None:
     (tmp_path / "a.pdf").write_bytes(f.fake_pdf(f.deposit(D1, "1000.00")))
-    report = importer.import_viac_history(viac.importer, tmp_path)
+    report = history.import_viac_history(viac.importer, tmp_path)
     assert not report.ok
     assert report.error is not None
     assert "add-portfolio" in report.error
@@ -362,7 +364,7 @@ def test_viac_history_refuses_unknown_portfolio(viac: FinanceDomain, tmp_path: P
 def test_viac_history_refuses_unreadable(viac: FinanceDomain, tmp_path: Path) -> None:
     add_portfolio(viac)
     (tmp_path / "a.pdf").write_bytes(f.fake_pdf("Lettre quelconque\nPortefeuille 3.100.200.300.01"))
-    report = importer.import_viac_history(viac.importer, tmp_path)
+    report = history.import_viac_history(viac.importer, tmp_path)
     assert not report.ok
     assert report.error is not None
     assert report.error.startswith("viac.unrecognized")
@@ -373,7 +375,7 @@ def test_viac_history_refuses_unreadable(viac: FinanceDomain, tmp_path: Path) ->
 
 
 def test_titles_are_valued_by_positions(viac: FinanceDomain) -> None:
-    from hub.domains.finance import insights, valuation
+    from hub.domains.finance.patrimoine.app import valuation
 
     open_portfolio(viac)
     send(viac, f.deposit(D1, "1000.00"), f.buy(D2, "9.5", "950.00"))
@@ -387,7 +389,7 @@ def test_titles_are_valued_by_positions(viac: FinanceDomain) -> None:
         v = valuation.value_at(conn, D3.isoformat())
         later = valuation.value_at(conn, "2026-07-15")
         (s,) = valuation.series(conn, [D3.isoformat()])
-        h = insights.holdings(conn, D3.isoformat())
+        h = holdings.holdings(conn, D3.isoformat())
     # valeur : 56 de liquidités + 1045 de titres ; versements : 1000 ; marché : 101 (dividende
     # compris)
     assert (v.net_worth, v.deposits) == (110100, 100000)
@@ -406,7 +408,7 @@ def test_titles_are_valued_by_positions(viac: FinanceDomain) -> None:
 
 
 def test_trade_after_report_moves_quantities(viac: FinanceDomain) -> None:
-    from hub.domains.finance import valuation
+    from hub.domains.finance.patrimoine.app import valuation
 
     _, titles = open_portfolio(viac)
     send(viac, f.deposit(D1, "2000.00"), f.buy(D2, "9.5", "950.00"))
@@ -419,7 +421,7 @@ def test_trade_after_report_moves_quantities(viac: FinanceDomain) -> None:
 
 
 def test_pillar3a_counts_viac_deposits(viac: FinanceDomain) -> None:
-    from hub.domains.finance import insights
+    from hub.domains.finance.classement.app import insights
 
     open_portfolio(viac)
     send(viac, f.deposit(D1, "3000.00"), f.deposit(D2, "500.00", withdrawal=True))
@@ -430,12 +432,11 @@ def test_pillar3a_counts_viac_deposits(viac: FinanceDomain) -> None:
 
 
 def test_accounts_route_gives_market_value(viac: FinanceDomain) -> None:
-    from hub.domains.finance import reads
 
     _, titles = open_portfolio(viac)
     send(viac, f.deposit(D1, "1000.00"), f.buy(D2, "9.5", "950.00"))
     send(viac, f.report(D3, [f.Folio("VIAC1", cash="50.00", positions=[f.Pos("9.5", "1045")])]))
     with viac.engine().connect() as conn:
-        by_id = {a["id"]: a for a in reads.accounts(conn)}
+        by_id = {a["id"]: a for a in account_list.accounts(conn)}
     assert by_id[titles]["balance"]["minor"] == 95000
     assert by_id[titles]["value"]["minor"] == 104500

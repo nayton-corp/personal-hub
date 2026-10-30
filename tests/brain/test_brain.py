@@ -93,7 +93,7 @@ def last_tool(messages: list[dict[str, Any]]) -> Any:
 def test_single_domain_is_loaded_at_start(
     client: TestClient, ctx: HubContext, year: FinanceDomain
 ) -> None:
-    box = box_for(client, ctx, "brain")
+    box = box_for(client, ctx, "brain=finance")
     names = [t["name"] for t in box.definitions()]
     assert names[:2] == [CAPABILITIES, LOAD]
     assert len(names) == 18  # 2 outils de routage + 16 outils Finance
@@ -102,7 +102,7 @@ def test_single_domain_is_loaded_at_start(
 
 
 def test_tools_load_on_demand(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
-    box = box_for(client, ctx, "brain", autoload=False)
+    box = box_for(client, ctx, "brain=finance", autoload=False)
     assert [t["name"] for t in box.definitions()] == [CAPABILITIES, LOAD]
     missing = box.call("finance_month_summary", {})
     assert missing.is_error
@@ -171,7 +171,7 @@ def test_mcp_session(client: TestClient, ctx: HubContext, year: FinanceDomain) -
 
 
 def test_mcp_over_stdio(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
-    server = McpServer(box_for(client, ctx, "brain"))
+    server = McpServer(box_for(client, ctx, "brain=finance"))
     lines = [
         json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}),
         "",
@@ -211,7 +211,9 @@ def test_restaurants_this_month(client: TestClient, ctx: HubContext, year: Finan
         calls(("finance_month_summary", {})),
         answer,
     )
-    out = agent.ask("Combien en restaurants ce mois ?", box_for(client, ctx, "brain"), model, TODAY)
+    out = agent.ask(
+        "Combien en restaurants ce mois ?", box_for(client, ctx, "brain=finance"), model, TODAY
+    )
     assert out.text == "Ce mois, 80.00 CHF en restaurants."
     assert out.tools == ["finance_list_categories", "finance_month_summary"]
     system = model.seen[0][0]["content"]
@@ -234,7 +236,9 @@ def test_accepted_suggestion_goes_through_a_card(
         propose,
         lambda _m: Reply("<think>simple</think>Carte créée, à valider dans l'app."),
     )
-    out = agent.ask("Le kiosque, c'est des loisirs", box_for(client, ctx, "brain"), model, TODAY)
+    out = agent.ask(
+        "Le kiosque, c'est des loisirs", box_for(client, ctx, "brain=finance"), model, TODAY
+    )
     assert out.text == "<think>simple</think>Carte créée, à valider dans l'app."  # pas de clean ici
     (pid,) = out.proposals
     with ctx.core.engine.connect() as conn:
@@ -244,7 +248,7 @@ def test_accepted_suggestion_goes_through_a_card(
 
 def test_agent_gives_up(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
     model = Scripted(*[calls((CAPABILITIES, {}))] * 3)
-    out = agent.ask("?", box_for(client, ctx, "brain"), model, TODAY, max_steps=3)
+    out = agent.ask("?", box_for(client, ctx, "brain=finance"), model, TODAY, max_steps=3)
     assert out.complete is False
     assert out.tools == [CAPABILITIES] * 3
 
@@ -297,7 +301,7 @@ def test_suggest_for_unknown_merchants(
             return Reply('{"category": "loisirs", "reason": "Un kiosque."}')
         return Reply('{"category": null, "reason": "incertain"}')
 
-    box = box_for(client, ctx, "brain")
+    box = box_for(client, ctx, "brain=finance")
     memory = Memory(tmp_path / "brain")
     report = suggest(box, Scripted(choose, choose), memory)
     assert (report.merchants, report.suggested, report.proposals, report.skipped) == (2, 1, 1, 1)
@@ -319,13 +323,13 @@ def test_suggest_stops_cleanly(
     def down(_m: list[dict[str, Any]]) -> Reply:
         raise LlmError("modèle injoignable")
 
-    report = suggest(box_for(client, ctx, "brain"), Scripted(down), Memory(tmp_path))
+    report = suggest(box_for(client, ctx, "brain=finance"), Scripted(down), Memory(tmp_path))
     assert report.stopped == "modèle injoignable"
     assert report.proposals == 0
     from hub.platform.settings import Auth
 
     ctx.settings = ctx.settings.model_copy(update={"auth": Auth(token_proposals_per_hour=1)})
-    box = box_for(client, ctx, "brain")
+    box = box_for(client, ctx, "brain=finance")
     box.call("finance_propose_budget", {"category": "divers", "amount": "1"})
     report = suggest(
         box, Scripted(lambda _m: Reply('{"category": "divers", "reason": "x"}')), Memory(tmp_path)
@@ -359,7 +363,7 @@ def test_catchup_proposes_one_rule_per_merchant(
             return Reply('{"category": "loisirs", "reason": "Un kiosque."}')
         return Reply('{"category": null, "reason": "incertain"}')
 
-    box = box_for(client, ctx, "brain")
+    box = box_for(client, ctx, "brain=finance")
     model = Every(choose)
     report = catchup(box, model, Memory(tmp_path / "brain"))
     assert report.merchants == len(model.prompts) >= 2
@@ -387,7 +391,7 @@ def test_direct_groups_one_off_purchases_by_category(
             return Reply('{"category": "alimentation", "sure": true, "reason": "Un kiosque."}')
         return Reply('{"category": null, "sure": false, "reason": "incertain"}')
 
-    box = box_for(client, ctx, "brain")
+    box = box_for(client, ctx, "brain=finance")
     model = Every(choose)
     report = direct(box, model, Memory(tmp_path / "brain"), max_count=5)
     assert report.merchants == len(model.prompts) >= 1

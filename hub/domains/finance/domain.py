@@ -4,7 +4,7 @@ sentinelles (lot 7)."""
 
 from __future__ import annotations
 
-import json
+import re
 import sqlite3
 from collections.abc import Mapping, Sequence
 from datetime import date
@@ -15,25 +15,23 @@ import typer
 from fastapi import APIRouter
 from sqlalchemy import Connection, Engine, event, text
 
-from hub.core import profile
+from hub.core import inbox, integrity, profile
 from hub.core.domain import Event, Health, Hit, McpTool, ProposalKind, Ref
 from hub.core.manifest import Manifest, Observation, Severity
-from hub.domains.finance import (
-    importer,
-    ledger,
-    manifest,
-    packs,
-    period,
-    reads,
-    recurring,
-    sentinels,
-    snapshots,
-    transfers,
-)
+from hub.core.search import excerpt
+from hub.domains.finance import manifest
+from hub.domains.finance.api import build_router
+from hub.domains.finance.classement.app import packs, recurring, sentinels
+from hub.domains.finance.cli import build_cli
 from hub.domains.finance.handlers import build_kinds
-from hub.domains.finance.importer import Archiver, ImportService, recipient_from_key
-from hub.kernel import canonical
-from hub.kernel.clock import local_today, now_iso
+from hub.domains.finance.patrimoine.app import snapshots, transfers
+from hub.domains.finance.registre.app import ledger, reads
+from hub.domains.finance.registre.model import period
+from hub.domains.finance.sources.app import statements
+from hub.domains.finance.sources.app.importer import ImportService
+from hub.domains.finance.sources.infra.files import Archiver, recipient_from_key
+from hub.domains.finance.tools import FinanceTools
+from hub.kernel.clock import local_today
 from hub.kernel.ids import Urn, urn
 from hub.kernel.money import base_currency
 from hub.platform import migrations as runner
@@ -44,6 +42,7 @@ from hub.platform.settings import Settings
 MIGRATIONS = Path(__file__).parent / "migrations"
 SCHEMA_VERSION = 17  # 0017_snapshot_categories
 log = get_logger("hub.finance")
+LEGACY_ARCHIVE = re.compile(r"\d{4}|duplicates")
 SEVERITY: dict[str, Severity] = {"budget_over": "alert", "budget_likely": "warning"}
 
 
@@ -77,8 +76,8 @@ class FinanceDomain:
         recipient = section.get("archive_recipient") or recipient_from_key(key_file)
         self.importer = ImportService(
             self._engine,
-            inbox=settings.paths.inbox,
-            archiver=Archiver(settings.paths.archive, recipient, key_file),
+            inbox=settings.paths.inbox_of(self.name),
+            archiver=Archiver(settings.paths.archive_of(self.name), recipient, key_file),
             lock_file=settings.paths.data / "finance.history.lock",
             on_applied=self.refresh_snapshots,
         )
@@ -94,6 +93,9 @@ class FinanceDomain:
             "pillar3a_cap": self.pillar3a_cap,
         }
 
+    def process_inbox(self) -> dict[str, int]:
+        return self.importer.process_inbox().counters()
+
     def manifest(self) -> Manifest:
         return manifest.MANIFEST
 
@@ -103,7 +105,7 @@ class FinanceDomain:
             alerts = sentinels.recent(conn, self.today())[:limit]
         return [
             Observation(
-                a["key"],
+                a["id"],  # opaque : la clé nomme la catégorie
                 a["kind"],
                 SEVERITY.get(a["kind"], "info"),
                 a["title"],
@@ -121,6 +123,12 @@ class FinanceDomain:
         (`seed=False` pour une reconstruction, qui recopie les règles de la base d'origine)."""
         fresh = runner.current(MIGRATIONS, self.path) is None
         runner.upgrade(MIGRATIONS, self.path)
+        # S4 : l'archive d'avant (archive/AAAA/MM, archive/duplicates) passe sous archive/finance
+        inbox.adopt(
+            self.settings.paths.archive,
+            self.name,
+            lambda n: LEGACY_ARCHIVE.fullmatch(n) is not None,
+        )
         self.check_currency()
         if fresh and seed:
             with begin_immediate(self._engine) as conn:
@@ -144,30 +152,27 @@ class FinanceDomain:
         return runner.current(MIGRATIONS, self.path) == runner.head(MIGRATIONS)
 
     def router(self) -> APIRouter:
-        from hub.domains.finance.api import build_router
-
         return build_router(self)
 
     def cli(self) -> typer.Typer | None:
-        from hub.domains.finance.cli import build_cli
-
-        return build_cli(self)
+        return build_cli(self, type(self))
 
     def mcp_tools(self) -> list[McpTool]:
-        from hub.domains.finance.tools import FinanceTools
-
         return FinanceTools(self).build()
 
     def search(self, q: str, limit: int, scopes: frozenset[str]) -> list[Hit]:
         with self._engine.connect() as conn:
             found = reads.search(conn, q, limit)
-        hits = []
-        for rank, e in enumerate(found):
-            title = e["counterparty"] or e["label"] or "écriture"
-            hits.append(
-                Hit(urn("finance", "entry", e["id"]), title, e["booking_date"], len(found) - rank)
+        return [
+            Hit(
+                urn("finance", "entry", e["id"]),
+                e["counterparty"] or e["label"] or "écriture",
+                e["booking_date"],
+                len(found) - rank,
+                excerpt([e["label"], e["remittance"]], q),
             )
-        return hits
+            for rank, e in enumerate(found)
+        ]
 
     def resolve(self, value: str) -> Ref | None:
         u = Urn.parse(value)
@@ -200,45 +205,16 @@ class FinanceDomain:
 
     def events_since(self, cursor: int, limit: int) -> list[Event]:
         with self._engine.connect() as conn:
-            rows = conn.execute(
-                text(
-                    "SELECT seq, type, urn, payload_json, created_at FROM events WHERE seq > :c "
-                    "ORDER BY seq LIMIT :n"
-                ),
-                {"c": cursor, "n": limit},
-            ).fetchall()
-        return [Event(r[0], r[1], r[2], json.loads(r[3]), r[4]) for r in rows]
+            return integrity.events_since(conn, cursor, limit)
 
     def applied(self, proposal_ids: Sequence[str]) -> Mapping[str, dict[str, Any]]:
-        if not proposal_ids:
-            return {}
-        marks = ",".join(f":p{i}" for i in range(len(proposal_ids)))
         with self._engine.connect() as conn:
-            rows = conn.execute(
-                text(
-                    "SELECT proposal_id, result_json FROM applied_proposals "
-                    f"WHERE proposal_id IN ({marks})"
-                ),
-                {f"p{i}": p for i, p in enumerate(proposal_ids)},
-            ).fetchall()
-        return {pid: json.loads(res) for pid, res in rows}
+            return integrity.applied(conn, proposal_ids)
 
     def record_applied(
         self, conn: Connection, proposal_id: str, kind: str, result: dict[str, Any]
     ) -> None:
-        ledger.append(
-            conn,
-            "applied_proposals",
-            {
-                "proposal_id": proposal_id,
-                "kind": kind,
-                "result_json": canonical.dumps(result),
-                "applied_at": now_iso(),
-            },
-        )
-        ledger.append_event(
-            conn, "proposal.applied", urn("core", "proposal", proposal_id), {"kind": kind}
-        )
+        ledger.LEDGER.record_applied(conn, proposal_id, kind, result)
 
     def request_reviews(self) -> int:
         """Redemande une carte `apply_import` pour chaque import en attente : une carte expirée
@@ -247,7 +223,7 @@ class FinanceDomain:
             ids = conn.execute(
                 text("SELECT id FROM imports WHERE status = 'needs_review' ORDER BY received_at")
             ).scalars()
-            return sum(importer.request_review(conn, i) for i in list(ids))
+            return sum(statements.request_review(conn, i) for i in list(ids))
 
     def verify_ledger(self) -> ledger.VerifyResult:
         with self._engine.connect() as conn:

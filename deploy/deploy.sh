@@ -129,6 +129,12 @@ once "$TAG" hub db upgrade || rollback "migration en échec"
 say "Vérification après migration"
 once "$TAG" hub verify || rollback "verify échoue après migration"
 
+say "Réplication : une entrée par base montée (hub ops litestream)"
+compose "$TAG" run --rm --no-deps -T scheduler hub ops litestream > "$HERE/litestream.local.yml.tmp" \
+  || rollback "configuration Litestream impossible"
+mv "$HERE/litestream.local.yml.tmp" "$HERE/litestream.local.yml"
+export HUB_LITESTREAM_CONFIG=./litestream.local.yml
+
 if [ -n "${HUB_COLLECTOR_SECRETS:-}" ]; then
   say "Connexions des collecteurs (reprise des anciens fichiers, jetons des deux services)"
   # sans effet une fois faite : une connexion qui a ses secrets les garde, un fichier existant reste
@@ -145,11 +151,12 @@ compose "$TAG" up -d --remove-orphans
 say "Contrôle de santé (30 s)"
 healthy=0
 for _ in $(seq 1 15); do
-  if [ -n "${HUB_PUBLIC_ORIGIN:-}" ] && curl -fsS --max-time 2 "$HUB_PUBLIC_ORIGIN/api/health" >/dev/null 2>&1; then
+  # « status »: « ok » seulement : core et chaque domaine monté répondent (aucune liste ici)
+  if [ -n "${HUB_PUBLIC_ORIGIN:-}" ] && curl -fsS --max-time 2 "$HUB_PUBLIC_ORIGIN/api/health" 2>/dev/null | grep -q '"status":"ok"'; then
     healthy=1; break
   fi
   # avant le premier enregistrement Tailscale, on vérifie au moins la chaîne web → api
-  if [ -z "${HUB_STRICT_TAILSCALE:-}" ] && compose "$TAG" exec -T web wget -qO- http://127.0.0.1:8080/api/health >/dev/null 2>&1; then
+  if [ -z "${HUB_STRICT_TAILSCALE:-}" ] && compose "$TAG" exec -T web wget -qO- http://127.0.0.1:8080/api/health 2>/dev/null | grep -q '"status":"ok"'; then
     healthy=1; break
   fi
   sleep 2

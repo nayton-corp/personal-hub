@@ -1,0 +1,17 @@
+// Politique Tailscale du hub (chantier S7), à coller dans la console : Access controls.
+// Versionnée ici pour qu'un changement se relise comme du code. Le nœud du hub porte le tag
+// tag:hub ; seuls les appareils de son propriétaire l'atteignent, et seulement en HTTPS.
+// Remplacer autogroup:owner par une liste d'adresses si plusieurs personnes ont un hub.
+{
+  "tagOwners": {
+    "tag:hub": ["autogroup:admin"],
+  },
+  "acls": [
+    // le propriétaire du tailnet ouvre l'app et l'API du hub (Caddy, port 443)
+    {"action": "accept", "src": ["autogroup:owner"], "dst": ["tag:hub:443"]},
+  ],
+  // le hub n'ouvre aucune connexion vers les autres appareils : pas de règle depuis tag:hub
+  "tests": [
+    {"src": "autogroup:owner", "accept": ["tag:hub:443"], "deny": ["tag:hub:22", "tag:hub:8710"]},
+  ],
+}

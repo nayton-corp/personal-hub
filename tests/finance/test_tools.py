@@ -13,8 +13,8 @@ from fastapi.testclient import TestClient
 
 from hub.core import proposals
 from hub.core.context import HubContext
+from hub.domains.finance.classement.interface.tools import ClassementTools
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.tools import FinanceTools
 from hub.platform.settings import Auth
 from tests.conftest import add_connections
 from tests.factories.camt import IBAN
@@ -44,7 +44,7 @@ def call(client: TestClient, headers: dict[str, str], name: str, **args: Any) ->
 
 
 def test_capabilities_by_token(client: TestClient, ctx: HubContext) -> None:
-    brain = client.get("/api/tools", headers=token(ctx, "brain")).json()["domains"]
+    brain = client.get("/api/tools", headers=token(ctx, "brain=finance")).json()["domains"]
     assert [d["domain"] for d in brain] == ["finance"]
     assert len(brain[0]["tools"]) == 16
     assert brain[0]["aggregates_only"] is False
@@ -63,30 +63,32 @@ def test_capabilities_by_token(client: TestClient, ctx: HubContext) -> None:
 def test_category_is_a_closed_list(
     client: TestClient, ctx: HubContext, year: FinanceDomain
 ) -> None:
-    items = client.get("/api/tools/finance", headers=token(ctx, "brain")).json()["items"]
+    items = client.get("/api/tools/finance", headers=token(ctx, "brain=finance")).json()["items"]
     schema = next(t for t in items if t["name"] == "finance_propose_category")["input_schema"]
     assert "restaurants" in schema["properties"]["category"]["enum"]
     r = client.post(
         "/api/tools/finance/finance_propose_category",
-        headers=token(ctx, "brain"),
+        headers=token(ctx, "brain=finance"),
         json={"entry_id": "e01", "category": "casino"},
     )
     assert r.status_code == 422
     r = client.post(
         "/api/tools/finance/finance_month_summary",
-        headers=token(ctx, "brain"),
+        headers=token(ctx, "brain=finance"),
         json={"month": "2026-10", "extra": 1},
     )
     assert r.status_code == 422
     assert (
-        client.post("/api/tools/finance/inconnu", headers=token(ctx, "brain"), json={}).status_code
+        client.post(
+            "/api/tools/finance/inconnu", headers=token(ctx, "brain=finance"), json={}
+        ).status_code
         == 404
     )
 
 
 def test_restaurants_this_month(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
     """La sortie du lot 7 : « combien en restaurants ce mois ? »."""
-    out = call(client, token(ctx, "brain"), "finance_month_summary")
+    out = call(client, token(ctx, "brain=finance"), "finance_month_summary")
     assert out["month"] == "2026-10"
     assert out["data_as_of"] == "2026-10-25"
     resto = next(c for c in out["by_category"] if c["category"] == "restaurants")
@@ -105,11 +107,13 @@ def test_restaurants_this_month(client: TestClient, ctx: HubContext, year: Finan
     assert "autres" in {c["category"] for c in agg["by_category"]}
     trend = call(client, token(ctx, "aggregates"), "finance_category_trend", category="restaurants")
     assert all(p["amount"] is None for p in trend["series"] if p["count"])
-    full = call(client, token(ctx, "brain"), "finance_category_trend", category="restaurants")
+    full = call(
+        client, token(ctx, "brain=finance"), "finance_category_trend", category="restaurants"
+    )
     assert full["series"][-1] == {"month": "2026-10", "amount": "80.00", "count": 1}
     r = client.post(
         "/api/tools/finance/finance_month_summary",
-        headers=token(ctx, "brain"),
+        headers=token(ctx, "brain=finance"),
         json={"month": "2026-12"},
     )
     assert r.status_code == 422
@@ -141,7 +145,7 @@ def test_reads_for_the_local_model(
     client: TestClient, ctx: HubContext, year: FinanceDomain
 ) -> None:
     add_connections(ctx, "bcf", "viac")
-    brain = token(ctx, "brain")
+    brain = token(ctx, "brain=finance")
     accounts = call(client, brain, "finance_list_accounts")["accounts"]
     assert accounts[0]["name"] == "Compte privé"
     assert "iban" not in accounts[0]
@@ -162,14 +166,14 @@ def test_reads_for_the_local_model(
     review = call(client, brain, "finance_to_review")
     merchants = {g["counterparty"]: g for g in review["groups"]}
     assert merchants["kiosque inconnu"]["known_merchant"] is False
-    assert "bistrot fictif" in FinanceTools(year).known_merchants(year.engine().connect())
+    assert "bistrot fictif" in ClassementTools(year).known_merchants(year.engine().connect())
     assert call(client, brain, "finance_recurring")["count"] >= 1
     cats = call(client, brain, "finance_list_categories")["categories"]
     assert {"id": "restaurants", "name": "Restaurants et sorties", "group": "variable"} in cats
 
 
 def test_proposals_need_a_card(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
-    brain = token(ctx, "brain")
+    brain = token(ctx, "brain=finance")
     entry = call(client, brain, "finance_search", query="kiosque")["items"][0]["entry_id"]
     out = call(
         client,
@@ -230,7 +234,7 @@ def test_proposals_are_rate_limited(
     client: TestClient, ctx: HubContext, year: FinanceDomain
 ) -> None:
     ctx.settings = ctx.settings.model_copy(update={"auth": Auth(token_proposals_per_hour=2)})
-    brain = token(ctx, "brain")
+    brain = token(ctx, "brain=finance")
     for category in ("loisirs", "divers"):
         call(client, brain, "finance_propose_budget", category=category, amount="10")
     r = client.post(
@@ -249,7 +253,11 @@ def test_budget_amounts_without_float(
     client: TestClient, ctx: HubContext, year: FinanceDomain, value: object, expected: int
 ) -> None:
     out = call(
-        client, token(ctx, "brain"), "finance_propose_budget", category="loisirs", amount=value
+        client,
+        token(ctx, "brain=finance"),
+        "finance_propose_budget",
+        category="loisirs",
+        amount=value,
     )
     with ctx.core.engine.connect() as conn:
         assert proposals.get(conn, out["proposal_id"]).params["monthly_minor"] == expected
@@ -259,7 +267,11 @@ def test_budget_accepts_the_former_amount_name(
     client: TestClient, ctx: HubContext, year: FinanceDomain
 ) -> None:
     out = call(
-        client, token(ctx, "brain"), "finance_propose_budget", category="loisirs", amount_chf="7"
+        client,
+        token(ctx, "brain=finance"),
+        "finance_propose_budget",
+        category="loisirs",
+        amount_chf="7",
     )
     with ctx.core.engine.connect() as conn:
         assert proposals.get(conn, out["proposal_id"]).params["monthly_minor"] == 700

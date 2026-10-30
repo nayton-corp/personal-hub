@@ -9,9 +9,11 @@ from typing import Any
 
 import pytest
 
-from hub.domains.finance import catalog, links, market, transfers
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.patrimoine.app import links, transfers
+from hub.domains.finance.registre.app import catalog
+from hub.domains.finance.sources.infra import market_file
+from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform.db import begin_immediate
 from tests.finance.conftest import rows
 
@@ -39,7 +41,7 @@ def price(symbol: str, value: str, currency: str = "CHF") -> dict[str, str]:
 
 
 BINANCE = {
-    "format": market.FORMAT,
+    "format": market_file.FORMAT,
     "fetched_at": "2026-10-27",
     "fx": [
         {"on_date": "2026-03-01", "base": "USD", "quote": "CHF", "rate": "0.8", "source": "ecb"}
@@ -94,7 +96,7 @@ BINANCE = {
     ],
 }
 LEDGER = {
-    "format": market.FORMAT,
+    "format": market_file.FORMAT,
     "fetched_at": "2026-10-27",
     "transactions": [
         # envoyé vers Binance la veille de l'arrivée, déjà au registre : sa valeur
@@ -224,7 +226,7 @@ def test_counterpart_prefers_the_txid_and_skips_taken_sides(
 
 def test_a_value_given_by_the_platform_wins(finance: FinanceDomain, accounts: None) -> None:
     doc = {
-        "format": market.FORMAT,
+        "format": market_file.FORMAT,
         "fetched_at": "2026-10-27",
         "fx": BINANCE["fx"],
         "prices": [price("BTC", "50000")],
@@ -252,7 +254,7 @@ def test_a_value_given_by_the_platform_wins(finance: FinanceDomain, accounts: No
 
 def test_a_token_and_its_gas_share_a_txid(finance: FinanceDomain, accounts: None) -> None:
     doc = {
-        "format": market.FORMAT,
+        "format": market_file.FORMAT,
         "fetched_at": "2026-10-27",
         "fx": BINANCE["fx"],
         "prices": [price("ETH", "2000")],

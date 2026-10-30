@@ -41,9 +41,11 @@ def test_search_resolve_links(
     assert r.json()["items"] == [
         {
             "domain": "demo",
+            "rank": 1,
             "urn": f"hub:demo:item:{seq}",
             "title": "abonnement cff",
             "date": "2026-10-27",
+            "excerpt": "abonnement cff",
         }
     ]
     assert client.get("/api/search?q=ab", headers=bearer(token)).status_code == 422
@@ -100,7 +102,11 @@ def test_registry_rules(settings: Settings, tmp_path: Path) -> None:
         reg.add(rogue)
     with pytest.raises(Problem):
         reg.get("ghost")
-    assert Registry.discover(settings).names() == ["finance"]  # point d'entrée hub.domains
+    assert Registry.discover(settings).names() == [
+        "agenda",
+        "documents",
+        "finance",
+    ]  # point d'entrée hub.domains
 
 
 def test_reversible_kind_needs_inverse() -> None:

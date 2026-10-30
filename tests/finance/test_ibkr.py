@@ -7,9 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from hub.domains.finance import catalog, ibkr, importer, valuation
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.patrimoine.app import valuation
+from hub.domains.finance.registre.app import catalog
+from hub.domains.finance.sources.app import history
+from hub.domains.finance.sources.infra import ibkr_flex
+from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform.db import begin_immediate
 from tests.factories import ibkr as f
 from tests.finance.conftest import rows
@@ -24,7 +27,7 @@ def add_ibkr(finance: FinanceDomain) -> catalog.Account:
             institution="IBKR",
             name="IBKR titres",
             kind="securities",
-            external_ref=ibkr.titles_ref(f.ACCOUNT),
+            external_ref=ibkr_flex.titles_ref(f.ACCOUNT),
         )
 
 
@@ -48,7 +51,7 @@ def quarter() -> f.Flex:
 
 
 def test_parse_flex() -> None:
-    pf = ibkr.parse(f.flex(quarter()))
+    pf = ibkr_flex.parse(f.flex(quarter()))
     (st,) = pf.statements
     assert (st.account, st.base_currency, st.from_date, st.to_date) == (
         f.ACCOUNT,
@@ -66,20 +69,20 @@ def test_parse_flex() -> None:
         "IBKR/INCOME/DIVIDEND",
         "IBKR/INCOME/TAX",
     ]
-    assert ibkr.is_flex(f.flex(quarter()))
-    assert not ibkr.is_flex(b"<Document/>")
+    assert ibkr_flex.is_flex(f.flex(quarter()))
+    assert not ibkr_flex.is_flex(b"<Document/>")
 
 
 def test_dates_and_refusals() -> None:
-    assert ibkr.iso_date("20261027;093000") == "2026-10-27"
-    assert ibkr.iso_date("2026-10-27, 09:30:00") == "2026-10-27"
-    assert ibkr.iso_date("10/27/2026") == "2026-10-27"
-    with pytest.raises(ibkr.FlexError):
-        ibkr.iso_date("27 oct.")
-    with pytest.raises(ibkr.FlexError):
-        ibkr.parse(b"<FlexQueryResponse><FlexStatements/></FlexQueryResponse>")
+    assert ibkr_flex.iso_date("20261027;093000") == "2026-10-27"
+    assert ibkr_flex.iso_date("2026-10-27, 09:30:00") == "2026-10-27"
+    assert ibkr_flex.iso_date("10/27/2026") == "2026-10-27"
+    with pytest.raises(ibkr_flex.FlexError):
+        ibkr_flex.iso_date("27 oct.")
+    with pytest.raises(ibkr_flex.FlexError):
+        ibkr_flex.parse(b"<FlexQueryResponse><FlexStatements/></FlexQueryResponse>")
     entity = b'<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "b">]><FlexQueryResponse/>'
-    assert not ibkr.is_flex(entity)
+    assert not ibkr_flex.is_flex(entity)
 
 
 def test_import_creates_currency_accounts_and_values_in_chf(finance: FinanceDomain) -> None:
@@ -88,7 +91,7 @@ def test_import_creates_currency_accounts_and_values_in_chf(finance: FinanceDoma
     assert report.counters()["applied"] == 1
     assert [s.reasons for s in report.statements] == [[]]  # soldes de fin retrouvés
     refs = {r[0] for r in rows(finance, "SELECT external_ref FROM accounts")}
-    assert {ibkr.cash_ref(f.ACCOUNT, "CHF"), ibkr.cash_ref(f.ACCOUNT, "USD")} <= refs
+    assert {ibkr_flex.cash_ref(f.ACCOUNT, "CHF"), ibkr_flex.cash_ref(f.ACCOUNT, "USD")} <= refs
     # ouverture à zéro la veille du relevé, pour les trois comptes
     openings = rows(finance, "SELECT booking_date, amount_minor FROM entries WHERE kind='opening'")
     assert openings == [("2025-12-31", 0)] * 3
@@ -204,11 +207,11 @@ def test_history_import(finance: FinanceDomain, tmp_path: Path) -> None:
         cash=[("CHF", "200", "200")],
     )
     (folder / "q4.xml").write_bytes(f.flex(first))
-    refused = importer.import_ibkr_history(finance.importer, folder)
+    refused = history.import_ibkr_history(finance.importer, folder)
     assert not refused.ok
     assert "compte IBKR inconnu" in str(refused.error)
     add_ibkr(finance)
-    report = importer.import_ibkr_history(finance.importer, folder)
+    report = history.import_ibkr_history(finance.importer, folder)
     assert report.ok, report.public()
     assert report.accounts == [
         {"account": f.ACCOUNT, "entries": 9, "from": "2025-10-01", "to": "2026-03-31"}
@@ -218,7 +221,7 @@ def test_history_import(finance: FinanceDomain, tmp_path: Path) -> None:
         finance,
         "SELECT e.booking_date, e.amount_minor FROM entries e JOIN accounts a ON a.id = "
         "e.account_id WHERE e.kind = 'opening' AND a.external_ref = :r",
-        r=ibkr.cash_ref(f.ACCOUNT, "CHF"),
+        r=ibkr_flex.cash_ref(f.ACCOUNT, "CHF"),
     ) == [("2025-09-30", 20_000)]
-    again = importer.import_ibkr_history(finance.importer, folder)
+    again = history.import_ibkr_history(finance.importer, folder)
     assert not again.ok  # rien de nouveau

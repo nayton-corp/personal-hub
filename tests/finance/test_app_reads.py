@@ -16,9 +16,11 @@ from sqlalchemy import text
 from hub.api.app import create_app
 from hub.core.context import HubContext
 from hub.core.registry import Registry
-from hub.domains.finance import catalog, importer, insights, ledger, period, snapshots, valuation
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.importer import Incoming
+from hub.domains.finance.patrimoine.app import holdings, snapshots, valuation
+from hub.domains.finance.registre.app import catalog, export, ledger, opening
+from hub.domains.finance.registre.model import amounts, period
+from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform.db import begin_immediate
 from tests.factories.camt import IBAN, IBAN_2, OTHER_IBAN, Stmt, Tx, camt053
 from tests.finance.conftest import finance_settings, rows, without_seed_rules
@@ -118,7 +120,7 @@ def setup_account(fin: FinanceDomain) -> catalog.Account:
             liquid=True,
             budget_account=True,
         )
-        importer.open_account(conn, a.id, "2025-11-30", 100_000, "CHF")
+        opening.open_account(conn, a.id, "2025-11-30", 100_000, "CHF")
     return a
 
 
@@ -214,7 +216,7 @@ def test_refresh_triggers(year: FinanceDomain) -> None:
     assert later.reason == "as_of"
     with begin_immediate(year.engine()) as conn:
         b = catalog.add_account(conn, institution="BCF", name="Épargne", iban=IBAN_2)
-        importer.open_account(conn, b.id, "2026-10-01", 50_000, "CHF")
+        opening.open_account(conn, b.id, "2026-10-01", 50_000, "CHF")
     assert snapshots.refresh(year.engine(), date(2026, 10, 28)).reason == "entries"
     year.nightly()
     assert rows(year, "SELECT as_of FROM snapshot_state") == [("2026-10-27",)]
@@ -224,7 +226,7 @@ def test_empty_ledger(fin: FinanceDomain) -> None:
     assert fin.refresh_snapshots().rows == 0
     with fin.engine().connect() as conn:
         assert snapshots.history(conn, None, None)["items"] == []
-        k = insights.kpis(conn, "2026-10", TODAY)
+        k = holdings.kpis(conn, "2026-10", TODAY)
     assert minor(k["net_worth"]) == 0
     assert k["months_covered"] is None
     assert k["savings_rate"] is None
@@ -237,7 +239,7 @@ def test_foreign_currency_needs_a_rate(fin: FinanceDomain) -> None:
         a = catalog.add_account(
             conn, institution="Revolut", name="EUR", currency="EUR", external_ref="rev-eur"
         )
-        importer.open_account(conn, a.id, "2026-10-01", 100_000, "EUR")
+        opening.open_account(conn, a.id, "2026-10-01", 100_000, "EUR")
     with fin.engine().connect() as conn:
         assert valuation.value_at(conn, "2026-10-02").missing_fx == [a.id]
     with begin_immediate(fin.engine()) as conn:
@@ -281,13 +283,18 @@ def test_kpis(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
     assert minor(k["pillar3a"]["paid"]) == 600_000
     assert minor(k["pillar3a"]["margin"]) == 125_800
     assert k["last_statement"] == "2026-10-25"
-    past = client.get("/api/finance/kpis?month=2026-09", headers=token(ctx, "brain")).json()
+    past = client.get("/api/finance/kpis?month=2026-09", headers=token(ctx, "brain=finance")).json()
     assert (past["as_of"], past["days_left"]) == ("2026-09-30", 0)
     assert (
-        client.get("/api/finance/kpis?month=2026-11", headers=token(ctx, "brain")).status_code
+        client.get(
+            "/api/finance/kpis?month=2026-11", headers=token(ctx, "brain=finance")
+        ).status_code
         == 422
     )
-    assert client.get("/api/finance/kpis", headers=token(ctx, "brain")).json()["month"] == "2026-10"
+    assert (
+        client.get("/api/finance/kpis", headers=token(ctx, "brain=finance")).json()["month"]
+        == "2026-10"
+    )
 
 
 def test_networth_history(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
@@ -320,7 +327,9 @@ def test_networth_history(client: TestClient, ctx: HubContext, year: FinanceDoma
 
 
 def test_flows_and_rule_of_three(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
-    full = client.get("/api/finance/flows?month=2026-10", headers=token(ctx, "brain")).json()
+    full = client.get(
+        "/api/finance/flows?month=2026-10", headers=token(ctx, "brain=finance")
+    ).json()
     groups = {g["group"]: g for g in full["groups"]}
     assert minor(full["income"]) == 502_000
     assert minor(groups["fixed"]["total"]) == 150_000
@@ -335,13 +344,15 @@ def test_flows_and_rule_of_three(client: TestClient, ctx: HubContext, year: Fina
     assert {i["category"] for i in agg_variable} == {"alimentation", "autres"}
     assert {i["category"] for i in agg["sources"]} == {"autres"}
     # trois mois complets avant octobre : juillet à septembre, sans les écritures d'octobre
-    q = client.get("/api/finance/flows?month=2026-10&period=q", headers=token(ctx, "brain")).json()
+    q = client.get(
+        "/api/finance/flows?month=2026-10&period=q", headers=token(ctx, "brain=finance")
+    ).json()
     assert q["months"] == ["2026-07", "2026-08", "2026-09"]
     assert minor(q["income"]) == 3 * 500_000
 
 
 def test_budget_and_totals(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
-    brain, agg = token(ctx, "brain"), token(ctx, "aggregates")
+    brain, agg = token(ctx, "brain=finance"), token(ctx, "aggregates")
     b = client.get("/api/finance/budget?month=2026-10", headers=brain).json()
     lines = {line["category"]: line for line in b["lines"]}
     assert lines["alimentation"]["over"] is True
@@ -373,7 +384,7 @@ def test_budget_and_totals(client: TestClient, ctx: HubContext, year: FinanceDom
 def test_summary_counts_uncategorized(
     client: TestClient, ctx: HubContext, year: FinanceDomain
 ) -> None:
-    s = client.get("/api/finance/summary?month=2026-10", headers=token(ctx, "brain")).json()
+    s = client.get("/api/finance/summary?month=2026-10", headers=token(ctx, "brain=finance")).json()
     assert (minor(s["income"]), minor(s["expenses"]), minor(s["uncategorized"])) == (
         502_000,
         193_000,
@@ -382,7 +393,10 @@ def test_summary_counts_uncategorized(
 
 
 def test_export_csv(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
-    assert client.get("/api/finance/export.csv", headers=token(ctx, "brain")).status_code == 403
+    assert (
+        client.get("/api/finance/export.csv", headers=token(ctx, "brain=finance")).status_code
+        == 403
+    )
     app_session(ctx, client)
     r = client.get("/api/finance/export.csv?from=2026-10-01")
     assert r.status_code == 200
@@ -401,18 +415,18 @@ def test_export_csv(client: TestClient, ctx: HubContext, year: FinanceDomain) ->
 
 
 def test_export_neutralizes_formulas() -> None:
-    assert insights._cell("=HYPERLINK()") == "'=HYPERLINK()"
-    assert insights._cell("Migros") == "Migros"
-    assert insights._cell(None) == ""
+    assert export._cell("=HYPERLINK()") == "'=HYPERLINK()"
+    assert export._cell("Migros") == "Migros"
+    assert export._cell(None) == ""
 
 
 def test_ratio_and_periods() -> None:
-    assert insights.ratio(1, 3) == "0.3333"
-    assert insights.ratio(1, 0) is None
-    assert insights.period_months("2026-01", "q") == ["2025-10", "2025-11", "2025-12"]
-    assert insights.days_left("2026-02", date(2026, 2, 10)) == 18
-    with pytest.raises(insights.FutureMonth):
-        insights.as_of("2026-11", TODAY)
+    assert amounts.ratio(1, 3) == "0.3333"
+    assert amounts.ratio(1, 0) is None
+    assert amounts.period_months("2026-01", "q") == ["2025-10", "2025-11", "2025-12"]
+    assert amounts.days_left("2026-02", date(2026, 2, 10)) == 18
+    with pytest.raises(amounts.FutureMonth):
+        amounts.as_of("2026-11", TODAY)
 
 
 def test_freshness_without_closing_balance(
