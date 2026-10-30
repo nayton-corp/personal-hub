@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+## [0.13.5] · 2026-10-30
+
+### Documents
+
+- Un document peut peser jusqu'à 100 Mo (30 avant) : les notices scannées de la bibliothèque
+  (54 et 70 Mo) n'étaient pas reprises.
+- Un fichier trop gros est sauté et compté (`too_large`), dans la reprise de la bibliothèque
+  comme dans `inbox/documents/` (où il reste), au lieu d'arrêter tout le traitement.
+
 ## [0.13.4] · 2026-10-30
 
 ### Sécurité

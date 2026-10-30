@@ -106,6 +106,9 @@ class Library:
             if reader.suffix(path.name) not in reader.SUFFIXES:
                 counts["ignored"] += 1
                 continue
+            if path.stat().st_size > reader.MAX_BYTES:
+                counts["too_large"] += 1  # laissé dans la boîte, pas lu en mémoire
+                continue
             _, added = self.add(path.name, path.read_bytes())
             counts["added" if added else "duplicates"] += 1
             path.unlink()
@@ -130,6 +133,9 @@ class Library:
             if not path.is_file() or LIBRARY_INBOX in rel.parts or path.name.startswith("."):
                 continue
             if path.suffix == ".yaml" or reader.suffix(path.name) not in reader.SUFFIXES:
+                continue
+            if path.stat().st_size > reader.MAX_BYTES:
+                counts["too_large"] += 1  # un seul gros fichier n'arrête pas la reprise
                 continue
             card = owners.get(str(rel)) or owners.get(path.name)
             if card is None and len(rel.parts) > 1 and (folder / f"{rel.parts[0]}.yaml").exists():
