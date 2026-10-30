@@ -36,6 +36,7 @@ hub-brain = "hub.brain.cli:main"
 
 [project.entry-points."hub.domains"]
 finance = "hub.domains.finance:create"
+agenda = "hub.domains.agenda:create"
 
 # ce que la finance apporte au cœur sans qu'il l'importe (chantier S1)
 [project.entry-points."hub.connectors"]
@@ -143,7 +144,7 @@ layers = ["hub.domains", "hub.core", "hub.platform", "hub.kernel"]
 [[tool.importlinter.contracts]]
 name = "Ni l'API ni la CLI n'importent un domaine : elles passent par le registre"
 type = "forbidden"
-source_modules = ["hub.kernel", "hub.platform", "hub.core", "hub.api", "hub.cli", "hub.cli_tokens", "hub.cli_inbox", "hub.cli_ops"]
+source_modules = ["hub.kernel", "hub.platform", "hub.core", "hub.api", "hub.cli", "hub.cli_tokens", "hub.cli_inbox", "hub.cli_ops", "hub.cli_proposals"]
 forbidden_modules = ["hub.domains", "hub.collectors", "hub.brain"]
 
 [[tool.importlinter.contracts]]

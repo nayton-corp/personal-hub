@@ -49,6 +49,8 @@ services:
       - ${HUB_SECRETS:?HUB_SECRETS manquant}:/srv/hub/config/secrets.enc.yaml:ro   # sujet ntfy
     secrets: [age_key]
     networks: [hub]
+    # l'agenda (S11) joint le pont Rappels/Calendrier du Mac, à l'écoute du Mac seul
+    extra_hosts: ["host.docker.internal:host-gateway"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8710/api/health', timeout=3).status == 200 else 1)"]
       interval: 30s

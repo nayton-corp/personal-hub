@@ -7,6 +7,17 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-024 · L'agenda ne copie rien : il lit et écrit par le pont (30.10.2026)
+
+- **Contexte** : Rappels et Calendrier sont déjà synchronisés par iCloud sur tous les appareils
+  du foyer ; une copie dans le hub divergerait.
+- **Décision** : le domaine Agenda lit au pont EventKit (sur le Mac, joint par
+  `host.docker.internal`) et n'écrit que par des propositions à effet externe : ajouter un
+  rappel, un événement, cocher. Jamais de suppression. Sa base ne tient que la trace des envois
+  (`sent`), pour l'idempotence et la réconciliation. La liste de courses passe au palier `auto`.
+- **Conséquence** : le Mac en veille, l'agenda se dit indisponible sans que la santé du hub
+  baisse. Le domaine est monté sans une ligne du cœur : paquet, point d'entrée, module de l'app.
+
 ## D-023 · Le palier par défaut vient du type, la personne le change (30.10.2026)
 
 - **Contexte** : `approval_policies` existait, vide et sans commande pour la remplir : tout

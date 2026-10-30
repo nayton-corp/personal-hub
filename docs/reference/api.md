@@ -55,6 +55,14 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `GET` | `/api/tools/{domain}` | Domain Tools |
 | `POST` | `/api/tools/{domain}/{name}` | Call Tool |
 
+## Agenda
+
+| Méthode | Chemin | Rôle |
+|---|---|---|
+| `GET` | `/api/agenda/counts` | Des nombres seulement : événements de la semaine, rappels ouverts et en retard. |
+| `GET` | `/api/agenda/overview` | Le bloc de l'accueil : la semaine, les rappels ouverts, la liste de courses ; le pont absent se dit (`available: false`). |
+| `GET` | `/api/agenda/upcoming` | Les événements des prochains jours, les rappels ouverts et la liste de courses. |
+
 ## Finance
 
 | Méthode | Chemin | Rôle |

@@ -16,7 +16,8 @@ flowchart TB
   end
   subgraph domaines["Domaines (hub.domains.*)"]
     finance["finance"]
-    autre["… (agenda, documents)"]
+    agenda["agenda"]
+    autre["… (documents)"]
   end
   core["Cœur (hub.core)<br/>accès, propositions, registre des domaines,<br/>boîte d'entrée, intégrité, connexions"]
   platform["Plateforme (hub.platform)<br/>SQLite, migrations, réglages, secrets, journaux"]

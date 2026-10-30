@@ -6,6 +6,10 @@ dbs:
     replica:
       type: file
       path: /replica/core.db
+  - path: /srv/hub/data/agenda.db
+    replica:
+      type: file
+      path: /replica/agenda.db
   - path: /srv/hub/data/finance.db
     replica:
       type: file

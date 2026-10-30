@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+### Domaine Agenda (chantier S11)
+
+- Rappels et Calendrier du Mac dans le hub, par le pont EventKit (`assistant/eventkit`) : un
+  bloc d'accueil (la semaine, les rappels ouverts, la liste de courses), `/api/agenda/…`, des
+  outils pour l'assistant, la recherche et un constat « rappels en retard ».
+- Ajouter un rappel, un événement, cocher : des cartes à valider ; un article sur la liste de
+  courses : automatique. Jamais de suppression. Aucune copie dans le hub ; les envois sont
+  tracés pour l'idempotence et la réconciliation.
+- L'API joint le pont par `host.docker.internal` (`[agenda]` de `deploy/settings.toml`).
+
 ### Paliers d'approbation réglables (chantier S11)
 
 - Un type de proposition déclare son palier par défaut (`human`, `auto_digest` ou `auto`) ;

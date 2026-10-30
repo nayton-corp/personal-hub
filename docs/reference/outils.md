@@ -4,6 +4,17 @@
 
 Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hub_load_tools`). Un outil `…:aggregates` est aussi ouvert à `…:read` ; un outil de proposition crée une carte à valider dans l'app, jamais un effet.
 
+## Agenda
+
+| Outil | Portée | Paramètres | Rôle |
+|---|---|---|---|
+| `agenda_upcoming` | `agenda:read` | `days`? | Les événements des prochains jours (7 par défaut), les rappels ouverts et la liste de courses, avec leurs identifiants. |
+| `agenda_counts` | `agenda:aggregates` | — | Combien d'événements cette semaine, de rappels ouverts ou en retard, d'articles à acheter (des nombres, jamais les titres). |
+| `agenda_propose_reminder` | `agenda:propose` | `title`, `list`?, `due`?, `notes`? | Propose un rappel (titre, liste, échéance) : une carte à valider dans l'app. |
+| `agenda_propose_event` | `agenda:propose` | `title`, `start`, `end`, `calendar`?, `notes`? | Propose un événement du calendrier (titre, début, fin) : une carte à valider. |
+| `agenda_propose_complete` | `agenda:propose` | `reminder_id`, `title` | Propose de cocher un rappel (son identifiant, tel que rendu par agenda_upcoming). |
+| `agenda_add_shopping` | `agenda:propose` | `title` | Ajoute un article à la liste de courses (palier automatique, sans carte). |
+
 ## Finance
 
 | Outil | Portée | Paramètres | Rôle |

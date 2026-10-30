@@ -123,11 +123,12 @@ def test_hub_domains_chooses_the_mounted_domains(settings: Settings) -> None:
     def only(value: str) -> Settings:
         return settings.model_copy(update={"domains": value})
 
-    assert Registry.discover(settings).names() == ["finance"]
+    assert Registry.discover(settings).names() == ["agenda", "finance"]
     assert Registry.discover(only("finance")).names() == ["finance"]
+    assert Registry.discover(only("finance, agenda")).names() == ["agenda", "finance"]
     assert Registry.discover(only("")).names() == []
-    with pytest.raises(ValueError, match="non installé : agenda"):
-        Registry.discover(only("finance, agenda"))
+    with pytest.raises(ValueError, match="non installé : maison"):
+        Registry.discover(only("finance, maison"))
 
 
 def test_a_switched_off_domain_has_no_base_no_route_no_tab(

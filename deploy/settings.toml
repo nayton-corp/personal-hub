@@ -21,6 +21,10 @@ home = "/var/lib/hub-collector"
 # G4 : horaires, banque Enable Banking, devises et cryptos suivies sont des réglages de chaque
 # connexion (app ou `hub connections set`), plus de ce fichier.
 
+# S11 : le pont Rappels/Calendrier (assistant/eventkit), sur le Mac qui porte les conteneurs
+[agenda]
+bridge_url = "http://host.docker.internal:8771"
+
 [secrets]
 file = "/srv/hub/config/secrets.enc.yaml"
 age_key_file = "/run/secrets/age_key"

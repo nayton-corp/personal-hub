@@ -102,7 +102,10 @@ def test_registry_rules(settings: Settings, tmp_path: Path) -> None:
         reg.add(rogue)
     with pytest.raises(Problem):
         reg.get("ghost")
-    assert Registry.discover(settings).names() == ["finance"]  # point d'entrée hub.domains
+    assert Registry.discover(settings).names() == [
+        "agenda",
+        "finance",
+    ]  # point d'entrée hub.domains
 
 
 def test_reversible_kind_needs_inverse() -> None:

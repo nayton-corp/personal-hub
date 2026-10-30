@@ -35,7 +35,7 @@ quels, en français. Un mot nouveau entre ici dans la même PR que le code qui l
 | **Résumé du jour** | Les effets appliqués au palier `auto_digest`, chacun avec son inverse. | `digest` |
 | **Lot** | Des propositions validées ensemble, d'un seul Face ID. | `bundle_id` |
 | **Inverse** | La proposition qui annule un effet réversible. | lien `reverts` |
-| **Effet externe** | Un changement chez un tiers (un virement, un geste vers Domia). Jamais automatique. | `ExternalHandler` |
+| **Effet externe** | Un changement chez un tiers (un virement, un geste vers Domia, un rappel ajouté). Jamais automatique, sauf un article sur la liste de courses ([D-023](decisions.md)). | `ExternalHandler` |
 | **Texte externe** | Un texte venu d'ailleurs (relevé, page, document). Une proposition qui en est tirée passe toujours par une carte. | `external_text` |
 
 ## Données
