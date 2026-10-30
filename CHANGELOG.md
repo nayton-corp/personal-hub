@@ -11,7 +11,9 @@
   comptes, dettes, export, budget, impôts), puis la section du hub (affichage, profil, sécurité,
   état), au lieu de « Données », « Préférences », « Compte ».
 - Les lignes de l'agenda et des documents sur l'accueil ne sont plus coupées après trois lettres :
-  sans pastille, leur titre tombait dans la colonne de l'icône.
+  sans pastille, leur titre tombait dans la colonne de l'icône. L'agenda n'y liste plus que les
+  rappels en retard ou du jour (les autres sont comptés), et un document y porte le nom de sa
+  fiche (« Lave-linge », avec le fichier en dessous).
 
 ## [0.13.6] · 2026-10-30
 
@@ -32,6 +34,8 @@
 
 - Le banc a son propre dossier et ne joint jamais le hub : il avait écrit trois fiches de test
   dans la vraie bibliothèque.
+
+## [0.13.5] · 2026-10-30
 
 ### Documents
 
