@@ -9,6 +9,11 @@ model:
   vision: gemma3:27b                   # pour lire une plaque signalétique (inventaire en photos)
   keep_alive: 24h                      # Ollama garde le modèle chargé ; null : son défaut (5 min)
   # reasoning: low                     # seulement pour un modèle qui réfléchit (gpt-oss) : low, medium ou high
+# cloud:                               # un modèle du cloud répond d'abord ; le modèle local ci-dessus le remplace s'il
+#   url: https://openrouter.ai/api/v1  # échoue (plus de crédit, clé refusée, réseau, délai), puis 5 min de suite
+#   name: deepseek/deepseek-v4.1-flash-1017
+#   api_key_env: OPENROUTER_API_KEY    # la clé dans .env, jamais ici ; absente : le modèle local seul
+#   timeout_s: 30
 listen:
   host: 0.0.0.0
   port: 8770
