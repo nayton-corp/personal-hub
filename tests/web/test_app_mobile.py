@@ -202,10 +202,13 @@ def open_tab(pg: Any, tab: str) -> None:
     if tab == "accueil":
         pg.click('#tabs button[data-v="accueil"]')
     else:
+        # déjà dans l'espace, un toucher sur « Finance » ramènerait au premier onglet : on passe
+        # par l'accueil pour que la vue visible ne change plus sous le clic
+        pg.click('#tabs button[data-v="accueil"]')
+        pg.wait_for_selector("#accueil:not([hidden])")
         pg.click('#tabs button[data-v="finance"]')
-        pg.wait_for_selector('#tabs button[data-v="finance"][aria-current="page"]')
-        here = pg.evaluate("document.querySelector('.view:not([hidden])').id")
-        pg.click(f'#{here} .subtabs button[data-v="{tab}"]')
+        pg.wait_for_selector(".view:not([hidden]) .subtabs button[aria-current]")
+        pg.locator(f'.view:not([hidden]) .subtabs button[data-v="{tab}"]').click()
     pg.wait_for_selector(f"#{tab}:not([hidden])")
 
 
