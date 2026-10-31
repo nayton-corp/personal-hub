@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from hub.core.assistant_link import AssistantLink
 from hub.core.coredb import CoreDB
 from hub.core.notify import Notifier
 from hub.core.registry import Registry
@@ -16,9 +17,11 @@ class HubContext:
     core: CoreDB
     registry: Registry
     notifier: Notifier = field(init=False)
+    assistant: AssistantLink = field(init=False)
 
     def __post_init__(self) -> None:
         self.notifier = Notifier(self.settings)
+        self.assistant = AssistantLink(self.settings.assistant.url)
 
     @classmethod
     def build(cls, settings: Settings, registry: Registry | None = None) -> HubContext:

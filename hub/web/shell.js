@@ -17,6 +17,7 @@
 // de la coquille (../../ui.js…) et les leurs.
 import * as accueil from "./accueil.js";
 import * as approvals from "./approvals.js";
+import * as assistant from "./assistant.js";
 import * as sources from "./sources.js";
 import { api, store } from "./store.js";
 import {
@@ -30,9 +31,9 @@ const TABS = []; // [id, libellé, icône] de la barre du bas : l'accueil, puis 
 const SPACES = {}; // domaine → { label, views: [[écran, libellé]] }
 const SPACE_OF = {}; // écran → son espace
 const LAST = {}; // espace → dernier écran ouvert
-const VIEWS = { accueil: accueil.render, sources: sources.render };
-const LABEL = { accueil: "Accueil", sources: "Sources et réglages" };
-const ACTIONS = { ...sources.actions, ...approvals.actions };
+const VIEWS = { accueil: accueil.render, assistant: assistant.render, sources: sources.render };
+const LABEL = { accueil: "Accueil", assistant: "Assistant", sources: "Sources et réglages" };
+const ACTIONS = { ...sources.actions, ...approvals.actions, ...assistant.actions };
 const MODULES = []; // modules de domaine (champ `module`), dans l'ordre des domaines
 const TODO = {}; // onglet → module qui compte ce qui reste à faire
 const LINKED = []; // modules qui savent rendre les filtres d'un lien suivi
@@ -235,13 +236,18 @@ function chrome() {
   for (const b of document.querySelectorAll('[data-a="back"]')) if (!b.firstChild) b.innerHTML = ic("back");
   const here = SPACE_OF[P.tab] || (P.tab === "accueil" ? "accueil" : null);
   const count = (k) => (TODO[k] ? TODO[k].todoCount() || 0 : 0);
-  fill($("tabs"), TABS.map(([k, l, i]) => {
+  if (P.tab === "assistant") $("orb").setAttribute("aria-current", "page");
+  else $("orb").removeAttribute("aria-current");
+  const buttons = TABS.map(([k, l, i]) => {
     const views = k === "accueil" ? ["accueil"] : SPACES[k].views.map(([v]) => v);
     const n = views.reduce((sum, v) => sum + count(v), 0);
     const what = (views.length === 1 && TODO[k] && TODO[k].todoLabel) || "à traiter";
     const act = k === "accueil" ? 'data-a="tab" data-v="accueil"' : `data-a="space" data-v="${k}"`;
     return `<button type="button" ${act} ${here === k ? 'aria-current="page"' : ""} aria-label="${l}${n ? `, ${n} ${what}` : ""}">${ic(i)}${l}${n ? `<span class="badge" aria-hidden="true">${n > 99 ? "99+" : n}</span>` : ""}</button>`;
-  }).join(""));
+  });
+  // l'accueil à gauche de l'orbe, les espaces à droite
+  fill($("tabs-start"), buttons[0]);
+  fill($("tabs-end"), buttons.slice(1).join(""));
   if (here && SPACES[here]) {
     LAST[here] = P.tab;
     for (const nav of document.querySelectorAll(`#${CSS.escape(P.tab)} .subtabs`)) {
@@ -261,6 +267,7 @@ export function draw() {
   chrome();
   VIEWS[P.tab]();
   if (SH.kind) renderSheet();
+  assistant.after();
   for (const m of MODULES) if (m.after) m.after();
   const key = P.tab + (P.rubric || "");
   if (drawn !== key) {
@@ -318,6 +325,7 @@ export async function start() {
   window.addEventListener("hashchange", deeplink);
   initSheetSwipe();
   history.replaceState(entry(), "");
+  assistant.init({ open: () => go("assistant", { top: false }), here: () => P.tab === "assistant" });
   deeplink();
   store.on(draw);
   draw();

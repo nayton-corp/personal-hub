@@ -44,7 +44,7 @@ def page(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Any]:
 def test_the_demo_tab_comes_from_its_manifest(page: Any) -> None:
     page.wait_for_selector('#tabs button[data-v="demo"]')
     tabs = page.locator("#tabs button").evaluate_all("bs => bs.map(b => b.dataset.v)")
-    assert tabs == ["accueil", "finance", "demo"]  # un espace par domaine qui a des onglets
+    assert tabs == ["accueil", "assistant", "finance", "demo"]  # l'orbe, puis un espace par domaine
     assert page.locator('#tabs button[data-v="demo"]').get_attribute("aria-label") == (
         "Démo, 2 à voir"
     )

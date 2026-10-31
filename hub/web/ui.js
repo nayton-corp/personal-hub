@@ -8,6 +8,7 @@ const $ = (id) => document.getElementById(id);
 
 export const ICON = {
   home: "M3 11l9-8 9 8M5 10v10h14V10",
+  send: "M12 19V5M5 12l7-7 7 7",
   trend: "M3 17l6-6 4 4 8-8M15 7h6v6",
   wallet: "M3 7h18v12H3zM3 11h18M16 15h.01",
   list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",

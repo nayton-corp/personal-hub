@@ -9,6 +9,10 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | Méthode | Chemin | Rôle |
 |---|---|---|
 | `POST` | `/api/approvals/challenge` | Défi WebAuthn qui contient `approval_digest` : un seul Face ID pour tout le lot. |
+| `GET` | `/api/assistant/history` | History |
+| `GET` | `/api/assistant/status` | Status |
+| `POST` | `/api/assistant/talk` | Talk |
+| `POST` | `/api/assistant/voice` | Voice |
 | `POST` | `/api/auth/logout` | Logout |
 | `POST` | `/api/auth/passkey/login/begin` | Login Begin |
 | `POST` | `/api/auth/passkey/login/finish` | Login Finish |
