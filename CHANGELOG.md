@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+### Collecteurs
+
+- BCF (et VIAC) : l'attente de la validation sur le téléphone survit à une page qui se
+  recharge ou à un onglet que la banque ferme ; un essai pris en pleine navigation est refait
+  au lieu d'arrêter le run.
+- Une erreur imprévue du navigateur dit à quelle étape elle tombe (`statement.link:error`,
+  `login.push:error`), avec une capture en mode diagnostic ; jamais son message.
+
 ## [0.13.8] · 2026-10-31
 
 ### App
