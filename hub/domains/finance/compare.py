@@ -67,7 +67,8 @@ CHECKS: dict[str, Query] = {
         "SELECT dedup_key, account_id || '|' || quantity || '|' || amount_minor FROM trades"
     ),
     "holdings": _q(
-        "SELECT account_id, on_date, isin, quantity || '|' || value_minor FROM holdings"
+        "SELECT account_id, on_date, isin, quantity || '|' || value_minor FROM holdings "
+        "ORDER BY seq"
     ),
     "prices": _q("SELECT isin, on_date, source, price FROM prices"),
     "fx": _q("SELECT on_date, base, quote, source, rate FROM fx_rates"),
