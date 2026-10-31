@@ -80,7 +80,7 @@ def test_the_demo_adds_a_home_block_and_a_rubric(page: Any) -> None:
     row = page.locator('#rubrics [data-a="rubric"][data-v="demo-prefs"]')
     assert "prête" in row.inner_text()
     groups = page.locator("#rubrics .grp-title").all_text_contents()
-    assert groups == ["Finance", "Demo", "Hub"]  # une section par domaine, puis le hub
+    assert groups == ["Hub", "Finance", "Demo"]  # le hub, puis une section par domaine
     row.click()
     page.wait_for_selector('#sources [data-rubric="demo-prefs"]:not(.off-rubric)')
     assert "Une rubrique venue du manifeste" in page.inner_text("#sources")

@@ -13,6 +13,8 @@
     indigo clair ; avec une seule banque, son nom n'est plus répété sur chaque écriture ;
   - Budget : sans budget, « Créer mon budget » est le bouton principal, sous le total ; le
     dernier jour affiche « Dernier jour du mois » au lieu de « 0 jour restant ».
+- Réglages : la section du hub (Affichage, Profil, Sécurité, État du hub) passe en premier,
+  avant celles des domaines.
 - « À valider » ouvre l'accueil : les propositions en attente y sont cochées, avec le bouton
   « Valider N avec Face ID », sans passer par le panneau (« Détails » ou « Tout voir » l'ouvre
   encore, pour les détails et les refus). Elles ne sont plus une ligne de « À faire ».
