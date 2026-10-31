@@ -9,8 +9,9 @@ seul ; le contrat avec l'API de Domia est figé dans `domia_assistant/contract/`
 - **Jamais dans la loop ni dans l'arbitre de Domia.** Le Mac éteint : plus de voix, la maison inchangée.
 - **Les gestes de Domia, rien d'autre**, par le jeton de l'appareil autorisé « Assistant de maison », au nom de la
   personne qui parle ; ses initiatives sont des remarques, jamais des gestes.
-- **Tout reste à la maison** : modèles, documents, mémoire sur le Mac. Seule une recherche web sort, si on l'active,
-  avec la question seulement.
+- **Tout reste à la maison** : documents, mémoire et modèle de secours sur le Mac. Ce qui sort : une recherche web, si
+  on l'active, avec la question seulement ; et, avec une section `cloud:`, la conversation vers le modèle du cloud
+  (décision du 2026-10-31 : DeepSeek par OpenRouter, fournisseurs sans entraînement ni rétention).
 
 ```
 iPhone / app Domia ──POST /api/talk──▶ Domia (Pi) ──POST /talk──▶ assistant (Mac, :8770)
@@ -73,6 +74,15 @@ iPhone / app Domia ──POST /api/talk──▶ Domia (Pi) ──POST /talk─�
    l'adresse des conteneurs : son journal dit `403`, ajouter cette adresse à `allow_from`. Pour que la conversation
    de l'app soit celle d'une personne de Domia : `HUB_ASSISTANT__PERSON=<identifiant>` dans `deploy/.env`.
 9. **Le Mac reste allumé** : Réglages Système → Économiseur d'énergie → empêcher la suspension automatique.
+
+## Le modèle du cloud, et le repli local
+
+Avec une section `cloud:` dans `config.yaml` et sa clé dans `.env` (`OPENROUTER_API_KEY` par défaut), le modèle du
+cloud répond d'abord (DeepSeek, choisi par le banc complet du 2026-10-31). S'il échoue (plus de crédit, clé refusée,
+réseau coupé, plus de `timeout_s` secondes), la phrase repart sur le modèle local de `model:` et le cloud est laissé
+de côté 5 minutes ; le journal le dit (`repli vers le modèle local`) et `check` montre qui a répondu en dernier. Les
+vecteurs (bge-m3), la vision et le classement du matin du hub restent toujours sur le modèle local. Sans section ou
+sans clé : le modèle local seul, comme avant.
 
 ## Lancer avec launchd
 

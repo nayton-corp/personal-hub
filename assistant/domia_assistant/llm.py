@@ -31,7 +31,9 @@ class OpenAICompatible:
         timeout: float = 120.0,
         keep_alive: str | None = None,
         reasoning: str | None = None,
+        api_key: str | None = None,
     ):
+        self.api_key = api_key  # un modèle dans le cloud ; jamais écrite dans un journal
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
@@ -43,7 +45,8 @@ class OpenAICompatible:
             self.base_url + path,
             data=json.dumps(body).encode("utf-8"),
             method="POST",
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json"}
+            | ({"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}),
         )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
@@ -96,6 +99,39 @@ class OpenAICompatible:
             body["keep_alive"] = self.keep_alive
         answer = self._post("/embeddings", body)
         return [d["embedding"] for d in sorted(answer["data"], key=lambda d: d["index"])]
+
+
+class Fallback:
+    """Le modèle du cloud d'abord, le modèle local en repli (décision de Client 0 du 2026-10-31) : plus de crédit, une
+    clé refusée, le réseau coupé ou un délai dépassé, et la phrase repart sur le modèle local. Après un échec, le cloud
+    est laissé de côté `pause_s` secondes : on n'attend pas son délai à chaque phrase. Les vecteurs et la vision
+    restent toujours sur le modèle local (`embed`, `look`)."""
+
+    def __init__(self, primary: Model, local: OpenAICompatible, pause_s: float = 300.0, clock=time.monotonic):
+        self.primary = primary
+        self.local = local
+        self.pause_s = pause_s
+        self.clock = clock
+        self.paused_until = 0.0
+        self.last = "primary"  # qui a répondu à la dernière phrase : primary ou local
+
+    def chat(self, messages: list[dict], tools: list[dict]) -> dict:
+        if self.clock() >= self.paused_until:
+            try:
+                message = self.primary.chat(messages, tools)
+                self.last = "primary"
+                return message
+            except ModelError as e:
+                self.paused_until = self.clock() + self.pause_s
+                LOG.warning("repli vers le modèle local pour %d s : %s", self.pause_s, e)
+        self.last = "local"
+        return self.local.chat(messages, tools)
+
+    def look(self, image: bytes, mime: str, question: str, model: str) -> str:
+        return self.local.look(image, mime, question, model)
+
+    def embed(self, texts: list[str], model: str) -> list[list[float]]:
+        return self.local.embed(texts, model)
 
 
 class ScriptedModel:

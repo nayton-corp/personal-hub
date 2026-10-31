@@ -32,6 +32,12 @@ class Settings:
     keep_alive: str | None = "24h"
     # un modèle qui réfléchit avant de répondre (gpt-oss) : low, medium ou high ; sa réflexion compte dans MAX_TOKENS
     reasoning: str | None = None
+    # le modèle du cloud (section `cloud:` de config.yaml) : il répond d'abord, le modèle local (`model:`) le remplace
+    # s'il échoue ; sans section ou sans clé dans .env, le modèle local seul
+    cloud_url: str | None = None
+    cloud_model: str | None = None
+    cloud_api_key: str | None = field(default=None, repr=False)
+    cloud_timeout_s: float = 30.0
     listen_host: str = "0.0.0.0"
     listen_port: int = 8770
     # qui peut appeler POST /talk : le Pi (Domia relaie) et la machine elle-même
@@ -90,6 +96,8 @@ def load(path: Path, env: dict[str, str] | None = None) -> Settings:
         raise SystemExit("assistant : DOMIA_ASSISTANT_TOKEN manque (dans .env ou l'environnement)")
     domia = raw.get("domia", {}) or {}
     model = raw.get("model", {}) or {}
+    cloud = raw.get("cloud", {}) or {}
+    cloud_key = env.get(str(cloud.get("api_key_env") or "OPENROUTER_API_KEY"), "").strip() or None
     listen = raw.get("listen", {}) or {}
     known = {f for f in Settings.__dataclass_fields__}
     extra = {k: v for k, v in (raw.get("assistant", {}) or {}).items() if k in known}
@@ -106,6 +114,10 @@ def load(path: Path, env: dict[str, str] | None = None) -> Settings:
         vision_model=model.get("vision"),
         keep_alive=model.get("keep_alive", Settings.keep_alive),
         reasoning=model.get("reasoning"),
+        cloud_url=str(cloud["url"]).rstrip("/") if cloud.get("url") and cloud.get("name") and cloud_key else None,
+        cloud_model=str(cloud["name"]) if cloud.get("url") and cloud.get("name") and cloud_key else None,
+        cloud_api_key=cloud_key if cloud.get("url") and cloud.get("name") else None,
+        cloud_timeout_s=float(cloud.get("timeout_s", Settings.cloud_timeout_s)),
         listen_host=str(listen.get("host", Settings.listen_host)),
         listen_port=int(listen.get("port", Settings.listen_port)),
         allow_from=tuple(listen.get("allow_from", Settings.allow_from)),

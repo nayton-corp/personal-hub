@@ -66,3 +66,20 @@ def test_the_model_stays_loaded_unless_told_otherwise(tmp_path, monkeypatch):
     assert Parts(load(config)).model.keep_alive == "24h"
     config.write_text(f"model: {{keep_alive: null}}\nassistant: {{home: '{tmp_path}'}}\n", encoding="utf-8")
     assert load(config).keep_alive is None
+
+
+def test_the_cloud_model_answers_first_with_the_local_model_behind(tmp_path, monkeypatch):
+    from domia_assistant.config import load
+    from domia_assistant.llm import Fallback, OpenAICompatible
+
+    monkeypatch.setenv("DOMIA_ASSISTANT_TOKEN", "t")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    config = tmp_path / "config.yaml"
+    cloud = "cloud: {url: 'https://openrouter.ai/api/v1/', name: deepseek/deepseek-v4.1-flash-1017}\n"
+    config.write_text(cloud + f"assistant: {{home: '{tmp_path}'}}\n", encoding="utf-8")
+    assert isinstance(Parts(load(config)).model, OpenAICompatible)  # sans clé : le modèle local seul
+    (tmp_path / ".env").write_text("OPENROUTER_API_KEY=sk-test\n", encoding="utf-8")
+    parts = Parts(load(config))
+    assert isinstance(parts.model, Fallback) and "sk-test" not in repr(parts.settings)
+    assert parts.model.primary.base_url == "https://openrouter.ai/api/v1" and parts.model.primary.timeout == 30
+    assert parts.model.local.model == load(config).model and parts.model.local.api_key is None

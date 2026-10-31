@@ -30,7 +30,7 @@ from .domia import Domia, DomiaError, Noting
 from .engagements import Engagements
 from .hub import MODES, HubModule, classify, connect, library
 from .library import INBOX, LibraryUnavailable
-from .llm import ModelError, OpenAICompatible
+from .llm import Fallback, ModelError, OpenAICompatible
 from .memory import Memory
 from .observer import Observer
 from .tools import Speaker, build
@@ -38,6 +38,15 @@ from .voice import Voice
 
 HERE = Path(__file__).resolve().parent.parent
 HUB_RETRY_S = 300
+
+
+def model(s: Settings) -> OpenAICompatible | Fallback:
+    """Le modèle local seul, ou le cloud d'abord avec le local en repli (section `cloud:` et sa clé dans .env)."""
+    local = OpenAICompatible(s.model_url, s.model, keep_alive=s.keep_alive, reasoning=s.reasoning)
+    if not (s.cloud_url and s.cloud_model and s.cloud_api_key):
+        return local
+    cloud = OpenAICompatible(s.cloud_url, s.cloud_model, timeout=s.cloud_timeout_s, api_key=s.cloud_api_key)
+    return Fallback(cloud, local)
 
 
 class Parts:
@@ -49,7 +58,7 @@ class Parts:
         auth = (s.config_user, s.config_password) if s.config_password else None
         # Noting relaie tout à Domia (__getattr__) : pour le typage, c'est un Domia
         self.domia = cast(Domia, Noting(Domia(s.domia_url, s.domia_token, config_auth=auth), self.memory))
-        self.model = OpenAICompatible(s.model_url, s.model, keep_alive=s.keep_alive, reasoning=s.reasoning)
+        self.model = model(s)
         # la bibliothèque vit dans le hub (domaine Documents) ; seules les photos à trier restent ici
         self.library = library(s.hub, s.library_dir / INBOX) if s.hub is not None else None
         self.voice = Voice(s.stt_model, "fr", s.say_voice) if s.voice else None
@@ -123,6 +132,8 @@ class Parts:
         except AgendaUnavailable as e:
             out["reminders"] = {"ok": False, "error": f"Rappels non autorisés ou injoignables : {e}"}
         out["model"] = self.settings.model
+        if isinstance(self.model, Fallback):
+            out["cloud"] = {"model": self.settings.cloud_model, "last": self.model.last}
         if self.settings.hub is not None:
             hub = self.hub()
             out["hub"] = {"ok": hub is not None, "domains": sorted(hub.families) if hub else []}

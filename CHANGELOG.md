@@ -2,6 +2,11 @@
 
 ## [Non publié]
 
+### Assistant
+
+- Le modèle du cloud répond d'abord (section `cloud:`, clé dans `.env`), le modèle local le
+  remplace s'il échoue (plus de crédit, clé refusée, réseau, délai), puis 5 minutes de suite.
+
 ## [0.13.10] · 2026-10-31
 
 ### App
