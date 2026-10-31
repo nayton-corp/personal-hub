@@ -1,6 +1,6 @@
 // Bloc d'accueil de la finance : le bilan du mois passé les premiers jours, deux tuiles
-// (patrimoine, reste à vivre), en tête de l'accueil ; ses lignes « À faire » et « À savoir »
-// rejoignent celles des autres domaines (accueil.js).
+// (patrimoine, reste à vivre) ; ses lignes « À faire » et « À savoir » rejoignent celles des
+// autres domaines (accueil.js).
 import { hiddenIds } from "./accounts.js";
 import { budgetPath, model } from "./budget.js";
 import { go } from "../../shell.js";
@@ -31,8 +31,6 @@ function spark(vals, w = 140, h = 30) {
   const [lx, ly] = pts[pts.length - 1];
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path d="M${pts.map((p) => p.map((x) => x.toFixed(1)).join(",")).join("L")}"/><circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3"/></svg>`;
 }
-
-export const lead = true;
 
 // les lignes de la finance pour « À faire » et « À savoir » ; null tant que les chiffres manquent
 export function rows() {
@@ -141,7 +139,7 @@ export function render(box) {
       <span class="pbar thin" data-css="--c:${st.color};margin-top:12px"><i data-css="width:${Math.min(100, m.ratio * 100).toFixed(1)}%"></i>${m.expected != null ? `<span class="pace" data-css="left:${(m.expected * 100).toFixed(1)}%"></span>` : ""}</span>`;
   }
   const budgetLabel = m && m.T != null ? `Reste à vivre ce mois ${nf(m.rest)} ${base()}, ${m.state.short}, ${m.daysLeft} jours restants. Ouvrir le budget` : "Ouvrir le budget";
-  fill(box, `${bilan(be.data)}
+  fill(box, `<h2 class="section-title home-head">Finance</h2>${bilan(be.data)}
     <div class="tiles">
       <button class="tile" type="button" data-a="tab" data-v="patrimoine" aria-label="Patrimoine ${n0(net)} ${base()}${g30 != null ? `, gain ${sgn(g30)}${n0(g30)} ${base()}${p30 != null ? `, rendement ${sgn(p30)}${pf(Math.abs(p30))} %` : ""} sur 30 jours` : ""}. Ouvrir le patrimoine">
         <span class="tile-lbl">${ic("trend")}Patrimoine</span>

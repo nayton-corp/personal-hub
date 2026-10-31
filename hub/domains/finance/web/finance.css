@@ -289,6 +289,8 @@
 /* accueil */
 .bilan { border-left: 3px solid var(--accent); }
 .bilan .section-head { margin-bottom: 0; }
+.bilan .strip b { font-size: .765rem; }
+.home-head { padding: 16px 16px 0; margin: 0; }
 /* dettes dans le patrimoine */
 .netgross { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 .netgross .seg { width: 140px; flex: none; }

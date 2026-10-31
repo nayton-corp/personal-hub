@@ -100,8 +100,17 @@ class AgendaDomain:
             found = self.upcoming()
         except BridgeError as exc:
             return {"available": False, "reason": str(exc)}
-        overdue = [r for r in found["reminders"] if _overdue(r, self.today())]
-        return {"available": True, **found, "overdue": len(overdue)}
+        # l'accueil ne liste que les rappels en retard ou du jour ; les autres se comptent
+        today = self.today()
+        overdue = [r for r in found["reminders"] if _overdue(r, today)]
+        now = [r for r in found["reminders"] if _overdue(r, today) or _due_today(r, today)]
+        return {
+            "available": True,
+            **found,
+            "reminders": now,
+            "open_reminders": len(found["reminders"]),
+            "overdue": len(overdue),
+        }
 
     def counts(self) -> dict[str, Any]:
         """Les agrégats : combien, jamais quoi."""
@@ -254,6 +263,10 @@ class AgendaDomain:
 def _overdue(reminder: dict[str, Any], today: date) -> bool:
     due = str(reminder.get("due") or "")[:10]
     return bool(due) and not reminder.get("done") and due < today.isoformat()
+
+
+def _due_today(reminder: dict[str, Any], today: date) -> bool:
+    return not reminder.get("done") and str(reminder.get("due") or "")[:10] == today.isoformat()
 
 
 def create(settings: Settings) -> AgendaDomain:

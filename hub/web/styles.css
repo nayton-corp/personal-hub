@@ -110,6 +110,7 @@ button:disabled { cursor: default; }
   padding: 10px 0; min-height: 60px; border-bottom: 1px solid var(--line); }
 .row:last-child { border-bottom: 0; }
 .row-main, .row .n { min-width: 0; display: flex; flex-direction: column; }
+.row.bare { grid-template-columns: minmax(0, 1fr) auto; } /* une ligne sans pastille */
 .row-title, .row .n b { font-weight: 600; font-size: .853rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-sub, .row .n span { font-size: .735rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .n span.warn { color: var(--warn); }
@@ -350,7 +351,6 @@ button:not(:disabled):active, a.secondary:active, [role="button"]:active { trans
 .strip { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
 .strip.three { margin: 14px 0 4px; background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
 .ic.up { transform: rotate(180deg); }
-.bilan .strip b { font-size: .765rem; }
 .rub .trow .row-num { flex-direction: row; align-items: center; }
 .pill.plain, .rub .pill:not(.ok):not(.warn) { color: var(--muted); background: var(--surface-2); }
 .alloc-pct { white-space: nowrap; }

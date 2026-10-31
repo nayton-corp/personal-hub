@@ -3,7 +3,7 @@
 // (fichier du dossier web/ du domaine) est chargé puis monté.
 //   - onglet (`tabs[].module`) : render(), actions ; facultatifs todoCount(), todoLabel,
 //     unlink(lien) quand l'historique quitte un lien suivi ;
-//   - accueil (`home`) : render(box), actions ; facultatifs lead, rows() (accueil.js) ; il
+//   - accueil (`home`) : render(box), actions ; facultatif rows() (accueil.js) ; il
 //     dessine dans [data-home=<domaine>] ;
 //   - cartes (`cards`) : facultatifs detail(p), prepare(ids) (approvals.js) ;
 //   - rubrique (`settings[].module`) : rubric(id) dessine la page, rubricStatus(id) l'état en
@@ -85,7 +85,7 @@ async function mount() {
     if (app.home) accueil.add(d.name, mod(app.home));
     if (app.cards) approvals.addCards(d.name, mod(app.cards));
     for (const t of app.tabs) tabs.push({ ...t, m: mod(t.module) });
-    sources.add(app.settings.map((s) => ({ ...s, m: mod(s.module) })));
+    sources.add(app.settings.map((s) => ({ ...s, domain: d.name, m: mod(s.module) })));
   }
   tabs.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
   TABS.push(["accueil", "Accueil", "home"]);

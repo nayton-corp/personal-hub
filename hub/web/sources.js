@@ -9,14 +9,14 @@ import { SHEETS, closeSheet, esc, failure, fill, ibox, ic, openSheet, pref, toas
 const $ = (id) => document.getElementById(id);
 const P = store.params;
 const THEMES = [["system", "Système"], ["light", "Clair"], ["dark", "Sombre"]];
-const GROUPS = ["Données", "Préférences", "Compte"]; // les groupes d'un domaine suivent
+const GROUPS = ["Données", "Préférences", "Compte"]; // l'ordre des rubriques dans une section
 const OWN = [
   { id: "display", label: "Affichage", icon: "eye", group: "Préférences" },
   { id: "profile", label: "Profil", icon: "user", group: "Préférences" },
   { id: "security", label: "Sécurité", icon: "faceid", group: "Compte" },
   { id: "health", label: "État du hub", icon: "info", group: "Compte" },
 ];
-const RUBRICS = []; // { id, label, icon, group, m } ; m absent : rubrique de la coquille
+const RUBRICS = []; // { id, label, icon, group, domain, m } ; m absent : rubrique de la coquille
 let ordered = null;
 
 export function add(sections) {
@@ -24,12 +24,15 @@ export function add(sections) {
   ordered = null;
 }
 
-// les rubriques des domaines d'abord dans chaque groupe, celles de la coquille ensuite
+// une section par domaine, dans l'ordre des domaines, puis celle du hub (la coquille) ; dans
+// une section, les rubriques suivent leur groupe (Données, Préférences, Compte)
+const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const rank = (r) => (GROUPS.includes(r.group) ? GROUPS.indexOf(r.group) : GROUPS.length);
+
 function groups() {
   if (ordered) return ordered;
-  const all = [...RUBRICS, ...OWN];
-  const names = [...GROUPS, ...all.map((r) => r.group).filter((g) => !GROUPS.includes(g))];
-  ordered = [...new Set(names)].map((g) => [g, all.filter((r) => r.group === g)]).filter(([, rs]) => rs.length);
+  const all = [...RUBRICS.map((r) => ({ ...r, sec: capital(r.domain) })), ...OWN.map((r) => ({ ...r, sec: "Hub" }))];
+  ordered = [...new Set(all.map((r) => r.sec))].map((g) => [g, all.filter((r) => r.sec === g).sort((a, b) => rank(a) - rank(b))]);
   return ordered;
 }
 

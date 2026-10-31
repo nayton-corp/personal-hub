@@ -64,7 +64,7 @@ def test_the_demo_adds_a_home_block_and_a_rubric(page: Any) -> None:
     row = page.locator('#rubrics [data-a="rubric"][data-v="demo-prefs"]')
     assert "prête" in row.inner_text()
     groups = page.locator("#rubrics .grp-title").all_text_contents()
-    assert groups == ["Données", "Préférences", "Compte"]
+    assert groups == ["Finance", "Demo", "Hub"]  # une section par domaine, puis le hub
     row.click()
     page.wait_for_selector('#sources [data-rubric="demo-prefs"]:not(.off-rubric)')
     assert "Une rubrique venue du manifeste" in page.inner_text("#sources")
@@ -73,7 +73,8 @@ def test_the_demo_adds_a_home_block_and_a_rubric(page: Any) -> None:
 
 def test_the_home_and_its_approvals_belong_to_the_shell(page: Any) -> None:
     """L'accueil et « À valider » sont au cœur : la carte d'un autre domaine que la finance s'y
-    valide, et « À faire » vient après les tuiles de la finance, avant les blocs des autres."""
+    valide ; « À faire » passe avant les blocs de tous les domaines, finance comprise, et chaque
+    ligne d'un domaine porte son nom."""
     page.click('#tabs button[data-v="accueil"]')
     page.evaluate(
         """fetch('/api/proposals', {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -85,7 +86,7 @@ def test_the_home_and_its_approvals_belong_to_the_shell(page: Any) -> None:
     order = page.locator("#homeBody > div").evaluate_all(
         "ds => ds.map(d => d.dataset.home ?? (d.dataset.lists === undefined ? '' : 'listes'))"
     )
-    assert order == ["finance", "listes", "demo", ""]
+    assert order == ["listes", "finance", "demo", ""]
     row.click()
     sheet = page.locator("#sheet")
     sheet.wait_for()

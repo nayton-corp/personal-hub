@@ -1,5 +1,6 @@
-// Bloc d'accueil de l'agenda (S11) : la semaine, les rappels ouverts, la liste de courses. Le
-// pont Rappels/Calendrier absent (Mac en veille, accès retiré), le bloc le dit sans erreur.
+// Bloc d'accueil de l'agenda (S11) : la semaine, les rappels en retard ou du jour (les autres
+// comptés), la liste de courses. Le pont Rappels/Calendrier absent (Mac en veille, accès
+// retiré), le bloc le dit sans erreur.
 import { date } from "../../format.js";
 import { store } from "../../store.js";
 import { esc, fill } from "../../ui.js";
@@ -12,7 +13,7 @@ const when = (iso) => (iso && iso.length > 10 ? `${date(iso.slice(0, 10))} · ${
 function rows(items, sub) {
   return items
     .slice(0, SHOWN)
-    .map((x) => `<div class="row"><span class="row-main"><span class="row-title">${esc(x.title)}</span><span class="row-sub">${esc(sub(x))}</span></span></div>`)
+    .map((x) => `<div class="row bare"><span class="row-main"><span class="row-title">${esc(x.title)}</span><span class="row-sub">${esc(sub(x))}</span></span></div>`)
     .join("");
 }
 
@@ -29,7 +30,7 @@ export function render(box) {
     `<section class="card" aria-labelledby="t-agenda">
       <h2 class="section-title" id="t-agenda">Agenda</h2>
       ${o.events.length ? rows(o.events, (e) => when(e.start)) : '<p class="note">Rien au calendrier cette semaine.</p>'}
-      ${o.reminders.length ? `<h3 class="row-sub">${o.reminders.length} rappel${o.reminders.length > 1 ? "s" : ""} ouvert${o.reminders.length > 1 ? "s" : ""}${late}</h3>${rows(o.reminders, (r) => when(r.due))}` : ""}
+      ${o.open_reminders ? `<h3 class="row-sub">${o.open_reminders} rappel${o.open_reminders > 1 ? "s" : ""} ouvert${o.open_reminders > 1 ? "s" : ""}${late}</h3>${rows(o.reminders, (r) => when(r.due))}` : ""}
       ${o.shopping.length ? `<p class="note">Courses : ${o.shopping.map((s) => esc(s.title)).join(", ")}</p>` : ""}
     </section>`,
   );

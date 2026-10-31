@@ -128,6 +128,18 @@ def client(hub: HubContext) -> Iterator[TestClient]:
         yield c
 
 
+def test_the_home_lists_only_late_or_todays_reminders(
+    client: TestClient, bridge: FakeBridge
+) -> None:
+    def due(rid: str, on: str) -> dict[str, object]:
+        return {"id": rid, "title": rid, "list": "Rappels", "done": False, "due": on}
+
+    bridge.reminders += [due("plus tard", "2026-12-01"), due("aujourd'hui", TODAY.isoformat())]
+    o = client.get("/api/agenda/overview").json()
+    assert [r["title"] for r in o["reminders"]] == ["Payer l'assurance", "aujourd'hui"]
+    assert (o["open_reminders"], o["overdue"]) == (3, 1)  # « Lait » est une course
+
+
 def test_reads_go_to_the_bridge(client: TestClient, bridge: FakeBridge) -> None:
     o = client.get("/api/agenda/overview").json()
     assert o["available"] is True
