@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.13.9] · 2026-10-31
+
 ### Collecteurs
 
 - BCF (et VIAC) : l'attente de la validation sur le téléphone survit à une page qui se
