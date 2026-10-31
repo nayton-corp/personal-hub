@@ -101,10 +101,12 @@ export const money = (v) => `<span class="money num">${nf(v)}</span>`;
 export const amount = (v) => `${money(v)} ${base()}`;
 export const amount2 = (v) => `<span class="money num">${nf2(v)}</span>`;
 export const share = (p) => `${pf(p)} %`;
+// un écart qui s'arrondit à zéro n'est ni un gain ni une perte : il reste gris
+const tone = (v, p) => (Math.round(v) === 0 && (p == null || Math.round(p * 1000) === 0) ? "zero" : v >= 0 ? "pos" : "neg");
 export const signed = (v, p) =>
-  `<span class="delta ${v >= 0 ? "pos" : "neg"} num"><span class="money">${sgn(v)}${n0(v)}</span> ${base()}${p == null ? "" : ` · ${sgn(p)}${pf(Math.abs(p))} %`}</span>`;
+  `<span class="delta ${tone(v, p)} num"><span class="money">${sgn(v)}${n0(v)}</span> ${base()}${p == null ? "" : ` · ${sgn(p)}${pf(Math.abs(p))} %`}</span>`;
 export const pctOnly = (p) =>
-  p == null ? '<span class="delta new">nouveau</span>' : `<span class="delta ${p >= 0 ? "pos" : "neg"} num">${sgn(p)}${pf(Math.abs(p))} %</span>`;
+  p == null ? '<span class="delta new">nouveau</span>' : `<span class="delta ${Math.round(p * 1000) === 0 ? "zero" : p >= 0 ? "pos" : "neg"} num">${sgn(p)}${pf(Math.abs(p))} %</span>`;
 export const qty = (v) => {
   const s = String(v);
   const [i, d] = s.replace("-", "").split(".");

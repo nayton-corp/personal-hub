@@ -218,9 +218,9 @@ export function render() {
     proj = `<div class="proj">${ic("trend")}<span>Projection fin ${P.period === "m" ? monthName(P.month).split(" ")[0] : "de période"} : <b class="num">${amount(m.projection)}</b>, ${d > 0 ? `<span class="delta neg">${n0(d)} au-dessus</span>` : `<span class="delta pos">${n0(-d)} sous</span>`} le budget</span></div>`;
   }
   const hero = `<section class="card" aria-labelledby="t-bud">
-      <div class="hero-label"><span id="t-bud">${m.T == null ? "Dépensé" : P.period === "m" ? "Reste à vivre" : "Reste sur 3 mois"}</span><span>${m.current ? `${m.daysLeft} jour${m.daysLeft > 1 ? "s" : ""} restant${m.daysLeft > 1 ? "s" : ""}` : "clos"}</span></div>
+      <div class="hero-label"><span id="t-bud">${m.T == null ? "Dépensé" : P.period === "m" ? "Reste à vivre" : "Reste sur 3 mois"}</span><span>${!m.current ? "clos" : m.daysLeft < 1 ? "Dernier jour du mois" : `${m.daysLeft} jour${m.daysLeft > 1 ? "s" : ""} restant${m.daysLeft > 1 ? "s" : ""}`}</span></div>
       <div class="hero-amount num${m.rest != null && m.rest < 0 ? " neg" : ""}"><span class="money">${nf(m.T == null ? m.spent : m.rest)}</span><small>${base()}</small></div>
-      ${m.T == null ? "" : `<div class="hint">${amount(m.spent)} dépensés sur ${amount(m.T)} de budget</div>
+      ${m.T == null ? `<button class="primary plan-cta" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}Créer mon budget</button>` : `<div class="hint">${amount(m.spent)} dépensés sur ${amount(m.T)} de budget</div>
       <div class="pbar" role="img" aria-label="${pf(m.ratio, 0)} % du budget dépensé${m.expected != null ? `, ${pf(m.expected, 0)} % attendus à ce jour` : ""}" data-css="--c:${st.color}"><i data-css="width:${Math.min(100, m.ratio * 100).toFixed(1)}%"></i>${m.expected != null ? `<span class="pace" data-css="left:${(m.expected * 100).toFixed(1)}%"></span>` : ""}</div>`}
       <div class="status ${st.k}">${ic(st.icon)}<span>${st.text}</span></div>
       ${fe.data ? savingsStrip(fe.data) : ""}
@@ -312,7 +312,7 @@ function categories(m) {
   return `<section class="card" id="budCats" aria-labelledby="t-cats">
       <div class="section-head"><h2 class="section-title" id="t-cats">Catégories${nOver ? ` <span class="pill bad">${nOver} dépassée${nOver > 1 ? "s" : ""}</span>` : ""}</h2>${head}</div>
       ${unclRow}${varPart}${fixedPart || ""}${!vars.length && !fixed.length && !uncl ? '<div class="empty">Aucune dépense sur la période.</div>' : ""}
-      ${B.bgroup ? "" : `<button class="secondary plan-btn" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}${m.T == null ? "Créer mon budget" : "Préparer le budget"}</button>`}
+      ${B.bgroup || m.T == null ? "" : `<button class="secondary plan-btn" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}Préparer le budget</button>`}
       ${pv != null && vars.length ? '<p class="hint">Le trait vertical marque où tu devrais en être aujourd\'hui. Les charges fixes sont dues en entier, elles n\'en ont pas.</p>' : ""}
     </section>`;
 }
