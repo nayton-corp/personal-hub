@@ -62,6 +62,8 @@ class SettingsSection:
 
 @dataclass(frozen=True)
 class AppModule:
+    label: str = ""  # le nom de son espace dans l'app (barre du bas) ; sans lui, le domaine
+    icon: str = ""  # l'icône de son espace
     tabs: tuple[Tab, ...] = ()
     home_cards: tuple[HomeCard, ...] = ()
     settings: tuple[SettingsSection, ...] = ()
@@ -145,6 +147,8 @@ class Manifest:
         return {
             "description": self.description,
             "app": {
+                "label": self.app.label,
+                "icon": self.app.icon,
                 "tabs": [vars(t) for t in sorted(self.app.tabs, key=lambda t: (t.order, t.id))],
                 "home_cards": [vars(c) for c in self.app.home_cards],
                 "settings": [vars(s) for s in self.app.settings],

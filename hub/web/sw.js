@@ -1,5 +1,5 @@
 // Service worker minimal : met en cache la coquille de l'app, jamais les réponses de l'API.
-const CACHE = "hub-shell-v30";
+const CACHE = "hub-shell-v31";
 // la coquille seule : les modules des domaines (/d/<domaine>/…) se gardent au premier chargement
 const SHELL = ["/", "/index.html", "/app.js", "/shell.js", "/accueil.js", "/approvals.js", "/sources.js", "/store.js", "/ui.js",
   "/format.js", "/webauthn.js", "/styles.css", "/fonts/ibm-plex-sans-latin-400-normal.woff2",

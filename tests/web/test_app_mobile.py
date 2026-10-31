@@ -197,10 +197,26 @@ def _screen_ok(pg: Any, name: str, shot: str | None = None) -> None:
     assert pg.problems == [], f"{name} : {pg.problems}"
 
 
+def open_tab(pg: Any, tab: str) -> None:
+    """L'accueil est dans la barre du bas ; les écrans de la finance, sous son espace."""
+    if tab == "accueil":
+        pg.click('#tabs button[data-v="accueil"]')
+    else:
+        # déjà dans l'espace, un toucher sur « Finance » ramènerait au premier onglet : on passe
+        # par l'accueil pour que la vue visible ne change plus sous le clic
+        pg.click('#tabs button[data-v="accueil"]')
+        pg.wait_for_selector("#accueil:not([hidden])")
+        pg.click('#tabs button[data-v="finance"]')
+        pg.wait_for_selector(".view:not([hidden]) .subtabs button[aria-current]")
+        pg.locator(f'.view:not([hidden]) .subtabs button[data-v="{tab}"]').click()
+    pg.wait_for_selector(f"#{tab}:not([hidden])")
+    if tab == "journal":  # ses écritures arrivent hors du store : « networkidle » peut les devancer
+        pg.wait_for_selector("#journal .tx-row")
+
+
 @pytest.mark.parametrize("tab", TABS)
 def test_each_tab_renders_at_375px(page: Any, tab: str) -> None:
-    page.click(f'#tabs button[data-v="{tab}"]')
-    page.wait_for_selector(f'#tabs button[data-v="{tab}"][aria-current="page"]')
+    open_tab(page, tab)
     _screen_ok(page, tab)
 
 
@@ -224,7 +240,7 @@ def test_home_rows_of_every_domain_use_the_full_width(page: Any) -> None:
 
 
 def test_the_year_of_demo_data_reaches_the_screens(page: Any) -> None:
-    page.click('#tabs button[data-v="journal"]')
+    open_tab(page, "journal")
     page.wait_for_load_state("networkidle")
     assert "Employeur Fictif SA" in page.locator("#journal").inner_text()
 

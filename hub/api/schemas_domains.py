@@ -66,6 +66,8 @@ class SettingsSectionOut(BaseModel):
 
 
 class AppModuleOut(BaseModel):
+    label: str = ""  # le nom de l'espace du domaine dans la barre du bas
+    icon: str = ""
     tabs: list[TabOut]
     home_cards: list[HomeCardOut]
     settings: list[SettingsSectionOut]

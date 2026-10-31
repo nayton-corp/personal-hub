@@ -44,7 +44,7 @@ def page(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Any]:
 def test_the_demo_tab_comes_from_its_manifest(page: Any) -> None:
     page.wait_for_selector('#tabs button[data-v="demo"]')
     tabs = page.locator("#tabs button").evaluate_all("bs => bs.map(b => b.dataset.v)")
-    assert tabs == ["accueil", "patrimoine", "budget", "journal", "demo"]
+    assert tabs == ["accueil", "finance", "demo"]  # un espace par domaine qui a des onglets
     assert page.locator('#tabs button[data-v="demo"]').get_attribute("aria-label") == (
         "Démo, 2 à voir"
     )
@@ -54,6 +54,22 @@ def test_the_demo_tab_comes_from_its_manifest(page: Any) -> None:
     assert "0 élément(s) dans le domaine factice des tests, monté 1 fois" in page.inner_text(
         "#demo"
     )
+
+
+def test_a_space_with_several_tabs_puts_them_at_the_top(page: Any) -> None:
+    """La finance est une seule entrée de la barre du bas ; ses onglets sont la barre du haut,
+    et l'espace rouvre le dernier onglet vu."""
+    page.click('#tabs button[data-v="finance"]')
+    page.wait_for_selector('#tabs button[data-v="finance"][aria-current="page"]')
+    subs = page.locator("#patrimoine .subtabs button").all_text_contents()
+    assert subs == ["Patrimoine", "Budget", "Journal"]
+    page.click('#patrimoine .subtabs button[data-v="journal"]')
+    page.wait_for_selector('#journal .subtabs button[data-v="journal"][aria-current="page"]')
+    assert page.locator("#journal .topbar-title").bounding_box()["width"] <= 1  # lecteurs d'écran
+    page.click('#tabs button[data-v="accueil"]')
+    page.click('#tabs button[data-v="finance"]')
+    page.wait_for_selector("#journal:not([hidden])")
+    assert page.problems == []
 
 
 def test_the_demo_adds_a_home_block_and_a_rubric(page: Any) -> None:

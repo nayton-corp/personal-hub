@@ -1,6 +1,8 @@
 // Coquille de l'app (chantier S5) : navigation, barre d'onglets, feuilles, page des réglages.
 // Elle ne connaît aucun domaine : /api/domains lui donne les manifestes, et chaque module nommé
 // (fichier du dossier web/ du domaine) est chargé puis monté.
+// La barre du bas porte l'accueil du hub puis un espace par domaine qui a des onglets (`label`,
+// `icon` du manifeste) ; dans un espace, ses onglets sont des sous-onglets en haut de l'écran.
 //   - onglet (`tabs[].module`) : render(), actions ; facultatifs todoCount(), todoLabel,
 //     unlink(lien) quand l'historique quitte un lien suivi ;
 //   - accueil (`home`) : render(box), actions ; facultatif rows() (accueil.js) ; il
@@ -24,7 +26,10 @@ import {
 const $ = (id) => document.getElementById(id);
 const P = store.params;
 const CACHED = "hub.domains"; // les manifestes du dernier lancement, pour démarrer hors ligne
-const TABS = [];
+const TABS = []; // [id, libellé, icône] de la barre du bas : l'accueil, puis les espaces
+const SPACES = {}; // domaine → { label, views: [[écran, libellé]] }
+const SPACE_OF = {}; // écran → son espace
+const LAST = {}; // espace → dernier écran ouvert
 const VIEWS = { accueil: accueil.render, sources: sources.render };
 const LABEL = { accueil: "Accueil", sources: "Sources et réglages" };
 const ACTIONS = { ...sources.actions, ...approvals.actions };
@@ -63,6 +68,23 @@ function viewFor(tab) {
   $("sources").before(s);
 }
 
+// l'espace d'un domaine : ses onglets, sous une seule entrée de la barre du bas. Avec plusieurs
+// onglets, le sélecteur des sous-onglets devient la barre du haut de chacun d'eux : le titre ne
+// reste que pour les lecteurs d'écran (la barre du bas dit déjà où l'on est)
+function spaceFor(d, label, tabs) {
+  if (!tabs.length) return;
+  const views = tabs.map((t) => [t.id, t.label]);
+  SPACES[d.name] = { label, views };
+  for (const [id] of views) SPACE_OF[id] = d.name;
+  TABS.push([d.name, label, d.app.icon || "cube"]);
+  if (views.length < 2) return;
+  for (const [id] of views) {
+    const top = $(id).querySelector(".topbar");
+    top.classList.add("spaced");
+    top.querySelector(".topbar-title").insertAdjacentHTML("afterend", `<nav class="subtabs" data-space="${esc(d.name)}" aria-label="${esc(label)}"></nav>`);
+  }
+}
+
 async function mount() {
   const domains = await manifests();
   // les modules d'un domaine sont servis sous /d/<domaine>/, à côté de son code
@@ -78,25 +100,25 @@ async function mount() {
     Object.assign(ACTIONS, m.actions || {});
     for (const [sel, where, html] of m.markup || []) document.querySelector(sel).insertAdjacentHTML(where, html);
   }
-  const tabs = [];
+  TABS.push(["accueil", "Accueil", "home"]);
+  TODO.accueil = accueil;
   for (const d of domains) {
     const app = d.app, mod = (f) => loaded[path(d, f)];
+    const label = app.label || d.name.charAt(0).toUpperCase() + d.name.slice(1);
     if (app.module) MODULES.push(mod(app.module));
     if (app.home) accueil.add(d.name, mod(app.home));
     if (app.cards) approvals.addCards(d.name, mod(app.cards));
-    for (const t of app.tabs) tabs.push({ ...t, m: mod(t.module) });
     sources.add(app.settings.map((s) => ({ ...s, domain: d.name, m: mod(s.module) })));
-  }
-  tabs.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
-  TABS.push(["accueil", "Accueil", "home"]);
-  TODO.accueil = accueil;
-  for (const t of tabs) {
-    viewFor(t);
-    TABS.push([t.id, t.label, t.icon]);
-    VIEWS[t.id] = t.m.render;
-    LABEL[t.id] = t.label;
-    if (t.m.todoCount) TODO[t.id] = t.m;
-    if (t.m.unlink) LINKED.push(t.m);
+    // les onglets arrivent triés par `order`
+    const tabs = app.tabs.map((t) => ({ ...t, m: mod(t.module) }));
+    for (const t of tabs) {
+      viewFor(t);
+      VIEWS[t.id] = t.m.render;
+      LABEL[t.id] = t.label;
+      if (t.m.todoCount) TODO[t.id] = t.m;
+      if (t.m.unlink) LINKED.push(t.m);
+    }
+    spaceFor(d, label, tabs);
   }
   for (const m of Object.values(loaded)) if (m.init) m.init();
 }
@@ -161,8 +183,18 @@ export function reveal(node, extra = 0) {
 
 export const action = (name) => ACTIONS[name];
 
+// un espace s'ouvre sur son dernier écran ; touché depuis l'un de ses écrans, sur le premier
+function openSpace(name) {
+  const s = SPACES[name];
+  if (!s) return go("accueil", { top: true });
+  const first = s.views[0][0];
+  const to = SPACE_OF[P.tab] === name ? first : LAST[name] || first;
+  go(to, { top: to === P.tab });
+}
+
 Object.assign(ACTIONS, {
   tab: (v) => go(v, { top: v === P.tab }),
+  space: openSpace,
   settings: () => go("sources"),
   rubric: (v) => go("sources", { rubric: v }),
   back: () => {
@@ -201,11 +233,24 @@ function chrome() {
   }
   for (const b of document.querySelectorAll('[data-a="settings"]')) if (!b.firstChild) b.innerHTML = ic("gear");
   for (const b of document.querySelectorAll('[data-a="back"]')) if (!b.firstChild) b.innerHTML = ic("back");
+  const here = SPACE_OF[P.tab] || (P.tab === "accueil" ? "accueil" : null);
+  const count = (k) => (TODO[k] ? TODO[k].todoCount() || 0 : 0);
   fill($("tabs"), TABS.map(([k, l, i]) => {
-    const n = TODO[k] ? TODO[k].todoCount() || 0 : 0;
-    const what = (TODO[k] && TODO[k].todoLabel) || "à traiter";
-    return `<button type="button" data-a="tab" data-v="${k}" ${P.tab === k ? 'aria-current="page"' : ""} aria-label="${l}${n ? `, ${n} ${what}` : ""}">${ic(i)}${l}${n ? `<span class="badge" aria-hidden="true">${n > 99 ? "99+" : n}</span>` : ""}</button>`;
+    const views = k === "accueil" ? ["accueil"] : SPACES[k].views.map(([v]) => v);
+    const n = views.reduce((sum, v) => sum + count(v), 0);
+    const what = (views.length === 1 && TODO[k] && TODO[k].todoLabel) || "à traiter";
+    const act = k === "accueil" ? 'data-a="tab" data-v="accueil"' : `data-a="space" data-v="${k}"`;
+    return `<button type="button" ${act} ${here === k ? 'aria-current="page"' : ""} aria-label="${l}${n ? `, ${n} ${what}` : ""}">${ic(i)}${l}${n ? `<span class="badge" aria-hidden="true">${n > 99 ? "99+" : n}</span>` : ""}</button>`;
   }).join(""));
+  if (here && SPACES[here]) {
+    LAST[here] = P.tab;
+    for (const nav of document.querySelectorAll(`#${CSS.escape(P.tab)} .subtabs`)) {
+      fill(nav, SPACES[here].views.map(([v, l]) => {
+        const n = count(v);
+        return `<button type="button" data-a="tab" data-v="${v}" ${v === P.tab ? 'aria-current="page"' : ""}>${esc(l)}${n ? `<span class="count">${n > 99 ? "99+" : n}</span>` : ""}</button>`;
+      }).join(""));
+    }
+  }
 }
 
 export function draw() {
