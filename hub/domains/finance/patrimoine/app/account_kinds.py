@@ -76,16 +76,18 @@ class EditAccount(Params):
     availability: Literal["auto", "immediate", "days", "locked"] | None = None
     category: Literal["auto", "cash", "funds", "crypto"] | None = None
     hidden: bool | None = None
+    # montant visé en unités entières de la devise du compte ; 0 le retire
+    target: int | None = Field(default=None, ge=0, le=1_000_000_000)
 
 
 class EditAccountHandler:
-    COLS = ("name", "goal", "availability", "category", "hidden")
+    COLS = ("name", "goal", "availability", "category", "hidden", "target_minor")
 
     def _row(self, conn: Connection, account_id: str) -> dict[str, Any]:
         row = conn.execute(
             text(
-                "SELECT institution, name, goal, availability, category, hidden "
-                "FROM accounts WHERE id = :a"
+                "SELECT institution, name, goal, availability, category, hidden, "
+                "target_minor FROM accounts WHERE id = :a"
             ),
             {"a": account_id},
         ).first()
@@ -100,6 +102,7 @@ class EditAccountHandler:
             "availability": p.availability,
             "category": p.category,
             "hidden": None if p.hidden is None else int(p.hidden),
+            "target_minor": None if p.target is None else (p.target * 100 or "auto"),
         }
         out = {}
         for col, v in wanted.items():
@@ -124,6 +127,8 @@ class EditAccountHandler:
             return f"disponibilité {AVAILABILITY_LABEL[v]}" if v else "disponibilité déduite"
         if col == "category":
             return f"catégorie {CATEGORY_LABEL[v].lower()}" if v else "catégorie déduite"
+        if col == "target_minor":
+            return f"montant visé {v // 100:,}".replace(",", "'") if v else "sans montant visé"
         return "masqué" if v else "affiché"
 
     def preview(self, conn: Connection, params: BaseModel) -> Preview:

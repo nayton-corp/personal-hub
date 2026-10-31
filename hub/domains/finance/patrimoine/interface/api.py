@@ -1,5 +1,5 @@
 """Routes du patrimoine : comptes et leur valeur, chiffres clés, positions, dettes, transparence
-des fonds, virements appariés, historique et performance."""
+des fonds, virements appariés, historique, performance et cours d'un instrument."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from hub.domains.finance.patrimoine.app import (
     lookthrough,
     perf_lines,
     performance,
+    price_history,
     snapshots,
     transfers,
 )
@@ -130,5 +131,17 @@ def build_router(host: Host) -> APIRouter:
         if eng is None:
             return performance.empty(base_currency())
         return performance.report(eng, line, from_, to, step)
+
+    @r.get("/prices")
+    def prices_route(
+        _p: AnyReader,
+        isin: Annotated[str, Query(min_length=3, max_length=40)],
+        from_: Annotated[str | None, Query(alias="from", pattern=DATE)] = None,
+        to: Annotated[str | None, Query(pattern=DATE)] = None,
+    ) -> dict[str, Any]:
+        """Cours connus d'un instrument entre deux dates, dans sa devise de cotation, au plus
+        400 points : la courbe « Cours » de la page d'un actif."""
+        with engine.connect() as conn:
+            return price_history.history(conn, isin, from_, to or host.today().isoformat())
 
     return r

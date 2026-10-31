@@ -40,7 +40,7 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
         text(
             "SELECT a.id, a.institution, a.name, a.kind, a.currency, a.iban, a.liquid, "
             "a.budget_account, coalesce(b.balance_minor, 0), b.last_booking, a.external_ref, "
-            "a.goal, a.availability, a.category, a.hidden "
+            "a.goal, a.availability, a.category, a.hidden, a.target_minor "
             "FROM accounts a LEFT JOIN v_balances b ON b.account_id = a.id "
             "ORDER BY a.institution, a.name"
         )
@@ -77,6 +77,8 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
                 # catégorie imposée à toutes les lignes du compte ; NULL : déduite de chaque ligne
                 "category": r[13],
                 "hidden": bool(r[14]),
+                # montant visé, dans la devise du compte ; None sans montant
+                "target": money(r[15], r[4]) if r[15] is not None else None,
                 "spend_rule": spend.get(r[0]),
                 "balance": money(r[8], r[4]),
                 # valeur de marché pour un compte de titres (parts × dernier cours), sinon le solde

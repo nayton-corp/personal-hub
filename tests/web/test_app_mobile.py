@@ -276,3 +276,21 @@ def test_each_settings_rubric_renders_at_375px(page: Any, rubric: str) -> None:
     page.wait_for_selector(f'#sources [data-rubric="{rubric}"]:not(.off-rubric)', state="attached")
     _screen_ok(page, "sources", shot=f"sources-{rubric}")
     page.locator('#sources [data-a="back"]').click()
+
+
+def test_an_account_opens_its_page_and_back_returns_home(page: Any) -> None:
+    """Un compte de la liste ouvre sa page ; le chemin dit où l'on est ; le retour du
+    navigateur ramène au patrimoine entier. La courbe passe en plein écran et en revient."""
+    open_tab(page, "patrimoine")
+    page.wait_for_load_state("networkidle")
+    page.locator('#patrimoine [data-a="w-open"][data-v^="a:"]').first.click()
+    page.wait_for_selector("#patCrumbs:not([hidden])")
+    assert "Patrimoine" in page.inner_text("#patCrumbs")
+    _screen_ok(page, "patrimoine", shot="patrimoine-compte")
+    page.go_back()
+    page.wait_for_selector("#patCrumbs", state="hidden")
+    page.locator('#patrimoine [data-a="w-full"][data-v="1"]').click()
+    page.wait_for_selector("#wland:not([hidden]) svg")
+    page.locator('#wland [data-a="w-full"][data-v="0"]').click()
+    page.wait_for_selector("#wland", state="hidden")
+    _screen_ok(page, "patrimoine")

@@ -2,6 +2,30 @@
 
 ## [Non publié]
 
+### App
+
+- Patrimoine refait :
+  - Net/Brut en haut à droite ; la courbe est simple par défaut, et les puces « Afficher »
+    ajoutent les apports, les avoirs et les dettes, le montant visé, les événements (gros
+    versements, retraits, revenus) et le plus haut et le plus bas ;
+  - courbe datée avec une règle pour mesurer l'écart entre deux dates, et plein écran
+    horizontal ;
+  - périodes au choix (1M 3M YTD 1A 5A Max épinglées par défaut, dix au total, plus une
+    plage libre) ;
+  - Gain et Rendement fusionnés en « Performance », en CHF ou en %, avec un repère (le cours
+    d'un fonds détenu) ;
+  - « Répartir par » un seul panneau : ce qui vient de tes comptes filtre l'écran, le
+    contenu des fonds se lit seulement ; filtres Compte et Actif en plus des quatre d'avant ;
+  - un compte ou un actif ouvre sa page (courbe, performance, positions ou comptes qui le
+    détiennent), avec un chemin en haut et le retour du navigateur ; une donnée périmée ou
+    incomplète est signalée sur la courbe.
+- Compte : un montant visé, suivi sur sa page avec une projection.
+
+### API
+
+- `GET /api/finance/prices` (cours d'un actif) ; `performance` porte `events` ; `accounts`
+  porte `target`. Migration finance 0018 (`accounts.target_minor`).
+
 ## [0.13.9] · 2026-10-31
 
 ### Collecteurs
