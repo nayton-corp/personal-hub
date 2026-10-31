@@ -226,17 +226,26 @@ def test_sources_and_settings_render_at_375px(page: Any) -> None:
     _screen_ok(page, "sources")
 
 
-def test_home_rows_of_every_domain_use_the_full_width(page: Any) -> None:
-    """Une ligne sans pastille (agenda, documents) prend toute la largeur : son titre tombait
-    dans la colonne de 38 px de l'icône (« Soi… »)."""
+def test_agenda_and_documents_only_surface_what_needs_attention(page: Any) -> None:
+    """L'agenda et les documents n'ont plus de bloc à l'accueil : le rappel en retard et
+    l'entretien dû remontent dans « À savoir », à pleine largeur, et ouvrent l'assistant."""
     page.click('#tabs button[data-v="accueil"]')
+    page.wait_for_selector("#accueil [data-lists] #t-info")
     for d in ("agenda", "documents"):
-        title = page.locator(f'#accueil [data-home="{d}"] .row-title').first
-        title.wait_for()
-        assert title.evaluate("e => e.getBoundingClientRect().width") > 200, d
-    assert "Lave-linge" in page.inner_text('#accueil [data-home="documents"]')
+        assert page.inner_text(f'#accueil [data-home="{d}"]') == "", d
+    info = page.locator("#accueil [data-lists] section:has(#t-info)")
+    subs = info.locator(".row-sub").all_text_contents()
+    assert any(x.startswith("Agenda · Rappel en retard") for x in subs), subs
+    assert any(x.startswith("Documents · Entretien dû") for x in subs), subs
+    assert "Payer l'assurance" in info.inner_text()
+    assert "Lave-linge" in info.inner_text()
+    title = info.locator('.row-title:has-text("Payer l\'assurance")')
+    assert title.evaluate("e => e.getBoundingClientRect().width") > 200
     subs = page.locator("#accueil [data-lists] .row-sub").all_text_contents()
     assert any(x.startswith("Finance · ") for x in subs), subs
+    info.locator('[data-a="assistant-open"]').first.click()
+    page.wait_for_selector("#assistant:not([hidden])")
+    assert page.problems == []
 
 
 def test_the_year_of_demo_data_reaches_the_screens(page: Any) -> None:
