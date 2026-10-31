@@ -24,14 +24,14 @@ export function add(sections) {
   ordered = null;
 }
 
-// une section par domaine, dans l'ordre des domaines, puis celle du hub (la coquille) ; dans
+// la section du hub (la coquille) d'abord, puis une section par domaine, dans leur ordre ; dans
 // une section, les rubriques suivent leur groupe (Données, Préférences, Compte)
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const rank = (r) => (GROUPS.includes(r.group) ? GROUPS.indexOf(r.group) : GROUPS.length);
 
 function groups() {
   if (ordered) return ordered;
-  const all = [...RUBRICS.map((r) => ({ ...r, sec: capital(r.domain) })), ...OWN.map((r) => ({ ...r, sec: "Hub" }))];
+  const all = [...OWN.map((r) => ({ ...r, sec: "Hub" })), ...RUBRICS.map((r) => ({ ...r, sec: capital(r.domain) }))];
   ordered = [...new Set(all.map((r) => r.sec))].map((g) => [g, all.filter((r) => r.sec === g).sort((a, b) => rank(a) - rank(b))]);
   return ordered;
 }

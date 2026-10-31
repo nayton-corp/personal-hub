@@ -94,8 +94,8 @@ const short = (iso) => `${Number(iso.slice(8, 10))} ${MOIS[Number(iso.slice(5, 7
 const shortY = (iso) => `${short(iso)} ${iso.slice(0, 4)}`;
 
 function accNames() {
-  const acc = store.data(accountsPath);
-  return Object.fromEntries((acc ? acc.items : []).map((a) => [a.id, a.institution === a.name ? a.name : `${a.institution} · ${a.name}`]));
+  const items = (store.data(accountsPath) || { items: [] }).items, one = new Set(items.map((a) => a.institution)).size < 2; // une seule banque : nom inutile
+  return Object.fromEntries(items.map((a) => [a.id, one || a.institution === a.name ? a.name : `${a.institution} · ${a.name}`]));
 }
 
 // puces des filtres actifs, chacune retirable d'un toucher

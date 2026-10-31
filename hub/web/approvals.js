@@ -83,6 +83,24 @@ SHEETS.props = () => {
   };
 };
 
+// la carte « À valider » en tête de l'accueil : les premières propositions à cocher, et le
+// Face ID du lot sans ouvrir le panneau ; « Tout voir » l'ouvre (détails, refus)
+const INLINE = 3;
+export function card() {
+  const pe = store.data(pendingPath);
+  const list = pe ? pe.items : [];
+  if (!list.length) return "";
+  const ids = list.filter((p) => !unchecked.has(p.id)).map((p) => p.id);
+  const rows = list.slice(0, INLINE).map((p) => `
+      <div class="prop"><input type="checkbox" id="hp-${esc(p.id)}" data-prop="${esc(p.id)}" ${unchecked.has(p.id) ? "" : "checked"}>
+        <label for="hp-${esc(p.id)}"><b>${esc(p.preview.summary)}</b><span><span>${esc(capital(p.domain))} · ${p.revision > 1 ? "a changé, relis-la" : by(p.created_by)}</span></span></label></div>`).join("");
+  const more = list.length > INLINE ? `<button class="link" type="button" data-a="props">Tout voir (${list.length})</button>` : `<button class="link" type="button" data-a="props">Détails</button>`;
+  return `<section class="card" aria-labelledby="t-approve">
+      <div class="section-head"><h2 class="section-title" id="t-approve">À valider</h2>${more}</div>${rows}
+      <button class="primary" type="button" data-a="props-ok" ${ids.length && !busy ? "" : "disabled"}>${ic("faceid")}${busy ? "Validation…" : ids.length ? `Valider ${ids.length} avec Face ID` : "Rien de coché"}</button>
+    </section>`;
+}
+
 document.addEventListener("change", (e) => {
   const id = e.target.dataset && e.target.dataset.prop;
   if (!id) return;

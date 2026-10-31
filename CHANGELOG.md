@@ -4,6 +4,20 @@
 
 ### App
 
+- Finance, retouches de la revue :
+  - un écart qui s'arrondit à zéro (« +0 CHF · +0,0 % ») est gris, plus vert ;
+  - sur la courbe du patrimoine, le gain est en bleu et la perte en orange, et la légende le
+    dit en mots ;
+  - les périodes (1M…Max) prennent le même sélecteur segmenté que Valeur/Gain/Rendement ;
+  - les filtres du Journal se fondent à droite (la rangée défile) et le filtre choisi est en
+    indigo clair ; avec une seule banque, son nom n'est plus répété sur chaque écriture ;
+  - Budget : sans budget, « Créer mon budget » est le bouton principal, sous le total ; le
+    dernier jour affiche « Dernier jour du mois » au lieu de « 0 jour restant ».
+- Réglages : la section du hub (Affichage, Profil, Sécurité, État du hub) passe en premier,
+  avant celles des domaines.
+- « À valider » ouvre l'accueil : les propositions en attente y sont cochées, avec le bouton
+  « Valider N avec Face ID », sans passer par le panneau (« Détails » ou « Tout voir » l'ouvre
+  encore, pour les détails et les refus). Elles ne sont plus une ligne de « À faire ».
 - L'orbe de l'assistant est au centre de la barre du bas, sur tous les écrans (la même orbe que
   Domia, en WebGL). La toucher ouvre la conversation ; la maintenir écoute (glisser vers le bas
   annule). Hors de la conversation, la réponse sort dans une carte de verre qui reste jusqu'à ce

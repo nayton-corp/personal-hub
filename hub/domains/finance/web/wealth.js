@@ -178,7 +178,7 @@ export function init() {
         <svg class="chart" id="chart" viewBox="0 0 ${W} ${H}" tabindex="0" role="img" aria-label="Courbe d'évolution. Flèches gauche et droite pour lire une date."></svg>
         <div class="chart-legend" id="legend"></div>
         <div class="estimate" id="estimate" hidden></div>
-        <div class="chips-row" id="periods" role="group" aria-label="Période"></div>
+        <div class="chips-row seg" id="periods" role="group" aria-label="Période"></div>
         <div class="seg small" id="modeSeg" role="group" aria-label="Mesure"></div>
       </div>
       <div id="heroFoot"></div>
@@ -371,7 +371,7 @@ function drawChart() {
     ${S.scrub != null ? `<line class="cursor" x1="${cx.toFixed(1)}" x2="${cx.toFixed(1)}" y1="${T}" y2="${H - BOT}"/>` : ""}
     <circle class="dot" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5"/>`);
   fill($("legend"), S.mode === "val"
-    ? `<span><i></i>${current.src.hasDebt ? "Net" : "Valeur"}</span><span><i class="dash"></i>Départ + ${activeCount() ? "apports nets" : "épargne"}</span>${current.src.hasDebt ? '<span><i class="thin"></i>Avoirs</span><span>Bande rouge : tes dettes</span>' : "<span>Écart vert : gain, rouge : perte</span>"}`
+    ? `<span><i></i>${current.src.hasDebt ? "Net" : "Valeur"}</span><span><i class="dash"></i>Départ + ${activeCount() ? "apports nets" : "épargne"}</span>${current.src.hasDebt ? '<span><i class="thin"></i>Avoirs</span><span>Bande rouge : tes dettes</span>' : "<span>Au-dessus du départ : gain (+) · en dessous : perte (−)</span>"}`
     : S.mode === "gain" ? `<span><i></i>Gain cumulé ${per().label}, versements exclus</span>`
     : '<span><i></i>Rendement pondéré dans le temps : les versements n\'y comptent pas</span>');
 }

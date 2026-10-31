@@ -10,7 +10,7 @@
 .hero-delta { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; font-size: .824rem; }
 .period-link { color: var(--muted); font-weight: 500; }
 .delta { font-weight: 600; }
-.delta.pos { color: var(--pos); } .delta.neg { color: var(--neg); } .delta.new { color: var(--accent); }
+.delta.pos { color: var(--pos); } .delta.neg { color: var(--neg); } .delta.new { color: var(--accent); } .delta.zero { color: var(--muted); }
 .share { margin-top: 12px; font-size: .765rem; color: var(--muted); }
 .sharebar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-bottom: 6px; }
 .sharebar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
@@ -28,8 +28,9 @@
 .chart .dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
 .chart .g0 { stop-color: var(--accent); stop-opacity: .22; } .chart .g1 { stop-color: var(--accent); stop-opacity: 0; }
 .chips-row { display: flex; gap: 6px; margin-top: 10px; }
-.pchip { flex: 1; min-height: 44px; border-radius: 8px; font-size: .765rem; font-weight: 600; color: var(--muted); }
-.pchip[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.chips-row.seg { gap: 2px; }
+.pchip { flex: 1; min-height: 40px; border-radius: 8px; font-size: .765rem; font-weight: 600; color: var(--muted); }
+.pchip[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
 .chart-opts { display: flex; gap: 8px; margin-top: 10px; }
 .chart-opts .seg { flex: 1; min-width: 0; }
 .estimate { font-size: .706rem; color: var(--faint); margin-top: 6px; }
@@ -130,7 +131,8 @@
 .searchbox input { width: 100%; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); padding: 0 12px 0 36px; font: inherit; font-size: max(16px, .941rem); color: var(--ink); }
 .searchbox input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 .fchip { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); font-size: .765rem; font-weight: 600; color: var(--muted); white-space: nowrap; background: var(--surface); }
-.fchip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.fchip[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+#jChips { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); padding-right: 32px; }
 .fchip b { background: var(--neg); color: #fff; border-radius: 9px; min-width: 18px; height: 18px; font-size: .647rem; display: grid; place-items: center; padding: 0 5px; }
 .jsum { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 10px 16px; font-size: .735rem; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--line); }
 .jsum b { color: var(--ink); font-weight: 600; }
@@ -152,7 +154,7 @@
 /* journal : filtres et « À classer » détaillé */
 .fchip .ic { width: 15px; height: 15px; }
 .fchip b.cnt { background: var(--accent); }
-.fchip[aria-pressed="true"] b.cnt { background: var(--surface); color: var(--ink); }
+.fchip[aria-pressed="true"] b.cnt { background: var(--accent); color: #fff; }
 .jf-per { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 4px; }
 .jf-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .jf-pair label { min-width: 0; }
@@ -194,7 +196,7 @@
 
 /* performance : haut de l'écran, courbe, dépliage, section repliable */
 .hero-sub { font-size: .735rem; color: var(--muted); margin-top: 2px; }
-.chart .zone.pos { fill: var(--pos); fill-opacity: .16; } .chart .zone.neg { fill: var(--neg); fill-opacity: .16; }
+.chart .zone.pos { fill: var(--accent); fill-opacity: .16; } .chart .zone.neg { fill: var(--s3); fill-opacity: .2; }
 .chart .dep { fill: none; stroke: var(--faint); stroke-width: 1.4; stroke-dasharray: 4 3; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .676rem; color: var(--muted); margin-top: 6px; }
 .chart-legend i { display: inline-block; width: 14px; vertical-align: middle; margin-right: 5px; border-top: 2px solid var(--accent); }
@@ -312,3 +314,5 @@
 .ibox.brand.xs .ic.logo { width: 13px; height: 13px; }
 /* journal : le jour reste sous la barre du haut pendant le défilement */
 .day { position: sticky; top: var(--topbar-h, 150px); z-index: 2; background: var(--surface-2); }
+
+.plan-cta { margin-top: 12px; }

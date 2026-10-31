@@ -1,10 +1,11 @@
-// Accueil de la coquille (cœur), neutre : aucun domaine ne passe en tête. D'abord « À faire »
-// (ce qui se règle d'un geste, dont les propositions à valider) et « À savoir », tous domaines
+// Accueil de la coquille (cœur), neutre : aucun domaine ne passe en tête. D'abord « À valider »
+// (les propositions, cochées, et leur Face ID), « À faire » (ce qui se règle d'un geste) et
+// « À savoir », tous domaines
 // confondus, où chaque ligne porte le nom de son domaine et mène à l'écran où l'on agit ; puis
 // le bloc de chaque domaine sous son titre, dans l'ordre des domaines.
 // Le module d'accueil d'un domaine (manifeste `home`) exporte render(box) ; il peut exporter
 // rows() : ses lignes { ic, c, mark, t, s, a, v, info }, ou null tant que ses données manquent.
-import { pendingCount, pendingPath } from "./approvals.js";
+import { card, pendingCount, pendingPath } from "./approvals.js";
 import { store } from "./store.js";
 import { esc, fill, ibox, ic } from "./ui.js";
 
@@ -33,8 +34,6 @@ function boxes() {
 // null tant qu'un domaine attend ses données : les listes ne s'affichent pas à moitié
 function rows() {
   const out = [];
-  const n = pendingCount();
-  if (n) out.push({ ic: "faceid", c: "var(--accent)", t: `${n} proposition${n > 1 ? "s" : ""} à valider`, s: "Un seul Face ID pour tout le lot", a: "props" });
   for (const [d, m] of HOMES) {
     if (!m.rows) continue;
     const r = m.rows();
@@ -46,7 +45,7 @@ function rows() {
 
 export function todoCount() {
   const all = rows();
-  return all ? all.filter((x) => !x.info).length : pendingCount();
+  return pendingCount() + (all ? all.filter((x) => !x.info).length : 0);
 }
 
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -61,7 +60,7 @@ function lists() {
   const all = rows();
   if (!all) return "";
   const acts = all.filter((x) => !x.info), infos = all.filter((x) => x.info);
-  return `<section class="card" aria-labelledby="t-todo">
+  return `${card()}<section class="card" aria-labelledby="t-todo">
       <div class="section-head"><h2 class="section-title" id="t-todo">À faire</h2>${acts.length ? `<span class="pill info">${acts.length}</span>` : ""}</div>
       ${acts.length ? acts.map(row).join("") : `<div class="status good">${ic("check")}<span>Rien à faire, tout est à jour.</span></div>`}
     </section>

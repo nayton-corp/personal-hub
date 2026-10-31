@@ -80,7 +80,7 @@ def test_the_demo_adds_a_home_block_and_a_rubric(page: Any) -> None:
     row = page.locator('#rubrics [data-a="rubric"][data-v="demo-prefs"]')
     assert "prête" in row.inner_text()
     groups = page.locator("#rubrics .grp-title").all_text_contents()
-    assert groups == ["Finance", "Demo", "Hub"]  # une section par domaine, puis le hub
+    assert groups == ["Hub", "Finance", "Demo"]  # le hub, puis une section par domaine
     row.click()
     page.wait_for_selector('#sources [data-rubric="demo-prefs"]:not(.off-rubric)')
     assert "Une rubrique venue du manifeste" in page.inner_text("#sources")
@@ -99,6 +99,11 @@ def test_the_home_and_its_approvals_belong_to_the_shell(page: Any) -> None:
     page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")  # tout se relit
     row = page.locator('#accueil [data-lists] [data-a="props"]')
     row.wait_for()
+    # la carte « À valider » ouvre l'accueil : la proposition cochée et le Face ID du lot
+    head = page.locator("#accueil [data-lists] .card").first
+    assert "À valider" in head.inner_text()
+    assert "ajouter lampe" in head.inner_text()
+    assert "Valider 1 avec Face ID" in head.inner_text()
     order = page.locator("#homeBody > div").evaluate_all(
         "ds => ds.map(d => d.dataset.home ?? (d.dataset.lists === undefined ? '' : 'listes'))"
     )
