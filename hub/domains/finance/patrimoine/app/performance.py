@@ -34,6 +34,7 @@ from collections.abc import Iterable, Sequence
 from decimal import Decimal, localcontext
 from typing import Any
 
+from hub.domains.finance.patrimoine.app.perf_events import events
 from hub.domains.finance.patrimoine.app.perf_lines import ABSENT, Engine, Line
 from hub.domains.finance.patrimoine.model.returns import (
     ONE,
@@ -189,6 +190,7 @@ def report(
         "by_year": [_period_json(p, ccy) for p in _periods(days, s, 4)],
         "risk": risk,
         "missing": sorted({ln.id for ln in chosen if any(ln.missing[ks : ke + 1])}),
+        "events": events(eng, chosen, ks, ke, s.value),
     }
 
 
@@ -209,4 +211,5 @@ def empty(ccy: str) -> dict[str, Any]:
         "by_year": [],
         "risk": None,
         "missing": [],
+        "events": [],
     }

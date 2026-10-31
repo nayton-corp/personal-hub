@@ -1,4 +1,4 @@
-// Réglages d'un compte : nom, objectif, disponibilité, catégorie, masquage et catégorie de toutes
+// Réglages d'un compte : nom, objectif et montant visé, disponibilité, catégorie, masquage et catégorie de toutes
 // ses dépenses (une poche Vacances), enregistrés par un seul Face ID. Le panneau s'ouvre depuis le patrimoine (détail d'un
 // compte) ou depuis la carte « Comptes » des réglages, qui montre aussi la fraîcheur.
 import { date, daysSince } from "../../format.js";
@@ -21,11 +21,12 @@ export const hiddenIds = () => new Set(((store.data(ACCOUNTS) || {}).items || []
 
 // état saisi : ce que le compte vaut aujourd'hui, modifié par les choix du panneau
 function initial(a) {
-  return { name: a.name, goal: a.goal, availability: a.availability_set ? a.availability : "auto", category: a.category || "auto", hidden: a.hidden, spend: a.spend_rule ? a.spend_rule.category_id : "" };
+  return { name: a.name, goal: a.goal, target: a.target ? String(Math.round(a.target.minor / 100)) : "", availability: a.availability_set ? a.availability : "auto", category: a.category || "auto", hidden: a.hidden, spend: a.spend_rule ? a.spend_rule.category_id : "" };
 }
 function changes(a, t) {
   const now = initial(a), out = {};
   for (const k of Object.keys(now)) if (t[k] !== now[k]) out[k] = t[k];
+  if ("target" in out && !/^\d{0,10}$/.test(out.target.trim())) return null;
   return "name" in out && !out.name.trim() ? null : out;
 }
 
@@ -51,6 +52,8 @@ SHEETS.account = (id, sh) => {
       <p class="hint">${esc(a.institution)} · ${esc(KIND[a.kind] || a.kind)}${a.iban ? ` · ${esc(a.iban)}` : ""}</p>
       <h3 class="field">Objectif</h3>
       ${radio("goal", facet("goal"), t.goal)}
+      <label class="field" for="acc-target">Montant visé (${esc(a.balance.currency)})<input id="acc-target" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="off" placeholder="aucun" value="${esc(t.target)}"></label>
+      <p class="hint">Un montant à atteindre : la page du compte montre la progression et une date estimée sur tes apports. Vide : pas d'objectif chiffré.</p>
       <h3 class="field">Disponibilité</h3>
       ${radio("availability", [auto(`Selon le type (${facetName("liq", a.availability_auto).toLowerCase()})`), ...facet("liq")], t.availability)}
       <h3 class="field">Catégorie</h3>
@@ -65,8 +68,8 @@ SHEETS.account = (id, sh) => {
 };
 
 document.addEventListener("input", (e) => {
-  if (e.target.id !== "acc-name" || SH.kind !== "account" || !SH.tmp) return;
-  SH.tmp.name = e.target.value;
+  if (!["acc-name", "acc-target"].includes(e.target.id) || SH.kind !== "account" || !SH.tmp) return;
+  SH.tmp[e.target.id === "acc-name" ? "name" : "target"] = e.target.value;
   renderSheet();
 });
 
@@ -114,9 +117,11 @@ export const actions = {
     if (!a) return;
     const name = $("acc-name");
     if (name) SH.tmp.name = name.value;
+    if ($("acc-target")) SH.tmp.target = $("acc-target").value;
     const diff = changes(a, SH.tmp);
     if (!diff || !Object.keys(diff).length) return;
     if ("name" in diff) diff.name = diff.name.trim();
+    if ("target" in diff) diff.target = Number(diff.target.trim() || 0);
     const items = [];
     if ("spend" in diff) {
       // une seule règle « tout débit » par compte : l'ancienne s'éteint, la nouvelle la remplace

@@ -68,6 +68,7 @@ class Engine:
     days: list[str]
     lines: dict[str, Line]
     currency: str
+    banks: frozenset[str] = frozenset()  # comptes bancaires (type « cash ») : salaire et dépenses
 
     def index(self, on: str) -> int:
         """Indice du jour `on`, borné à la série."""
@@ -280,7 +281,8 @@ def build(conn: Connection, as_of: str) -> Engine | None:
             elif cur == ABSENT:
                 ln.flow[k] = 0
             prev = cur
-    return Engine(days, {i: ln for i, ln in lines.items() if _used(ln)}, ccy)
+    banks = frozenset(a[0] for a in accts if a[1] == "cash")
+    return Engine(days, {i: ln for i, ln in lines.items() if _used(ln)}, ccy, banks)
 
 
 def _used(ln: Line) -> bool:

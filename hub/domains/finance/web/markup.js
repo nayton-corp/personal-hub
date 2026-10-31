@@ -17,6 +17,7 @@ const VIEWS = `
     <section class="view" id="patrimoine" data-view="patrimoine" aria-labelledby="t-patrimoine" hidden>
       <header class="topbar" id="pat-top">
         <div class="topbar-row">
+          <nav class="crumbs" id="patCrumbs" aria-label="Chemin" hidden></nav>
           <h1 class="topbar-title" id="t-patrimoine">Patrimoine<span class="topbar-sub" data-fresh></span><span class="topbar-mini num" id="miniTotal"></span></h1>
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
           <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>

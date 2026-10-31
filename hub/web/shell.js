@@ -127,8 +127,10 @@ async function mount() {
 // --- navigation -------------------------------------------------------------------------------
 
 // Chaque écran (et chaque rubrique des réglages) a son entrée d'historique : le geste retour
-// d'iOS revient à l'écran d'avant, comme un lien. state = { tab, rubric, link }.
-const entry = () => ({ tab: P.tab, rubric: P.rubric || null, link: P.jlink || null });
+// d'iOS revient à l'écran d'avant, comme un lien. state = { tab, rubric, link, page } ; `page`
+// est le chemin d'une page dans l'écran (le compte, puis l'actif ouverts depuis le patrimoine).
+const entry = () => ({ tab: P.tab, rubric: P.rubric || null, link: P.jlink || null, page: P.page || null });
+const where = () => P.tab + (P.rubric || "") + (P.page ? JSON.stringify(P.page) : "");
 const title = () => (P.rubric ? sources.rubricLabel(P.rubric) : LABEL[P.tab]);
 
 function remember(replace) {
@@ -145,15 +147,16 @@ export function go(tab, opts = {}) {
   const inSheet = sheetEntryOpen();
   closeSheet(true, false, true);
   const rubric = tab === "sources" ? (opts.rubric ?? null) : null;
-  if (tab === P.tab && rubric === (P.rubric || null)) {
+  const page = opts.page && opts.page.length ? opts.page : null;
+  if (tab === P.tab && rubric === (P.rubric || null) && JSON.stringify(page) === JSON.stringify(P.page || null)) {
     if (inSheet) history.replaceState(entry(), "");
     if (opts.top) window.scrollTo({ top: 0, behavior: reduced() ? "auto" : "smooth" });
     return;
   }
-  scrolls[P.tab + (P.rubric || "")] = window.scrollY;
+  scrolls[where()] = window.scrollY;
   if (tab === "sources" && P.tab !== "sources") back = P.tab;
-  store.set({ tab, rubric, jlink: opts.link || null });
-  if (opts.top) scrolls[tab + (rubric || "")] = 0;
+  store.set({ tab, rubric, jlink: opts.link || null, page });
+  if (opts.top || page) scrolls[where()] = 0;
   remember(inSheet || opts.replace);
   announce(title());
 }
@@ -165,8 +168,8 @@ function popped(e) {
   const s = e.state || { tab: "accueil" };
   depth = Math.max(0, depth - 1);
   if (P.jlink && s.link !== P.jlink) for (const m of LINKED) m.unlink(P.jlink);
-  scrolls[P.tab + (P.rubric || "")] = window.scrollY;
-  store.set({ tab: VIEWS[s.tab] ? s.tab : "accueil", rubric: s.rubric || null, jlink: s.link || null });
+  scrolls[where()] = window.scrollY;
+  store.set({ tab: VIEWS[s.tab] ? s.tab : "accueil", rubric: s.rubric || null, jlink: s.link || null, page: s.page || null });
   announce(title());
 }
 
@@ -269,7 +272,7 @@ export function draw() {
   if (SH.kind) renderSheet();
   assistant.after();
   for (const m of MODULES) if (m.after) m.after();
-  const key = P.tab + (P.rubric || "");
+  const key = where();
   if (drawn !== key) {
     drawn = key;
     window.scrollTo(0, scrolls[key] || 0);

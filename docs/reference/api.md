@@ -100,6 +100,7 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `GET` | `/api/finance/lookthrough` | Positions ventilées par région, secteur, devise, ou les dix plus grosses lignes sous-jacentes (transparence des fonds). |
 | `GET` | `/api/finance/networth/history` | Instantanés : patrimoine, versements cumulés, valeur par enveloppe et par compte. `step=day` ou `week` : un point par jour ou par semaine, calculé à la demande entre `from` et `to` (aujourd'hui par défaut), au plus 400 points. |
 | `GET` | `/api/finance/performance` | Performance d'une sélection de lignes (`line=<compte>\|<instrument>`, `<compte>\|cash`, `debt:<id>` ; par défaut, celles de l'app) : courbe de la valeur, des apports nets, du gain et du rendement pondéré dans le temps ; résumé (gain, revenus, frais, rendement, rendement personnel annuel) ; le même par compte, par actif, par ligne ; par mois et par année ; risque. Des agrégats seulement. |
+| `GET` | `/api/finance/prices` | Cours connus d'un instrument entre deux dates, dans sa devise de cotation, au plus 400 points : la courbe « Cours » de la page d'un actif. |
 | `GET` | `/api/finance/recurring` | Abonnements et paiements réguliers, prochaines échéances, total mensuel ; pour la portée `aggregates`, les totaux seulement. |
 | `GET` | `/api/finance/review` | Écritures sans catégorie, groupées par contrepartie normalisée. |
 | `GET` | `/api/finance/rules/packs` | Packs de règles livrés, version installée, ceux du pays de l'instance, et le nombre de règles actives hors système (parcours d'accueil). |

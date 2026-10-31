@@ -33,7 +33,7 @@ function divBars(rows) {
   const m = Math.max(...rows.map((r) => Math.abs(r.v)), 1);
   return `<div class="pbars">${rows.map((r) => {
     const w = (Math.abs(r.v) / m) * 50;
-    return `<button class="bar-row go" type="button" data-a="w-jump" data-v="${esc(r.jump)}" aria-label="${esc(r.n)}, ${sgn(r.v)}${n0(r.v)} ${base()}. Voir dans le détail">
+    return `<button class="bar-row go" type="button" data-a="w-jump" data-v="${esc(r.jump)}" aria-label="${esc(r.n)}, ${sgn(r.v)}${n0(r.v)} ${base()}. Ouvrir sa page">
       <span class="nm">${esc(r.n)}</span><span class="track div"><b class="${tone(r.v)}" data-css="left:${pctw(r.v >= 0 ? 50 : 50 - w)}%;width:${pctw(w)}%"></b></span><span class="vl ${tone(r.v)}">${signedMoney(r.v)}</span></button>`;
   }).join("")}</div>`;
 }
@@ -41,7 +41,7 @@ function divBars(rows) {
 // barres simples (part, frais) : `cls` colore, `vl` est le texte de droite
 function plainBars(rows, cls) {
   const m = Math.max(...rows.map((r) => Math.abs(r.v)), 1e-9);
-  return `<div class="pbars">${rows.map((r) => `<button class="bar-row go" type="button" data-a="w-jump" data-v="${esc(r.jump)}" aria-label="${esc(r.n)}, ${esc(r.label)}. Voir dans le détail">
+  return `<div class="pbars">${rows.map((r) => `<button class="bar-row go" type="button" data-a="w-jump" data-v="${esc(r.jump)}" aria-label="${esc(r.n)}, ${esc(r.label)}. Ouvrir sa page">
       <span class="nm">${esc(r.n)}</span><span class="track plain"><b class="${cls}" data-css="left:0;width:${pctw((Math.abs(r.v) / m) * 100)}%"></b></span><span class="vl">${r.vl}</span></button>`).join("")}</div>`;
 }
 
