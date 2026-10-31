@@ -42,7 +42,9 @@ Les mots sont ceux du [glossaire](glossaire.md) ; la décision qui fonde le mani
 invalide.
 
 - `description` et `assistant` : ce que l'assistant lit du domaine, et ses consignes.
-- `app` : `tabs` (onglets : identifiant, libellé, icône, module, ordre), `home_cards` (blocs
+- `app` : `label` et `icon` (son espace dans la barre du bas, s'il a des onglets), `tabs`
+  (onglets : identifiant, libellé, icône, module, ordre ; à partir de deux, ils deviennent les
+  sous-onglets en haut de l'espace), `home_cards` (blocs
   de l'accueil, lus sur une route du domaine), `settings` (rubriques de « Sources et
   réglages », dans la section du domaine, ordonnées par groupe), `cards` (module qui dessine ses cartes à valider), `home`
   (module de ses blocs d'accueil), `module` (son module : démarrage, rendu commun, liens des

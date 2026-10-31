@@ -4,6 +4,12 @@
 
 ### App
 
+- La barre du bas ne porte plus que l'accueil et un espace par domaine qui a des onglets :
+  « Finance » remplace Patrimoine, Budget et Journal. Dans l'espace, ses onglets sont la barre
+  du haut (Patrimoine · Budget · Journal), à côté de l'œil et des réglages, sans titre ;
+  l'espace rouvre le dernier onglet vu. Le manifeste d'un domaine donne `label` et `icon`.
+- L'accueil n'a plus de barre de titre : une ligne discrète (« Mis à jour… », l'œil, les
+  réglages) défile avec lui. On gagne environ 50 px en haut de chaque écran.
 - L'accueil est neutre : aucun domaine ne passe plus en tête. « À faire » et « À savoir »
   viennent d'abord, chaque ligne avec le nom de son domaine (« Finance · … »), puis le bloc de
   chaque domaine sous son titre (Agenda, Documents, Finance).

@@ -56,6 +56,18 @@ button:disabled { cursor: default; }
 .topbar-sub.warn { color: var(--warn); }
 .topbar-mini { font-size: .765rem; font-weight: 600; color: var(--muted); height: 0; overflow: hidden; opacity: 0; transition: opacity .2s, height .2s; }
 .topbar.compact .topbar-mini { height: 17px; opacity: 1; }
+/* l'accueil n'a pas de barre : une ligne discrète (fraîcheur, œil, réglages) qui défile avec lui */
+.bare-bar { display: flex; align-items: center; gap: 2px; padding: calc(var(--top) + 4px) 8px 0 16px; }
+.bare-bar .topbar-sub { flex: 1; min-width: 0; }
+.bare-bar .icon-btn, .topbar.spaced .icon-btn { width: 40px; height: 40px; }
+/* dans un espace à plusieurs onglets, les sous-onglets sont la barre du haut ; le titre reste
+   pour les lecteurs d'écran */
+.topbar.spaced .topbar-row { padding: 6px 8px 6px 16px; gap: 4px; }
+.topbar.spaced .topbar-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.subtabs { flex: 1; min-width: 0; display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface-2); }
+.subtabs button { position: relative; flex: 1; min-width: 0; min-height: 38px; border-radius: 8px; font-size: .735rem; font-weight: 600; color: var(--muted); white-space: nowrap; padding: 0 6px; }
+.subtabs button[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+.subtabs .count { margin-left: 4px; color: var(--accent); font-variant-numeric: tabular-nums; }
 .icon-btn { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; color: var(--muted); flex: none; }
 .icon-btn:hover { background: var(--surface-2); }
 .icon-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
@@ -256,7 +268,7 @@ button:disabled { cursor: default; }
 
 /* barre d'onglets */
 .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; background: var(--surface); border-top: 1px solid var(--line); padding: 4px 6px calc(6px + var(--bottom)); }
-.tabbar .in { max-width: 34rem; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); }
+.tabbar .in { max-width: 34rem; margin: 0 auto; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
 .tabbar button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 52px; justify-content: center; font-size: .647rem; font-weight: 600; color: var(--faint); border-radius: 10px; }
 .tabbar button svg { width: 24px; height: 24px; }
 .tabbar button[aria-current="page"] { color: var(--accent); }

@@ -50,6 +50,8 @@ LEDGER = integrity.Ledger(integrity.COMMON_FIELDS)
 MANIFEST = Manifest(
     description="Domaine factice des tests : des éléments nommés.",
     app=AppModule(
+        label="Démo",
+        icon="cube",
         tabs=(Tab("demo", "Démo", "list", "demo.js", order=60),),
         home_cards=(HomeCard("compte", "Éléments", "/summary"),),
         settings=(SettingsSection("demo-prefs", "Démo", "gear", "Préférences", "demo.js"),),

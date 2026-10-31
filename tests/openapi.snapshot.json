@@ -121,6 +121,16 @@
             "title": "Home Cards",
             "type": "array"
           },
+          "icon": {
+            "default": "",
+            "title": "Icon",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
           "module": {
             "anyOf": [
               {
