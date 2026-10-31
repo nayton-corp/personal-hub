@@ -82,6 +82,7 @@ class Browser:
         self.diag = diag
         self.page: Page = context.pages[0] if context.pages else context.new_page()
         self.downloads: list[Download] = []
+        self.step = "start"  # la dernière étape tentée, pour le journal d'une erreur inattendue
         self.page.on("download", self._got)
         context.on("page", lambda p: p.on("download", self._got))
 
@@ -93,6 +94,7 @@ class Browser:
     def goto(self, url: str, step: str) -> None:
         from playwright.sync_api import Error as PwError
 
+        self.step = step
         try:
             try:
                 self.page.goto(url, wait_until="domcontentloaded", timeout=30_000)
@@ -115,9 +117,20 @@ class Browser:
             pass  # une page qui bavarde sans fin ne bloque pas : la suite vérifie l'état
 
     def frames(self) -> list[Frame]:
+        # la banque peut fermer l'onglet et rouvrir la session ailleurs (validation au téléphone)
+        if self.page.is_closed() and self.context.pages:
+            self.page = self.context.pages[-1]
         return list(self.page.frames)
 
+    def pause(self, ms: int) -> None:
+        """Attente entre deux essais, qui survit à une page en plein rechargement."""
+        try:
+            self.page.wait_for_timeout(ms)
+        except Exception:  # page fermée ou contexte détruit : on attend sans elle
+            time.sleep(ms / 1000)
+
     def find(self, name: str, timeout_ms: int = 10_000) -> ElementHandle | None:
+        self.step = name
         css = self.sel.get(name)
         end = _deadline(timeout_ms)
         while True:
@@ -130,7 +143,7 @@ class Browser:
                     continue
             if time.monotonic_ns() >= end:
                 return None
-            self.page.wait_for_timeout(POLL_MS)
+            self.pause(POLL_MS)
 
     def exists(self, name: str, timeout_ms: int = 5_000) -> bool:
         """Présent dans le DOM, visible ou non (cases à cocher masquées, etc.)."""
@@ -148,6 +161,7 @@ class Browser:
             self.page.wait_for_timeout(POLL_MS)
 
     def frame_of(self, name: str, timeout_ms: int = 10_000) -> Frame | None:
+        self.step = name
         css = self.sel.get(name)
         end = _deadline(timeout_ms)
         while True:
@@ -159,7 +173,7 @@ class Browser:
                     continue
             if time.monotonic_ns() >= end:
                 return None
-            self.page.wait_for_timeout(POLL_MS)
+            self.pause(POLL_MS)
 
     def require(self, name: str, timeout_ms: int = 10_000) -> ElementHandle:
         el = self.find(name, timeout_ms)
@@ -197,15 +211,21 @@ class Browser:
         return total
 
     def wait_for(self, checks: dict[str, Callable[[], bool]], timeout_ms: int) -> str | None:
-        """Premier état atteint parmi `checks`, ou None à l'échéance."""
+        """Premier état atteint parmi `checks`, ou None à l'échéance. Une page qui se recharge
+        pendant un essai (la banque passe à la session validée) ne compte pas : on réessaie."""
         end = _deadline(timeout_ms)
         while True:
             for state, check in checks.items():
-                if check():
-                    return state
+                try:
+                    if check():
+                        return state
+                except Failure:
+                    raise
+                except Exception:  # noqa: S112 - navigation en cours
+                    continue
             if time.monotonic_ns() >= end:
                 return None
-            self.page.wait_for_timeout(POLL_MS * 2)
+            self.pause(POLL_MS * 2)
 
     # --- téléchargement --------------------------------------------------------------------
 
@@ -220,7 +240,7 @@ class Browser:
         while not self.downloads:
             if time.monotonic_ns() >= end or (give_up is not None and give_up()):
                 return None
-            self.page.wait_for_timeout(POLL_MS)
+            self.pause(POLL_MS)
         d = self.downloads.pop(0)
         path = d.path()
         data = Path(path).read_bytes()
@@ -255,8 +275,16 @@ def open_browser(
             accept_downloads=True,
             args=["--disable-dev-shm-usage"],
         )
+        b = Browser(context, selectors, diag)
         try:
-            yield Browser(context, selectors, diag)
+            yield b
+        except Failure:
+            raise
+        except Exception as exc:
+            # erreur inattendue du navigateur : le journal dit à quelle étape et de quel type,
+            # jamais son message (il peut citer la page)
+            b.snap(f"error-{b.step}")
+            raise Failure("unknown", f"{b.step}:{type(exc).__name__.lower()}") from None
         finally:
             context.close()
 

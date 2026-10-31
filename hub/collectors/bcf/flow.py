@@ -60,6 +60,7 @@ def login(b: Browser, env: Env) -> None:
     if early == "in":
         return
     env.notify("auth_pending")
+    b.step = "login.push"
     state = b.wait_for(
         {
             "in": lambda: b.text_matches(sel.site("logged_in")),

@@ -129,3 +129,46 @@ def test_diagnose_writes_screenshots(
     result = execute(env, "run")
     assert result.detail == "export.date_from"
     assert list((env.cfg.diag / "bcf").glob("*.png"))
+
+
+def test_a_page_reloading_during_the_push_wait_is_retried(
+    make_env, bank: Bank, monkeypatch: pytest.MonkeyPatch
+) -> None:  # type: ignore[no-untyped-def]
+    """Valider sur le téléphone recharge la page de la banque : un essai qui tombe en pleine
+    navigation (« Execution context was destroyed ») ne met pas fin au run (31/10)."""
+    from playwright.sync_api import Error as PwError
+
+    from hub.collectors.browser import Browser
+
+    bank.push_ms = 2_000
+    real = Browser.text_matches
+    calls = {"n": 0}
+
+    def flaky(self: Browser, pattern: str) -> bool:
+        calls["n"] += 1
+        if calls["n"] in {5, 6}:  # après la notification, pendant l'attente du push
+            raise PwError("Execution context was destroyed")
+        return real(self, pattern)
+
+    monkeypatch.setattr(Browser, "text_matches", flaky)
+    result = execute(make_env("bcf"), "run")
+    assert (result.outcome, result.files) == ("ok", 1)
+    assert calls["n"] > 6
+
+
+def test_an_unexpected_browser_error_names_its_step(
+    make_env, monkeypatch: pytest.MonkeyPatch
+) -> None:  # type: ignore[no-untyped-def]
+    """Une erreur imprévue du navigateur dit à quelle étape elle tombe, sans son message."""
+    from playwright.sync_api import Error as PwError
+
+    def broken(b):  # type: ignore[no-untyped-def]
+        b.find("statement.link", 1_000)
+        raise PwError("Target page crashed: texte de la page")
+
+    monkeypatch.setattr(flow, "open_statement", broken)
+    env = make_env("bcf")
+    env.diagnose = True
+    result = execute(env, "run")
+    assert (result.outcome, result.detail) == ("unknown", "statement.link:error")
+    assert list((env.cfg.diag / "bcf").glob("*error-statement.link.png"))
