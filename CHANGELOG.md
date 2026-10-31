@@ -4,6 +4,9 @@
 
 ### App
 
+- « À valider » ouvre l'accueil : les propositions en attente y sont cochées, avec le bouton
+  « Valider N avec Face ID », sans passer par le panneau (« Détails » ou « Tout voir » l'ouvre
+  encore, pour les détails et les refus). Elles ne sont plus une ligne de « À faire ».
 - L'orbe de l'assistant est au centre de la barre du bas, sur tous les écrans (la même orbe que
   Domia, en WebGL). La toucher ouvre la conversation ; la maintenir écoute (glisser vers le bas
   annule). Hors de la conversation, la réponse sort dans une carte de verre qui reste jusqu'à ce

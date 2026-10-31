@@ -99,6 +99,11 @@ def test_the_home_and_its_approvals_belong_to_the_shell(page: Any) -> None:
     page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")  # tout se relit
     row = page.locator('#accueil [data-lists] [data-a="props"]')
     row.wait_for()
+    # la carte « À valider » ouvre l'accueil : la proposition cochée et le Face ID du lot
+    head = page.locator("#accueil [data-lists] .card").first
+    assert "À valider" in head.inner_text()
+    assert "ajouter lampe" in head.inner_text()
+    assert "Valider 1 avec Face ID" in head.inner_text()
     order = page.locator("#homeBody > div").evaluate_all(
         "ds => ds.map(d => d.dataset.home ?? (d.dataset.lists === undefined ? '' : 'listes'))"
     )

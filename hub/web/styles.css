@@ -199,6 +199,7 @@ button:disabled { cursor: default; }
 .primary { width: 100%; min-height: 48px; border-radius: 14px; background: var(--accent); color: var(--surface); font-weight: 700; font-size: .882rem; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 14px; }
 .primary .ic { width: 20px; height: 20px; }
 .primary:disabled { opacity: .45; }
+.card > .primary { margin-top: 12px; }
 .secondary { width: 100%; min-height: 46px; border-radius: 14px; border: 1px solid var(--line); font-weight: 600; font-size: .853rem; display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--surface); padding: 0 14px; text-decoration: none; color: var(--ink); }
 .secondary:disabled { opacity: .5; }
 .danger { color: var(--neg); }
