@@ -1,38 +1,25 @@
-// Bloc d'accueil de l'agenda (S11) : la semaine, les rappels en retard ou du jour (les autres
-// comptés), la liste de courses. Le pont Rappels/Calendrier absent (Mac en veille, accès
-// retiré), le bloc le dit sans erreur.
+// L'agenda à l'accueil (S11, revu le 31/10) : pas de bloc à lui. Les rendez-vous et les rappels
+// restent dans Rappels et Calendrier de l'iPhone ; seuls les rappels en retard remontent dans
+// « À savoir », et la ligne ouvre l'assistant. Le pont absent (Mac en veille), rien ne s'affiche.
 import { date } from "../../format.js";
 import { store } from "../../store.js";
-import { esc, fill } from "../../ui.js";
+import { fill } from "../../ui.js";
 
 const PATH = "/agenda/overview";
-const SHOWN = 5;
+const SHOWN = 3;
 
-const when = (iso) => (iso && iso.length > 10 ? `${date(iso.slice(0, 10))} · ${iso.slice(11, 16)}` : iso ? date(iso) : "");
+const today = () => new Date().toLocaleDateString("sv-SE"); // AAAA-MM-JJ, à l'heure locale
 
-function rows(items, sub) {
-  return items
-    .slice(0, SHOWN)
-    .map((x) => `<div class="row bare"><span class="row-main"><span class="row-title">${esc(x.title)}</span><span class="row-sub">${esc(sub(x))}</span></span></div>`)
-    .join("");
+export function rows() {
+  const o = store.use(PATH).data;
+  if (!o) return null;
+  if (!o.available) return [];
+  const late = o.reminders.filter((r) => r.due && r.due.slice(0, 10) < today());
+  const out = late.slice(0, SHOWN).map((r) => ({ info: true, ic: "calendar", c: "var(--s3)", t: r.title, s: `Rappel en retard depuis le ${date(r.due.slice(0, 10))}`, a: "assistant-open" }));
+  if (late.length > SHOWN) out.push({ info: true, ic: "calendar", c: "var(--s3)", t: `${late.length - SHOWN} autre${late.length - SHOWN > 1 ? "s" : ""} rappel${late.length - SHOWN > 1 ? "s" : ""} en retard`, s: "Dans Rappels", a: "assistant-open" });
+  return out;
 }
 
 export function render(box) {
-  const o = store.use(PATH).data;
-  if (!o) return;
-  if (!o.available) {
-    fill(box, `<section class="card" aria-labelledby="t-agenda"><h2 class="section-title" id="t-agenda">Agenda</h2><p class="note">Rappels et Calendrier ne répondent pas pour l'instant.</p></section>`);
-    return;
-  }
-  const late = o.overdue ? ` · ${o.overdue} en retard` : "";
-  fill(
-    box,
-    `<section class="card" aria-labelledby="t-agenda">
-      <h2 class="section-title" id="t-agenda">Agenda</h2>
-      ${o.events.length ? rows(o.events, (e) => when(e.start)) : '<p class="note">Rien au calendrier cette semaine.</p>'}
-      ${o.open_reminders ? `<h3 class="row-sub">${o.open_reminders} rappel${o.open_reminders > 1 ? "s" : ""} ouvert${o.open_reminders > 1 ? "s" : ""}${late}</h3>${rows(o.reminders, (r) => when(r.due))}` : ""}
-      ${o.shopping.length ? `<p class="note">Courses : ${o.shopping.map((s) => esc(s.title)).join(", ")}</p>` : ""}
-    </section>`,
-  );
+  fill(box, "");
 }
-

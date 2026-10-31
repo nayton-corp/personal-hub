@@ -2,6 +2,13 @@
 
 ## [Non publié]
 
+### App
+
+- L'accueil n'a plus de bloc Agenda ni de bloc Documents : les rendez-vous et les rappels
+  restent dans Rappels et Calendrier, les documents se demandent à l'assistant. Seuls les
+  rappels en retard et les entretiens dus remontent dans « À savoir », et la ligne ouvre
+  l'assistant.
+
 ## [0.13.7] · 2026-10-31
 
 ### App
