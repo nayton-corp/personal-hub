@@ -5,6 +5,9 @@ Clé d'un instrument (`instruments.isin`) : l'ISIN quand il existe, sinon une cl
 `CRYPTO:BTC` pour une crypto, `IBKR:<conid>` pour un titre IBKR sans ISIN, `SYM:<symbole>` pour
 une position saisie à la main. `prices` et `holdings` sont en ajout seul et chaînés au journal :
 une ligne déjà présente (même instrument, même date, même source) n'est jamais réécrite.
+
+Un solde crypto relevé plusieurs fois le même jour (« Actualiser », les passages de 4 h) ajoute
+une ligne quand il a bougé : à date égale, la ligne la plus récente (`seq`) fait foi.
 """
 
 from __future__ import annotations
@@ -116,12 +119,13 @@ def add_holding(
     currency: str,
     import_id: str,
     cost_price: Decimal | None = None,
+    *,
+    intraday: bool = False,
 ) -> bool:
-    found = conn.execute(
-        text("SELECT 1 FROM holdings WHERE account_id = :a AND on_date = :d AND isin = :i"),
-        {"a": account_id, "d": on_date, "i": key},
-    ).first()
-    if found is not None:
+    """Un relevé de position ; False s'il est déjà connu pour ce jour. `intraday` (soldes
+    crypto) : un relevé de plus dans la journée s'ajoute si la quantité a changé."""
+    found = day_holdings(conn, account_id, on_date).get(key)
+    if found is not None and (not intraday or found == qty_text(quantity)):
         return False
     ledger.append(
         conn,
@@ -139,6 +143,18 @@ def add_holding(
         },
     )
     return True
+
+
+def day_holdings(conn: Connection, account_id: str, on_date: str) -> dict[str, str]:
+    """{instrument: parts} du relevé d'un compte à ce jour : la ligne la plus récente."""
+    rows = conn.execute(
+        text(
+            "SELECT isin, quantity FROM holdings WHERE account_id = :a AND on_date = :d "
+            "ORDER BY seq"
+        ),
+        {"a": account_id, "d": on_date},
+    )
+    return {str(isin): str(q) for isin, q in rows}
 
 
 def add_fx(

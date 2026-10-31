@@ -2,6 +2,13 @@
 
 ## [Non publié]
 
+### Finance
+
+- « Actualiser » met à jour le solde crypto du jour dans le patrimoine tout de suite (avant :
+  le lendemain). Un relevé de plus le même jour ajoute une ligne quand le solde a bougé, une
+  crypto sortie du relevé passe à zéro, la plus récente fait foi. Migration finance 0019
+  (`holdings` sans la contrainte d'un relevé par jour, lignes et empreintes gardées).
+
 ### Assistant
 
 - Le modèle du cloud répond d'abord (section `cloud:`, clé dans `.env`), le modèle local le

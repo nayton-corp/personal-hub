@@ -176,7 +176,7 @@ def _cost(
             text(
                 "SELECT h.quantity, h.cost_price, n.currency FROM holdings h JOIN instruments n "
                 "ON n.isin = h.isin WHERE h.account_id = :a AND h.isin = :i AND h.on_date <= :d "
-                "ORDER BY h.on_date DESC LIMIT 1"
+                "ORDER BY h.on_date DESC, h.seq DESC LIMIT 1"
             ),
             {"a": account_id, "i": isin, "d": on_date},
         ).first()
