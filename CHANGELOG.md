@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.13.8] · 2026-10-31
+
 ### App
 
 - L'accueil n'a plus de bloc Agenda ni de bloc Documents : les rendez-vous et les rappels
