@@ -210,6 +210,8 @@ def open_tab(pg: Any, tab: str) -> None:
         pg.wait_for_selector(".view:not([hidden]) .subtabs button[aria-current]")
         pg.locator(f'.view:not([hidden]) .subtabs button[data-v="{tab}"]').click()
     pg.wait_for_selector(f"#{tab}:not([hidden])")
+    if tab == "journal":  # ses écritures arrivent hors du store : « networkidle » peut les devancer
+        pg.wait_for_selector("#journal .tx-row")
 
 
 @pytest.mark.parametrize("tab", TABS)
