@@ -268,7 +268,7 @@ button:disabled { cursor: default; }
 
 /* barre d'onglets */
 .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; background: var(--surface); border-top: 1px solid var(--line); padding: 4px 6px calc(6px + var(--bottom)); }
-.tabbar .in { max-width: 34rem; margin: 0 auto; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+.tabbar .in { max-width: 34rem; margin: 0 auto; }
 .tabbar button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 52px; justify-content: center; font-size: .647rem; font-weight: 600; color: var(--faint); border-radius: 10px; }
 .tabbar button svg { width: 24px; height: 24px; }
 .tabbar button[aria-current="page"] { color: var(--accent); }

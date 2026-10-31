@@ -90,6 +90,65 @@
         "title": "AcceptResultOut",
         "type": "object"
       },
+      "AnswerOut": {
+        "properties": {
+          "answer": {
+            "default": "",
+            "title": "Answer",
+            "type": "string"
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm"
+          },
+          "done": {
+            "default": [],
+            "items": {},
+            "title": "Done",
+            "type": "array"
+          },
+          "heard": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heard"
+          },
+          "proposals": {
+            "default": [],
+            "items": {},
+            "title": "Proposals",
+            "type": "array"
+          },
+          "speech": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speech"
+          }
+        },
+        "title": "AnswerOut",
+        "type": "object"
+      },
       "AppModuleOut": {
         "properties": {
           "cards": {
@@ -216,6 +275,29 @@
           "approval_digest"
         ],
         "title": "ApprovalChallengeOut",
+        "type": "object"
+      },
+      "AssistantStatusOut": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "voice": {
+            "title": "Voice",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "configured",
+          "ok",
+          "voice"
+        ],
+        "title": "AssistantStatusOut",
         "type": "object"
       },
       "CapabilitiesOut": {
@@ -1323,6 +1405,32 @@
         "title": "HealthOut",
         "type": "object"
       },
+      "HistoryOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "waiting": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Waiting",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "HistoryOut",
+        "type": "object"
+      },
       "HitOut": {
         "properties": {
           "date": {
@@ -2238,6 +2346,21 @@
         "title": "TabOut",
         "type": "object"
       },
+      "TalkIn": {
+        "properties": {
+          "text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TalkIn",
+        "type": "object"
+      },
       "ToolCallOut": {
         "properties": {
           "result": {
@@ -2382,6 +2505,168 @@
         "summary": "Approval Challenge",
         "tags": [
           "propositions"
+        ]
+      }
+    },
+    "/api/assistant/history": {
+      "get": {
+        "operationId": "history_api_assistant_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "History",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/api/assistant/status": {
+      "get": {
+        "operationId": "status_api_assistant_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Status",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/api/assistant/talk": {
+      "post": {
+        "operationId": "talk_api_assistant_talk_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TalkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Talk",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/api/assistant/voice": {
+      "post": {
+        "operationId": "voice_api_assistant_voice_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "content-type",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Content-Type",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Voice",
+        "tags": [
+          "assistant"
         ]
       }
     },

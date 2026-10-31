@@ -1,0 +1,58 @@
+/* L'assistant (cœur) : l'orbe au centre de la barre du bas, la carte de verre, l'écoute et la
+   conversation. Bulles et verre repris de Domia, aux couleurs du hub. */
+
+/* --- l'orbe de la barre ------------------------------------------------------------------- */
+.tabbar .in { display: flex; align-items: flex-end; }
+.tabs-side { flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+.tab-orb { position: relative; flex: none; width: 80px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 52px; justify-content: flex-end; font-size: .647rem; font-weight: 600; color: var(--faint); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.tab-orb[aria-current="page"] { color: var(--accent); }
+.tab-orb .well { width: 50px; height: 50px; margin-top: -14px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(8, 12, 20, .18); }
+.tab-orb canvas, .big-orb canvas { display: block; width: 42px; height: 42px; }
+.tab-orb .dot { position: absolute; top: -12px; left: calc(50% + 12px); width: 12px; height: 12px; border-radius: 50%; background: var(--warn); border: 2px solid var(--surface); }
+/* sans WebGL : un disque dégradé, teinté par l'humeur */
+.orb-flat::after { content: ""; display: block; width: 36px; height: 36px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #9db4ff, #3a5bd9 60%, #1d2f7a); }
+.orb-flat[data-mood="offline"]::after { filter: grayscale(1) brightness(.8); }
+.orb-flat[data-mood="listening"]::after { filter: hue-rotate(-45deg); }
+.orb-flat[data-mood="speaking"]::after { filter: hue-rotate(170deg); }
+
+/* --- au-dessus de la barre : la réponse en verre et l'aide ------------------------------------ */
+.orb-float { position: fixed; left: 0; right: 0; bottom: calc(80px + var(--bottom)); z-index: 9; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 0 16px; pointer-events: none; }
+.orb-float > * { pointer-events: auto; max-width: 30rem; }
+.orb-hint { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: .735rem; font-weight: 600; color: var(--muted); }
+.glass { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 24px; background: color-mix(in srgb, var(--surface) 82%, transparent); border: 1px solid var(--line); box-shadow: 0 14px 34px rgba(8, 12, 20, .16); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+.answer { width: 100%; box-sizing: border-box; animation: glass-in .6s cubic-bezier(.2, .7, .3, 1) both; transform-origin: 50% 100%; }
+.answer-text { margin: 0; font-size: 1.06rem; font-weight: 600; line-height: 1.35; white-space: pre-line; }
+.answer .said { font-size: .735rem; color: var(--muted); }
+@keyframes glass-in { 0% { opacity: 0; transform: translateY(32px) scale(.7); } 100% { opacity: 1; transform: none; } }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { min-height: 40px; padding: 0 16px; border-radius: 999px; font-size: .824rem; font-weight: 600; background: var(--surface-2); color: var(--ink); }
+.pill.p1 { background: var(--ink); color: var(--surface); }
+.pill.p3 { background: transparent; color: var(--muted); }
+
+/* --- l'écoute ------------------------------------------------------------------------------ */
+.listen { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 24px calc(120px + var(--bottom)); background: color-mix(in srgb, var(--surface-2) 78%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.listen[hidden] { display: none; }
+.big-orb canvas { width: 168px; height: 168px; }
+.listen b { font-size: 1.12rem; }
+.listen > span:last-child { font-size: .765rem; color: var(--muted); text-align: center; }
+
+/* --- la conversation ------------------------------------------------------------------------ */
+#assistant { display: flex; flex-direction: column; min-height: calc(100vh - 76px - var(--bottom)); }
+.chat { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; padding: calc(var(--top) + 16px) 16px 12px; }
+.chat-note { margin: 24px 0 0; color: var(--muted); font-size: .824rem; text-align: center; }
+.chat-note.warn { color: var(--warn); }
+.me { align-self: flex-end; max-width: 82%; margin: 0; padding: 10px 14px; border-radius: 18px 18px 4px 18px; background: var(--accent); color: #fff; white-space: pre-line; }
+.me small { display: block; margin-top: 2px; font-size: .647rem; opacity: .8; }
+.bot { align-self: flex-start; max-width: 88%; display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-radius: 18px 18px 18px 4px; background: var(--surface); border: 1px solid var(--line); white-space: pre-line; }
+.bot b { font-size: .765rem; color: var(--muted); }
+.typing { flex-direction: row; gap: 4px; padding: 14px; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: typing 1.2s infinite ease-in-out; }
+.typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes typing { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+.askdock { position: sticky; bottom: calc(62px + var(--bottom)); background: var(--surface-2); padding-top: 6px; }
+.suggest { display: flex; gap: 8px; overflow-x: auto; padding: 0 16px 8px; scrollbar-width: none; }
+.suggest button { flex: none; min-height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); font-size: .765rem; color: var(--muted); }
+.askbar { display: flex; gap: 8px; align-items: center; padding: 8px 12px 10px; background: var(--surface); border-top: 1px solid var(--line); }
+.askbar input { flex: 1; min-width: 0; height: 46px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 0 14px; font: inherit; font-size: 16px; }
+.send-btn { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; background: var(--accent); color: #fff; flex: none; }
+.send-btn svg { width: 20px; height: 20px; }

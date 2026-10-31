@@ -90,6 +90,14 @@ class Backup(BaseModel):
     keep_local_days: int = Field(default=7, ge=1)
 
 
+class Assistant(BaseModel):
+    """L'assistant de la maison (assistant/), natif sur le Mac : l'orbe de l'app lui parle par
+    le hub. Sans `url`, l'orbe reste grise et l'écran le dit."""
+
+    url: str | None = None  # « http://host.docker.internal:8770 » depuis les conteneurs
+    person: str | None = None  # la personne qui parle depuis l'app (la mémoire de l'assistant)
+
+
 class Secrets(BaseModel):
     file: Path = Path("/etc/hub/secrets.enc.yaml")
     age_key_file: Path = Path("/run/secrets/age_key")
@@ -106,6 +114,7 @@ class Settings(BaseSettings):
     notify: Notify = Notify()
     secrets: Secrets = Secrets()
     backup: Backup = Backup()
+    assistant: Assistant = Assistant()
     log_level: str = "INFO"
     domains: str = "*"  # HUB_DOMAINS : « * » tous, sinon « finance,agenda » ; vide : aucun
 

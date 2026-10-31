@@ -42,7 +42,7 @@ def test_the_app_starts_without_finance(without_finance: Any) -> None:
     page = without_finance
     page.wait_for_selector('#tabs button[data-v="demo"]')
     tabs = page.locator("#tabs button").evaluate_all("bs => bs.map(b => b.dataset.v)")
-    assert tabs == ["accueil", "demo"]
+    assert tabs == ["accueil", "assistant", "demo"]
     page.wait_for_selector("#accueil [data-lists] #t-todo")
     assert "Démo à l'accueil" in page.inner_text("#accueil")
     page.locator('#accueil [data-a="settings"]').click()

@@ -4,6 +4,14 @@
 
 ### App
 
+- L'orbe de l'assistant est au centre de la barre du bas, sur tous les écrans (la même orbe que
+  Domia, en WebGL). La toucher ouvre la conversation ; la maintenir écoute (glisser vers le bas
+  annule). Hors de la conversation, la réponse sort dans une carte de verre qui reste jusqu'à ce
+  qu'on la ferme, et une pastille signale une réponse non lue. L'orbe est grise quand
+  l'assistant ne répond pas.
+- Le hub relaie l'app vers l'assistant du Mac (`/api/assistant/status`, `history`, `talk`,
+  `voice`, session de l'app seule), sans rien garder ; réglage `[assistant] url` (et `person`).
+  Caddy autorise le micro pour l'app (`microphone=(self)`) et le son de la réponse (`media-src blob:`).
 - La barre du bas ne porte plus que l'accueil et un espace par domaine qui a des onglets :
   « Finance » remplace Patrimoine, Budget et Journal. Dans l'espace, ses onglets sont la barre
   du haut (Patrimoine · Budget · Journal), à côté de l'œil et des réglages, sans titre ;

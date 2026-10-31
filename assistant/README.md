@@ -67,7 +67,12 @@ iPhone / app Domia ──POST /api/talk──▶ Domia (Pi) ──POST /talk─�
    `curl http://127.0.0.1:8771/health` doit dire `true` deux fois ; sinon Réglages Système → Confidentialité et
    sécurité → Rappels, puis Calendriers : autoriser « Domia Rappels ».
 7. **Vérifier.** `.venv/bin/python -m domia_assistant check` : Domia, le modèle, la bibliothèque du hub et le pont.
-8. **Le Mac reste allumé** : Réglages Système → Économiseur d'énergie → empêcher la suspension automatique.
+8. **L'orbe de l'app du hub.** L'app du hub parle à l'assistant par le hub (`/api/assistant/…`, session de l'app
+   seule), qui le joint à `http://host.docker.internal:8770` (`[assistant] url` de `deploy/settings.toml`). Le hub
+   relaie la phrase, l'historique et le son, sans rien garder. Si l'orbe reste grise, l'assistant refuse sans doute
+   l'adresse des conteneurs : son journal dit `403`, ajouter cette adresse à `allow_from`. Pour que la conversation
+   de l'app soit celle d'une personne de Domia : `HUB_ASSISTANT__PERSON=<identifiant>` dans `deploy/.env`.
+9. **Le Mac reste allumé** : Réglages Système → Économiseur d'énergie → empêcher la suspension automatique.
 
 ## Lancer avec launchd
 
