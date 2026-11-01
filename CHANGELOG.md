@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### App
+
+- Patrimoine : un compte à zéro, ou alimenté par sa connexion depuis moins de 45 jours, ne rend
+  plus la fin de courbe « estimée » (un compte Revolut qui ne bouge pas n'a pas de solde de
+  clôture et gardait une vieille dernière donnée).
+
 ### Assistant
 
 - Le modèle du cloud répond d'abord (section `cloud:`, clé dans `.env`), le modèle local le
