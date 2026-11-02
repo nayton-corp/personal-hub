@@ -144,7 +144,10 @@ class Positions:
         # relevés : account -> [(date, {isin: (parts, valeur, devise)})] triés
         snaps: dict[str, dict[str, dict[str, tuple[Decimal, int, str]]]] = {}
         for account_id, on, isin, qty, value, ccy in conn.execute(
-            text("SELECT account_id, on_date, isin, quantity, value_minor, currency FROM holdings")
+            text(
+                "SELECT account_id, on_date, isin, quantity, value_minor, currency FROM holdings "
+                "ORDER BY seq"  # à date égale, le relevé le plus récent l'emporte
+            )
         ):
             snaps.setdefault(account_id, {}).setdefault(on, {})[isin] = (
                 Decimal(qty),

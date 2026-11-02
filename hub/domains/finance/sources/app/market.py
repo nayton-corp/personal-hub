@@ -6,7 +6,9 @@ Le fichier porte ces listes, chacune facultative :
 - `fx` : cours de change de la BCE (1 devise = rate dans la devise de base), vers `fx_rates` ;
 - `prices` : cours quotidiens (cryptos, titres cotés), vers `prices` ;
 - `balances` : solde d'un portefeuille crypto relevé sur la chaîne (adresses publiques), qui
-  devient un relevé de positions du compte `crypto:<nom>` à cette date ;
+  devient un relevé de positions du compte `crypto:<nom>` à cette date ; un relevé de plus le
+  même jour (« Actualiser ») remplace celui du matin pour ce qui a bougé, une crypto sortie du
+  relevé y passe à zéro ;
 - `transactions` : une transaction du portefeuille sur la chaîne (net reçu ou envoyé, frais
   payés), qui devient une opération au registre du compte, en devise de base, et un mouvement
   de parts. Un envoi ou une arrivée relié à l'autre côté sur un autre de mes comptes (même
@@ -84,7 +86,9 @@ def apply_balance(conn: Connection, import_id: str, b: Balance) -> Result:
     if known is None:
         result.reasons.add("missing_price")  # observation : la valeur suivra le premier cours
     assets.upsert_instrument(conn, b.key, None, kind="crypto", symbol=instruments.symbol_of(b.key))
-    if assets.add_holding(conn, account.id, b.on_date, b.key, b.quantity, value, ccy, import_id):
+    if assets.add_holding(
+        conn, account.id, b.on_date, b.key, b.quantity, value, ccy, import_id, intraday=True
+    ):
         result.new += 1
         ledger.append_event(
             conn,
@@ -95,6 +99,41 @@ def apply_balance(conn: Connection, import_id: str, b: Balance) -> Result:
     else:
         result.duplicates += 1
     return result
+
+
+def _vanished(
+    conn: Connection, import_id: str, doc: MarketFile, applied: dict[tuple[str, str], set[str]]
+) -> None:
+    """Un compte relevé en entier ce jour-là (toutes ses lignes appliquées) : une crypto du
+    relevé précédent du même jour qui n'y est plus passe à zéro."""
+    listed: dict[tuple[str, str], set[str]] = {}
+    for b in doc.balances:
+        listed.setdefault((b.account, b.on_date), set()).add(b.key)
+    for (ref, on_date), keys in sorted(applied.items()):
+        account = catalog.account_by_ref(conn, ref)
+        if account is None or keys != listed[(ref, on_date)]:
+            continue
+        held = assets.day_holdings(conn, account.id, on_date)
+        gone = [k for k, q in sorted(held.items()) if k not in keys and Decimal(q) != 0]
+        for key in gone:
+            assets.add_holding(
+                conn,
+                account.id,
+                on_date,
+                key,
+                Decimal(0),
+                Decimal(0),
+                account.currency,
+                import_id,
+                intraday=True,
+            )
+        if gone:
+            ledger.append_event(
+                conn,
+                "holdings.recorded",
+                urn("finance", "account", account.id),
+                {"import_id": import_id, "count": len(gone)},
+            )
 
 
 class _Chain:
@@ -202,9 +241,14 @@ def apply(
     out = []
     if indexes is None or 0 in indexes:
         out.append((0, _apply_rates(conn, import_id, doc)))
+    applied: dict[tuple[str, str], set[str]] = {}
     for i, b in enumerate(doc.balances, start=1):
         if indexes is None or i in indexes:
-            out.append((i, apply_balance(conn, import_id, b)))
+            result = apply_balance(conn, import_id, b)
+            out.append((i, result))
+            if result.status == "applied":
+                applied.setdefault((b.account, b.on_date), set()).add(b.key)
+    _vanished(conn, import_id, doc, applied)
     if doc.transactions:
         chain = _Chain(conn, import_id)
         firsts: dict[str, str] = {}

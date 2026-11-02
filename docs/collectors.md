@@ -66,9 +66,11 @@ flux :
 - Enable Banking (Revolut) : quatre synchronisations par jour au plus (`max_syncs_per_day`),
   trois prises par l'horaire ; au-delà, le run finit en « quota du jour atteint » ;
 - VIAC : un code 2FA demandé au milieu d'un run le fait échouer, comme à l'horaire ;
-- positions et soldes crypto : un seul relevé par compte et par jour (le premier de la
-  journée, le registre est en ajout seul) ; un run de plus dans la journée apporte les
-  nouvelles opérations au Journal, le solde du jour suit le lendemain.
+- soldes crypto (portefeuilles et plateformes) : un run de plus dans la journée met le solde
+  du jour à jour tout de suite. Le registre reste en ajout seul : le relevé du matin est
+  gardé, une ligne s'ajoute pour ce qui a bougé (une crypto partie passe à zéro) et, à date
+  égale, la plus récente fait foi. Les rapports de positions (VIAC, IBKR, saisie) gardent un
+  relevé par jour.
 
 Les cours et plateformes crypto, sans limite de synchro, passent toutes les 4 heures (06:15,
 10:15, 14:15, 18:15, 22:15, et quelques minutes après pour les plateformes) : leurs nouvelles

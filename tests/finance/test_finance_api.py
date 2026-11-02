@@ -372,7 +372,7 @@ def test_upload_and_import_detail(client: TestClient, ctx: HubContext, fin: Fina
 
 def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
     r = client.get("/api/health").json()
-    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 18, "ok": True}
+    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 19, "ok": True}
     events = loaded.events_since(0, 10)
     assert [e.type for e in events] == ["entries.appended", "import.applied"]
     assert loaded.applied([]) == {}
