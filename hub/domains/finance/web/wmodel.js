@@ -60,7 +60,14 @@ function uncertain(pts, sel) {
   if (fresh && pts.length > 1) {
     const end = day(asOf());
     for (const f of fresh.items) {
-      if (!f.last_data || !sel.some((l) => l.acc === f.account_id)) continue;
+      const mine = sel.filter((l) => l.acc === f.account_id);
+      if (!f.last_data || !mine.length) continue;
+      // un compte vide ne rend rien incertain ; un compte que sa connexion a alimenté
+      // récemment n'est pas sans nouvelles, même sans écriture (Revolut n'a pas de solde
+      // de clôture : un compte qui ne bouge pas garde une vieille dernière donnée)
+      if (Math.abs(mine.reduce((t, l) => t + l.value, 0)) < 0.5) continue;
+      const seen = f.last_import && f.last_import.slice(0, 10) > f.last_data ? f.last_import.slice(0, 10) : f.last_data;
+      if (Math.round((end - day(seen)) / 864e5) <= STALE_DAYS) continue;
       const age = Math.round((end - day(f.last_data)) / 864e5);
       if (age <= STALE_DAYS || f.last_data >= pts[pts.length - 1].d) continue;
       const k = Math.max(0, indexOf(pts, f.last_data) - 1);

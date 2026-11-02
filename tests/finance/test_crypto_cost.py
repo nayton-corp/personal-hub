@@ -1,0 +1,133 @@
+"""Résultat des cryptos depuis l'achat : prix de revient commun à tous les comptes, virement
+entre mes comptes sans remise à zéro du coût, récompense sans coût, vente réalisée, effet du
+dollar, et parts sans historique montrées à part."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.patrimoine.app import crypto_cost, holdings
+from hub.domains.finance.sources.infra import market_file
+from hub.domains.finance.sources.infra.files import Incoming
+from tests.finance.test_exchange import op
+from tests.finance.test_wealth import add_ref
+
+
+def doc(**kw: Any) -> Incoming:
+    body = {"format": market_file.FORMAT, "fetched_at": "2026-10-27", **kw}
+    return Incoming("market.json", json.dumps(body).encode())
+
+
+def btc(on: str, value: str) -> dict[str, str]:
+    return {
+        "instrument": "BTC",
+        "kind": "crypto",
+        "on_date": on,
+        "price": value,
+        "currency": "CHF",
+        "source": "coingecko",
+    }
+
+
+def usd(on: str, rate: str) -> dict[str, str]:
+    return {"on_date": on, "base": "USD", "quote": "CHF", "rate": rate, "source": "ecb"}
+
+
+def minor(x: dict[str, Any] | None) -> int | None:
+    return None if x is None else int(x["minor"])
+
+
+def setup(finance: FinanceDomain) -> None:
+    add_ref(finance, "crypto:binance", "crypto", "Binance")
+    add_ref(finance, "crypto:ledger", "crypto", "Ledger")
+    binance = doc(
+        fx=[usd("2026-03-01", "0.9"), usd("2026-10-01", "0.8")],
+        prices=[
+            btc("2026-03-01", "50000"),
+            btc("2026-04-01", "80000"),
+            btc("2026-06-01", "60000"),
+            btc("2026-10-01", "40000"),
+        ],
+        operations=[
+            op("fiat:1", "fiat_deposit", "2026-03-01", ("CHF", "1000", "deposit")),
+            op("buy:1", "trade", "2026-03-02", ("CHF", "-1000", "trade"), ("BTC", "0.02", "trade")),
+            op("out:1", "withdrawal", "2026-04-01", ("BTC", "-0.01", "withdrawal"), txid="t1"),
+            op("reward:1", "reward", "2026-04-01", ("BTC", "0.001", "income")),
+            op(
+                "sell:1", "trade", "2026-06-01", ("BTC", "-0.005", "trade"), ("CHF", "300", "trade")
+            ),
+        ],
+    )
+    ledger = doc(
+        transactions=[
+            {
+                "account": "crypto:ledger",
+                "instrument": "BTC",
+                "on_date": "2026-04-01",
+                "txid": "t1",
+                "quantity": "0.01",
+                "fee": "0",
+            }
+        ]
+    )
+    finance.importer.process([binance])
+    finance.importer.process([ledger])
+
+
+def test_cost_follows_the_coins_across_my_accounts(finance: FinanceDomain) -> None:
+    setup(finance)
+    with finance.engine().connect() as conn:
+        r = holdings.holdings(conn, "2026-10-27")["crypto"]["since_purchase"]
+    assert r is not None
+    # 0.016 BTC à 40 000 ; payés 1 000 pour 0.02, l'envoi vers la Ledger garde le coût,
+    # la récompense entre sans coût, la vente de 0.005 sort 0.005 / 0.021 du coût
+    assert minor(r["value"]) == 64_000
+    assert minor(r["cost"]) == 76_190
+    assert minor(r["realized"]) == 6_190  # 300 − 238,10
+    assert minor(r["unrealized"]) == -12_190
+    assert minor(r["result"]) == -6_000
+    assert minor(r["income"]) == 8_000  # 0.001 à 80 000, le jour de la récompense
+    assert minor(r["unknown_cost_value"]) == 0
+    assert minor(r["arrived_from_outside"]) == 0
+    # en dollars, les cryptos ont gagné ; c'est le dollar (0,90 → 0,80) qui fait la perte
+    assert (minor(r["result_usd"]), r["result_usd"]["currency"]) == (2_222, "USD")
+    assert minor(r["crypto_effect"]) == 1_778
+    assert minor(r["fx_effect"]) == -7_778
+    assert set(r["by_asset"]) == {"CRYPTO:BTC"}
+    assert minor(r["by_asset"]["CRYPTO:BTC"]["result"]) == -6_000
+
+
+def test_coins_without_history_have_no_cost(finance: FinanceDomain) -> None:
+    add_ref(finance, "crypto:phantom", "crypto", "Phantom")
+    sol = {"kind": "crypto", "currency": "CHF", "source": "coingecko", "instrument": "SOL"}
+    finance.importer.process(
+        [
+            doc(
+                prices=[{**sol, "on_date": "2026-10-01", "price": "100"}],
+                balances=[
+                    {
+                        "account": "crypto:phantom",
+                        "instrument": "SOL",
+                        "on_date": "2026-10-01",
+                        "quantity": "2",
+                    }
+                ],
+            )
+        ]
+    )
+    with finance.engine().connect() as conn:
+        r = holdings.holdings(conn, "2026-10-27")["crypto"]["since_purchase"]
+    assert r is not None
+    assert (minor(r["value"]), minor(r["cost"]), minor(r["result"])) == (20_000, 0, 0)
+    assert minor(r["unknown_cost_value"]) == 20_000
+
+
+def test_roles_from_codes() -> None:
+    assert crypto_cost.role("EXCHANGE/TRADE/BUY") == "trade"
+    assert crypto_cost.role("SWISSBORG/INCOME/YIELD") == "income"
+    assert crypto_cost.role("CRYPTO/FEE") == "fee"
+    assert crypto_cost.role("CRYPTO/RECEIVE") == "in"
+    assert crypto_cost.role("SWISSBORG/WITHDRAWAL") == "out"
+    assert crypto_cost.role("OPENING") is None

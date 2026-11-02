@@ -2,6 +2,19 @@
 
 ## [Non publié]
 
+### App
+
+- Patrimoine : section « Depuis l'achat » quand l'écran ne montre que des cryptos (le filtre
+  Crypto), le chiffre à comparer avec CoinStats. Un prix de revient par crypto, commun à tous
+  les comptes crypto : un envoi d'un compte à l'autre garde son prix d'achat au lieu de repartir
+  au cours du jour, une récompense entre sans coût. Résultat latent et réalisé, en CHF partagé
+  entre l'effet des cryptos et l'effet du dollar, ou en USD. La page d'une crypto (tous comptes)
+  prend ce prix de revient. Ce que le calcul ne sait pas lire (parts sans historique, arrivées
+  d'un compte non suivi) est affiché.
+- Patrimoine : un compte à zéro, ou alimenté par sa connexion depuis moins de 45 jours, ne rend
+  plus la fin de courbe « estimée » (un compte Revolut qui ne bouge pas n'a pas de solde de
+  clôture et gardait une vieille dernière donnée).
+
 ### Finance
 
 - « Actualiser » met à jour le solde crypto du jour dans le patrimoine tout de suite (avant :
