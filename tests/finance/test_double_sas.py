@@ -687,7 +687,13 @@ def test_yearly_budget_and_account_rule(
     p = create(
         ctx,
         "set_budget",
-        {"category_id": "voyages", "monthly_minor": 5_000, "cadence": "year"},
+        # en vigueur depuis janvier : le test ne dépend pas du mois où il tourne
+        {
+            "category_id": "voyages",
+            "monthly_minor": 5_000,
+            "cadence": "year",
+            "valid_from": "2026-01-01",
+        },
     )
     assert p.preview["summary"].startswith("Budget Vacances : 600.00 CHF par an")
     accept(ctx, p)
