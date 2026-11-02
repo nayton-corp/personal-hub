@@ -87,9 +87,7 @@ def holdings(conn: Connection, on_date: str) -> dict[str, Any]:
         "value": in_base(total),
         "cost": in_base(sum(costs)) if len(costs) == len(items) else None,
         "missing_prices": sorted({x.isin for x in lines if x.price is None}),
-        "crypto": _crypto(
-            conn, positions, [x for x in lines if x.account_id in crypto], on_date
-        ),
+        "crypto": _crypto(conn, positions, [x for x in lines if x.account_id in crypto], on_date),
     }
 
 
