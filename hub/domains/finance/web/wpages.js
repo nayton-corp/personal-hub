@@ -11,6 +11,7 @@ import { compact, pct, px, sgnMoney } from "./wchart.js";
 import { rate, units } from "./perf.js";
 import { DEBT_KIND, debtDetail } from "./debts.js";
 import { monthly } from "./wmodel.js";
+import { assetSince } from "./wcrypto.js";
 import { store } from "../../store.js";
 
 const RATE = 0.04; // rendement supposé pour la date estimée d'un objectif (jamais la hausse passée)
@@ -123,14 +124,19 @@ export function assetPage(m, all, r) {
   const c = m.perf ? m.perf.summary : null;
   let h = "";
   if (!cash) {
-    const q = m.qty, cost = m.cost, value = sum(ls), lat = cost != null ? value - cost : null;
+    // une crypto, tous comptes : le prix de revient commun (un envoi entre tes comptes garde son coût)
+    const pool = f.kind === "crypto" && !(r.from && S.where === "here") ? assetSince(f.isin) : null;
+    const q = m.qty, value = sum(ls), blind = pool ? units(pool.unknown_cost_value) : 0;
+    const cost = pool ? (blind >= 1 ? null : units(pool.cost)) : m.cost;
+    const lat = pool ? units(pool.unrealized) : cost != null ? value - cost : null;
     h += section("Ma position", r.from && S.where === "here" ? `dans ${esc(f.inst)}` : "tous comptes", `<div class="strip">
       <div><span>Quantité</span><b class="num money">${qty(q)}</b></div><div><span>Cours</span><b class="num">${f.price ? `${px(Number(f.price))} <small>${esc(f.priceCcy || "")}</small>` : "—"}</b></div>
       <div><span>Prix de revient</span><b class="num">${cost != null && q ? `<span class="money">${px(cost / q)}</span>` : "—"}</b></div>
       <div><span>Gain latent</span><b class="num ${tone(lat)}">${lat == null ? "—" : `<span class="money">${sgnMoney(lat)}</span>`}</b></div>
       <div><span>Rendement ${S.custom ? "" : S.period}</span><b class="num ${tone(c ? rate(c.twr) : null)}">${c ? pct(rate(c.twr)) : "—"}</b></div>
       <div><span>Par an</span><b class="num">${c && days >= 365 && rate(c.twr_yearly) != null ? pct(rate(c.twr_yearly)) : "—"}</b></div></div>
-      ${cost == null ? '<p class="pnote">Prix de revient inconnu pour une partie des parts.</p>' : ""}`);
+      ${pool && (units(pool.realized) || units(pool.income)) ? `<p class="pnote">Depuis l'achat : réalisé <span class="money">${sgnMoney(units(pool.realized))}</span> ${base()}, récompenses reçues <span class="money">${n0(units(pool.income))}</span> ${base()}.</p>` : ""}
+      ${cost == null ? `<p class="pnote">Prix de revient inconnu pour une partie des parts${pool ? ` (<span class="money">${n0(blind)}</span> ${base()} sans historique d'achat, hors du gain latent)` : ""}.</p>` : ""}`);
   }
   const held = all.filter((l) => l.asset === r.id), tot = sum(held);
   h += section("Détenu dans", `${new Set(held.map((l) => l.acc)).size} compte(s) · ${amount(tot)}`, `<div class="list">${held.slice().sort((a, b) => b.value - a.value).map((l) => `<button class="row go-row" type="button" data-a="w-open" data-v="${esc(`a:${l.acc}`)}">${instMark(l.inst, "sm")}
