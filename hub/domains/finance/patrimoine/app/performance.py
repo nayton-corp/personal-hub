@@ -98,7 +98,9 @@ def _summary(days: Sequence[str], s: Series, ccy: str, *, with_mwr: bool = True)
     gain = s.value[-1] - s.value[0] - flows
     income, fees = sum(s.income), sum(s.fees)
     twr = s.index[-1] - 1 if s.positive else None
-    span = _span(days[s.ks], days[s.ks + len(s.value) - 1])
+    # annualisé depuis le premier jour où il y a quelque chose à faire fructifier
+    first = next((j for j, v in enumerate(s.value) if v >= MIN_BASE), 0)
+    span = _span(days[s.ks + first], days[s.ks + len(s.value) - 1])
     yearly = None
     if twr is not None and span >= 365 and twr > -1:
         with localcontext(RATE_CONTEXT):

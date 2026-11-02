@@ -14,7 +14,7 @@ lint:
 	scripts/check_no_data.sh
 
 test:
-	uv run pytest -q --cov=hub --cov-fail-under=85
+	uv run pytest -q -n auto --cov=hub --cov-fail-under=85
 
 migrations-test:
 	uv run pytest -q -m migrations

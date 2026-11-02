@@ -24,7 +24,7 @@ from hub.domains.finance.api import build_router
 from hub.domains.finance.classement.app import packs, recurring, sentinels
 from hub.domains.finance.cli import build_cli
 from hub.domains.finance.handlers import build_kinds
-from hub.domains.finance.patrimoine.app import snapshots, transfers
+from hub.domains.finance.patrimoine.app import checks, snapshots, transfers
 from hub.domains.finance.registre.app import ledger, reads
 from hub.domains.finance.registre.model import period
 from hub.domains.finance.sources.app import statements
@@ -40,7 +40,7 @@ from hub.platform.logging import get_logger
 from hub.platform.settings import Settings
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 19  # 0019_intraday_holdings
+SCHEMA_VERSION = 20  # 0020_reconcile_decisions
 log = get_logger("hub.finance")
 LEGACY_ARCHIVE = re.compile(r"\d{4}|duplicates")
 SEVERITY: dict[str, Severity] = {"budget_over": "alert", "budget_likely": "warning"}
@@ -285,11 +285,13 @@ class FinanceDomain:
         if not health.ok:
             return health
         result = self.verify_ledger()
+        with self._engine.connect() as conn:  # les chiffres (docs/finance-politique.md)
+            figures_ok, figures = checks.figures(conn, self.today().isoformat())
         return Health(
-            ok=result.ok,
+            ok=result.ok and figures_ok,
             db=health.db,
             schema_version=self.schema_version,
-            detail={"ledger": result.public()},
+            detail={"ledger": result.public(), "figures": figures},
         )
 
 

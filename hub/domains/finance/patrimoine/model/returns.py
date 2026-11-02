@@ -39,19 +39,25 @@ def _span(a: str, b: str) -> int:
 
 def mwr(days: Sequence[str], s: Series) -> Decimal | None:
     """Rendement personnel annuel (TRI), à partir d'un an de recul ; None sinon. Les flux sont
-    groupés par semaine (à la fin de la semaine), ce qui ne change le taux qu'à la marge."""
+    groupés par semaine, au jour moyen de la semaine pondéré par les montants, ce qui ne change
+    le taux qu'à la marge."""
     start, end = days[s.ks], days[s.ks + len(s.value) - 1]
     total = _span(start, end)
     if total < MWR_MIN_DAYS:
         return None
-    weeks: dict[int, int] = {}
+    # semaine → (somme, Σ jour × |montant|, Σ |montant|)
+    weeks: dict[int, tuple[int, int, int]] = {}
     for j, f in enumerate(s.flow):
         if j and f:
-            w = min(total, (j // 7 + 1) * 7)
-            weeks[w] = weeks.get(w, 0) - f
+            c, wd, wa = weeks.get(j // 7, (0, 0, 0))
+            weeks[j // 7] = (c - f, wd + j * abs(f), wa + abs(f))
     with localcontext(RATE_CONTEXT):
         cash = [(Decimal(0), Decimal(-s.value[0]))]
-        cash += [(Decimal(d) / 365, Decimal(c)) for d, c in sorted(weeks.items()) if c]
+        cash += [
+            (Decimal(wd) / Decimal(wa) / 365, Decimal(c))
+            for _w, (c, wd, wa) in sorted(weeks.items())
+            if c
+        ]
         cash.append((Decimal(total) / 365, Decimal(s.value[-1])))
 
         def npv(r: Decimal) -> Decimal:

@@ -4,8 +4,9 @@ plateforme qui sait lire son historique (Binance), ses opérations et leurs cour
 
 Les soldes deviennent un relevé de positions du compte `crypto:<plateforme>` (à déclarer avec
 `fin crypto add-wallet <plateforme>`, ou le champ `account` des secrets). La valeur, dans la
-devise de base, vient des cours CoinGecko du collecteur « market » ; une crypto sans cours y
-attend son premier cours.
+devise de base, vient des cours CoinGecko du collecteur « market », et pour les autres cryptos
+détenues des clôtures Binance des derniers jours, relues à chaque passage ; une crypto sans
+cours est signalée (run incomplet) et attend son premier cours.
 """
 
 from __future__ import annotations
@@ -14,13 +15,15 @@ import json
 import re
 import time
 from collections.abc import Callable, Iterable
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from hub.collectors.base import Failure, Kind, Result
 from hub.collectors.dropbox import is_market_json
+from hub.collectors.exchanges.binance_history import FIAT, STABLE
 from hub.collectors.http import Http
-from hub.collectors.market.flow import holdings
+from hub.collectors.market.flow import binance_prices, holdings
 from hub.collectors.runtime import Env
 
 Fetch = Callable[[Env, Http], Iterable[tuple[str, Any]]]
@@ -28,6 +31,7 @@ Fetch = Callable[[Env, Http], Iterable[tuple[str, Any]]]
 History = Callable[[Env, Http, str, set[str]], Any]
 _ACCOUNT = re.compile(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$")
 _SYMBOL = re.compile(r"^[A-Z0-9]{1,20}$")
+RECENT_DAYS = 7  # clôtures relues à chaque passage : un jour manqué se rattrape
 
 
 def now_ms() -> int:
@@ -56,6 +60,28 @@ def totals(env: Env, items: Iterable[tuple[str, Any]], step: str) -> dict[str, D
     return out
 
 
+def recent_prices(
+    env: Env, http: Http, held: dict[str, Decimal]
+) -> tuple[list[dict[str, str]], list[str]]:
+    """Clôtures Binance des derniers jours de chaque crypto détenue que CoinGecko ne suit pas
+    (collecteur « market ») : sans elles, la crypto garde le cours de sa dernière opération, ou
+    n'en a aucun. Une crypto sans paire USDT est dite (`prices.<symbole>:no_pair`)."""
+    covered = set(env.cfg.market.crypto) | FIAT | STABLE
+    start, end = env.today - timedelta(days=RECENT_DAYS), env.today + timedelta(days=1)
+    rows: list[dict[str, str]] = []
+    notes: list[str] = []
+    for symbol in sorted(s for s, q in held.items() if q > 0 and s not in covered):
+        try:
+            rows += binance_prices(env, http, [symbol], start, end)
+        except Failure as f:
+            no_pair = f.detail.endswith(":http_400")
+            notes.append(f"prices.{symbol.lower()}:{'no_pair' if no_pair else f.outcome}")
+            continue
+        if not any(r["instrument"] == symbol for r in rows):
+            notes.append(f"prices.{symbol.lower()}:no_pair")
+    return rows, notes
+
+
 def runner(fetch: Fetch, history: History) -> Callable[..., Result]:
     """Le run d'une plateforme : ses soldes ET son historique (règle du hub : pas de connecteur
     crypto sans écritures au Journal ; `tests/collectors/test_crypto_history_rule.py`)."""
@@ -74,11 +100,13 @@ def runner(fetch: Fetch, history: History) -> Callable[..., Result]:
             "balances": holdings(account, env.today, held, "BTC"),
         }
         past = history(env, http, account, set(held))
-        doc.update(operations=past.operations, prices=past.prices, fx=past.fx)
+        recent, missing = recent_prices(env, http, held)
+        doc.update(operations=past.operations, prices=past.prices + recent, fx=past.fx)
         data = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
         dropped = env.inbox.drop(f"{env.name}.json", data, is_market_json, step=f"{env.name}.file")
         past.commit()
-        detail = "partial " + " ".join(past.failed) if past.failed else None
+        gaps = past.failed + missing
+        detail = "partial " + " ".join(gaps) if gaps else None
         return Result("ok" if dropped else "nothing_new", int(dropped), detail)
 
     run.history = history  # type: ignore[attr-defined]

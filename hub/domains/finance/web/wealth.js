@@ -13,7 +13,7 @@ import { gainSpan, perfSection, perfSummary, rate, signedMoney, units } from "./
 import { kindFor, model } from "./wmodel.js";
 import { DEBT_KIND, debtMark } from "./debts.js";
 import { byLabel } from "./wsheets.js";
-import { CCY, cryptoSection } from "./wcrypto.js";
+import * as place from "./wplace.js";
 import { base } from "../../format.js";
 import { go } from "../../shell.js";
 import { linkTo } from "./journal.js";
@@ -94,7 +94,7 @@ function keys(e) {
 const width = () => Math.max(280, Math.min(720, ($("cw") && $("cw").clientWidth) || 340));
 function updateChart() {
   const all = lines() || [], r = here(), kind = kindFor(r), w = width();
-  fill($("hero"), heroHTML(M, all, r));
+  fill($("hero"), heroHTML(M, all, r) + (S.scrub == null && r.t !== "asset" ? place.breaksLine(M.sel) : ""));
   fill($("cw"), chartSVG(M, kind, w, H, { interactive: true, empty: emptyText() }) + flagHTML(M, w));
   fill($("wrul"), rulerHTML(M, kind));
   drawLand(M, all);
@@ -242,7 +242,7 @@ function listSection(sel) {
 
 function homeSections(all) {
   const sel = scopeLines(all, { t: "home" });
-  return allocSection(sel, all) + perfBlock(all) + cryptoSection(sel) + listSection(sel);
+  return allocSection(sel, all) + perfBlock(all) + listSection(sel);
 }
 
 // --- actions ----------------------------------------------------------------------------------
@@ -273,6 +273,7 @@ export function only(key, v) {
 }
 
 export const actions = {
+  ...place.actions,
   filters: () => openSheet("filters"),
   "w-opt": (v) => { const i = v.indexOf("|"); toggle(v.slice(0, i), v.slice(i + 1)); store.notify(); announceSel(); },
   "w-clear": () => { for (const f of FILTERS) S.filters[f.key].clear(); store.notify(); announceSel(); },
@@ -356,7 +357,6 @@ export const actions = {
   },
   "w-why": (v) => toast(v),
   "w-bucket": (k) => openSheet("bucket", k),
-  "w-ccy": (v) => { CCY.v = v; store.notify(); },
   "w-fold": (k) => { FOLD[k] = !FOLD[k]; setPref("fold", FOLD); store.notify(); },
   // le journal filtré sur ce compte, cet actif ou les paiements de cette dette ; le retour revient ici
   "w-journal": (key) => {

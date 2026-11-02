@@ -2,8 +2,27 @@
 
 ## [Non publié]
 
+### Finance
+
+- Patrimoine : un relevé SwissBorg sans cours du jour (valeur 0 pour des parts tenues) ne fait
+  plus tomber la ligne à zéro. Elle vaut parts × cours. La Performance des cryptos montrait de
+  fausses pertes : environ −2 200 CHF sur l'USDC, et d'autres cryptos SwissBorg touchées.
+- Patrimoine : un seul calcul de gain. La Performance des cryptos compte le prix de revient réel
+  (commun à tous tes comptes crypto) : un envoi d'un compte à l'autre garde son coût, une
+  récompense est un revenu, une vente sort au coût moyen. « Max » = le résultat depuis l'achat.
+  La section crypto « Depuis l'achat » disparaît, elle faisait doublon.
+- Patrimoine : les soldes qu'aucune opération connue n'explique sont listés, chiffrés, sous le
+  grand chiffre et sur l'accueil (`GET /finance/breaks`, règle : docs/finance-politique.md).
+  Un écart se règle d'un geste : « J'ai payé X », « Garder tel quel » ou « Parti hors de mes
+  comptes ».
+  `hub verify` contrôle aussi les chiffres et échoue au-delà de la tolérance.
+- Collecteurs : un passage qui saute un réseau faute de clé ou ne trouve pas de cours n'est plus
+  « ok » mais « incomplet », avec ce qu'il faut faire sur l'accueil. Les cryptos détenues sans
+  cours connu reçoivent les clôtures récentes de Binance.
+
 ### Exploitation
 
+- CI plus rapide : les tests tournent en parallèle (pytest-xdist), environ 2 min 30 au lieu de 6.
 - Release plus rapide : le tag ne rejoue plus la CI quand celle de main est déjà verte sur le
   même commit (il attend sa fin si elle tourne encore), et les images arm64 se construisent sur
   un runner arm64 natif au lieu de l'émulation QEMU (en release comme dans la CI).

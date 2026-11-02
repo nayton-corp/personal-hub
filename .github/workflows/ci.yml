@@ -59,7 +59,8 @@ jobs:
       - name: Tests et couverture (dont l'app à 375 px dans Chromium)
         env:
           HUB_SCREENSHOTS: ${{ runner.temp }}/screens
-        run: uv run pytest -q --cov=hub --cov-report=term --cov-fail-under=85
+        # en parallèle sur les cœurs du runner (pytest-xdist) : ~2 min 30 au lieu de ~6
+        run: uv run pytest -q -n auto --cov=hub --cov-report=term --cov-fail-under=85
       - name: Captures de l'app (375 px, données fictives)
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

@@ -14,7 +14,7 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.patrimoine.app import debts, valuation
+from hub.domains.finance.patrimoine.app import crypto_cost, debts, decisions, valuation
 from hub.domains.finance.registre.model import institutions
 from hub.kernel.money import DECIMAL_CONTEXT, base_currency
 
@@ -51,6 +51,7 @@ class Line:
     income: array[int] = field(init=False)
     fees: array[int] = field(init=False)
     missing: bytearray = field(init=False)  # 1 : aurait une valeur, mais pas de cours ou change
+    costed: set[int] = field(default_factory=set)  # jours au flux tiré des opérations (crypto)
 
     def __post_init__(self) -> None:
         self.value = array("q", [ABSENT]) * self.n
@@ -84,16 +85,17 @@ class Engine:
 
 
 def _first_day(conn: Connection, as_of: str) -> str | None:
-    found = [
-        conn.execute(text(f"SELECT min({col}) FROM {table}")).scalar_one()  # noqa: S608
-        for table, col in (
-            ("entries", "booking_date"),
-            ("trades", "trade_date"),
-            ("holdings", "on_date"),
-            ("debt_balances", "on_date"),
-        )
-    ]
-    days = [d for d in found if d is not None and d <= as_of]
+    days = []
+    for table, col in (
+        ("entries", "booking_date"),
+        ("trades", "trade_date"),
+        ("holdings", "on_date"),
+        ("debt_balances", "on_date"),
+    ):
+        d = conn.execute(text(f"SELECT min({col}) FROM {table}")).scalar_one()  # noqa: S608
+        if d is None or d > as_of:
+            continue
+        days.append(d)
     return min(days) if days else None
 
 
@@ -148,7 +150,8 @@ def _unit_values(
                 out[isin] = (q, None)
                 continue
             d, price, ccy = known
-            if isin in h.base and isin not in h.moved and d == h.since:
+            # un relevé à 0 pour des parts tenues (SwissBorg) n'annonce pas de valeur : q × cours
+            if isin in h.base and isin not in h.moved and d == h.since and h.base[isin][1]:
                 _q, reported, rccy = h.base[isin]
                 out[isin] = (q, fx.to_base(reported, rccy, on))
             else:
@@ -182,6 +185,10 @@ def build(conn: Connection, as_of: str) -> Engine | None:
         daily.setdefault(acc, {})[on] = (int(total), int(inc), int(fee))
 
     lines: dict[str, Line] = {}
+    crypto = {a[0] for a in accts if a[1] == "crypto"}
+    # flux des cryptos tirés des opérations (politique de calcul) : coût, récompense sans apport
+    legs = crypto_cost.walk(conn, as_of, fx, decisions.lots(decisions.read(conn))).flows
+    legs = legs if crypto else {}
 
     def conv(minor: int, currency: str, on: str) -> int | None:
         return 0 if minor == 0 else fx.to_base(minor, currency, on)
@@ -202,6 +209,13 @@ def build(conn: Connection, as_of: str) -> Engine | None:
         )
         balance = 0
         prev_q: dict[str, Decimal] = {}
+        costed = None
+        if acc_id in crypto:
+            costed = _Costed(
+                acc_id,
+                legs,
+                lambda i, a=acc_id, h=hidden: line(f"{a}|{i}", a, f"isin:{i}", "position", h),
+            )
         for k, on in enumerate(days):
             total, inc, fee = moves.get(on, (0, 0, 0))
             balance += total
@@ -212,6 +226,8 @@ def build(conn: Connection, as_of: str) -> Engine | None:
             # sans aucun cours, le compte garde son solde au registre (valuation.held)
             fallback = holding is None or not values or all(v is None for _q, v in values.values())
             if fallback:
+                if costed is not None:
+                    costed.collect(on)  # pas de cours : les opérations attendent le premier
                 if holding is not None and not values and balance == 0:
                     pass  # compte à positions vide : hors du patrimoine
                 else:
@@ -232,6 +248,10 @@ def build(conn: Connection, as_of: str) -> Engine | None:
                 # pour décomposer le gain ; la ligne « cash » n'a pas de valeur ici
                 cash.income[k] = conv(inc, acc_ccy, on) or 0
                 cash.fees[k] = conv(fee, acc_ccy, on) or 0
+                if costed is not None:
+                    costed.day(k, on, values)
+                    prev_q = {isin: q for isin, (q, _v) in values.items()}
+                    continue
                 for isin, (q, value) in values.items():
                     ln = line(f"{acc_id}|{isin}", acc_id, f"isin:{isin}", "position", hidden)
                     if value is None:
@@ -273,7 +293,7 @@ def build(conn: Connection, as_of: str) -> Engine | None:
         prev = ABSENT
         for k in range(n):
             cur = ln.value[k]
-            if prev == ABSENT and cur != ABSENT:
+            if prev == ABSENT and cur != ABSENT and k not in ln.costed:
                 ln.flow[k] = cur
                 ln.income[k] = ln.fees[k] = 0
             elif prev != ABSENT and cur == ABSENT:
@@ -283,6 +303,65 @@ def build(conn: Connection, as_of: str) -> Engine | None:
             prev = cur
     banks = frozenset(a[0] for a in accts if a[1] == "cash")
     return Engine(days, {i: ln for i, ln in lines.items() if _used(ln)}, ccy, banks)
+
+
+class _Costed:
+    """Les lignes d'un compte crypto : le flux d'un jour, ce sont ses opérations (crypto_cost.walk),
+    et le reste de la variation des parts, que rien n'explique (une rupture, reconcile.py), au
+    cours du jour. Les opérations d'un jour sans cours attendent le premier cours : la ligne
+    entre alors à ce qu'elle a coûté, pas à sa valeur du jour."""
+
+    def __init__(
+        self, account: str, legs: dict[tuple[str, str], dict[str, Any]], line: Any
+    ) -> None:
+        self.line = line
+        self.legs = {key: days for (acc, key), days in legs.items() if acc == account}
+        self.priced: dict[str, Decimal] = {}  # parts au dernier jour valorisé
+        self.pending: dict[str, tuple[Decimal, Decimal]] = {}  # opérations depuis ce jour
+        self.unit: dict[str, Decimal] = {}  # valeur d'une part ce jour-là
+
+    def collect(self, on: str) -> None:
+        """Les opérations du jour, en attente du jour valorisé qui les compte."""
+        zero = Decimal(0)
+        with localcontext(DECIMAL_CONTEXT):
+            for key, days in self.legs.items():
+                if on in days:
+                    pq, pf = self.pending.get(key, (zero, zero))
+                    dq, df = days[on]
+                    self.pending[key] = (pq + dq, pf + df)
+
+    def day(self, k: int, on: str, values: dict[str, tuple[Decimal, int | None]]) -> None:
+        zero = Decimal(0)
+        line = self.line
+        self.collect(on)
+        with localcontext(DECIMAL_CONTEXT):
+            for key, (q, value) in values.items():
+                ln = line(key)
+                if value is None:
+                    ln.missing[k] = 1
+                    continue
+                pq, pf = self.pending.pop(key, (zero, zero))
+                unit = Decimal(value) / q
+                rest = q - self.priced.get(key, zero) - pq  # parts que rien n'explique
+                ln.value[k] = value
+                ln.flow[k] = int((pf + rest * unit).to_integral_value())
+                ln.costed.add(k)
+                self.priced[key], self.unit[key] = q, unit
+            for key in [x for x in self.pending if x not in values]:
+                # tout vendu, ou un aller-retour du jour : valeur 0, ses opérations font le flux
+                pq, pf = self.pending.pop(key)
+                had = self.priced.pop(key, zero)
+                rest = -had - pq
+                ln = line(key)
+                ln.value[k] = 0
+                ln.flow[k] = int((pf + rest * self.unit.get(key, zero)).to_integral_value())
+                ln.costed.add(k)
+            for key in [x for x in self.priced if x not in values]:  # sorti sans opération
+                had = self.priced.pop(key)
+                ln = line(key)
+                ln.value[k] = 0
+                ln.flow[k] = int((-had * self.unit.get(key, zero)).to_integral_value())
+                ln.costed.add(k)
 
 
 def _used(ln: Line) -> bool:
@@ -300,6 +379,7 @@ _FINGERPRINT = (
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM fx_rates), "
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM debt_balances), "
     "(SELECT coalesce(max(seq), 0) FROM events), "
+    "(SELECT count(*) FROM reconcile_decisions), "
     "(SELECT group_concat(id || ':' || hidden) FROM accounts)"
 )
 

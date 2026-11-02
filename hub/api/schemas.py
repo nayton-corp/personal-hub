@@ -215,6 +215,11 @@ class CollectorRunOut(BaseModel):
     detail: str | None
 
 
+class CollectorGapOut(BaseModel):
+    scope: str  # étape : `history.<compte>.<réseau>`, `prices.<symbole>`…
+    reason: str  # needs_key, pruned, unsupported, un résultat de run, skipped=<n>
+
+
 class CollectorOut(BaseModel):
     name: str  # identifiant de la connexion
     label: str
@@ -230,6 +235,8 @@ class CollectorOut(BaseModel):
     can_enable: bool
     link_requested: bool  # consentement demandé depuis l'app, pas encore pris
     link_url: str | None  # adresse d'autorisation à ouvrir, quelques minutes
+    # ce que le dernier run réussi n'a pas pu lire : non vide, la collecte est incomplète
+    gaps: list[CollectorGapOut] = []
 
 
 class CollectorListOut(BaseModel):
