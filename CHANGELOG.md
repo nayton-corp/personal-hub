@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.13.11] · 2026-11-02
+
 ### App
 
 - Patrimoine : section « Depuis l'achat » quand l'écran ne montre que des cryptos (le filtre
