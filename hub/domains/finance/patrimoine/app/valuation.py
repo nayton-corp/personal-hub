@@ -201,8 +201,9 @@ class Positions:
                     out.append(Line(account_id, isin, qty[isin], None, None, 0))
                     continue
                 d, price, ccy = known
-                if isin in base and isin not in moved and d == since:
-                    # valeur du relevé, au centime près, convertie au change de la date
+                if isin in base and isin not in moved and d == since and base[isin][1]:
+                    # valeur du relevé, au centime près, convertie au change de la date ; un
+                    # relevé à 0 pour des parts tenues (SwissBorg) n'annonce pas de valeur
                     _q, reported, rccy = base[isin]
                     value = self.fx.to_base(reported, rccy, on_date)
                 else:

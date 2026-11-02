@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### Finance
+
+- Patrimoine : un relevé SwissBorg sans cours du jour (valeur 0 pour des parts tenues) ne fait
+  plus tomber la ligne à zéro. Elle vaut parts × cours. La Performance des cryptos montrait de
+  fausses pertes : environ −2 200 CHF sur l'USDC, et d'autres cryptos SwissBorg touchées.
+
 ### Exploitation
 
 - CI plus rapide : les tests tournent en parallèle (pytest-xdist), environ 2 min 30 au lieu de 6.

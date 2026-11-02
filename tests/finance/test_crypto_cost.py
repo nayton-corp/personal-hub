@@ -5,12 +5,17 @@ dollar, et parts sans historique montrées à part."""
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import text
+
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.patrimoine.app import crypto_cost, holdings, valuation
+from hub.domains.finance.patrimoine.app import assets, crypto_cost, holdings, perf_lines, valuation
+from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.sources.infra import market_file
 from hub.domains.finance.sources.infra.files import Incoming
+from hub.platform.db import begin_immediate
 from tests.finance.test_exchange import op
 from tests.finance.test_wealth import add_ref
 
@@ -161,3 +166,39 @@ def test_nothing_held_and_history_below_zero(finance: FinanceDomain) -> None:
     assert r is not None
     assert (minor(r["value"]), minor(r["cost"]), minor(r["unrealized"])) == (0, 0, 0)
     assert minor(r["unknown_cost_value"]) == 0
+
+
+def test_a_report_at_zero_for_held_coins_is_not_a_value(finance: FinanceDomain) -> None:
+    # SwissBorg relève des parts sans cours du jour : valeur 0. Ce n'est pas une valeur nulle,
+    # la ligne vaut parts × cours (sinon une fausse perte, puis un faux gain le lendemain)
+    account = add_ref(finance, "crypto:phantom", "crypto", "Phantom")
+    sol = {"kind": "crypto", "currency": "CHF", "source": "coingecko", "instrument": "SOL"}
+    finance.importer.process(
+        [
+            doc(
+                prices=[
+                    {**sol, "on_date": "2026-10-01", "price": "100"},
+                    {**sol, "on_date": "2026-10-02", "price": "100"},
+                ],
+                balances=[
+                    {
+                        "account": "crypto:phantom",
+                        "instrument": "SOL",
+                        "on_date": "2026-10-01",
+                        "quantity": "2",
+                    }
+                ],
+            )
+        ]
+    )
+    key = instruments.crypto_key("SOL")
+    with begin_immediate(finance.engine()) as conn:
+        imp = conn.execute(text("SELECT id FROM imports LIMIT 1")).scalar_one()
+        assets.add_holding(conn, account.id, "2026-10-02", key, Decimal(2), Decimal(0), "USD", imp)
+    with finance.engine().connect() as conn:
+        line = valuation.Positions(conn).lines(account.id, "2026-10-02")[0]
+        engine = perf_lines.build(conn, "2026-10-02")
+    assert line.value == 20_000
+    assert engine is not None
+    ln = engine.lines[f"{account.id}|{key}"]
+    assert ln.value[engine.index("2026-10-02")] == 20_000

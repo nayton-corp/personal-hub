@@ -148,7 +148,8 @@ def _unit_values(
                 out[isin] = (q, None)
                 continue
             d, price, ccy = known
-            if isin in h.base and isin not in h.moved and d == h.since:
+            # un relevé à 0 pour des parts tenues (SwissBorg) n'annonce pas de valeur : q × cours
+            if isin in h.base and isin not in h.moved and d == h.since and h.base[isin][1]:
                 _q, reported, rccy = h.base[isin]
                 out[isin] = (q, fx.to_base(reported, rccy, on))
             else:
