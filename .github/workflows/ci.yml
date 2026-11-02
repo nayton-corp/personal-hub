@@ -102,12 +102,11 @@ jobs:
         run: pip install -r requirements-dev.txt && python -m pytest -q
 
   image:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm  # arm64 natif, comme le Mac : pas d'émulation QEMU
     needs: quality
     if: ${{ !inputs.release }}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - name: Image hub (linux/arm64)
         uses: docker/build-push-action@v6

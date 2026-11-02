@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### Exploitation
+
+- Release plus rapide : le tag ne rejoue plus la CI quand celle de main est déjà verte sur le
+  même commit (il attend sa fin si elle tourne encore), et les images arm64 se construisent sur
+  un runner arm64 natif au lieu de l'émulation QEMU (en release comme dans la CI).
+
 ## [0.13.12] · 2026-11-02
 
 ### Finance

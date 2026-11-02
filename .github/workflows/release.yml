@@ -1,6 +1,7 @@
 # Publication d'une version (chantier S13) : un tag vX.Y.Z posé sur main par `make tag`.
 # 1. le tag est égal à la version de pyproject.toml et le CHANGELOG a sa section ;
-# 2. toutes les barrières de la CI ; 3. images linux/arm64 poussées sur GHCR, avec leur SBOM
+# 2. toutes les barrières de la CI : si la CI de main est déjà verte sur ce même commit, elle
+# n'est pas rejouée (on attend sa fin si elle tourne encore) ; sinon elle est relancée ici ; 3. images linux/arm64 poussées sur GHCR, avec leur SBOM
 # et leur provenance ; 4. analyse des vulnérabilités de chaque image ; 5. notes de version.
 # Rien ne se déploie ici : le Mac tire l'image après un « oui déploie vX » (make deploy).
 name: Release
@@ -33,15 +34,46 @@ jobs:
           git fetch --quiet origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-  quality:
+  # la CI de main a-t-elle déjà validé ce commit ? « true » : verte ; « false » : pas de CI de
+  # main pour ce commit, on la rejoue ; rouge : la release s'arrête
+  main-ci:
     needs: version
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      green: ${{ steps.check.outputs.green }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for _ in $(seq 1 60); do
+            run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&branch=main" \
+              --jq '.workflow_runs | if length == 0 then "" else (sort_by(.created_at) | last | "\(.status) \(.conclusion)") end')
+            if [ -z "$run" ]; then echo "green=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+            status=${run%% *}; conclusion=${run#* }
+            if [ "$status" = completed ]; then
+              if [ "$conclusion" = success ]; then echo "green=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+              echo "::error::la CI de main est $conclusion sur ce commit"; exit 1
+            fi
+            echo "CI de main : $status, on attend"; sleep 30
+          done
+          echo "::error::la CI de main ne se termine pas"; exit 1
+
+  quality:
+    needs: main-ci
+    if: needs.main-ci.outputs.green != 'true'
     uses: ./.github/workflows/ci.yml
     with:
       release: true
 
   publish:
-    needs: quality
-    runs-on: ubuntu-24.04
+    needs: [main-ci, quality]
+    if: ${{ !cancelled() && needs.main-ci.result == 'success' && (needs.quality.result == 'success' || needs.quality.result == 'skipped') }}
+    # un runner arm64 natif : plus d'émulation QEMU, l'image collector se construit bien plus vite
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
@@ -51,7 +83,6 @@ jobs:
         target: [hub, web, collector]
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -106,6 +137,7 @@ jobs:
 
   notes:
     needs: publish
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
