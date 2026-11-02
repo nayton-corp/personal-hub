@@ -13,6 +13,7 @@ import { gainSpan, perfSection, perfSummary, rate, signedMoney, units } from "./
 import { kindFor, model } from "./wmodel.js";
 import { DEBT_KIND, debtMark } from "./debts.js";
 import { byLabel } from "./wsheets.js";
+import { CCY, cryptoSection } from "./wcrypto.js";
 import { base } from "../../format.js";
 import { go } from "../../shell.js";
 import { linkTo } from "./journal.js";
@@ -241,7 +242,7 @@ function listSection(sel) {
 
 function homeSections(all) {
   const sel = scopeLines(all, { t: "home" });
-  return allocSection(sel, all) + perfBlock(all) + listSection(sel);
+  return allocSection(sel, all) + perfBlock(all) + cryptoSection(sel) + listSection(sel);
 }
 
 // --- actions ----------------------------------------------------------------------------------
@@ -355,6 +356,7 @@ export const actions = {
   },
   "w-why": (v) => toast(v),
   "w-bucket": (k) => openSheet("bucket", k),
+  "w-ccy": (v) => { CCY.v = v; store.notify(); },
   "w-fold": (k) => { FOLD[k] = !FOLD[k]; setPref("fold", FOLD); store.notify(); },
   // le journal filtré sur ce compte, cet actif ou les paiements de cette dette ; le retour revient ici
   "w-journal": (key) => {

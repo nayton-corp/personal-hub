@@ -18,7 +18,7 @@ from hub.domains.finance.classement.app.insights import (
     to_categorize,
 )
 from hub.domains.finance.classement.app.totals import Totals
-from hub.domains.finance.patrimoine.app import transfers, valuation
+from hub.domains.finance.patrimoine.app import crypto_cost, transfers, valuation
 from hub.domains.finance.registre.model.amounts import (
     as_of,
     days_left,
@@ -88,7 +88,7 @@ def holdings(conn: Connection, on_date: str) -> dict[str, Any]:
         "cost": in_base(sum(costs)) if len(costs) == len(items) else None,
         "missing_prices": sorted({x.isin for x in lines if x.price is None}),
         "crypto": _crypto(
-            conn, positions.fx, [x for x in lines if x.account_id in crypto], on_date
+            conn, positions, [x for x in lines if x.account_id in crypto], on_date
         ),
     }
 
@@ -118,12 +118,14 @@ def _arrival_cost(
 
 
 def _crypto(
-    conn: Connection, fx: valuation.FxTable, lines: list[valuation.Line], on_date: str
+    conn: Connection, positions: valuation.Positions, lines: list[valuation.Line], on_date: str
 ) -> dict[str, Any] | None:
-    """Performance globale des cryptos : investi = paiements nets de la catégorie « Crypto »
-    (virements vers SwissBorg, Binance…, moins ce qui en revient), en CHF au change du jour du
-    paiement ; résultat = valeur des portefeuilles moins investi. Ce qui attend chez une
-    plateforme sans relevé compte comme investi sans valeur."""
+    """Résultat des cryptos depuis l'achat (crypto_cost), et en regard l'argent envoyé depuis la
+    banque : investi = paiements nets de la catégorie « Crypto » (virements vers SwissBorg,
+    Binance…, moins ce qui en revient), en CHF au change du jour du paiement ; résultat = valeur
+    des portefeuilles moins investi. Ce qui attend chez une plateforme sans relevé compte comme
+    investi sans valeur."""
+    fx = positions.fx
     invested = 0
     rows = conn.execute(
         text(
@@ -145,6 +147,7 @@ def _crypto(
         "value": in_base(value),
         "result": in_base(value - invested),
         "missing_prices": any(x.price is None for x in lines),
+        "since_purchase": crypto_cost.result(conn, on_date, positions),
     }
 
 

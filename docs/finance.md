@@ -290,7 +290,22 @@ dernier cours connu. Un envoi donne `CRYPTO/SEND` et ses frais `CRYPTO/FEE`
 trouve les retraits, le relevé SwissBorg doit être au registre avant le premier passage du
 collecteur qui dépose les transactions.
 
-**Performance des cryptos.** Deux mesures, dans la carte Positions de l'enveloppe crypto :
+**Résultat des cryptos depuis l'achat** (`crypto_cost.py`, `holdings.crypto.since_purchase`,
+section « Depuis l'achat » du Patrimoine quand la sélection ne contient que des comptes crypto).
+La performance du patrimoine mesure une période : une crypto y entre au cours du jour où le hub
+la voit. Ici chaque crypto a un prix de revient (coût moyen) commun à tous les comptes crypto,
+tiré des écritures (`fx_json` : quantité, crypto, `peer`) : un achat ajoute ce qu'il a coûté,
+une vente retire sa part du coût et réalise la différence, un mouvement apparié entre deux de
+mes comptes déplace les parts sans toucher au coût, une récompense entre sans coût, des frais
+retirent des parts sans retirer de coût, une arrivée de l'extérieur coûte sa valeur du jour, un
+envoi vers l'extérieur retire sa part du coût sans gain ni perte. Les parts tenues sans
+historique qui les explique n'ont pas de coût : leur valeur est montrée à part, hors du
+résultat. Le même calcul en dollars (chaque montant au change de son jour) donne le résultat en
+USD, à comparer avec CoinStats ; converti au change du jour, c'est l'effet des cryptos, et le
+reste du résultat en francs l'effet du dollar.
+
+**Performance des cryptos (anciennes mesures).** Deux mesures, dans la réponse de
+`/finance/holdings` :
 - *globale* : investi = paiements nets de la catégorie « Crypto » (virements vers SwissBorg,
   Binance, Coinbase, KuCoin…, reconnus par les règles, moins ce qui en revient), en CHF au change
   du jour ; résultat = valeur des portefeuilles moins investi, frais compris. Ce qui attend
