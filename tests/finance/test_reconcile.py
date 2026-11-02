@@ -229,3 +229,18 @@ def test_breaks_route_and_decision(client_fin: tuple[TestClient, FinanceDomain])
     )
     assert ok.status_code == 200
     assert (ok.json()["count"], ok.json()["decision"]["cost_minor"]) == (0, 15_000)
+
+
+def test_verify_checks_the_figures(finance: FinanceDomain) -> None:
+    # le hub contrôle ses chiffres : un seul gain pour les cryptos, ruptures comptées
+    setup(finance)
+    phantom(finance)
+    health = finance.verify()
+    assert health.ok
+    fig = health.detail["figures"]
+    assert fig["by_kind"]["unexplained"] == 1
+    crypto = fig["crypto"]
+    assert crypto["ok"]
+    # la performance compte les 2 SOL sans historique à leur cours ; le résultat les laisse à part
+    gap = abs(minor(crypto["performance_max"]) - minor(crypto["since_purchase"]))
+    assert gap <= minor(crypto["allowed_gap"])
