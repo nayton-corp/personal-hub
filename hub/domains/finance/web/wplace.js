@@ -1,10 +1,12 @@
 // Patrimoine : les soldes qu'aucune opération connue n'explique (le rapprochement,
 // docs/finance-politique.md). Une ligne sous le grand chiffre, comme « Fin de courbe estimée »,
-// ouvre la liste chiffrée : compte, actif, montant et cause. Rien n'est caché ni compté en silence.
+// ouvre la liste chiffrée : compte, actif, montant et cause. Un écart qu'aucun import ne comblera
+// se règle d'un geste : « J'ai payé X », « Garder tel quel » (au cours du jour où le hub l'a vu) ou,
+// pour un envoi, « Parti hors de mes comptes ». Ta décision est gardée. Rien n'est compté en silence.
 // Tout vient de /finance/breaks, en centimes.
-import { SHEETS, amount, closeSheet, esc, ic, openSheet } from "../../ui.js";
-import { store } from "../../store.js";
-import { date } from "../../format.js";
+import { SHEETS, amount, closeSheet, esc, failure, ic, openSheet, toast } from "../../ui.js";
+import { api, store } from "../../store.js";
+import { base, date } from "../../format.js";
 import { go } from "../../shell.js";
 import { units } from "./perf.js";
 
@@ -50,13 +52,50 @@ SHEETS.brk = () => {
   return {
     title: "Soldes non expliqués",
     body: `<p class="note">Ces montants ne viennent d'aucune opération connue. Ils restent hors du gain jusqu'à ce que l'historique manquant soit importé.</p>
-      <div class="list">${items.map((b) => `<div class="row row2"><span class="row-main"><span class="row-title">${esc(NAME[key(b)](b.symbol))}</span><span class="row-sub">${esc(b.account)} · depuis le ${date(b.since)} · ${esc(CAUSE[b.cause] || "")}</span></span>
-        <span class="row-num"><span class="row-val num">${b.value ? amount(worth(b)) : "—"}</span></span></div>`).join("")}</div>`,
+      <div class="list">${items.map((b) => `<button class="row row2 go-row" type="button" data-a="w-brk-one" data-v="${esc(b.id)}"><span class="row-main"><span class="row-title">${esc(NAME[key(b)](b.symbol))}</span><span class="row-sub">${esc(b.account)} · depuis le ${date(b.since)} · ${esc(CAUSE[b.cause] || "")}</span></span>
+        <span class="row-num"><span class="row-val num">${b.value ? amount(worth(b)) : "—"}</span></span><span class="go">${ic("chev")}</span></button>`).join("")}</div>`,
     foot: '<button class="primary" type="button" data-a="w-brk-conn">Ouvrir les connexions</button>',
   };
 };
 
+// un écart : son montant, sa cause et les gestes qui le règlent
+const DO = { accept: "Garder tel quel", gone: "Parti hors de mes comptes" };
+SHEETS.brk1 = (id) => {
+  const b = itemsFor(null).find((x) => x.id === id);
+  if (!b) return { title: "Écart réglé", body: '<p class="note">Cet écart n\'est plus ouvert.</p>' };
+  const qty = b.quantity ? `${esc(b.quantity.replace(".", ","))} ${esc(b.symbol)} sur ${esc(b.account)}` : esc(b.account);
+  const cost = b.actions.includes("cost")
+    ? `<label class="field" for="brk-cost">J'ai payé, en ${base()}<input id="brk-cost" inputmode="decimal" autocomplete="off"></label><div class="acts"><button class="primary" type="button" data-a="w-brk-cost" data-v="${esc(b.id)}">Valider ce prix d'achat</button></div>`
+    : "";
+  const keep = b.kind === "unexplained" && Number(b.quantity) > 0 ? "<p class=\"hint\">« Garder tel quel » : le prix d'achat devient la valeur du jour où le hub a vu ces parts.</p>" : "";
+  const acts = b.actions.filter((a) => DO[a]).map((a) => `<button class="secondary" type="button" data-a="w-brk-do" data-v="${esc(`${a}|${b.id}`)}">${DO[a]}</button>`).join("");
+  return {
+    title: NAME[key(b)](b.symbol),
+    body: `<div class="strip"><div><span>Montant</span><b class="num">${b.value ? amount(worth(b)) : "inconnu"}</b></div></div><p class="note">${qty}, depuis le ${date(b.since)} : ${esc(CAUSE[b.cause] || "")}.</p>${cost}${keep}`,
+    foot: `<div class="stack-v">${acts}<button class="secondary" type="button" data-a="w-brk-conn">Importer l'historique (Connexions)</button></div>`,
+  };
+};
+
+async function decide(id, decision, cost) {
+  try {
+    await api(`${breaksPath}/decide`, { id, decision, ...(cost != null ? { cost_minor: cost } : {}) });
+    closeSheet();
+    store.invalidate();
+    toast("Écart réglé");
+  } catch (e) {
+    toast(failure(e), { error: true });
+  }
+}
+
 export const actions = {
   "w-brk": () => openSheet("brk"),
+  "w-brk-one": (v) => openSheet("brk1", v),
+  "w-brk-do": (v) => { const i = v.indexOf("|"); decide(v.slice(i + 1), v.slice(0, i)); },
+  "w-brk-cost": (v) => {
+    const raw = (document.getElementById("brk-cost") || {}).value || "";
+    const n = Number(raw.replace(/['’\s]/g, "").replace(",", "."));
+    if (!raw || !Number.isFinite(n) || n < 0) return toast("Montant invalide", { error: true });
+    decide(v, "cost", Math.round(n * 100));
+  },
   "w-brk-conn": () => { closeSheet(true); go("sources", { rubric: "conn" }); },
 };

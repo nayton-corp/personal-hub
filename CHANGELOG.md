@@ -13,6 +13,8 @@
   La section crypto « Depuis l'achat » disparaît, elle faisait doublon.
 - Patrimoine : les soldes qu'aucune opération connue n'explique sont listés, chiffrés, sous le
   grand chiffre et sur l'accueil (`GET /finance/breaks`, règle : docs/finance-politique.md).
+  Un écart se règle d'un geste : « J'ai payé X », « Garder tel quel » ou « Parti hors de mes
+  comptes ».
   `hub verify` contrôle aussi les chiffres et échoue au-delà de la tolérance.
 - Collecteurs : un passage qui saute un réseau faute de clé ou ne trouve pas de cours n'est plus
   « ok » mais « incomplet », avec ce qu'il faut faire sur l'accueil. Les cryptos détenues sans

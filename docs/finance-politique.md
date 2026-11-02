@@ -61,8 +61,11 @@ entre eux).
 - Une rupture porte : le compte, l'actif, les parts, la valeur et la cause probable. L'app les
   montre sous le grand chiffre du patrimoine (« N soldes non expliqués ») et sur l'accueil ; la
   liste mène aux connexions, où l'on importe l'historique manquant.
-- Une décision enregistrée par l'API (`POST /finance/breaks/decide` : coût saisi, garder tel
-  quel, « parti ») sort la rupture de la liste ; l'app ne propose pas encore ces gestes.
+- Un écart qu'aucun import ne comblera se règle d'un geste, depuis la liste : « J'ai payé X »
+  (le prix d'achat saisi), « Garder tel quel » (le prix d'achat devient la valeur du jour où le
+  hub a vu ces parts) ou, pour un envoi, « Parti hors de mes comptes » (sortie au coût). La
+  décision est gardée (`POST /finance/breaks/decide`) et sort l'écart de la liste ; une nouvelle
+  opération du même genre le rouvre.
 
 ## Collecteurs
 
