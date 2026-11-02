@@ -40,7 +40,7 @@ from hub.platform.logging import get_logger
 from hub.platform.settings import Settings
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 19  # 0019_intraday_holdings
+SCHEMA_VERSION = 20  # 0020_reconcile_decisions
 log = get_logger("hub.finance")
 LEGACY_ARCHIVE = re.compile(r"\d{4}|duplicates")
 SEVERITY: dict[str, Severity] = {"budget_over": "alert", "budget_likely": "warning"}

@@ -139,7 +139,11 @@ def copy_reference(src: Connection, dst: Connection) -> None:
     for rule_id in list(dst.execute(text("SELECT id FROM rules")).scalars()):
         if rule_id not in kept:
             dst.execute(text("DELETE FROM rules WHERE id = :i"), {"i": rule_id})
-    for table, key in (("debts", "id"), ("debt_balances", "debt_id, on_date")):
+    for table, key in (
+        ("debts", "id"),
+        ("debt_balances", "debt_id, on_date"),
+        ("reconcile_decisions", "id"),
+    ):
         cols, rows = _rows(src, table, key)
         _upsert(dst, table, key, cols, rows)
     cols, rows = _rows(src, "rule_packs", "name")

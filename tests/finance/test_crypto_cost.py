@@ -11,7 +11,14 @@ from typing import Any
 from sqlalchemy import text
 
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.patrimoine.app import assets, crypto_cost, holdings, perf_lines, valuation
+from hub.domains.finance.patrimoine.app import (
+    assets,
+    crypto_cost,
+    holdings,
+    perf_lines,
+    performance,
+    valuation,
+)
 from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.sources.infra import market_file
 from hub.domains.finance.sources.infra.files import Incoming
@@ -202,3 +209,56 @@ def test_a_report_at_zero_for_held_coins_is_not_a_value(finance: FinanceDomain) 
     assert engine is not None
     ln = engine.lines[f"{account.id}|{key}"]
     assert ln.value[engine.index("2026-10-02")] == 20_000
+
+
+def _crypto_gain(finance: FinanceDomain, on: str) -> int:
+    """Gain « Max » de la performance sur les lignes de cryptos (toutes leurs positions)."""
+    with finance.engine().connect() as conn:
+        eng = perf_lines.build(conn, on)
+        crypto = set(conn.execute(text("SELECT id FROM accounts WHERE kind = 'crypto'")).scalars())
+    assert eng is not None
+    ids = [i for i, ln in eng.lines.items() if ln.kind == "position" and ln.account_id in crypto]
+    return int(performance.report(eng, ids, None, None, "month")["summary"]["gain"]["minor"])
+
+
+def test_performance_max_is_the_result_since_purchase(finance: FinanceDomain) -> None:
+    # politique de calcul : un seul gain. La récompense est du gain (pas un apport), l'envoi
+    # vers la Ledger garde son coût, la vente sort ce qu'elle a rapporté
+    setup(finance)
+    with finance.engine().connect() as conn:
+        r = holdings.holdings(conn, "2026-10-27")["crypto"]["since_purchase"]
+    assert r is not None
+    assert _crypto_gain(finance, "2026-10-27") == minor(r["result"]) == -6_000
+
+
+def test_a_send_outside_leaves_at_cost_and_a_late_price_keeps_the_gain(
+    finance: FinanceDomain,
+) -> None:
+    # achat de 0.02 BTC pour 1 000 sans cours ce jour-là (le premier arrive le 5 mars) ; un
+    # envoi de 0.01 vers un portefeuille non suivi sort au coût (500), pas au cours (800)
+    add_ref(finance, "crypto:binance", "crypto", "Binance")
+    finance.importer.process(
+        [
+            doc(
+                prices=[btc("2026-03-05", "60000"), btc("2026-04-01", "80000")],
+                operations=[
+                    op("fiat:1", "fiat_deposit", "2026-03-01", ("CHF", "1000", "deposit")),
+                    op(
+                        "buy:1",
+                        "trade",
+                        "2026-03-02",
+                        ("CHF", "-1000", "trade"),
+                        ("BTC", "0.02", "trade"),
+                    ),
+                    op("out:1", "withdrawal", "2026-04-01", ("BTC", "-0.01", "withdrawal")),
+                ],
+            )
+        ]
+    )
+    with finance.engine().connect() as conn:
+        r = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
+    assert r is not None
+    assert minor(r["sent_outside_cost"]) == 50_000
+    # 0.01 BTC à 80 000 = 800, coût restant 500 : +300 ; l'envoi ne crée ni gain ni perte
+    assert minor(r["result"]) == 30_000
+    assert _crypto_gain(finance, "2026-10-27") == 30_000

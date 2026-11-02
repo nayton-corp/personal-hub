@@ -23,13 +23,14 @@ francs est l'effet du change. Des agrégats seulement : aucune opération n'en s
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from decimal import Decimal, localcontext
 from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.patrimoine.app import valuation
+from hub.domains.finance.patrimoine.app import decisions, valuation
 from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.registre.model.amounts import money
 from hub.kernel.money import DECIMAL_CONTEXT, base_currency, quantize
@@ -92,11 +93,15 @@ class Book:
         return c, cu, q - known
 
 
-def _legs(conn: Connection, on_date: str) -> list[tuple[str, str, int, str, Decimal, bool]]:
-    """(jour, rôle, montant, symbole, quantité signée, entre mes comptes) des écritures crypto."""
+Leg = tuple[str, str, int, str, Decimal, bool, str]
+
+
+def _legs(conn: Connection, on_date: str) -> list[Leg]:
+    """(jour, rôle, montant, symbole, quantité signée, entre mes comptes, compte) des écritures
+    crypto."""
     rows = conn.execute(
         text(
-            "SELECT e.seq, e.booking_date, e.amount_minor, e.bank_tx_code, "
+            "SELECT e.seq, e.booking_date, e.amount_minor, e.bank_tx_code, e.account_id, "
             "json_extract(e.fx_json, '$.currency'), json_extract(e.fx_json, '$.quantity'), "
             "json_extract(e.fx_json, '$.peer') "
             "FROM entries e JOIN accounts a ON a.id = e.account_id "
@@ -105,9 +110,9 @@ def _legs(conn: Connection, on_date: str) -> list[tuple[str, str, int, str, Deci
         ),
         {"d": on_date},
     ).fetchall()
-    linked = {int(r[6]) for r in rows if r[6] is not None}
+    linked = {int(r[7]) for r in rows if r[7] is not None}
     out = []
-    for seq, on, amount, code, symbol, qty, peer in rows:
+    for seq, on, amount, code, account, symbol, qty, peer in rows:
         kind = role(code)
         if kind is None or not symbol or qty is None or instruments.known_currency(str(symbol)):
             continue  # une monnaie (francs en attente chez la plateforme) n'est pas une crypto
@@ -118,37 +123,64 @@ def _legs(conn: Connection, on_date: str) -> list[tuple[str, str, int, str, Deci
         if not q:
             continue
         internal = kind in ("in", "out") and (peer is not None or int(seq) in linked)
-        out.append((str(on), kind, int(amount), str(symbol).upper(), q, internal))
+        out.append((str(on), kind, int(amount), str(symbol).upper(), q, internal, str(account)))
     return out
 
 
-def books(conn: Connection, on_date: str, fx: valuation.FxTable) -> tuple[dict[str, Book], bool]:
-    """Le prix de revient de chaque crypto (clé `CRYPTO:<symbole>`), et si le dollar est connu
-    à chaque date."""
+@dataclass
+class Walk:
+    """Le prix de revient de chaque crypto (clé `CRYPTO:<symbole>`), si le dollar est connu à
+    chaque date, et le flux de chaque jour par compte et par crypto pour la performance : ce que
+    les parts ont coûté ou rapporté, selon la politique de calcul (une récompense n'est pas un
+    apport, un envoi vers l'extérieur sort à son coût)."""
+
+    books: dict[str, Book]
+    usd_ok: bool
+    # (compte, clé) → jour → (parts expliquées, flux en centimes de la devise de base)
+    flows: dict[tuple[str, str], dict[str, tuple[Decimal, Decimal]]] = field(default_factory=dict)
+
+
+def walk(conn: Connection, on_date: str, fx: valuation.FxTable, lots: Sequence[Leg] = ()) -> Walk:
+    """Les jambes crypto dans l'ordre, et les lots de tes décisions (decisions.lots) avant les
+    jambes de leur jour."""
     out: dict[str, Book] = {}
+    flows: dict[tuple[str, str], dict[str, tuple[Decimal, Decimal]]] = {}
     usd_ok = True
+    legs = sorted(
+        [*(x for x in lots if x[0] <= on_date), *_legs(conn, on_date)], key=lambda x: x[0]
+    )
     with localcontext(DECIMAL_CONTEXT):
-        for on, kind, amount, symbol, q, internal in _legs(conn, on_date):
-            b = out.setdefault(instruments.crypto_key(symbol), Book())
+        for on, kind, amount, symbol, q, internal, account in legs:
+            key = instruments.crypto_key(symbol)
+            b = out.setdefault(key, Book())
+            day = flows.setdefault((account, key), {})
             v = Decimal(abs(amount))
             rate = fx.rate(USD, on)
             if rate is None:
                 usd_ok = False
                 rate = Decimal(1)
             vu = v / rate
+            had_q, had_f = day.get(on, (ZERO, ZERO))
             if internal:
                 b.held += q  # les parts changent de compte, le coût reste
+                day[on] = (had_q + q, had_f + (v if q > 0 else -v))  # au cours, s'annule au total
                 continue
             if q > 0:
                 if kind == "income" or kind == "fee":  # récompense, remise de frais : sans coût
                     b.add(q, ZERO, ZERO)
                     b.income += v
+                    day[on] = (had_q + q, had_f)  # du gain, pas un apport
                 else:
                     b.add(q, v, vu)
+                    day[on] = (had_q + q, had_f + v)
                     if kind == "in":
                         b.arrived += v
                 continue
             c, cu, unknown = b.remove(-q)
+            flow = -v if kind == "trade" else ZERO  # frais : des parts en moins, une perte
+            if kind == "out":  # au coût ; des parts sans historique, à leur valeur
+                flow = -(c + v * unknown / -q)
+            day[on] = (had_q + q, had_f + flow)
             if kind == "trade":
                 known = (-q - unknown) / -q
                 b.realized += v * known - c
@@ -157,7 +189,14 @@ def books(conn: Connection, on_date: str, fx: valuation.FxTable) -> tuple[dict[s
             elif kind == "out":
                 b.out_cost += c
             # frais : des parts en moins, le coût reste sur les autres
-    return out, usd_ok
+    return Walk(out, usd_ok, flows)
+
+
+def books(
+    conn: Connection, on_date: str, fx: valuation.FxTable, lots: Sequence[Leg] = ()
+) -> tuple[dict[str, Book], bool]:
+    w = walk(conn, on_date, fx, lots)
+    return w.books, w.usd_ok
 
 
 def _m(x: Decimal, ccy: str) -> dict[str, Any]:
@@ -179,7 +218,7 @@ def result(conn: Connection, on_date: str, positions: valuation.Positions) -> di
                 continue
             had, worth = held.get(x.isin, (ZERO, 0))
             held[x.isin] = (had + x.quantity, worth + x.value)
-    bk, usd_ok = books(conn, on_date, fx)
+    bk, usd_ok = books(conn, on_date, fx, decisions.lots(decisions.read(conn)))
     if not held and not bk:
         return None
     ccy = base_currency()
