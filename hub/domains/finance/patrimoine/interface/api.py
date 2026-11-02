@@ -16,6 +16,7 @@ from hub.domains.finance.patrimoine.app import (
     lookthrough,
     perf_lines,
     performance,
+    placements,
     price_history,
     reconcile,
     snapshots,
@@ -84,6 +85,13 @@ def build_router(host: Host) -> APIRouter:
         """Dettes et leur solde aujourd'hui : départ, paiements et intérêts depuis, fin projetée."""
         with engine.connect() as conn:
             return {"items": debts.items(conn, host.today().isoformat())}
+
+    @r.get("/placements")
+    def placements_route(_p: AnyReader) -> dict[str, Any]:
+        """Mes placements depuis l'achat : un gain par classe (cryptos, titres, 3e pilier), la
+        complétude et les ruptures ouvertes."""
+        with engine.connect() as conn:
+            return placements.summary(conn, host.today().isoformat())
 
     @r.get("/breaks")
     def breaks_route(_p: AnyReader) -> dict[str, Any]:
