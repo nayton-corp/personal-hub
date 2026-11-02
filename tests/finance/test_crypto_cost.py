@@ -8,7 +8,7 @@ import json
 from typing import Any
 
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.patrimoine.app import crypto_cost, holdings
+from hub.domains.finance.patrimoine.app import crypto_cost, holdings, valuation
 from hub.domains.finance.sources.infra import market_file
 from hub.domains.finance.sources.infra.files import Incoming
 from tests.finance.test_exchange import op
@@ -131,3 +131,33 @@ def test_roles_from_codes() -> None:
     assert crypto_cost.role("CRYPTO/RECEIVE") == "in"
     assert crypto_cost.role("SWISSBORG/WITHDRAWAL") == "out"
     assert crypto_cost.role("OPENING") is None
+
+
+def test_nothing_held_and_history_below_zero(finance: FinanceDomain) -> None:
+    # tout est parti, et l'historique sort plus de parts qu'il n'en a fait entrer : pas de
+    # division par zéro, rien de tenu, rien de latent
+    add_ref(finance, "crypto:binance", "crypto", "Binance")
+    finance.importer.process(
+        [
+            doc(
+                fx=[usd("2026-03-01", "0.9")],
+                prices=[btc("2026-03-01", "50000"), btc("2026-10-01", "40000")],
+                balances=[
+                    {
+                        "account": "crypto:binance",
+                        "instrument": "BTC",
+                        "on_date": "2026-03-01",
+                        "quantity": "0.01",
+                    }
+                ],
+                operations=[
+                    op("out:1", "withdrawal", "2026-03-02", ("BTC", "-0.01", "withdrawal")),
+                ],
+            )
+        ]
+    )
+    with finance.engine().connect() as conn:
+        r = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
+    assert r is not None
+    assert (minor(r["value"]), minor(r["cost"]), minor(r["unrealized"])) == (0, 0, 0)
+    assert minor(r["unknown_cost_value"]) == 0

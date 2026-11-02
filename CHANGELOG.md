@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+## [0.13.12] · 2026-11-02
+
+### Finance
+
+- Patrimoine : la section « Depuis l'achat » ne plante plus quand une crypto n'est plus tenue
+  alors que son historique sort plus de parts qu'il n'en a fait entrer (division par zéro qui
+  faisait tomber la page Patrimoine).
+
 ## [0.13.11] · 2026-11-02
 
 ### App
