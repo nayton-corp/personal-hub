@@ -7,6 +7,16 @@
 - Patrimoine : un relevé SwissBorg sans cours du jour (valeur 0 pour des parts tenues) ne fait
   plus tomber la ligne à zéro. Elle vaut parts × cours. La Performance des cryptos montrait de
   fausses pertes : environ −2 200 CHF sur l'USDC, et d'autres cryptos SwissBorg touchées.
+- Patrimoine : un seul calcul de gain. La Performance des cryptos compte le prix de revient réel
+  (commun à tous tes comptes crypto) : un envoi d'un compte à l'autre garde son coût, une
+  récompense est un revenu, une vente sort au coût moyen. « Max » = le résultat depuis l'achat.
+  La section crypto « Depuis l'achat » disparaît, elle faisait doublon.
+- Patrimoine : les soldes qu'aucune opération connue n'explique sont listés, chiffrés, sous le
+  grand chiffre et sur l'accueil (`GET /finance/breaks`, règle : docs/finance-politique.md).
+  `hub verify` contrôle aussi les chiffres et échoue au-delà de la tolérance.
+- Collecteurs : un passage qui saute un réseau faute de clé ou ne trouve pas de cours n'est plus
+  « ok » mais « incomplet », avec ce qu'il faut faire sur l'accueil. Les cryptos détenues sans
+  cours connu reçoivent les clôtures récentes de Binance.
 
 ### Exploitation
 

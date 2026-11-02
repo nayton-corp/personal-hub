@@ -45,6 +45,8 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
 | `budget?month=&period=m\|q` | réel et cible par catégorie de dépense, dépassements, reste à vivre |
 | `budget/totals?month=&period=m\|q` | revenus, dépenses fixes et variables, épargne, placements, taux |
 | `budget/months?month=&months=6` | les mêmes totaux, mois par mois (graphique Tendance) |
+| `breaks` | soldes non expliqués d'aujourd'hui (rapprochement) : compte, actif, parts, valeur, cause, et leur total ; règle dans [finance-politique.md](finance-politique.md) |
+| `breaks/decide` | `POST` (session passkey) : classe une rupture (`cost` avec `cost_minor`, `accept`, `gone`) |
 | `export.csv?from=&to=` | journal complet en CSV (session passkey seulement) |
 
 - **Mois.** Le mois affiché est toujours un paramètre ; l'app part du mois budgétaire en cours dans le fuseau de l'instance (`HUB_TZ`, Zurich par défaut).

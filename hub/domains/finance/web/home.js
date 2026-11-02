@@ -9,6 +9,7 @@ import { catMark, taxRate } from "./meta.js";
 import { shiftMonth, store } from "../../store.js";
 import { esc, fill, ic, n0, nf, pctOnly, pf, pref, setPref, sgn, skel } from "../../ui.js";
 import { gapRows } from "./gaps.js";
+import { breaksPath } from "./wplace.js";
 import * as wealth from "./wealth.js";
 
 const STALE_DAYS = 45;
@@ -52,6 +53,8 @@ export function rows() {
     const y = l.yearly, spent = (y ? y.spent : l.spent).minor / 100, target = (y ? y.target : l.target).minor / 100;
     out.push({ info: true, mark: catMark(l.category, l.group), t: `${l.name} dépasse de ${n0(spent - target)} ${base()}`, s: `${n0(spent)} sur ${n0(target)}${y ? " depuis janvier" : " ce mois"}`, a: "cat", v: l.category });
   }
+  const br = store.data(breaksPath);
+  if (br && br.count > 0) out.push({ info: true, ic: "alert", c: "var(--s3)", t: `${br.count} solde${br.count > 1 ? "s" : ""} non expliqué${br.count > 1 ? "s" : ""} dans le patrimoine`, s: `${n0(br.open_value.minor / 100)} ${base()} qu'aucune opération connue n'explique`, a: "tab", v: "patrimoine" });
   if (k.unmatched_transfers > 0) out.push({ info: true, ic: "swap", c: "var(--s6)", t: `${k.unmatched_transfers} virement${k.unmatched_transfers > 1 ? "s" : ""} sans autre côté`, s: "Un relevé manque peut-être sur l'autre compte", a: "rubric", v: "accounts" });
   const alerts = store.data(alertsPath);
   for (const a of alerts ? alerts.items : []) {
@@ -108,6 +111,7 @@ export function render(box) {
   store.use(alertsPath);
   store.use(connPath);
   store.use(runsPath);
+  store.use(breaksPath);
   const be = store.use(budgetPath(store.today, "m"));
   const sp = sparkPath(k);
   const se = sp ? store.use(sp) : null;

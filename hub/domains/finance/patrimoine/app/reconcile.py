@@ -123,7 +123,8 @@ def _unit(positions: valuation.Positions, key: str, on: str) -> Decimal | None:
     if rate is None:
         return None
     with localcontext(DECIMAL_CONTEXT):
-        return price * rate * 10 ** CURRENCY_EXPONENTS.get(base_currency(), 2)
+        unit: Decimal = price * rate * 10 ** CURRENCY_EXPONENTS.get(base_currency(), 2)
+        return unit
 
 
 def _value(q: Decimal, unit: Decimal | None) -> int | None:

@@ -58,12 +58,11 @@ opérations connues jusqu'au relevé (et, pour un titre, la suite des relevés a
 entre eux).
 
 - **Tolérance : 1 CHF** par compte et par actif. Au-delà, l'écart est une rupture.
-- Une rupture porte : le compte, l'actif, les parts, la valeur, la cause probable et les gestes
-  qui la règlent (importer l'historique, saisir le coût, marquer « parti », garder tel quel).
-- Une rupture **classée** (une décision) sort de la liste ; une nouvelle opération du même genre
-  la rouvre.
-- **Complétude** : la part de la valeur des placements expliquée et cotée, affichée sur le
-  patrimoine.
+- Une rupture porte : le compte, l'actif, les parts, la valeur et la cause probable. L'app les
+  montre sous le grand chiffre du patrimoine (« N soldes non expliqués ») et sur l'accueil ; la
+  liste mène aux connexions, où l'on importe l'historique manquant.
+- Une décision enregistrée par l'API (`POST /finance/breaks/decide` : coût saisi, garder tel
+  quel, « parti ») sort la rupture de la liste ; l'app ne propose pas encore ces gestes.
 
 ## Collecteurs
 

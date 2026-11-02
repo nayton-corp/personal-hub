@@ -83,6 +83,8 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 |---|---|---|
 | `GET` | `/api/finance/accounts` | Comptes, IBAN masqué, solde calculé, dernier CLBD et écart. |
 | `GET` | `/api/finance/accounts/pending` | Comptes vus dans des relevés en attente (Enable Banking, CSV Revolut) mais pas encore créés : clé, devise, nombre d'écritures et période. Aucun montant. |
+| `GET` | `/api/finance/breaks` | Rapprochement d'aujourd'hui : les ruptures ouvertes (compte, actif, parts, valeur, cause, gestes), leur total et la part des placements expliquée et cotée. |
+| `POST` | `/api/finance/breaks/decide` | Classe une rupture : coût saisi, garder tel quel, ou « parti » pour un envoi. |
 | `GET` | `/api/finance/budget` | Réel et cible par catégorie de dépense, dépassements, reste à vivre, jours restants. `period=q` : les trois mois complets avant `month`. |
 | `GET` | `/api/finance/budget/months` | Les totaux du budget mois par mois, jusqu'à `month` compris. |
 | `GET` | `/api/finance/budget/totals` | Revenus, dépenses (fixes, variables), épargne, placements et taux d'épargne. |
