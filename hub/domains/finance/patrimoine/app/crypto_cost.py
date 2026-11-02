@@ -211,12 +211,14 @@ def result(conn: Connection, on_date: str, positions: valuation.Positions) -> di
             v = Decimal(value)
             unknown = ZERO
             missing_out = ZERO
-            if q > b.held + EPS:  # des parts sans historique : sans prix de revient
+            if q > 0 and q > b.held + EPS:  # des parts sans historique : sans prix de revient
                 unknown = v * (q - max(b.held, ZERO)) / q
             elif b.held > q + EPS and b.held > 0:  # sorties que l'historique ne montre pas
                 missing_out = b.cost * (b.held - q) / b.held
                 b.cost_usd -= b.cost_usd * (b.held - q) / b.held
                 b.cost -= missing_out
+            if q <= 0 and b.held < 0:  # plus rien, sorties sans arrivée connue : rien à porter
+                b.cost = b.cost_usd = ZERO
             covered = v - unknown
             unrealized = covered - b.cost if covered or b.cost else ZERO
             row = {
