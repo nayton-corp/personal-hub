@@ -85,16 +85,17 @@ class Engine:
 
 
 def _first_day(conn: Connection, as_of: str) -> str | None:
-    found = [
-        conn.execute(text(f"SELECT min({col}) FROM {table}")).scalar_one()  # noqa: S608
-        for table, col in (
-            ("entries", "booking_date"),
-            ("trades", "trade_date"),
-            ("holdings", "on_date"),
-            ("debt_balances", "on_date"),
-        )
-    ]
-    days = [d for d in found if d is not None and d <= as_of]
+    days = []
+    for table, col in (
+        ("entries", "booking_date"),
+        ("trades", "trade_date"),
+        ("holdings", "on_date"),
+        ("debt_balances", "on_date"),
+    ):
+        d = conn.execute(text(f"SELECT min({col}) FROM {table}")).scalar_one()  # noqa: S608
+        if d is None or d > as_of:
+            continue
+        days.append(d)
     return min(days) if days else None
 
 
@@ -378,6 +379,7 @@ _FINGERPRINT = (
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM fx_rates), "
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM debt_balances), "
     "(SELECT coalesce(max(seq), 0) FROM events), "
+    "(SELECT count(*) FROM reconcile_decisions), "
     "(SELECT group_concat(id || ':' || hidden) FROM accounts)"
 )
 
