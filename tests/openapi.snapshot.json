@@ -375,6 +375,24 @@
         "title": "ChallengeOut",
         "type": "object"
       },
+      "CollectorGapOut": {
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "reason"
+        ],
+        "title": "CollectorGapOut",
+        "type": "object"
+      },
       "CollectorLinkIn": {
         "additionalProperties": false,
         "properties": {
@@ -529,6 +547,14 @@
           "consecutive_failures": {
             "title": "Consecutive Failures",
             "type": "integer"
+          },
+          "gaps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CollectorGapOut"
+            },
+            "title": "Gaps",
+            "type": "array"
           },
           "label": {
             "title": "Label",

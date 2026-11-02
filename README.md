@@ -18,7 +18,7 @@ suivants. Les changements : [CHANGELOG.md](CHANGELOG.md).
 | ajouter un domaine | [docs/ajouter-un-domaine.md](docs/ajouter-un-domaine.md) |
 | la sécurité | [docs/securite.md](docs/securite.md) |
 | installer, déployer, sauvegarder | [docs/exploitation/](docs/exploitation/README.md) |
-| la finance (usage), et son code | [docs/finance.md](docs/finance.md), [hub/domains/finance/README.md](hub/domains/finance/README.md) |
+| la finance (usage), sa politique de calcul, et son code | [docs/finance.md](docs/finance.md), [docs/finance-politique.md](docs/finance-politique.md), [hub/domains/finance/README.md](hub/domains/finance/README.md) |
 | l'agenda (usage), et son code | [docs/agenda.md](docs/agenda.md), [hub/domains/agenda/README.md](hub/domains/agenda/README.md) |
 | les documents (usage), et leur code | [docs/documents.md](docs/documents.md), [hub/domains/documents/README.md](hub/domains/documents/README.md) |
 | les collecteurs, l'IA locale | [docs/collectors.md](docs/collectors.md), [docs/brain.md](docs/brain.md) |

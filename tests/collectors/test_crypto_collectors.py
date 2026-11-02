@@ -482,6 +482,8 @@ def binance_api(
         path = urlsplit(url).path
         if path == "/api/v3/exchangeInfo":
             return 200, {"symbols": SYMBOLS}
+        if path == "/api/v3/klines" and history is None:  # clôtures des cryptos détenues
+            return 200, [[int(query(url)["startTime"]), "0", "0", "0", "2.5"]]
         if path == "/api/v3/klines" or "frankfurter" in url:
             assert history is not None
             found = history(path if "klines" in path else "fx", query(url))
@@ -822,7 +824,9 @@ def test_binance_history_reads_every_stream_once(make_env: Any, binance_pauses: 
     deposit = next(o for o in doc.operations if o.id == "deposit:d1")
     assert (deposit.txid, deposit.address, deposit.network) == ("aa11", "bc1qbinance", "BTC")
     # les cours Binance des seuls jours d'opération ; XRP sans paire USDT est laissé
-    binance_prices = sorted((p.key, p.on_date) for p in doc.prices)
+    recent = "2026-10-20"  # en plus : les clôtures des derniers jours des cryptos détenues
+    binance_prices = sorted((p.key, p.on_date) for p in doc.prices if p.on_date < recent)
+    assert {p.key for p in doc.prices if p.on_date >= recent} == {"CRYPTO:LDO"}
     assert binance_prices == [
         ("CRYPTO:BNB", "2026-03-03"),
         ("CRYPTO:BNB", "2026-04-05"),
@@ -853,7 +857,10 @@ def test_binance_history_reads_every_stream_once(make_env: Any, binance_pauses: 
     assert [int(q["startTime"]) for q in deposits] == [at("2026-10-24", 0)]
     trades = [query(u) for _m, u, _h in later.calls if "myTrades" in u]
     assert {q["symbol"]: q["fromId"] for q in trades}["BTCUSDT"] == "102"
-    assert not [u for _m, u, _h in later.calls if "klines" in u or "frankfurter" in u]
+    assert not [u for _m, u, _h in later.calls if "frankfurter" in u]
+    klines = [query(u) for _m, u, _h in later.calls if "klines" in u]
+    assert [q["symbol"] for q in klines] == ["LDOUSDT"]  # seulement les derniers jours
+    assert int(klines[0]["startTime"]) == at("2026-10-20", 0)
     assert [bool(d.operations) for d in dropped(env)].count(False) == 1
 
 
@@ -882,7 +889,8 @@ def test_binance_first_history_is_all_or_nothing(make_env: Any) -> None:
     result = binance.run(env, "run", Http(fake))
     assert result.detail == "partial convert:site_unavailable"
     (doc,) = dropped(env)
-    assert (doc.operations, doc.prices) == ([], [])  # les soldes, pas l'historique
+    assert doc.operations == []  # les soldes, pas l'historique
+    assert {p.on_date >= "2026-10-20" for p in doc.prices} <= {True}  # cours du jour seulement
     assert len(doc.balances) == 4
     assert env.memory.get("history_since") is None
     assert env.memory.get("trade_ids") is None
@@ -1527,3 +1535,24 @@ def test_a_cosmos_address_is_checked(make_env: Any) -> None:
     with pytest.raises(Failure) as err:
         market.wallet_entries(make_env("market", creds={"wallets": [wallet]}))
     assert err.value.outcome == "auth_error"
+
+
+def test_held_cryptos_get_recent_closes_or_are_flagged(make_env: Any) -> None:
+    """Une crypto détenue hors de la liste CoinGecko reçoit les clôtures Binance des derniers
+    jours ; sans paire USDT, le run le dit au lieu de la laisser sans cours en silence."""
+    from hub.collectors.exchanges.common import recent_prices
+    from hub.core.collector_gaps import parse
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        q = query(url)
+        if q["symbol"] == "ETHWUSDT":
+            return 400, {"code": -1121}
+        return 200, [[int(q["startTime"]), "0", "0", "0", "0.00002"]]
+
+    env = make_env("binance")
+    held = {"BONK": Decimal(5), "ETHW": Decimal(1), "BTC": Decimal(1), "USDC": Decimal(3)}
+    rows, notes = recent_prices(env, Http(Fake(route)), {**held, "OLD": Decimal(0)})
+    assert {(r["instrument"], r["currency"]) for r in rows} == {("BONK", "USD")}
+    assert min(r["on_date"] for r in rows) == "2026-10-20"  # sept jours avant le passage
+    assert notes == ["prices.ethw:no_pair"]
+    assert parse("partial " + " ".join(notes)) == [{"scope": "prices.ethw", "reason": "no_pair"}]

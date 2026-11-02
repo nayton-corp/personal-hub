@@ -30,7 +30,7 @@ from hub.api.schemas import (
     ConnectorOut,
     RunnerListOut,
 )
-from hub.core import collectors, connections, connectors
+from hub.core import collector_gaps, collectors, connections, connectors
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal
 from hub.core.errors import Problem
 from hub.core.notify import Message
@@ -59,7 +59,8 @@ Viewer = Annotated[Principal, Depends(_app_or_collector)]
 
 
 def _out(state: collectors.State) -> CollectorOut:
-    return CollectorOut.model_validate(state.public())
+    out = state.public()
+    return CollectorOut.model_validate({**out, "gaps": collector_gaps.of_run(out["last_run"])})
 
 
 @router.get("", response_model=CollectorListOut)

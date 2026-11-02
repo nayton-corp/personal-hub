@@ -8,6 +8,7 @@ import { base, date, monthName } from "../../format.js";
 import { catMark, taxRate } from "./meta.js";
 import { shiftMonth, store } from "../../store.js";
 import { esc, fill, ic, n0, nf, pctOnly, pf, pref, setPref, sgn, skel } from "../../ui.js";
+import { gapRows } from "./gaps.js";
 import * as wealth from "./wealth.js";
 
 const STALE_DAYS = 45;
@@ -16,6 +17,7 @@ const BILAN_DAYS = 7; // le bilan du mois passé reste sur l'accueil la premièr
 const kpisPath = () => `/finance/kpis?month=${store.today}`;
 const alertsPath = "/observations?domain=finance"; // les constats des sentinelles
 const connPath = "/collectors/connections";
+const runsPath = "/collectors"; // l'état des collecteurs : une collecte incomplète se dit
 
 function sparkPath(k) {
   if (!k) return null;
@@ -42,6 +44,7 @@ export function rows() {
   const cs = store.data(connPath);
   const missing = cs ? cs.items.filter((c) => !c.ready) : [];
   if (missing.length) out.push({ ic: "key", c: "var(--s3)", t: `${missing.length} connexion${missing.length > 1 ? "s" : ""} à régler`, s: `${missing.map((c) => c.label).join(", ")} : identifiants à donner`, a: "rubric", v: "conn" });
+  out.push(...gapRows(store.data(runsPath)));
   if (k.stale_accounts > 0) out.push({ ic: "clock", c: "var(--s3)", t: `${k.stale_accounts} compte${k.stale_accounts > 1 ? "s" : ""} à rafraîchir`, s: `Dernière donnée il y a plus de ${STALE_DAYS} jours`, a: "rubric", v: "accounts" });
   // à savoir : dépassements, hausses, marge 3a, réserve
   const b = store.data(budgetPath(store.today, "m"));
@@ -104,6 +107,7 @@ export function render(box) {
   const k = ke.data;
   store.use(alertsPath);
   store.use(connPath);
+  store.use(runsPath);
   const be = store.use(budgetPath(store.today, "m"));
   const sp = sparkPath(k);
   const se = sp ? store.use(sp) : null;
