@@ -112,6 +112,11 @@ def test_an_answer_that_arrives_elsewhere_waits_in_a_glass_card(page: Any) -> No
 def test_without_an_assistant_the_orb_says_so(hub: tuple[HubContext, str], page: Any) -> None:
     hub[0].assistant = AssistantLink(None)
     page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")  # tout se relit
+    # attendre la relecture de l'état avant de toucher l'orbe : sous charge (tests en
+    # parallèle), le clic pouvait passer avant la réponse de /assistant/status
+    page.wait_for_function(
+        "(document.querySelector('#orb').getAttribute('aria-label') || '').includes('hors ligne')"
+    )
     page.locator("#orb").click()
     page.wait_for_selector("#chat .chat-note >> text=Aucun assistant")
     assert "hors ligne" in (page.locator("#orb").get_attribute("aria-label") or "")
