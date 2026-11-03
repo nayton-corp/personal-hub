@@ -4,10 +4,12 @@
 
 ### Finance
 
-- Cours et cryptos : l'historique Ethereum des portefeuilles passe par Etherscan avec ta clé
-  (Routescan sans clé coupait sans prévenir), Base par Blockscout (hors de l'offre gratuite
-  d'Etherscan). Un réseau en erreur ne bloque plus l'historique des autres, et l'alerte de
-  l'accueil dit sa cause (clé refusée, explorateur saturé…). L'ETHW a son cours (CoinGecko).
+- Cours et cryptos : un réseau en erreur ne bloque plus l'historique des autres réseaux du
+  portefeuille, et l'alerte de l'accueil dit sa cause (clé refusée, explorateur saturé…). Les
+  transferts internes de Polygon, que l'offre gratuite d'Etherscan refuse en disant « clé
+  invalide », ne font plus échouer tout l'historique (MetaMask, Trust Wallet, Coinbase Wallet).
+  Base passe par Blockscout (hors de l'offre gratuite d'Etherscan). L'ETHW a son cours
+  (CoinGecko).
 - Connexions : les clés d'API se saisissent dans un champ texte masqué ; le trousseau du
   téléphone ne les préremplit plus (il écrasait la clé Etherscan).
 - Patrimoine : un relevé SwissBorg sans cours du jour (valeur 0 pour des parts tenues) ne fait

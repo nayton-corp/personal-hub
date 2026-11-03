@@ -588,7 +588,15 @@ def eth_moves(
                 for address in addresses:
                     for action in ("txlist", "txlistinternal", "tokentx"):
                         for page in range(1, (CHAIN_PAGES if full else 1) + 1):
-                            rows = _scan(env, http, network, action, address, page)
+                            try:
+                                rows = _scan(env, http, network, action, address, page)
+                            except Failure as f:
+                                # Polygon : l'offre gratuite refuse les transferts internes en
+                                # disant « Invalid API Key » ; un écart éventuel se voit au
+                                # rapprochement
+                                if action != "txlistinternal" or not f.detail.endswith(":key"):
+                                    raise
+                                break
                             for r in rows:
                                 txid = str(r["hash"])
                                 sender = str(r.get("from", "")).lower()

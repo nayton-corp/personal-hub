@@ -51,7 +51,7 @@ const FIELD_LABEL = {
   flex_token: "Jeton Flex", query_id: "Numéro de la requête Flex", api_key: "Clé API",
   api_secret: "Secret API", passphrase: "Passphrase", key_name: "Nom de la clé",
   coingecko_key: "Clé CoinGecko (facultative)",
-  etherscan_key: "Clé Etherscan (historique Ethereum, Arbitrum, Polygon)",
+  etherscan_key: "Clé Etherscan (historique Arbitrum, Polygon, BSC)",
   aspsp_name: "Banque (nom chez Enable Banking)", aspsp_country: "Pays de la banque (ISO)",
   psu_type: "Type de compte (personal ou business)", consent_days: "Durée du consentement (jours)",
   max_syncs_per_day: "Synchronisations par jour au plus", currencies: "Devises suivies",

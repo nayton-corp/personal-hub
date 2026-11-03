@@ -1,6 +1,6 @@
 """Réseaux compatibles Ethereum d'un portefeuille : nœud public pour le solde, et l'API
-d'historique compatible Etherscan de chacun (Etherscan V2 avec la clé, Routescan pour Ethereum
-sans clé, ou l'explorateur sans clé d'un réseau hors de l'offre gratuite d'Etherscan)."""
+d'historique compatible Etherscan de chacun : Routescan pour Ethereum (sans clé), Etherscan V2
+avec la clé pour les autres, ou l'explorateur sans clé d'un réseau hors de son offre gratuite."""
 
 from __future__ import annotations
 
@@ -24,8 +24,8 @@ def networks(env: Env, w: dict[str, Any]) -> list[Network]:
     keyed = isinstance(key, str) and bool(key)
     out = []
     for name in w.get("networks") or ["ethereum"]:
-        if name == "ethereum":  # sans clé : Routescan, qui coupe sans prévenir
-            rpc, native, chain_id, own = m.eth_rpc_url, "ETH", 1, "" if keyed else m.eth_history_url
+        if name == "ethereum":  # Routescan, sans clé
+            rpc, native, chain_id, own = m.eth_rpc_url, "ETH", 1, m.eth_history_url
             tokens = {c: s for s, c in m.erc20_tokens.items()}
         else:
             n = m.evm_networks[name]

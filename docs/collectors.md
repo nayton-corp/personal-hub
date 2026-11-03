@@ -356,7 +356,7 @@ nœuds publics élaguent leur index des transactions : s'ils n'en rendent aucune
 demande un indexeur (Mintscan, nœud d'archive), à brancher sur `cosmos_rest_url`.
 
 **Historique ETH et SOL.** Leurs transactions partent aussi dans `transactions`, pour le
-registre : ETH par l'API Etherscan V2 (`chainid=1`) quand la clé `etherscan_key` est là, sinon par celle de Routescan (`eth_history_url`, compatible Etherscan, sans clé, qui coupe sans prévenir) — envois et arrivées d'ETH, transferts internes de contrats et jetons suivis, les frais de
+registre : ETH par l'API de Routescan (`eth_history_url`, compatible Etherscan, sans clé) — envois et arrivées d'ETH, transferts internes de contrats et jetons suivis, les frais de
 gaz payés par mes adresses — et SOL par le RPC (`getSignaturesForAddress` puis
 `getTransaction`), SOL natif et jetons suivis. Tout au premier passage (jusqu'à
 `CHAIN_PAGES` pages par adresse, mémoire `chain_txs`), ensuite la dernière page. Un jeton et
@@ -366,7 +366,7 @@ Arbitrum, BNB Smart Chain et Polygon passent par l'API Etherscan V2 (`etherscan_
 demande une clé gratuite (etherscan.io → API Keys), une seule pour tous les réseaux : le secret
 `etherscan_key` de « Cours et cryptos » (champ « Clé Etherscan » dans l'app). Sans elle, leur
 solde est lu mais pas leur historique (détail `partial history.<nom>.<réseau>:needs_key`) ; il
-est relu en entier dès que la clé arrive (mémoire `chain_txs` : `<compte>@<réseau>`). Un réseau hors de l'offre gratuite d'Etherscan est signalé (`:unsupported`). Base en est sorti : il passe par l'explorateur Blockscout sans clé (`history_url` du réseau dans `evm_networks`), qui peut couper après quelques appels ; BNB Smart Chain n'a pas d'autre source gratuite. Un réseau en erreur est signalé avec sa cause (`history.<nom>.<réseau>:key`, `:http_429`, …) et retiré du passage ; les autres réseaux du portefeuille continuent, et il est relu en entier au passage suivant.
+est relu en entier dès que la clé arrive (mémoire `chain_txs` : `<compte>@<réseau>`). Un réseau hors de l'offre gratuite d'Etherscan est signalé (`:unsupported`). Base en est sorti : il passe par l'explorateur Blockscout sans clé (`history_url` du réseau dans `evm_networks`), qui peut couper après quelques appels ; BNB Smart Chain n'a pas d'autre source gratuite. Un réseau en erreur est signalé avec sa cause (`history.<nom>.<réseau>:key`, `:http_429`, …) et retiré du passage ; les autres réseaux du portefeuille continuent, et il est relu en entier au passage suivant. Les transferts internes de Polygon sont refusés par l'offre gratuite (« Invalid API Key » avec une clé valide) : ils sont sautés, un écart éventuel se voit au rapprochement.
 Les sources publiques limitent le débit : une pause avant chaque page d'historique
 (`chain_pause_seconds`) et chaque cours CoinGecko sans clé (`coingecko_pause_seconds`), et sur
 un refus (429, « rate limit ») une attente de 10, 30 puis 60 secondes avant de réessayer.

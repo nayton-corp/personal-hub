@@ -357,7 +357,7 @@ def test_an_eth_wallet_reads_its_networks_and_staking(make_env: Any) -> None:
                 "timeStamp": "1772280000",
             }
             return 200, {"status": "1", "message": "OK", "result": [row]}
-        if "chainid=1&" in url and query(url)["action"] == "tokentx":
+        if "routescan" in url and query(url)["action"] == "tokentx":
             row = {  # parts reçues au staking
                 "hash": "0xk1",
                 "from": "0x" + "00" * 20,
@@ -394,7 +394,7 @@ def test_an_eth_wallet_reads_its_networks_and_staking(make_env: Any) -> None:
         if "etherscan" in u or "blockscout" in u
     }
     assert scans == {
-        ("api.etherscan.io", "1", "cle-gratuite"),  # Ethereum avec la clé
+        ("api.routescan.io", None, None),  # Ethereum, sans clé
         ("base.blockscout.com", None, None),  # Base : hors de l'offre gratuite d'Etherscan
         ("api.etherscan.io", "137", "cle-gratuite"),
     }
@@ -1466,24 +1466,27 @@ def test_a_failing_network_is_flagged_with_its_cause_and_the_others_go_on(make_e
     )
 
     def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
-        if "chainid=1&" in url:
+        q = query(url) if "etherscan" in url else {}
+        if q.get("chainid") == "42161":
             return 200, {"status": "0", "message": "NOTOK", "result": "Invalid API Key"}
+        if q.get("chainid") == "137" and q["action"] == "txlistinternal":  # offre gratuite
+            return 200, {"status": "0", "message": "NOTOK", "result": "Invalid API Key (#err2)"}
         return inner.route(method, url, headers, data)
 
     wallet = {
         "account": "crypto:metamask",
         "asset": "ETH",
         "addresses": [ETH_ME],
-        "networks": ["ethereum", "arbitrum"],
+        "networks": ["ethereum", "arbitrum", "polygon"],
     }
-    creds = {"wallets": [wallet], "etherscan_key": "pas-une-cle"}
+    creds = {"wallets": [wallet], "etherscan_key": "cle-gratuite"}
     env = make_env("market", creds=creds, market={"coingecko_pause_seconds": 0})
     result = market.run(env, "run", Http(Fake(route)))
-    assert result.detail == "partial history.metamask.ethereum:key"
+    # Arbitrum refuse la clé : signalé seul ; Polygon sans ses transferts internes passe
+    assert result.detail == "partial history.metamask.arbitrum:key"
     (doc,) = dropped(env)
-    # l'historique d'Arbitrum est gardé, celui d'Ethereum sera relu en entier au prochain passage
-    assert [t.txid for t in doc.transactions] == ["0xa1"]
-    assert env.memory.get("chain_txs") == ["crypto:metamask@arbitrum"]
+    assert "0xa1" in [t.txid for t in doc.transactions]  # Ethereum gardé
+    assert env.memory.get("chain_txs") == ["crypto:metamask", "crypto:metamask@polygon"]
 
 
 def test_ethw_gets_its_price_from_coingecko() -> None:
