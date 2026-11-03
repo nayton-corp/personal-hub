@@ -178,6 +178,8 @@ class _Chain:
         peer = links.counterpart(self.conn, t.account, t.symbol, t.on_date, moved, t.txid)
         if peer:
             detail["peer"] = peer[0]
+        if t.stake:
+            detail["stake"] = 1
         if t.quantity > 0:
             amount = -peer[1] if peer else self.value(t, t.quantity)
             legs = [("receive", "CRYPTO/RECEIVE", f"Réception {t.symbol}", t.quantity, amount)]

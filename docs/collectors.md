@@ -371,7 +371,12 @@ Les sources publiques limitent le débit : une pause avant chaque page d'histori
 (`chain_pause_seconds`) et chaque cours CoinGecko sans clé (`coingecko_pause_seconds`), et sur
 un refus (429, « rate limit ») une attente de 10, 30 puis 60 secondes avant de réessayer.
 Une mise en staking apparaît comme
-l'envoi d'ETH et l'arrivée des parts, comptées comme de l'ETH. Les autres jetons de staking
+l'envoi d'ETH et l'arrivée des parts, comptées comme de l'ETH. Une transaction qui touche un
+contrat de `staking_tokens` (mise, demande de sortie, claim) est marquée `kind: "stake"` : le
+domaine Finance la garde à moi, sans gain ni perte, et seule la récompense devient du gain. Un
+portefeuille délégué (EIP-7702, Coinbase Wallet) voit ses transferts internes répétés par une
+trace `delegatecall` qui ne bouge aucun ETH : seuls les transferts internes de type `call`
+comptent. Les autres jetons de staking
 liquide (stETH, rETH…) ne sont pas lus : à ajouter à `staking_tokens` ou `erc20_tokens`.
 
 Un compte est relevé en entier ou pas du tout : si une de ses adresses ne répond pas, il est

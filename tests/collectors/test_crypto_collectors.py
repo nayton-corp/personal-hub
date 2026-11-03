@@ -1605,3 +1605,38 @@ def test_held_cryptos_get_recent_closes_or_are_flagged(make_env: Any) -> None:
     assert min(r["on_date"] for r in rows) == "2026-10-20"  # sept jours avant le passage
     assert notes == ["prices.lunc:no_pair"]
     assert parse("partial " + " ".join(notes)) == [{"scope": "prices.lunc", "reason": "no_pair"}]
+
+
+def test_a_staking_claim_on_a_delegated_wallet_is_one_stake_arrival(make_env: Any) -> None:
+    """Portefeuille EIP-7702 : la trace `delegatecall` répète l'ETH reçu du claim sans le
+    bouger ; seule l'arrivée compte, et elle est marquée « staking »."""
+    queue = "0x" + "9e" * 20
+    common = {"hash": "0xc1", "isError": "0", "timeStamp": "1772366400"}
+    eth_txs = {
+        "txlist": [
+            {
+                **common,
+                "from": ETH_ME,
+                "to": KILN.lower(),
+                "value": "0",
+                "gasUsed": "1",
+                "gasPrice": "1",
+            }
+        ],
+        "txlistinternal": [
+            {**common, "from": queue, "to": ETH_ME, "value": str(5293 * 10**14), "type": "call"},
+            {
+                **common,
+                "from": ETH_ME,
+                "to": "0x" + "de" * 20,
+                "value": str(5293 * 10**14),
+                "type": "delegatecall",
+            },
+        ],
+    }
+    wallet = {"account": "crypto:coinbase-wallet", "asset": "ETH", "addresses": [ETH_ME]}
+    env = make_env("market", creds={"wallets": [wallet]}, market={"erc20_tokens": {}})
+    assert market.run(env, "run", Http(chain(eth_txs=eth_txs))).detail is None
+    (doc,) = dropped(env)
+    got = [(t.txid, t.symbol, t.quantity, t.stake) for t in doc.transactions]
+    assert got == [("0xc1", "ETH", Decimal("0.529299999999999999"), True)]

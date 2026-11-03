@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+### Finance
+
+- Cours et cryptos : un portefeuille délégué (EIP-7702, Coinbase Wallet) ne voit plus ses ETH
+  reçus annulés par la copie technique `delegatecall` d'un transfert interne ; un claim de
+  staking arrive donc bien au portefeuille.
+- Une mise en staking et sa sortie (cbwsETH de Kiln brûlés, ETH réclamé) restent à moi : le
+  prix de revient ne bouge pas, plus d'envoi ni d'arrivée « hors de mes comptes » à régler, et
+  la récompense compte comme gain.
+
 ## [0.13.15] · 2026-11-03
 
 ### Finance
