@@ -56,8 +56,16 @@ iPhone / app Domia ──POST /api/talk──▶ Domia (Pi) ──POST /talk─�
    de la configuration (celui du `htpasswd` du Pi) : `DOMIA_CONFIG_PASSWORD=<mot de passe>` (et `DOMIA_CONFIG_USER`,
    `client0` par défaut). Sans lui, il propose et Domia vérifie, mais Nginx refuse l'écriture (401).
 4. **La config.** `cp config.example.yaml config.yaml` et ajuster (l'adresse du Pi, le modèle, `allow_from`).
+   **Qui parle à l'assistant** (`listen.callers`) : chaque appelant a son jeton, dans `.env`
+   (`ASSISTANT_CALLER_<NOM>`), et la personne pour qui il parle en découle ; sans jeton connu, l'assistant répond
+   `401` et l'adresse (`allow_from`) n'est plus qu'une seconde barrière. Tirer un jeton :
+   `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'`. `domia` nomme la personne de l'appareil qui
+   parle, parmi `speaks_for` ; le même jeton va sur le Pi (`DOMIA_ASSISTANT_SECRET`, étape 5). `hub` parle toujours
+   pour `person` ; son jeton est celui du hub (`secrets.enc.yaml`, section `assistant`, clé `token`, créé par
+   `hub init` ; `age -d` le relit). Un Raccourci Siri est un appelant de plus. `check` liste les appelants.
 5. **Domia sait où est l'assistant.** Sur le Pi, dans `/opt/domia-instance/.env` :
-   `DOMIA_ASSISTANT_URL=http://<ip du Mac>:8770`, puis recréer le backend pour qu'il relise le `.env` (`deploy.sh`
+   `DOMIA_ASSISTANT_URL=http://<ip du Mac>:8770` et `DOMIA_ASSISTANT_SECRET=<le jeton ASSISTANT_CALLER_DOMIA>`,
+   puis recréer le backend pour qu'il relise le `.env` (`deploy.sh`
    sur le tag déjà en place ne fait rien) : `docker compose -p domia-prod --env-file /opt/domia-instance/.env -f
    compose.prod.yml up -d domia-backend`. Sans cette ligne, `POST /api/talk` répond 503 et l'Accueil ne montre pas
    « Dis à l'appart ». Une réservation DHCP pour le Mac évite que l'adresse change.
@@ -70,9 +78,10 @@ iPhone / app Domia ──POST /api/talk──▶ Domia (Pi) ──POST /talk─�
 7. **Vérifier.** `.venv/bin/python -m domia_assistant check` : Domia, le modèle, la bibliothèque du hub et le pont.
 8. **L'orbe de l'app du hub.** L'app du hub parle à l'assistant par le hub (`/api/assistant/…`, session de l'app
    seule), qui le joint à `http://host.docker.internal:8770` (`[assistant] url` de `deploy/settings.toml`). Le hub
-   relaie la phrase, l'historique et le son, sans rien garder. Si l'orbe reste grise, l'assistant refuse sans doute
-   l'adresse des conteneurs : son journal dit `403`, ajouter cette adresse à `allow_from`. Pour que la conversation
-   de l'app soit celle d'une personne de Domia : `HUB_ASSISTANT__PERSON=<identifiant>` dans `deploy/.env`.
+   relaie la phrase, l'historique et le son, sans rien garder, et se présente avec le jeton `assistant.token` de
+   `secrets.enc.yaml` (le même que `ASSISTANT_CALLER_HUB` ici). Si l'orbe reste grise, le journal de l'assistant
+   dit pourquoi : `403`, ajouter l'adresse des conteneurs à `allow_from` ; `401`, les deux jetons diffèrent. La
+   conversation de l'app est celle de la personne de `callers.hub.person`.
 9. **Le Mac reste allumé** : Réglages Système → Économiseur d'énergie → empêcher la suspension automatique.
 
 ## Le modèle du cloud, et le repli local

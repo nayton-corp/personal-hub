@@ -1,5 +1,7 @@
-# Copier en config.yaml (la vraie maison) ou config.essai.yaml (le banc, contre l'essai) ; le jeton dans .env :
+# Copier en config.yaml (la vraie maison) ou config.essai.yaml (le banc, contre l'essai) ; les jetons dans .env :
 #   DOMIA_ASSISTANT_TOKEN=<le jeton de l'appareil autorisé « Assistant de maison »>
+#   ASSISTANT_CALLER_DOMIA=<le jeton que Domia présente (DOMIA_ASSISTANT_SECRET sur le Pi)>
+#   ASSISTANT_CALLER_HUB=<le jeton que le hub présente (assistant.token de secrets.enc.yaml)>
 domia:
   url: http://192.168.0.63:3000        # l'essai : http://192.168.0.63:3001
 model:
@@ -17,7 +19,11 @@ model:
 listen:
   host: 0.0.0.0
   port: 8770
-  allow_from: [192.168.0.63, 127.0.0.1]  # le Pi (Domia relaie POST /api/talk) et le Mac
+  allow_from: [192.168.0.63, 127.0.0.1]  # seconde barrière : d'où un appelant peut venir (le Pi, le Mac)
+  callers:                               # qui parle : un jeton par appelant, dans .env (ASSISTANT_CALLER_<NOM>)
+    domia: {speaks_for: [robin, kim]}    # Domia dit qui parle (la personne de l'appareil), parmi ces personnes
+    hub: {person: robin}                 # le hub parle toujours pour son propriétaire (secrets.enc.yaml, assistant.token)
+    # siri: {person: robin}              # un Raccourci Siri, avec son propre jeton
 assistant:
   home: ~/Domia                        # assistant.sqlite, Bibliothèque/à-trier/ (photos) ; la bibliothèque vit au hub
   eventkit_url: http://127.0.0.1:8771  # le pont Rappels/Calendrier

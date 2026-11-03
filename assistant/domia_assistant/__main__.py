@@ -132,6 +132,7 @@ class Parts:
         except AgendaUnavailable as e:
             out["reminders"] = {"ok": False, "error": f"Rappels non autorisés ou injoignables : {e}"}
         out["model"] = self.settings.model
+        out["callers"] = sorted(c.name for c in self.settings.callers.values())
         if isinstance(self.model, Fallback):
             out["cloud"] = {"model": self.settings.cloud_model, "last": self.model.last}
         if self.settings.hub is not None:
@@ -157,7 +158,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "serve":
         s = parts.settings
-        httpd = server.serve(parts.assistant, s.listen_host, s.listen_port, s.allow_from, parts.status, parts.voice)
+        httpd = server.serve(
+            parts.assistant, s.listen_host, s.listen_port, s.allow_from, parts.status, parts.voice, s.callers
+        )
         stop = threading.Event()
         signal.signal(signal.SIGTERM, lambda *_: stop.set())
         logging.getLogger("assistant").info("listening host=%s port=%d model=%s", s.listen_host, s.listen_port, s.model)

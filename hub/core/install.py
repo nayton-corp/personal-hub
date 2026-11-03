@@ -121,11 +121,17 @@ def age_key(path: Path, report: Report) -> str:
 
 
 def secrets_file(path: Path, recipient: str, report: Report) -> None:
-    """Secrets chiffrés de l'instance : un mot de passe restic tiré au hasard, jamais affiché."""
+    """Secrets chiffrés de l'instance : un mot de passe restic et le jeton que le hub présente à
+    l'assistant de la maison, tirés au hasard, jamais affichés."""
     if path.exists():
         report.kept.append(str(path))
         return
-    plain = yaml.safe_dump({"restic": {"password": random.token_urlsafe(32)}}).encode()
+    plain = yaml.safe_dump(
+        {
+            "restic": {"password": random.token_urlsafe(32)},
+            "assistant": {"token": random.token_urlsafe(32)},
+        }
+    ).encode()
     _write(path, secrets.encrypt_for(recipient, plain), 0o600)
     report.created.append(str(path))
 

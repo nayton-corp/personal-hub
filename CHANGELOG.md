@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+### Assistant et sécurité
+
+- L'assistant de la maison reconnaît ses appelants à leur jeton (`listen.callers`,
+  `ASSISTANT_CALLER_<NOM>` dans son `.env`) et en déduit pour qui chacun parle : le hub parle
+  toujours pour son propriétaire, Domia nomme la personne de l'appareil parmi celles permises.
+  Sans jeton connu, `401` ; l'adresse (`allow_from`) n'est plus qu'une seconde barrière. Le hub
+  présente `assistant.token` de `secrets.enc.yaml` (créé par `hub init`) et ne passe plus de
+  personne ; `HUB_ASSISTANT__PERSON` disparaît.
+
 ### Finance
 
 - `hub finance golden save | check` : l'étalon des agrégats (patrimoine, positions,

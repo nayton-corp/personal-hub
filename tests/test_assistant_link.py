@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -18,11 +19,13 @@ ANSWER = {"answer": "Nettoie le filtre.", "done": [], "proposals": [], "confirm"
 class FakeAssistant:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, bytes | None, str]] = []
+        self.auth: list[str | None] = []
 
     def __call__(
-        self, method: str, url: str, data: bytes | None, mime: str, timeout: int
+        self, method: str, url: str, data: bytes | None, headers: dict[str, str], timeout: int
     ) -> tuple[int, bytes]:
-        self.calls.append((method, url, data, mime))
+        self.calls.append((method, url, data, headers["Content-Type"]))
+        self.auth.append(headers.get("Authorization"))
         if url.endswith("/health"):
             return 200, json.dumps({"version": "x", "voice": "ok"}).encode()
         if "/history" in url:
@@ -40,10 +43,9 @@ class FakeAssistant:
         return 200, json.dumps(ANSWER).encode()
 
 
-def linked(hub: HubContext, person: str | None = "nathan") -> FakeAssistant:
+def linked(hub: HubContext, token: str | None = "hub-secret") -> FakeAssistant:  # noqa: S107 - test
     fake = FakeAssistant()
-    hub.assistant = AssistantLink("http://assistant:8770", fake)
-    hub.settings.assistant.__dict__["person"] = person
+    hub.assistant = AssistantLink("http://assistant:8770", fake, token=token)
     return fake
 
 
@@ -62,11 +64,9 @@ def test_a_sentence_goes_to_the_assistant_and_its_answer_comes_back(
     assert r.json()["answer"] == "Nettoie le filtre."
     method, url, data, _mime = fake.calls[-1]
     assert (method, url) == ("POST", "http://assistant:8770/talk")
-    assert json.loads(data or b"") == {
-        "text": "le lave-vaisselle affiche E24",
-        "person": "nathan",
-        "client": "hub",
-    }
+    # le hub ne nomme jamais la personne : l'assistant la tient de son jeton
+    assert json.loads(data or b"") == {"text": "le lave-vaisselle affiche E24", "client": "hub"}
+    assert fake.auth[-1] == "Bearer hub-secret"
 
 
 def test_the_history_and_the_status_are_read_through_the_hub(
@@ -81,7 +81,7 @@ def test_the_history_and_the_status_are_read_through_the_hub(
     }
     items = client.get("/api/assistant/history?days=3").json()["items"]
     assert items[0]["answer"] == "Vidange."
-    assert "person=nathan" in fake.calls[-1][1]
+    assert "person=" not in fake.calls[-1][1]
     assert "days=3" in fake.calls[-1][1]
 
 
@@ -110,6 +110,24 @@ def test_without_an_assistant_the_app_is_told_plainly(hub: HubContext, client: T
     r = client.post("/api/assistant/talk", json={"text": "salut"})
     assert r.status_code == 503
     assert r.json()["type"].endswith("assistant.unconfigured")
+
+
+def test_the_token_the_hub_presents_comes_from_the_secrets(hub: HubContext, tmp_path: Path) -> None:
+    import pyrage
+
+    from hub.core import assistant_link
+    from hub.platform import secrets
+    from hub.platform.settings import Secrets
+
+    key, enc = tmp_path / "age.key", tmp_path / "secrets.enc.yaml"
+    settings = hub.settings.model_copy(update={"secrets": Secrets(file=enc, age_key_file=key)})
+    assert assistant_link.token(settings) is None  # pas de fichier de secrets : pas de jeton
+    identity = pyrage.x25519.Identity.generate()
+    key.write_text(f"# created: test\n{identity}\n")
+    enc.write_bytes(
+        secrets.encrypt_for(str(identity.to_public()), b"assistant:\n  token: ' hub-secret '\n")
+    )
+    assert assistant_link.token(settings) == "hub-secret"
 
 
 def test_an_assistant_that_sleeps_is_reported_unreachable(

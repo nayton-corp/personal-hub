@@ -92,10 +92,10 @@ class Backup(BaseModel):
 
 class Assistant(BaseModel):
     """L'assistant de la maison (assistant/), natif sur le Mac : l'orbe de l'app lui parle par
-    le hub. Sans `url`, l'orbe reste grise et l'écran le dit."""
+    le hub. Sans `url`, l'orbe reste grise et l'écran le dit. Le hub se présente avec le jeton
+    `assistant.token` de `secrets.enc.yaml` ; l'assistant en déduit la personne."""
 
     url: str | None = None  # « http://host.docker.internal:8770 » depuis les conteneurs
-    person: str | None = None  # la personne qui parle depuis l'app (la mémoire de l'assistant)
 
 
 class Secrets(BaseModel):

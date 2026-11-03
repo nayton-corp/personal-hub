@@ -9,6 +9,8 @@ from pathlib import Path
 
 import yaml
 
+from .callers import Callers
+from .callers import from_config as callers_from
 from .hub import HubSettings
 from .hub import settings as hub_settings
 
@@ -40,8 +42,10 @@ class Settings:
     cloud_timeout_s: float = 30.0
     listen_host: str = "0.0.0.0"
     listen_port: int = 8770
-    # qui peut appeler POST /talk : le Pi (Domia relaie) et la machine elle-même
+    # d'où un appelant peut venir (seconde barrière) : le Pi (Domia relaie) et la machine elle-même
     allow_from: tuple[str, ...] = ("127.0.0.1",)
+    # qui parle (domia_assistant.callers) : un jeton par appelant dans .env ; sans appelant, personne ne parle
+    callers: Callers = field(default_factory=dict)
     home: Path = HOME
     eventkit_url: str | None = "http://127.0.0.1:8771"
     web_search_url: str | None = None  # une instance SearXNG locale (format=json) ; absente : pas de recherche web
@@ -121,6 +125,7 @@ def load(path: Path, env: dict[str, str] | None = None) -> Settings:
         listen_host=str(listen.get("host", Settings.listen_host)),
         listen_port=int(listen.get("port", Settings.listen_port)),
         allow_from=tuple(listen.get("allow_from", Settings.allow_from)),
+        callers=callers_from(listen.get("callers"), env),
         hub=hub_settings(raw.get("hub"), env),
         **extra,
     )

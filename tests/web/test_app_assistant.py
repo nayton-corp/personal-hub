@@ -33,7 +33,7 @@ class SlowAssistant:
     """Un assistant qui réfléchit un peu : le temps de quitter la conversation."""
 
     def __call__(
-        self, method: str, url: str, data: bytes | None, mime: str, timeout: int
+        self, method: str, url: str, data: bytes | None, headers: dict[str, str], timeout: int
     ) -> tuple[int, bytes]:
         if url.endswith("/health"):
             return 200, json.dumps({"voice": "ok"}).encode()

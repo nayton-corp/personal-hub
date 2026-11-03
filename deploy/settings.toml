@@ -25,7 +25,8 @@ home = "/var/lib/hub-collector"
 [agenda]
 bridge_url = "http://host.docker.internal:8771"
 
-# l'assistant de la maison (assistant/), natif sur le Mac : l'orbe de l'app lui parle par le hub
+# l'assistant de la maison (assistant/), natif sur le Mac : l'orbe de l'app lui parle par le hub,
+# qui se présente avec le jeton `assistant.token` de secrets.enc.yaml (ASSISTANT_CALLER_HUB chez lui)
 [assistant]
 url = "http://host.docker.internal:8770"
 

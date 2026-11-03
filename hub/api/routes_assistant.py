@@ -1,6 +1,7 @@
 """Routes de l'orbe : l'app parle à l'assistant de la maison par le hub (session de l'app seule).
 
-Le hub relaie ; l'assistant garde la conversation, le hub ne garde rien (ni phrase ni son).
+Le hub relaie ; l'assistant garde la conversation, le hub ne garde rien (ni phrase ni son). La
+personne qui parle est celle du jeton du hub chez l'assistant, jamais un paramètre.
 """
 
 from __future__ import annotations
@@ -66,7 +67,7 @@ def history(
     limit: Annotated[int, Query(ge=1, le=200)] = 60,
 ) -> HistoryOut:
     try:
-        found = hub_ctx.assistant.history(hub_ctx.settings.assistant.person, days, limit)
+        found = hub_ctx.assistant.history(days, limit)
     except AssistantError as e:
         raise _relay(e) from None
     return HistoryOut(items=found.get("items") or [], waiting=found.get("waiting") or [])
@@ -75,7 +76,7 @@ def history(
 @router.post("/talk", response_model=AnswerOut)
 def talk(body: TalkIn, hub_ctx: Ctx, _principal: AppSession) -> AnswerOut:
     try:
-        found = hub_ctx.assistant.talk(body.text.strip(), hub_ctx.settings.assistant.person)
+        found = hub_ctx.assistant.talk(body.text.strip())
     except AssistantError as e:
         raise _relay(e) from None
     return AnswerOut.model_validate(found)
@@ -93,7 +94,7 @@ async def voice(
     if not mime.startswith("audio/") or not audio or len(audio) > MAX_AUDIO:
         raise Problem("validation.params", "son absent, trop long ou d'un type inconnu")
     try:
-        found = hub_ctx.assistant.voice(audio, content_type, hub_ctx.settings.assistant.person)
+        found = hub_ctx.assistant.voice(audio, content_type)
     except AssistantError as e:
         raise _relay(e) from None
     return AnswerOut.model_validate(found)

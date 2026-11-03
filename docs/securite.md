@@ -17,6 +17,9 @@ quittent pas sa machine, sauf les sauvegardes chiffrées qu'elle choisit d'envoy
 - **L'app** : une session ne s'ouvre que par une passkey (WebAuthn, Face ID). La première
   s'inscrit avec un code à usage unique (`hub auth bootstrap-code`) ; une seconde passkey sert
   de secours. Le cookie de session n'est gardé en base que par son empreinte.
+- **L'assistant de la maison** reconnaît ses appelants (le hub, Domia, un Raccourci) à leur
+  jeton et en déduit pour qui chacun parle ; le hub présente `assistant.token` de
+  `secrets.enc.yaml` et ne nomme jamais la personne. L'adresse n'est qu'une seconde barrière.
 - **Les programmes** (assistant, collecteurs, Claude) : un jeton à portée et à date de fin
   ([D-017](decisions.md)). Le jeton n'est montré qu'une fois et gardé par son empreinte ; un
   jeton fini est refusé, une alerte prévient 14 jours avant, `hub token rotate` le renouvelle.

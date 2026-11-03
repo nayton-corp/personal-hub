@@ -44,6 +44,8 @@ def test_init_prepares_a_machine(tmp_path: Path) -> None:
     assert mode(tmp_path / "config") == 0o700
     assert report.public_key == secrets.recipient(key)
     conf = secrets.section(tmp_path / "config" / "secrets.enc.yaml", key, "restic")
+    link = secrets.section(tmp_path / "config" / "secrets.enc.yaml", key, "assistant")
+    assert len(link["token"]) >= 32  # le jeton que le hub présente à l'assistant, à copier chez lui
     assert len(conf["password"]) >= 40
     assert conf["password"] not in env_file.read_text()
     for sub in ("inbox", "backup/litestream", "backup/restic"):
