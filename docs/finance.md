@@ -54,6 +54,7 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
   `period=q` couvre les trois mois complets avant le mois choisi. Un mois futur est refusé.
 - **Virements.** Deux écritures de même montant entre deux de mes comptes sont appariées (IBAN, code de virement, ou même établissement à un jour d'écart pour le compte Revolut et ses poches). Un côté apparié sans catégorie, ou classé seulement par une règle « tout le reste », compte comme « Virement entre mes comptes » (vue `v_entry_shown`).
 - **Règle d'un compte.** `create_rule` avec `account_id` limite la règle à ce compte ; son motif peut être vide (« tout débit de la poche Vacances → Vacances »).
+- **Comptes suivis.** Budget, flux, totaux et tendance comptent en entier les comptes « Suivi par le budget ». Un autre compte courant (l'épargne) n'y entre que par ses dépenses catégorisées (fixes ou variables) : des impôts payés depuis l'épargne comptent dans Impôts, mais ses intérêts, ses virements et ses écritures sans catégorie restent dehors.
 - **Sans catégorie.** Les règles (lot 3) catégorisent à l'import ; ce qui reste sans
   catégorie compte en dépense variable si c'est négatif, en revenu sinon, sous le nom
   « À catégoriser », jusqu'à ce que tu le catégorises.

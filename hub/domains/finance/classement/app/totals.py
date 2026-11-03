@@ -49,6 +49,17 @@ class Line:
     count: int
 
 
+# Un compte de budget compte en entier. Un autre compte courant (l'épargne) ne compte que pour ses
+# dépenses catégorisées : des impôts payés depuis l'épargne restent des impôts, mais ses
+# intérêts, ses virements et ce qu'il a sans catégorie restent hors budget.
+_SCOPE = "(v.account_id IN {ids} OR (a.kind = 'cash' AND c.grp IN ('fixed', 'variable')))"
+
+
+def _scope(conn: Connection) -> tuple[str, dict[str, str]]:
+    ids, params = in_list("a", budget_accounts(conn))
+    return _SCOPE.format(ids=ids), params
+
+
 # Les règles (lot 3) catégorisent à l'import ; ce qui reste sans catégorie compte, comme dans
 # l'ancien script, en dépense variable s'il est négatif et en revenu sinon (la règle de départ
 # « autres revenus » prend déjà presque tous les crédits). Il garde l'identifiant
@@ -58,19 +69,21 @@ _LINES = (
     "CASE WHEN c.grp IS NOT NULL THEN c.grp WHEN v.amount_minor < 0 THEN 'variable' "
     "ELSE 'income' END, sum(v.amount_minor), count(DISTINCT v.entry_seq) "
     "FROM v_entry_allocation v JOIN entries e ON e.seq = v.entry_seq "
+    "JOIN accounts a ON a.id = v.account_id "
     "LEFT JOIN categories c ON c.id = v.category_id "
-    "WHERE v.account_id IN {ids} AND v.currency = :ccy AND e.kind != 'opening' "
+    "WHERE {scope} AND v.currency = :ccy AND e.kind != 'opening' "
     "AND v.booking_date >= :s AND v.booking_date < :e GROUP BY 1, 2 ORDER BY 3, 1"
 )
 
 
 def period_lines(conn: Connection, start: str, end: str, currency: str | None = None) -> list[Line]:
-    """Totaux par catégorie des comptes de budget, entre `start` inclus et `end` exclu, dans
+    """Totaux par catégorie des comptes de budget (et des dépenses catégorisées des autres comptes
+    courants, `_SCOPE`), entre `start` inclus et `end` exclu, dans
     `currency` (la devise de base par défaut)."""
     currency = currency or base_currency()
-    ids, params = in_list("a", budget_accounts(conn))
+    scope, params = _scope(conn)
     rows = conn.execute(
-        text(_LINES.format(ids=ids)),
+        text(_LINES.format(scope=scope)),
         {**params, "unc": UNCATEGORIZED, "ccy": currency, "s": start, "e": end},
     ).fetchall()
     return [Line(r[0], r[1], int(r[2]), int(r[3])) for r in rows]
@@ -150,7 +163,7 @@ def trend(
     first = shift_month(until, -(months - 1))
     start, _ = month_bounds(first)
     _, end = month_bounds(until)
-    ids, params = in_list("a", budget_accounts(conn))
+    scope, params = _scope(conn)
     cat_clause = (
         "AND v.category_id = :cat"
         if category
@@ -160,8 +173,9 @@ def trend(
         text(
             "SELECT v.booking_date, sum(v.amount_minor), count(*) "
             "FROM v_entry_allocation v JOIN entries e ON e.seq = v.entry_seq "
+            "JOIN accounts a ON a.id = v.account_id "
             "LEFT JOIN categories c ON c.id = v.category_id "
-            f"WHERE v.account_id IN {ids} AND v.currency = :ccy AND e.kind = 'movement' "
+            f"WHERE {scope} AND v.currency = :ccy AND e.kind = 'movement' "
             f"AND v.booking_date >= :s AND v.booking_date < :e {cat_clause} GROUP BY 1"
         ),
         {**params, "ccy": currency, "s": start, "e": end, "cat": category},
