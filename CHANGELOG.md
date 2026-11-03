@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.13.16] · 2026-11-03
+
 ### Finance
 
 - Cours et cryptos : un portefeuille délégué (EIP-7702, Coinbase Wallet) ne voit plus ses ETH
