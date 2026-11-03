@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+## [0.13.17] · 2026-11-03
+
+### Finance
+
+- Une transaction crypto relue avec une autre quantité (lecture corrigée, comme le claim de
+  Coinbase Wallet) reçoit un mouvement de parts de correction pour la différence : l'écart
+  « inexpliqué » qu'elle laissait disparaît, sans réécrire le registre.
+
 ## [0.13.16] · 2026-11-03
 
 ### Finance

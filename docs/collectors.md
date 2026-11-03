@@ -360,7 +360,7 @@ registre : ETH par l'API de Routescan (`eth_history_url`, compatible Etherscan, 
 gaz payés par mes adresses — et SOL par le RPC (`getSignaturesForAddress` puis
 `getTransaction`), SOL natif et jetons suivis. Tout au premier passage (jusqu'à
 `CHAIN_PAGES` pages par adresse, mémoire `chain_txs`), ensuite la dernière page. Un jeton et
-le gaz d'une même transaction donnent deux écritures. Le solde passé, lui, n'est pas
+le gaz d'une même transaction donnent deux écritures. Une transaction relue avec une autre quantité nette (une lecture corrigée) garde ses écritures et reçoit un mouvement de parts de correction pour la différence. Le solde passé, lui, n'est pas
 reconstitué : la courbe de patrimoine de ces portefeuilles part du jour où ils sont branchés.
 Arbitrum, BNB Smart Chain et Polygon passent par l'API Etherscan V2 (`etherscan_url`, `chainid`), qui
 demande une clé gratuite (etherscan.io → API Keys), une seule pour tous les réseaux : le secret
