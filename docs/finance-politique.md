@@ -32,6 +32,7 @@ plus ce que les ventes ont réalisé. La performance « Max » de l'écran est c
 | Échange crypto contre crypto | Une vente suivie d'un achat, à la même valeur. |
 | Transfert entre deux de mes comptes | Les parts changent de compte, le coût les suit : ni gain ni perte. |
 | Récompense (staking, Earn, airdrop) | Revenu à la valeur du jour de réception, puis coût zéro. Comme l'AFC. |
+| Virement entre deux de mes comptes sans txid commun | Un envoi et une arrivée de la même crypto, à quelques jours, l'arrivée recevant au plus 5 % de moins (frais de retrait), sont appariés à la lecture, même écrits avant : le coût suit les parts, la différence est un frais. |
 | Mise en staking et sortie (parts brûlées, ETH réclamé) | Les cryptos restent à moi : le coût ne bouge pas, ni envoi ni arrivée hors de mes comptes. Une sortie lue sans marque (avant la marque `stake`) est reliée au claim qui la suit dans les 60 jours, s'il rend entre 100 % et 125 % de la mise. Ce que le claim rend en plus est du gain à coût zéro. |
 | Frais payés en crypto | Des parts en moins, le coût reste sur les autres : une perte. |
 | Arrivée d'un portefeuille non suivi | Coûte sa valeur du jour, et ouvre une rupture « arrivée de l'extérieur » tant que tu ne l'as pas classée. |

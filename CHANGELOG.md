@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+## [0.13.18] · 2026-11-03
+
+### Finance
+
+- Un virement crypto entre deux de mes comptes dont l'arrivée est un peu plus petite que
+  l'envoi (frais de retrait, sans txid commun) est reconnu comme virement, même pour le passé :
+  plus d'« envoyé hors de mes comptes » ni d'« arrivé de l'extérieur » à régler pour ces cas.
+- Cours et cryptos : cours quotidiens CoinGecko pour les cryptos tenues chez SwissBorg (BORG,
+  ADA, XRP, TRX, BCH, JitoSOL, Hyperliquid, EigenLayer, Bittensor), dont les cours ne venaient
+  que des exports SwissBorg et vieillissaient entre deux.
+
 ## [0.13.17] · 2026-11-03
 
 ### Finance
