@@ -31,10 +31,12 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.core.errors import Problem
-from hub.domains.finance.patrimoine.app import crypto_cost, decisions, valuation
+from hub.domains.finance.patrimoine.app import crypto_cost, decisions
+from hub.domains.finance.patrimoine.app.market_data import Positions
 from hub.domains.finance.patrimoine.model import instruments
+from hub.domains.finance.patrimoine.model.fx import FxRates
 from hub.domains.finance.registre.model.amounts import money
-from hub.kernel.money import CURRENCY_EXPONENTS, DECIMAL_CONTEXT, base_currency
+from hub.kernel.money import DECIMAL_CONTEXT, base_currency
 
 TOLERANCE_MINOR = 100  # 1 CHF par compte et par actif
 ROUNDING = Decimal("0.01")  # un relevé de fonds arrondit ses parts au centième
@@ -128,29 +130,8 @@ def _accounts(conn: Connection) -> list[tuple[str, str, str, bool, str]]:
     return [(str(r[0]), str(r[1]), str(r[2]), bool(r[3]), str(r[4])) for r in rows]
 
 
-def _unit(positions: valuation.Positions, key: str, on: str) -> Decimal | None:
-    """Valeur d'une part en centimes de la devise de base, au dernier cours connu."""
-    known = positions.price(key, on)
-    if known is None:
-        return None
-    _d, price, ccy = known
-    rate = positions.fx.rate(ccy, on)
-    if rate is None:
-        return None
-    with localcontext(DECIMAL_CONTEXT):
-        unit: Decimal = price * rate * 10 ** CURRENCY_EXPONENTS.get(base_currency(), 2)
-        return unit
-
-
-def _value(q: Decimal, unit: Decimal | None) -> int | None:
-    if unit is None:
-        return None
-    with localcontext(DECIMAL_CONTEXT):
-        return int((q * unit).to_integral_value())
-
-
 def _unexplained(
-    positions: valuation.Positions,
+    positions: Positions,
     account: str,
     kind: str,
     on: str,
@@ -197,7 +178,7 @@ def _unexplained(
             rest = gap - covered.get((account, k), ZERO)
             if not rest:
                 continue
-            value = _value(rest, _unit(positions, k, on))
+            value = positions.worth(k, rest, on)
             if value is not None and abs(value) < TOLERANCE_MINOR:
                 continue
             cause = "no_history" if rest > 0 else "missing_out"
@@ -233,7 +214,7 @@ def _covers(decided: Decided, key: tuple[str, str, str], quantity: Decimal | Non
 
 
 def _prices(
-    positions: valuation.Positions, account: str, kind: str, on: str, decided: Decided
+    positions: Positions, account: str, kind: str, on: str, decided: Decided
 ) -> tuple[list[Break], int, int, set[str]]:
     """Cours absents ou anciens d'un compte, (valeur du compte, dont au cours ancien), et les
     devises de ses cours."""
@@ -260,9 +241,7 @@ def _prices(
     return out, total, stale, currencies
 
 
-def _fx(
-    fx: valuation.FxTable, account: str, currencies: set[str], on: str, decided: Decided
-) -> list[Break]:
+def _fx(fx: FxRates, account: str, currencies: set[str], on: str, decided: Decided) -> list[Break]:
     """Un change plus vieux que `STALE_FX_DAYS` convertit encore, mais se dit (audit M6) ; une
     décision le couvre jusqu'au jour du change qu'elle a vu."""
     out = []
@@ -278,7 +257,7 @@ def _fx(
 
 
 def report(conn: Connection, on: str) -> Report:
-    positions = valuation.Positions(conn)
+    positions = Positions(conn)
     found = decisions.read(conn)
     covered: dict[tuple[str, str], Decimal] = {}
     decided: Decided = {}
@@ -337,8 +316,10 @@ def decide(
     on_date = b.since if b.kind == "unexplained" else on
     if b.kind == "unexplained" and decision == "accept" and quantity and quantity > 0:
         # garder tel quel : les parts entrent à leur valeur du jour où elles sont apparues
-        positions = valuation.Positions(conn)
-        cost_minor = max(0, _value(quantity, _unit(positions, b.asset, b.since)) or 0)
+        worth = Positions(conn).worth(b.asset, quantity, b.since)
+        if worth is None:  # jamais 0 en silence : le coût se saisit
+            raise Problem("validation.params", "pas de cours ce jour-là : saisis le coût")
+        cost_minor = max(0, worth)
     return decisions.add(
         conn,
         account_id=b.account_id,

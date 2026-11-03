@@ -22,6 +22,15 @@
 
 ### Finance
 
+- Un seul moteur de valorisation (audit C2, M1, m4) : la série du patrimoine
+  (`patrimoine/model/engine.py`, pure, gelée une fois construite) donne la valeur et le flux de
+  chaque ligne et les versements cumulés, jour par jour ; `networth`, `kpis`, les instantanés,
+  la performance, le résultat des cryptos et le rapprochement la lisent, ou lisent les mêmes parts
+  et cours (`model/positions.py`). Les versements en devise sont convertis au change de leur
+  jour, plus de celui de la valorisation : sur un compte en devise, l'effet marché comprend le
+  change (les versements cumulés d'un tel compte changent ; le patrimoine, non). Une rupture
+  « sans historique » gardée telle quelle sans cours ce jour-là demande un coût au lieu d'en
+  poser un à 0. La série est gardée en mémoire par base, tant que rien n'a changé.
 - Aucun zéro silencieux (audit M6, M7, M8, m6) : un montant sans change marque la série
   partielle au lieu de valoir 0 ; un change de plus de 7 jours ouvre une rupture « change
   ancien » (`stale_fx`, décision « garder tel quel ») ; une décision « sans cours » ou « cours

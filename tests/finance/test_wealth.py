@@ -242,6 +242,25 @@ def test_foreign_cash_account_uses_fx(finance: FinanceDomain) -> None:
     assert (v.net_worth, v.deposits, v.missing_fx) == (9_000, 9_000, [])
 
 
+def test_deposits_are_converted_at_their_own_date(finance: FinanceDomain) -> None:
+    """Audit M1 : un versement en devise vaut ce qu'il valait le jour où il est entré, pas au
+    change du jour de la valorisation ; un versement d'un jour sans change attend le premier."""
+    eur = add_ref(finance, "revolut:EUR", "cash", "Revolut EUR", "EUR")
+    open_account(finance, eur, "2026-09-20", 10_000)  # avant tout cours de change
+    fx = [
+        {"on_date": "2026-10-01", "base": "EUR", "quote": "CHF", "rate": "0.9", "source": "ecb"},
+        {"on_date": "2026-10-20", "base": "EUR", "quote": "CHF", "rate": "1.1", "source": "ecb"},
+    ]
+    finance.importer.process([Incoming("fx.json", market_doc(fx=fx))])
+    with finance.engine().connect() as conn:
+        before = valuation.value_at(conn, "2026-09-25")
+        first = valuation.value_at(conn, "2026-10-05")
+        later = valuation.value_at(conn, "2026-10-27")
+    assert (before.net_worth, before.deposits, before.missing_fx) == (0, 0, [eur.id])
+    assert (first.net_worth, first.deposits) == (9_000, 9_000)  # entré au premier change connu
+    assert (later.net_worth, later.deposits) == (11_000, 9_000)  # la hausse est un effet marché
+
+
 # --- positions saisies à la main ---------------------------------------------------------------
 
 POSITIONS = (

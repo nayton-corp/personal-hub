@@ -16,6 +16,8 @@ from hub.core.context import HubContext
 from hub.core.errors import Problem
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.patrimoine.app import assets, crypto_cost, reconcile, valuation
+from hub.domains.finance.patrimoine.model import positions
+from hub.domains.finance.patrimoine.model.fx import FxRates
 from hub.platform.db import begin_immediate
 from tests.finance.conftest import ready_account
 from tests.finance.test_crypto_cost import _crypto_gain, btc, doc, minor, setup
@@ -317,21 +319,14 @@ def test_verify_checks_the_figures(finance: FinanceDomain) -> None:
     assert gap <= minor(crypto["allowed_gap"])
 
 
-class _Fx:
-    def rate(self, ccy: str, on: str) -> Decimal:
-        return Decimal(1)
-
-
-class _Positions:
-    """Relevés et mouvements d'un compte, un cours de 500 la part."""
+class _Positions(positions.Positions):
+    """Relevés et mouvements d'un compte, un cours de 500 la part, en francs."""
 
     def __init__(self, reports: Any, trades: Any) -> None:
-        self.reports = {"a": reports}
-        self.trades = {"a": trades}
-        self.fx = _Fx()
+        super().__init__(FxRates("CHF", {}), {"a": trades}, {"a": reports}, {})
 
-    def price(self, key: str, on: str) -> tuple[str, Decimal, str]:
-        return on, Decimal(500), "CHF"
+    def price(self, isin: str, on_date: str) -> positions.Price | None:
+        return on_date, Decimal(500), "CHF"
 
 
 def test_a_fund_report_rounded_to_the_hundredth_is_not_a_break() -> None:
@@ -346,8 +341,8 @@ def test_a_fund_report_rounded_to_the_hundredth_is_not_a_break() -> None:
     trades = [("2026-02-10", "CH1", Decimal("0.003"))]
     p: Any = _Positions(reports, trades)
     assert reconcile._unexplained(p, "a", "pillar3a", "2026-03-01", {}) == []
-    reports.append(("2026-03-31", {"CH1": (Decimal("12.40"), one, "CHF")}))
-    (b,) = reconcile._unexplained(p, "a", "pillar3a", "2026-04-01", {})
+    later = [*reports, ("2026-03-31", {"CH1": (Decimal("12.40"), one, "CHF")})]
+    (b,) = reconcile._unexplained(_Positions(later, trades), "a", "pillar3a", "2026-04-01", {})
     assert (b.asset, b.quantity) == ("CH1", Decimal("0.04"))
 
 

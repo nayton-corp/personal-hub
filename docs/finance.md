@@ -192,8 +192,10 @@ l'import est appliqué et signale `holdings_mismatch` (parts), `ledger_check_fai
 
 **Valeur et effet marché.** Les titres valent leurs parts (dernier rapport, plus les achats et
 ventes des avis postérieurs) fois le dernier cours connu. Les versements nets sont toutes les
-écritures sauf le rendement et les frais : l'effet marché (valeur moins versements) comprend
-donc la hausse des cours, les dividendes, les intérêts et les commissions. La marge 3a compte
+écritures sauf le rendement et les frais, chacune convertie au change de son jour : l'effet
+marché (valeur moins versements) comprend donc la hausse des cours, les dividendes, les
+intérêts, les commissions et le change. Valeur, performance, résultat des cryptos et
+rapprochement lisent une seule série ([politique de calcul](finance-politique.md#valeur)). La marge 3a compte
 les versements reçus par VIAC (ou, s'ils sont plus élevés, les paiements « Épargne 3a » des
 comptes BCF). `GET /api/finance/holdings?on=` donne les positions (valeur, prix de revient au
 coût moyen, plus-value, poids) ; l'onglet Patrimoine les affiche. `GET /api/finance/trades?isin=`

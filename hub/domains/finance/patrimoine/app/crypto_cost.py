@@ -31,8 +31,10 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.patrimoine.app import decisions, valuation
+from hub.domains.finance.patrimoine.app import decisions
+from hub.domains.finance.patrimoine.app.market_data import Positions
 from hub.domains.finance.patrimoine.model import instruments
+from hub.domains.finance.patrimoine.model.fx import FxRates
 from hub.domains.finance.registre.model.amounts import money
 from hub.kernel.money import DECIMAL_CONTEXT, base_currency, quantize
 
@@ -203,7 +205,7 @@ class Walk:
     flows: dict[tuple[str, str], dict[str, tuple[Decimal, Decimal]]] = field(default_factory=dict)
 
 
-def walk(conn: Connection, on_date: str, fx: valuation.FxTable, lots: Sequence[Leg] = ()) -> Walk:
+def walk(conn: Connection, on_date: str, fx: FxRates, lots: Sequence[Leg] = ()) -> Walk:
     """Les jambes crypto dans l'ordre, et les lots de tes décisions (decisions.lots) avant les
     jambes de leur jour."""
     out: dict[str, Book] = {}
@@ -260,7 +262,7 @@ def walk(conn: Connection, on_date: str, fx: valuation.FxTable, lots: Sequence[L
 
 
 def books(
-    conn: Connection, on_date: str, fx: valuation.FxTable, lots: Sequence[Leg] = ()
+    conn: Connection, on_date: str, fx: FxRates, lots: Sequence[Leg] = ()
 ) -> tuple[dict[str, Book], bool]:
     w = walk(conn, on_date, fx, lots)
     return w.books, w.usd_ok
@@ -270,7 +272,7 @@ def _m(x: Decimal, ccy: str) -> dict[str, Any]:
     return money(int(quantize(x, 0)), ccy)
 
 
-def result(conn: Connection, on_date: str, positions: valuation.Positions) -> dict[str, Any] | None:
+def result(conn: Connection, on_date: str, positions: Positions) -> dict[str, Any] | None:
     """Le résultat depuis l'achat de toutes les cryptos, par crypto et au total."""
     crypto = [r[0] for r in conn.execute(text("SELECT id FROM accounts WHERE kind = 'crypto'"))]
     fx = positions.fx

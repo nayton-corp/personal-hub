@@ -11,6 +11,14 @@ reste ouverte.
 
 ## Valeur
 
+- **Un seul calcul.** La série du patrimoine (`patrimoine/model/engine.py`, pure et gelée) donne,
+  chaque jour depuis la première écriture, la valeur et le flux de chaque ligne (instrument d'un
+  compte à positions, solde d'un compte, dette) et les versements cumulés par compte. La valeur à
+  une date, la performance, le résultat des cryptos et le rapprochement la lisent, ou lisent les
+  mêmes parts et les mêmes cours (`model/positions.py`) : un chiffre n'a qu'une formule.
+- **Les versements sont convertis au change de leur jour**, pas de celui de la valorisation :
+  l'effet de change sur un compte en devise est un effet marché, comme la variation d'un cours.
+  Un versement d'un jour sans change attend le premier jour qui en a, comme la ligne elle-même.
 - **Une position vaut ses parts fois le dernier cours connu**, converti en francs au change du
   jour. Le relevé d'un compte (rapport VIAC, solde lu par l'API) donne les parts ; sa valeur
   annoncée ne sert que si elle est positive : un relevé à 0 pour des parts tenues (SwissBorg,

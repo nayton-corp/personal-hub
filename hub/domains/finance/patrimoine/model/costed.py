@@ -1,9 +1,10 @@
-"""Les lignes d'un compte crypto dans la performance (perf_lines.py) : le flux d'un jour, ce
+"""Les lignes d'un compte crypto dans la série (engine.py) : le flux d'un jour, ce
 sont ses opérations (crypto_cost.walk), et le reste de la variation des parts, que rien
 n'explique (une rupture, reconcile.py), au cours du jour."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from decimal import Decimal, localcontext
 from typing import Any
 
@@ -17,7 +18,10 @@ class Costed:
     entre alors à ce qu'elle a coûté, pas à sa valeur du jour."""
 
     def __init__(
-        self, account: str, legs: dict[tuple[str, str], dict[str, Any]], line: Any
+        self,
+        account: str,
+        legs: Mapping[tuple[str, str], Mapping[str, tuple[Decimal, Decimal]]],
+        line: Any,
     ) -> None:
         self.line = line
         self.legs = {key: days for (acc, key), days in legs.items() if acc == account}
