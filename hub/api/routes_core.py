@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Response
 from sqlalchemy import text
 
 import hub
@@ -126,10 +126,13 @@ def update_profile(body: ProfileIn, hub_ctx: Ctx, principal: AppSession) -> Prof
 def list_proposals(
     hub_ctx: Ctx,
     principal: Reader,
+    background: BackgroundTasks,
     status: Annotated[str | None, Query(pattern="^[a-z_]+$")] = "pending",
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
 ) -> ProposalListOut:
-    proposals.sync_events(hub_ctx)  # cartes demandées par les domaines (imports en attente…)
+    # cartes demandées par les domaines (imports en attente…) : après la réponse, une lecture
+    # n'écrit pas ; l'app relit la liste régulièrement
+    background.add_task(proposals.sync_events, hub_ctx)
     with hub_ctx.core.engine.connect() as conn:
         items = proposals.list_by_status(conn, status, limit)
     visible = [

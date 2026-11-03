@@ -30,7 +30,10 @@ Un sous-contexte n'importe que ceux de sa colonne « Lit ».
 - `domain.py` : `FinanceDomain`, le contrat de domaine (`hub.core.domain.Domain`).
 - `manifest.py` : ce que la finance apporte à l'app, à la boîte d'entrée et à l'assistant.
 - `api.py`, `cli.py`, `tools.py` : assemblent les interfaces des sous-contextes.
-- `handlers.py` : les types de proposition, réunis pour le cœur.
+- `handlers.py` : les types de proposition, réunis pour le cœur. Toute écriture d'un domaine
+  passe par là (`tests/test_double_sas_everywhere.py`) : `registre/app/period_kinds.py` (jour de
+  début du mois, daté), `patrimoine/app/break_kinds.py` (décisions de rapprochement et leur
+  retrait), `patrimoine/app/debt_kinds.py` (dettes, soldes en ajout seul).
 - `rebuild.py`, `compare.py` : reconstruction du registre par rejeu, comparaison de deux bases.
 - `golden.py`, `golden_cli.py` : étalon des agrégats figé avant une mise à jour et vérifié
   après (`hub finance golden save | check`).

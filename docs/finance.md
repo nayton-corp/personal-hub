@@ -41,16 +41,15 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
 | `entries?account=&category=&from=&to=&direction=in\|out&min_minor=&max_minor=&q=&sort=date\|amount` | le journal filtré : compte, catégorie, dates, sens, montant absolu en centimes, texte (3 lettres au moins) ; tri par date ou par plus gros montant |
 | `review` | écritures sans catégorie groupées par contrepartie : nombre, total, sens, comptes, première et dernière date, plus petit et plus gros montant, libellés, communications, codes bancaires et les 10 dernières écritures |
 | `budget` (suite) | une catégorie suivie à l'année (`set_budget` avec `cadence: year`) porte `yearly` : cible annuelle, cumul depuis janvier ; elle sort de `budget`, `budgeted_expenses` et `rest_to_live` |
-| `settings` | `month_start_day` (1 à 28), mois budgétaire en cours et ses dates ; `POST` (session passkey) change le jour |
+| `settings` | `month_start_day` (1 à 28) du mois en cours, mois budgétaire en cours et ses dates, règles datées (`rules`) ; le jour se change par la proposition `set_month_start` |
 | `budget?month=&period=m\|q` | réel et cible par catégorie de dépense, dépassements, reste à vivre |
 | `budget/totals?month=&period=m\|q` | revenus, dépenses fixes et variables, épargne, placements, taux |
 | `budget/months?month=&months=6` | les mêmes totaux, mois par mois (graphique Tendance) |
 | `breaks` | soldes non expliqués d'aujourd'hui (rapprochement) : compte, actif, parts, valeur, cause, et leur total ; règle dans [finance-politique.md](finance-politique.md) |
-| `breaks/decide` | `POST` (session passkey) : classe une rupture (`cost` avec `cost_minor`, `accept`, `gone`) |
 | `export.csv?from=&to=` | journal complet en CSV (session passkey seulement) |
 
 - **Mois.** Le mois affiché est toujours un paramètre ; l'app part du mois budgétaire en cours dans le fuseau de l'instance (`HUB_TZ`, Zurich par défaut).
-  Le mois budgétaire commence le jour choisi dans les réglages (1 par défaut, table `budget_period`). Après le 15, il porte le nom du mois où il finit : début le 25, « novembre » va du 25 octobre au 24 novembre. Budget, flux, tendance, sentinelles et outils suivent tous ce découpage.
+  Le mois budgétaire commence le jour choisi dans les réglages (1 par défaut) : une règle datée (table `budget_period_rules`, proposition `set_month_start`) vaut pour les mois à partir de son mois, les mois d'avant gardent leur découpage. Après le 15, il porte le nom du mois où il finit : début le 25, « novembre » va du 25 octobre au 24 novembre. Budget, flux, tendance, sentinelles et outils suivent tous ce découpage.
   `period=q` couvre les trois mois complets avant le mois choisi. Un mois futur est refusé.
 - **Virements.** Deux écritures de même montant entre deux de mes comptes sont appariées (IBAN, code de virement, ou même établissement à un jour d'écart pour le compte Revolut et ses poches). Un côté apparié sans catégorie, ou classé seulement par une règle « tout le reste », compte comme « Virement entre mes comptes » (vue `v_entry_shown`).
 - **Règle d'un compte.** `create_rule` avec `account_id` limite la règle à ce compte ; son motif peut être vide (« tout débit de la poche Vacances → Vacances »).
@@ -156,6 +155,12 @@ règle qui sert aussi aux prochains imports.
 | `set_account_goal` | objectif d'un compte (filtre « Objectif » du patrimoine) | — |
 | `edit_account` | réglages d'un compte dans l'app : nom, objectif, disponibilité, catégorie (`auto` rend la déduction par type), masqué | — |
 | `create_account` · `create_category` | comptes et catégories (le CLI passe par là) | — |
+| `set_month_start` | jour où commence le mois budgétaire, pour les mois dès `valid_from` (le mois en cours par défaut) | oui |
+| `decide_break` | règle une rupture du rapprochement : `cost` (avec `cost_minor`), `accept`, `gone` ; l'assistant peut la proposer | oui (`withdraw_break_decision` : une ligne de retrait, la rupture se rouvre) |
+| `save_debt` · `record_debt_balance` | une dette et ses soldes constatés (en ajout seul : le dernier relevé d'un jour fait foi) | — |
+
+Aucune route d'un domaine n'écrit hors de ces propositions (`tests/test_double_sas_everywhere.py`) ;
+une lecture n'écrit pas non plus : le rafraîchissement des instantanés part après la réponse.
 
 Un relevé en attente pour un motif qui se force (`ledger_check_failed`, `near_duplicate`…)
 devient une carte `apply_import` à valider ; il est rejoué avant d'appliquer. Depuis le Mac,

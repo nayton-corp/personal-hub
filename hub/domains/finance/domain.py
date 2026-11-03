@@ -40,20 +40,23 @@ from hub.platform.logging import get_logger
 from hub.platform.settings import Settings
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 20  # 0020_reconcile_decisions
+SCHEMA_VERSION = 21  # 0021_double_sas
 log = get_logger("hub.finance")
 LEGACY_ARCHIVE = re.compile(r"\d{4}|duplicates")
 SEVERITY: dict[str, Severity] = {"budget_over": "alert", "budget_likely": "warning"}
 
 
 def _read_period(dbapi_conn: sqlite3.Connection, _record: Any, _proxy: Any) -> None:
-    """Chaque connexion relit le début du mois budgétaire : un réglage changé par l'app vaut
-    aussitôt pour le planificateur et le CLI, qui tournent dans d'autres processus."""
+    """Chaque connexion relit les règles du mois budgétaire : un réglage posé par une
+    proposition vaut aussitôt pour le planificateur et le CLI, qui tournent dans d'autres
+    processus."""
     try:
-        row = dbapi_conn.execute("SELECT start_day FROM budget_period").fetchone()
+        rows = dbapi_conn.execute(
+            "SELECT valid_from, start_day FROM budget_period_rules ORDER BY created_at, id"
+        ).fetchall()
     except sqlite3.OperationalError:  # base pas encore migrée
-        row = None
-    period.set_start_day(int(row[0]) if row else 1)
+        rows = []
+    period.set_rules([(str(r[0]), int(r[1])) for r in rows])
 
 
 class CurrencyMismatch(RuntimeError):

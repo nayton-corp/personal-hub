@@ -5,10 +5,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Protocol
 
-from fastapi import APIRouter, Query
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, BackgroundTasks, Query
 
-from hub.core.auth import AppSession
 from hub.core.errors import Problem
 from hub.domains.finance.patrimoine.app import (
     account_list,
@@ -31,19 +29,8 @@ from hub.domains.finance.registre.interface.http import (
     checked_month,
 )
 from hub.kernel.money import base_currency
-from hub.platform.db import begin_immediate
 
 DIMENSION = r"^(region|sector|currency|holding)$"
-
-
-class BreakDecisionIn(BaseModel):
-    """Ta décision sur une rupture du rapprochement (docs/finance-politique.md)."""
-
-    model_config = ConfigDict(extra="forbid")
-    id: str = Field(max_length=200)  # `<rupture>|<compte>|<actif>`, tel que GET /breaks le donne
-    decision: str = Field(pattern=r"^(cost|accept|gone)$")
-    cost_minor: int | None = Field(default=None, ge=0, le=10**13)  # coût saisi (`cost`)
-    note: str | None = Field(default=None, max_length=200)
 
 
 class Host(http.Host, Protocol):
@@ -88,26 +75,10 @@ def build_router(host: Host) -> APIRouter:
     @r.get("/breaks")
     def breaks_route(_p: AnyReader) -> dict[str, Any]:
         """Rapprochement d'aujourd'hui : les ruptures ouvertes (compte, actif, parts, valeur,
-        cause, gestes), leur total et la part des placements expliquée et cotée."""
+        cause, gestes), leur total et la part des placements expliquée et cotée. Une rupture
+        se règle par la proposition `decide_break` (Double Sas)."""
         with engine.connect() as conn:
             return reconcile.summary(conn, host.today().isoformat())
-
-    @r.post("/breaks/decide")
-    def decide_route(body: BreakDecisionIn, session: AppSession) -> dict[str, Any]:
-        """Classe une rupture : coût saisi, garder tel quel, ou « parti » pour un envoi."""
-        on = host.today().isoformat()
-        with begin_immediate(engine) as conn:
-            d = reconcile.decide(
-                conn,
-                on,
-                body.id,
-                body.decision,
-                cost_minor=body.cost_minor,
-                note=body.note,
-                actor=session.actor,
-            )
-        with engine.connect() as conn:
-            return {"decision": d.public(), **reconcile.summary(conn, on)}
 
     @r.get("/lookthrough")
     def lookthrough_route(
@@ -121,15 +92,17 @@ def build_router(host: Host) -> APIRouter:
             return lookthrough.breakdown(conn, dimension, on or host.today().isoformat())
 
     @r.get("/transfers")
-    def transfers_route(p: AnyReader) -> dict[str, Any]:
-        """Virements appariés par méthode et virements sans autre côté."""
-        host.refresh_snapshots()
+    def transfers_route(p: AnyReader, background: BackgroundTasks) -> dict[str, Any]:
+        """Virements appariés par méthode et virements sans autre côté. Une lecture n'écrit
+        pas : les instantanés se rafraîchissent après la réponse, en tâche de fond."""
+        background.add_task(host.refresh_snapshots)
         with engine.connect() as conn:
             return transfers.summary(conn, detailed=not aggregates_only(p))
 
     @r.get("/networth/history")
     def networth_history(
         _p: AnyReader,
+        background: BackgroundTasks,
         from_: Annotated[str | None, Query(alias="from", pattern=DATE)] = None,
         to: Annotated[str | None, Query(pattern=DATE)] = None,
         step: Annotated[str, Query(pattern=r"^(day|week|month)$")] = "month",
@@ -145,7 +118,7 @@ def build_router(host: Host) -> APIRouter:
                 raise Problem("validation.params", "période vide ou trop longue pour ce pas")
             with engine.connect() as conn:
                 return snapshots.live_history(conn, dates)
-        host.refresh_snapshots()
+        background.add_task(host.refresh_snapshots)  # après la réponse, jamais dans la lecture
         with engine.connect() as conn:
             return snapshots.history(conn, from_, to)
 

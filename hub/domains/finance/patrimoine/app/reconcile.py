@@ -295,9 +295,10 @@ def decide(
     cost_minor: int | None,
     note: str | None,
     actor: str,
+    proposal_id: str | None = None,
 ) -> decisions.Decision:
-    """Ta décision sur une rupture ouverte aujourd'hui ; elle couvre ses parts ou ses
-    opérations jusqu'à aujourd'hui."""
+    """Ta décision sur une rupture ouverte aujourd'hui (proposition `decide_break`) ; elle
+    couvre ses parts ou ses opérations jusqu'à aujourd'hui."""
     found = {b.id: b for b in report(conn, on).breaks}
     b = found.get(break_id)
     if b is None:
@@ -320,4 +321,5 @@ def decide(
         currency=base_currency(),
         note=note,
         actor=actor,
+        proposal_id=proposal_id,
     )

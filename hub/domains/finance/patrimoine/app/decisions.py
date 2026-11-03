@@ -12,6 +12,10 @@ Une rupture se recalcule à chaque lecture (reconcile.py) ; seule la décision s
 
 Les lots entrent dans le prix de revient (crypto_cost.py) et dans la performance (perf_lines.py)
 comme une opération de plus : ils expliquent les parts, qui ne repartent pas au cours du jour.
+
+Une décision vient d'une proposition (`decide_break`, break_kinds.py) ; elle se retire par une
+ligne de `reconcile_withdrawals` (migration 0021), jamais par un effacement, et la lecture
+l'ignore alors.
 """
 
 from __future__ import annotations
@@ -48,6 +52,7 @@ class Decision:
     currency: str
     note: str | None
     created_at: str
+    proposal_id: str | None = None
 
     def public(self) -> dict[str, object]:
         return {
@@ -62,32 +67,63 @@ class Decision:
             "currency": self.currency,
             "note": self.note,
             "created_at": self.created_at,
+            "proposal_id": self.proposal_id,
         }
 
 
+_COLUMNS = (
+    "d.id, d.account_id, d.asset, d.break_kind, d.decision, d.on_date, d.quantity, "
+    "d.cost_minor, d.currency, d.note, d.created_at, d.proposal_id"
+)
+_LIVE = (
+    "FROM reconcile_decisions d LEFT JOIN reconcile_withdrawals w ON w.decision_id = d.id "
+    "WHERE w.decision_id IS NULL"
+)
+
+
+def _decision(r: tuple[object, ...]) -> Decision:
+    return Decision(
+        str(r[0]),
+        str(r[1]),
+        str(r[2]),
+        str(r[3]),
+        str(r[4]),
+        str(r[5]),
+        None if r[6] is None else Decimal(str(r[6])),
+        None if r[7] is None else int(str(r[7])),
+        str(r[8]),
+        None if r[9] is None else str(r[9]),
+        str(r[10]),
+        None if r[11] is None else str(r[11]),
+    )
+
+
 def read(conn: Connection) -> list[Decision]:
-    rows = conn.execute(
+    """Les décisions en vigueur (pas les retirées), de la plus ancienne à la plus récente."""
+    rows = conn.execute(text(f"SELECT {_COLUMNS} {_LIVE} ORDER BY d.created_at, d.id")).fetchall()
+    return [_decision(tuple(r)) for r in rows]
+
+
+def get(conn: Connection, decision_id: str) -> Decision | None:
+    """Une décision en vigueur ; None si inconnue ou retirée."""
+    row = conn.execute(
+        text(f"SELECT {_COLUMNS} {_LIVE} AND d.id = :i"),
+        {"i": decision_id},
+    ).first()
+    return None if row is None else _decision(tuple(row))
+
+
+def withdraw(conn: Connection, decision_id: str, *, proposal_id: str | None, actor: str) -> None:
+    """Retire une décision : une ligne de retrait, la décision reste lisible dans l'historique."""
+    if get(conn, decision_id) is None:
+        raise Problem("not_found", "décision inconnue ou déjà retirée")
+    conn.execute(
         text(
-            "SELECT id, account_id, asset, break_kind, decision, on_date, quantity, cost_minor, "
-            "currency, note, created_at FROM reconcile_decisions ORDER BY created_at, id"
-        )
-    ).fetchall()
-    return [
-        Decision(
-            r[0],
-            r[1],
-            r[2],
-            r[3],
-            r[4],
-            r[5],
-            None if r[6] is None else Decimal(r[6]),
-            None if r[7] is None else int(r[7]),
-            r[8],
-            r[9],
-            r[10],
-        )
-        for r in rows
-    ]
+            "INSERT INTO reconcile_withdrawals (decision_id, proposal_id, created_at, actor) "
+            "VALUES (:i, :p, :at, :a)"
+        ),
+        {"i": decision_id, "p": proposal_id, "at": now_iso(), "a": actor},
+    )
 
 
 Lot = tuple[str, str, int, str, Decimal, bool, str]  # comme une jambe de crypto_cost._legs
@@ -121,6 +157,7 @@ def add(
     currency: str,
     note: str | None,
     actor: str,
+    proposal_id: str | None = None,
 ) -> Decision:
     if decision not in DECISIONS.get(break_kind, ()):
         raise Problem("validation.params", f"{decision} ne règle pas une rupture {break_kind}")
@@ -143,12 +180,13 @@ def add(
         currency,
         note,
         now_iso(),
+        proposal_id,
     )
     conn.execute(
         text(
             "INSERT INTO reconcile_decisions (id, account_id, asset, break_kind, decision, "
-            "on_date, quantity, cost_minor, currency, note, created_at, actor) VALUES "
-            "(:id, :a, :s, :k, :d, :on, :q, :c, :ccy, :n, :at, :actor)"
+            "on_date, quantity, cost_minor, currency, note, created_at, actor, proposal_id) "
+            "VALUES (:id, :a, :s, :k, :d, :on, :q, :c, :ccy, :n, :at, :actor, :p)"
         ),
         {
             "id": d.id,
@@ -163,6 +201,7 @@ def add(
             "n": note,
             "at": d.created_at,
             "actor": actor,
+            "p": proposal_id,
         },
     )
     return d

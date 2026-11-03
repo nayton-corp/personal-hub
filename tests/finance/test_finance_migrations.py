@@ -259,6 +259,62 @@ def test_upgrade_on_reference_base_keeps_ledger_valid(tmp_path: Path) -> None:
     domain.engine().dispose()
 
 
+def test_double_sas_migration_keeps_the_month_start_and_the_debt_balances(
+    tmp_path: Path,
+) -> None:
+    """0021 : le jour de début de mois devient une règle depuis toujours, les soldes constatés
+    passent en ajout seul ; rien n'est effacé des anciennes tables."""
+    from hub.domains.finance.domain import MIGRATIONS
+    from hub.domains.finance.registre.model import period
+    from hub.platform import migrations as runner
+    from tests.finance.conftest import finance_settings
+
+    settings = finance_settings(tmp_path)
+    domain = FinanceDomain(settings)
+    runner.upgrade(MIGRATIONS, domain.path, "0020_reconcile_decisions")
+    engine = make_engine(domain.path)
+    with begin_immediate(engine) as conn:
+        conn.execute(
+            text(
+                "INSERT INTO budget_period (id, start_day, updated_at, actor) "
+                "VALUES (1, 25, '2026-10-01T00:00:00.000Z', 'passkey:x')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO debts (id, name, lender, kind, currency, rate, created_at, "
+                "updated_at) VALUES ('d1', 'Prêt', 'X', 'loan', 'CHF', '0', "
+                "'2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO debt_balances (debt_id, on_date, amount_minor, source, created_at) "
+                "VALUES ('d1', '2026-10-01', 500000, 'opening', '2026-10-01T00:00:00.000Z')"
+            )
+        )
+    engine.dispose()
+    runner.upgrade(MIGRATIONS, domain.path)
+    with domain.engine().connect() as conn:
+        assert rows_of(conn, "SELECT valid_from, start_day FROM budget_period_rules") == [
+            ("1900-01", 25)
+        ]
+        assert rows_of(conn, "SELECT start_day FROM budget_period") == [(25,)]
+        assert rows_of(
+            conn, "SELECT id, debt_id, on_date, amount_minor FROM debt_balance_records"
+        ) == [("legacy|d1|2026-10-01", "d1", "2026-10-01", 500000)]
+        assert rows_of(conn, "SELECT count(*) FROM debt_balances") == [(1,)]
+        assert period.start_day("2026-11") == 25
+    domain.engine().dispose()
+
+
+def rows_of(conn: object, sql: str) -> list[tuple[object, ...]]:
+    from sqlalchemy import Connection
+
+    assert isinstance(conn, Connection)
+    return [tuple(r) for r in conn.execute(text(sql)).fetchall()]
+
+
 def test_journal_cannot_be_rewritten_through_a_copy_without_detection(
     finance: FinanceDomain, tmp_path: Path
 ) -> None:

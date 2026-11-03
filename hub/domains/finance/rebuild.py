@@ -142,7 +142,10 @@ def copy_reference(src: Connection, dst: Connection) -> None:
     for table, key in (
         ("debts", "id"),
         ("debt_balances", "debt_id, on_date"),
+        ("debt_balance_records", "id"),
         ("reconcile_decisions", "id"),
+        ("reconcile_withdrawals", "decision_id"),
+        ("budget_period_rules", "id"),
     ):
         cols, rows = _rows(src, table, key)
         _upsert(dst, table, key, cols, rows)

@@ -121,6 +121,9 @@ def test_system_prompt_uses_the_profile() -> None:
     assert "(ex. 412.30 EUR)" in euro
 
 
+IGNORED = {".venv", "node_modules", "__pycache__"}
+
+
 def test_no_owner_name_left_in_code() -> None:
     root = Path(__file__).resolve().parents[1]
     hits = [
@@ -128,6 +131,7 @@ def test_no_owner_name_left_in_code() -> None:
         for base in ("hub", "deploy", "assistant")
         for p in (root / base).rglob("*")
         if p.is_file()
+        and not IGNORED & set(p.parts)  # un venv local ou un cache n'est pas du code
         and p.suffix in {".py", ".js", ".html", ".toml", ".yaml", ".example", ""}
         and "nathan" in p.read_text(errors="ignore").lower()
     ]

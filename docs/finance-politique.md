@@ -67,8 +67,9 @@ entre eux).
 - Un écart qu'aucun import ne comblera se règle d'un geste, depuis la liste : « J'ai payé X »
   (le prix d'achat saisi), « Garder tel quel » (le prix d'achat devient la valeur du jour où le
   hub a vu ces parts) ou, pour un envoi, « Parti hors de mes comptes » (sortie au coût). La
-  décision est gardée (`POST /finance/breaks/decide`) et sort l'écart de la liste ; une nouvelle
-  opération du même genre le rouvre.
+  décision est une proposition (`decide_break`, un Face ID, annulable : son retrait rouvre
+  l'écart) ; gardée, elle sort l'écart de la liste ; une nouvelle opération du même genre le
+  rouvre.
 
 ## Collecteurs
 

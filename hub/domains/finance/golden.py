@@ -55,6 +55,9 @@ TABLES = (
     "reconcile_decisions",
     "debts",
     "debt_balances",
+    "debt_balance_records",
+    "reconcile_withdrawals",
+    "budget_period_rules",
 )
 # clés retirées des agrégats : des mots (noms, libellés, références), jamais des chiffres
 WORDS = frozenset(

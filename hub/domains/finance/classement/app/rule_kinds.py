@@ -13,6 +13,7 @@ from hub.domains.finance.classement.app import packs, rules
 from hub.domains.finance.registre.app.kinds import (
     SAMPLE,
     Params,
+    RefreshAfter,
     Slug,
     bad,
     category_row,
@@ -58,7 +59,7 @@ class CreateRule(Params):
         return rules.normalize_pattern(self.field, self.pattern)
 
 
-class CreateRuleHandler:
+class CreateRuleHandler(RefreshAfter):
     def _rule(self, params: CreateRule, rule_id: str = "new") -> rules.Rule:
         return rules.Rule(
             rule_id,

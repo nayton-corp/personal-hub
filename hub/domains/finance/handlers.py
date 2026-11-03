@@ -40,6 +40,13 @@ from hub.domains.finance.patrimoine.app.account_kinds import (
     SetAccountGoal,
     SetAccountGoalHandler,
 )
+from hub.domains.finance.patrimoine.app.break_kinds import (
+    DecideBreak,
+    DecideBreakHandler,
+    WithdrawBreakDecision,
+    WithdrawBreakDecisionHandler,
+    decide_break_inverse,
+)
 from hub.domains.finance.patrimoine.app.debt_kinds import (
     RecordDebtBalance,
     RecordDebtBalanceHandler,
@@ -53,6 +60,11 @@ from hub.domains.finance.registre.app.entry_kinds import (
     CreateCategory,
     CreateCategoryHandler,
 )
+from hub.domains.finance.registre.app.period_kinds import (
+    SetMonthStart,
+    SetMonthStartHandler,
+    month_start_inverse,
+)
 from hub.domains.finance.sources.app.import_kinds import (
     ApplyImport,
     ApplyImportHandler,
@@ -65,12 +77,12 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
     return {
         "recategorize": ProposalKind(
             Recategorize,
-            RecategorizeHandler(),
+            RecategorizeHandler(domain),
             reversible=True,
             inverse=recategorize_inverse,
             ai_allowed=True,
         ),
-        "create_rule": ProposalKind(CreateRule, CreateRuleHandler(), ai_allowed=True),
+        "create_rule": ProposalKind(CreateRule, CreateRuleHandler(domain), ai_allowed=True),
         "disable_rule": ProposalKind(DisableRule, DisableRuleHandler()),
         "set_budget": ProposalKind(
             SetBudget,
@@ -90,8 +102,24 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
         "install_pack": ProposalKind(InstallPack, InstallPackHandler()),
         "save_debt": ProposalKind(SaveDebt, SaveDebtHandler(domain)),
         "record_debt_balance": ProposalKind(RecordDebtBalance, RecordDebtBalanceHandler(domain)),
-        "categorize_rest": ProposalKind(CategorizeRest, CategorizeRestHandler()),
+        "decide_break": ProposalKind(
+            DecideBreak,
+            DecideBreakHandler(domain),
+            reversible=True,
+            inverse=decide_break_inverse,
+            ai_allowed=True,
+        ),
+        "withdraw_break_decision": ProposalKind(
+            WithdrawBreakDecision, WithdrawBreakDecisionHandler(domain)
+        ),
+        "set_month_start": ProposalKind(
+            SetMonthStart,
+            SetMonthStartHandler(domain),
+            reversible=True,
+            inverse=month_start_inverse,
+        ),
+        "categorize_rest": ProposalKind(CategorizeRest, CategorizeRestHandler(domain)),
         "categorize_entries": ProposalKind(
-            CategorizeEntries, CategorizeEntriesHandler(), ai_allowed=True
+            CategorizeEntries, CategorizeEntriesHandler(domain), ai_allowed=True
         ),
     }

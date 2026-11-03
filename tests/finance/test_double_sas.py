@@ -565,6 +565,7 @@ def test_apply_import_card_validates_the_gap(
     # octobre annonce 900 d'ouverture : le registre dit 1000 -> en attente, carte demandée
     fin.importer.process([Incoming("oct.xml", octo)])
     assert rows(fin, "SELECT status FROM imports") == [("needs_review",)]
+    proposals.sync_events(ctx)  # la lecture n'écrit plus : la carte naît hors requête
     listed = client.get("/api/proposals").json()["items"]
     (card,) = [p for p in listed if p["kind"] == "apply_import"]
     assert card["preview"]["details"]["reasons"] == ["ledger_check_failed"]

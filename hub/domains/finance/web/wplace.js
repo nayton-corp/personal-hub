@@ -2,10 +2,12 @@
 // docs/finance-politique.md). Une ligne sous le grand chiffre, comme « Fin de courbe estimée »,
 // ouvre la liste chiffrée : compte, actif, montant et cause. Un écart qu'aucun import ne comblera
 // se règle d'un geste : « J'ai payé X », « Garder tel quel » (au cours du jour où le hub l'a vu) ou,
-// pour un envoi, « Parti hors de mes comptes ». Ta décision est gardée. Rien n'est compté en silence.
-// Tout vient de /finance/breaks, en centimes.
+// pour un envoi, « Parti hors de mes comptes ». Ta décision est une proposition (`decide_break`,
+// Double Sas : un Face ID, annulable). Rien n'est compté en silence. Tout vient de /finance/breaks,
+// en centimes.
 import { SHEETS, amount, closeSheet, esc, failure, ic, openSheet, toast } from "../../ui.js";
-import { api, store } from "../../store.js";
+import { outcome, proposeAndApprove } from "./proposals.js";
+import { store } from "../../store.js";
 import { base, date } from "../../format.js";
 import { go } from "../../shell.js";
 import { units } from "./perf.js";
@@ -78,7 +80,9 @@ SHEETS.brk1 = (id) => {
 
 async function decide(id, decision, cost) {
   try {
-    await api(`${breaksPath}/decide`, { id, decision, ...(cost != null ? { cost_minor: cost } : {}) });
+    const params = { break_id: id, decision, ...(cost != null ? { cost_minor: cost } : {}) };
+    const [text, bad] = outcome(await proposeAndApprove([["decide_break", params]]));
+    if (bad) return toast(text, { error: true });
     closeSheet();
     store.invalidate();
     toast("Écart réglé");

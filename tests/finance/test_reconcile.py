@@ -199,7 +199,15 @@ def test_a_held_coin_without_price_or_with_an_old_one(finance: FinanceDomain) ->
     }
 
 
-def test_breaks_route_and_decision(client_fin: tuple[TestClient, FinanceDomain]) -> None:
+def test_breaks_route_and_decision(
+    client_fin: tuple[TestClient, FinanceDomain],
+    ctx: HubContext,  # noqa: F811
+) -> None:
+    """La décision est une proposition (`decide_break`, Double Sas) : aperçu, validation, et
+    un retrait qui rouvre la rupture (`withdraw_break_decision`)."""
+    from hub.core import proposals
+    from tests.finance.test_double_sas import APP, accept, create
+
     http, domain = client_fin
     today = domain.today()
     add_ref(domain, "crypto:phantom", "crypto", "Phantom")
@@ -223,13 +231,32 @@ def test_breaks_route_and_decision(client_fin: tuple[TestClient, FinanceDomain])
     assert r["count"] == 1
     (b,) = r["items"]
     assert b["account"] == "Phantom"
-    bad = http.post("/api/finance/breaks/decide", json={"id": b["id"], "decision": "gone"})
-    assert bad.status_code == 422
-    ok = http.post(
-        "/api/finance/breaks/decide", json={"id": b["id"], "decision": "cost", "cost_minor": 15_000}
-    )
-    assert ok.status_code == 200
-    assert (ok.json()["count"], ok.json()["decision"]["cost_minor"]) == (0, 15_000)
+    with pytest.raises(Problem):  # « parti » ne règle pas des parts sans historique
+        create(ctx, "decide_break", {"break_id": b["id"], "decision": "gone"})
+    with pytest.raises(Problem):  # un coût saisi demande son montant
+        create(ctx, "decide_break", {"break_id": b["id"], "decision": "cost"})
+    p = create(ctx, "decide_break", {"break_id": b["id"], "decision": "cost", "cost_minor": 15_000})
+    assert p.preview["summary"].startswith("Rupture « parts sans historique » sur Phantom (SOL)")
+    assert p.preview["details"]["break"]["id"] == b["id"]
+    outcome = accept(ctx, p)
+    assert outcome.status == "applied"
+    assert outcome.result is not None
+    assert outcome.result["decision"]["cost_minor"] == 15_000
+    assert http.get("/api/finance/breaks").json()["count"] == 0
+    with domain.engine().connect() as conn:
+        (d,) = reconcile.decisions.read(conn)
+    assert d.proposal_id == p.id
+    # un retrait (l'inverse) rouvre la rupture ; la décision reste dans l'historique
+    with ctx.core.engine.connect() as conn:
+        fresh = proposals.get(conn, p.id)
+    reverted = proposals.revert(ctx, APP, fresh, None)
+    assert reverted.status == "applied"
+    assert http.get("/api/finance/breaks").json()["count"] == 1
+    with domain.engine().connect() as conn:
+        assert reconcile.decisions.read(conn) == []
+        assert reconcile.decisions.get(conn, d.id) is None
+    with pytest.raises(Problem):
+        create(ctx, "withdraw_break_decision", {"decision_id": d.id})
 
 
 def test_verify_checks_the_figures(finance: FinanceDomain) -> None:

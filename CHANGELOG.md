@@ -13,6 +13,14 @@
 
 ### Finance
 
+- Tout passe par le Double Sas (audit C5, M9, m1, m5) : une décision de rapprochement est la
+  proposition `decide_break` (annulable par `withdraw_break_decision`), le jour de début du
+  mois budgétaire est la proposition `set_month_start`, datée (règles `budget_period_rules` :
+  les mois d'avant gardent leur découpage), les soldes constatés des dettes sont en ajout seul
+  (`debt_balance_records`, le dernier relevé d'un jour fait foi). `POST /finance/breaks/decide`
+  et `POST /finance/settings` disparaissent ; `GET /finance/settings` rend les règles. Une
+  lecture n'écrit plus : `transfers`, `networth/history` et `/proposals` rafraîchissent après
+  la réponse. Migration 0021, additive.
 - `hub finance golden save | check` : l'étalon des agrégats (patrimoine, positions,
   performance, ruptures, budget, dettes) se fige avant une mise à jour et se vérifie après, au
   centime ; le fichier ne contient que des chiffres et des identifiants.

@@ -90,7 +90,7 @@ def _first_day(conn: Connection, as_of: str) -> str | None:
         ("entries", "booking_date"),
         ("trades", "trade_date"),
         ("holdings", "on_date"),
-        ("debt_balances", "on_date"),
+        ("debt_balance_records", "on_date"),
     ):
         d = conn.execute(text(f"SELECT min({col}) FROM {table}")).scalar_one()  # noqa: S608
         if d is None or d > as_of:
@@ -377,9 +377,10 @@ _FINGERPRINT = (
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM holdings), "
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM prices), "
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM fx_rates), "
-    "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM debt_balances), "
+    "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM debt_balance_records), "
     "(SELECT coalesce(max(seq), 0) FROM events), "
     "(SELECT count(*) FROM reconcile_decisions), "
+    "(SELECT count(*) FROM reconcile_withdrawals), "
     "(SELECT group_concat(id || ':' || hidden) FROM accounts)"
 )
 

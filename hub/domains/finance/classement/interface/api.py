@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Protocol
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, BackgroundTasks, Query
 
 from hub.core import profile
 from hub.domains.finance.classement.app import budget as budget_app
@@ -135,10 +135,10 @@ def build_router(host: Host) -> APIRouter:
         }
 
     @r.get("/recurring")
-    def recurring_route(p: AnyReader) -> dict[str, Any]:
+    def recurring_route(p: AnyReader, background: BackgroundTasks) -> dict[str, Any]:
         """Abonnements et paiements réguliers, prochaines échéances, total mensuel ; pour la
         portée `aggregates`, les totaux seulement."""
-        host.refresh_snapshots()
+        background.add_task(host.refresh_snapshots)  # après la réponse, jamais dans la lecture
         with engine.connect() as conn:
             return recurring.listing(conn, host.today(), aggregates_only=aggregates_only(p))
 

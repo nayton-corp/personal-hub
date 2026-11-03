@@ -15,6 +15,7 @@ from hub.domains.finance.registre.app.kinds import (
     SAMPLE,
     EntryId,
     Params,
+    RefreshAfter,
     Slug,
     bad,
     category_row,
@@ -43,7 +44,7 @@ class Recategorize(Params):
     suggested: bool = False  # proposée par un modèle et acceptée telle quelle
 
 
-class RecategorizeHandler:
+class RecategorizeHandler(RefreshAfter):
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, Recategorize)  # noqa: S101
         e = entry_row(conn, params.entry_id)
@@ -140,7 +141,7 @@ def _rest(conn: Connection, params: CategorizeRest) -> list[Any]:
     )
 
 
-class CategorizeRestHandler:
+class CategorizeRestHandler(RefreshAfter):
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, CategorizeRest)  # noqa: S101
         name, _grp = category_row(conn, params.category_id)
@@ -222,7 +223,7 @@ def _entries(conn: Connection, ids: list[str]) -> list[Any]:
     return list(rows)
 
 
-class CategorizeEntriesHandler:
+class CategorizeEntriesHandler(RefreshAfter):
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, CategorizeEntries)  # noqa: S101
         name, _grp = category_row(conn, params.category_id)

@@ -255,10 +255,7 @@ class RecordDebtBalanceHandler:
         return row
 
     def _before(self, conn: Connection, p: RecordDebtBalance) -> int | None:
-        return conn.execute(
-            text("SELECT amount_minor FROM debt_balances WHERE debt_id = :i AND on_date = :d"),
-            {"i": p.debt_id, "d": p.on_date},
-        ).scalar_one_or_none()
+        return debts.stated_on(conn, p.debt_id, p.on_date)
 
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, RecordDebtBalance)  # noqa: S101

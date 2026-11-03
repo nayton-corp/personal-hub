@@ -6,7 +6,8 @@ import { accountsCard, connectionsCard } from "./connections.js";
 import { debtsList } from "./debts.js";
 import { STALE_DAYS, daysSince } from "../../format.js";
 import { TAX_RATES, taxRate } from "./meta.js";
-import { api, monthStartDay, store } from "../../store.js";
+import { outcome, proposeAndApprove } from "./proposals.js";
+import { monthStartDay, store } from "../../store.js";
 import { esc, failure, fill, pf, setPref, toast } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -78,13 +79,18 @@ export const actions = {
   },
 };
 
+// le jour de début est une proposition (`set_month_start`, Double Sas) : un Face ID, et le
+// mois en cours suit ; les mois d'avant gardent leur découpage
 document.addEventListener("change", async (e) => {
   if (e.target.id !== "month-start") return;
   const day = Number(e.target.value);
   try {
-    const s = await api(SETTINGS, { month_start_day: day });
-    store.setMonthStart(s.month_start_day);
-    toast(`Le mois budgétaire commence le ${day === 1 ? "1er" : day}`);
+    const [text, bad] = outcome(await proposeAndApprove([["set_month_start", { start_day: day }]]));
+    if (bad) toast(text, { error: true });
+    else {
+      store.setMonthStart(day);
+      toast(`Le mois budgétaire commence le ${day === 1 ? "1er" : day}`);
+    }
   } catch (err) {
     toast(failure(err), { error: true });
     store.invalidate();
