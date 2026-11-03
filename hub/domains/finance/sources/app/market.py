@@ -162,6 +162,20 @@ class _Chain:
             self.opened.add(account.id)
             exchange.open_empty(self.conn, account, first)
 
+    def _traded(self, ref: str, part: str) -> tuple[Decimal, int]:
+        """Parts déjà écrites pour cette transaction, et le nombre de lignes (la première, puis
+        ses corrections)."""
+        total, n = Decimal(0), 0
+        while True:
+            suffix = "trade" if not n else f"trade|fix-{n}"
+            key = ledger.dedup_hash(f"chain|{ref}|{part}|{suffix}")
+            row = self.conn.execute(
+                text("SELECT quantity FROM trades WHERE dedup_key = :k"), {"k": key}
+            ).first()
+            if row is None:
+                return total, n
+            total, n = total + Decimal(str(row[0])), n + 1
+
     def apply(self, t: Transaction, first: str) -> Result:
         result = Result()
         account = catalog.account_by_ref(self.conn, t.account)
@@ -207,15 +221,16 @@ class _Chain:
                     remittance=f"{instruments.qty_text(qty)} {t.symbol}",
                     fx_json=fx,
                 )
-        # une transaction Ethereum porte l'ETH (le gaz) et un jeton : une clé par crypto
+        # une transaction Ethereum porte l'ETH (le gaz) et un jeton : une clé par crypto. Une
+        # transaction relue avec une autre quantité nette (lecture corrigée) reçoit un mouvement
+        # de correction pour la différence : le registre ne réécrit jamais une ligne
         part = t.txid if t.symbol == "BTC" else f"{t.txid}|{t.symbol}"
-        trade_key = ledger.dedup_hash(f"chain|{t.account}|{part}|trade")
-        if (
-            t.quantity
-            and not self.conn.execute(
-                text("SELECT 1 FROM trades WHERE dedup_key = :k"), {"k": trade_key}
-            ).first()
-        ):
+        written, n = self._traded(t.account, part)
+        with localcontext(DECIMAL_CONTEXT):
+            quantity = t.quantity - written
+            amount = cost if not n else int(cost * quantity / t.quantity) if t.quantity else 0
+        if quantity:
+            suffix = "trade" if not n else f"trade|fix-{n}"
             assets.upsert_instrument(
                 self.conn, t.key, None, kind="crypto", symbol=instruments.symbol_of(t.key)
             )
@@ -226,10 +241,10 @@ class _Chain:
                     "account_id": account.id,
                     "trade_date": t.on_date,
                     "isin": t.key,
-                    "quantity": instruments.qty_text(t.quantity),
-                    "amount_minor": int(cost),
+                    "quantity": instruments.qty_text(quantity),
+                    "amount_minor": int(amount),
                     "currency": account.currency,
-                    "dedup_key": trade_key,
+                    "dedup_key": ledger.dedup_hash(f"chain|{t.account}|{part}|{suffix}"),
                     "import_id": self.import_id,
                     "created_at": self.writer.created,
                 },

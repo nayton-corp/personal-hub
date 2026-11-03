@@ -309,3 +309,26 @@ def test_a_staking_exit_keeps_the_cost_and_the_reward_is_a_gain(finance: Finance
     assert minor(r["sent_outside_cost"]) == 0
     assert minor(r["arrived_from_outside"]) == 0
     assert not [b for b in found.breaks if b.kind in ("sent_outside", "arrived_outside")]
+
+
+def test_a_transaction_read_again_with_another_net_gets_a_correction(
+    finance: FinanceDomain,
+) -> None:
+    """Une lecture fausse (claim annulé par une trace fantôme) puis corrigée : le mouvement de
+    parts n'est pas réécrit, une ligne de correction apporte la différence."""
+    add_ref(finance, "crypto:ledger", "crypto", "Ledger")
+
+    def read(q: str) -> None:
+        row = {"account": "crypto:ledger", "instrument": "BTC", "on_date": "2026-09-01"}
+        tx = {**row, "txid": "t9", "quantity": q, "fee": "0", "kind": "stake"}
+        finance.importer.process([doc(prices=[btc("2026-09-01", "40000")], transactions=[tx])])
+
+    read("0.001")
+    read("0.011")
+    read("0.011")  # relu tel quel : rien de plus
+    with finance.engine().connect() as conn:
+        rows = conn.execute(text("SELECT quantity, amount_minor FROM trades")).all()
+    assert sorted((Decimal(q), a) for q, a in rows) == [
+        (Decimal("0.001"), 4_000),
+        (Decimal("0.01"), 40_000),
+    ]
