@@ -4,6 +4,12 @@
 
 ### Finance
 
+- Cours et cryptos : l'historique Ethereum des portefeuilles passe par Etherscan avec ta clé
+  (Routescan sans clé coupait sans prévenir), Base par Blockscout (hors de l'offre gratuite
+  d'Etherscan). Un réseau en erreur ne bloque plus l'historique des autres, et l'alerte de
+  l'accueil dit sa cause (clé refusée, explorateur saturé…). L'ETHW a son cours (CoinGecko).
+- Connexions : les clés d'API se saisissent dans un champ texte masqué ; le trousseau du
+  téléphone ne les préremplit plus (il écrasait la clé Etherscan).
 - Patrimoine : un relevé SwissBorg sans cours du jour (valeur 0 pour des parts tenues) ne fait
   plus tomber la ligne à zéro. Elle vaut parts × cours. La Performance des cryptos montrait de
   fausses pertes : environ −2 200 CHF sur l'USDC, et d'autres cryptos SwissBorg touchées.

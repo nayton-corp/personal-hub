@@ -51,7 +51,7 @@ const FIELD_LABEL = {
   flex_token: "Jeton Flex", query_id: "Numéro de la requête Flex", api_key: "Clé API",
   api_secret: "Secret API", passphrase: "Passphrase", key_name: "Nom de la clé",
   coingecko_key: "Clé CoinGecko (facultative)",
-  etherscan_key: "Clé Etherscan (historique Arbitrum, Base, Polygon)",
+  etherscan_key: "Clé Etherscan (historique Ethereum, Arbitrum, Polygon)",
   aspsp_name: "Banque (nom chez Enable Banking)", aspsp_country: "Pays de la banque (ISO)",
   psu_type: "Type de compte (personal ou business)", consent_days: "Durée du consentement (jours)",
   max_syncs_per_day: "Synchronisations par jour au plus", currencies: "Devises suivies",
@@ -407,7 +407,7 @@ function buildEdit(box, c, spec, newWallet = false) {
     return "Réglages enregistrés.";
   }));
 
-  // identifiants : remplacés en bloc, jamais relus
+  // identifiants : remplacés en bloc, jamais relus ; une clé d'API dans un champ texte masqué, que le trousseau ne préremplit pas
   const fields = spec.secrets.length ? spec.secrets : (spec.name === "market" ? ["coingecko_key", "etherscan_key"] : []);
   if (fields.length) {
     box.append(el("h3", "", "Identifiants"));
@@ -416,8 +416,8 @@ function buildEdit(box, c, spec, newWallet = false) {
       : spec.secrets.length ? "Pas encore donnés : la connexion ne tourne pas sans eux." : "Facultatifs."));
     const secretInputs = {};
     for (const key of fields) {
-      const node = MULTILINE_SECRETS.has(key) ? el("textarea") : input("", "password");
-      node.autocomplete = "off";
+      const pass = key === "password", multi = MULTILINE_SECRETS.has(key), node = multi ? el("textarea") : input("", pass ? "password" : "text");
+      node.autocomplete = "off"; if (!pass && !multi) Object.assign(node, { spellcheck: false, autocapitalize: "off" }).style.webkitTextSecurity = "disc";
       secretInputs[key] = field(box, `ce-secret-${key}`, FIELD_LABEL[key] || key, node);
     }
     const store_ = button(c.has_secrets ? "Remplacer les identifiants" : "Enregistrer les identifiants", "btn secondary");

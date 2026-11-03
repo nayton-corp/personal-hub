@@ -72,6 +72,9 @@ class EvmNetwork(BaseModel):
     chain_id: int
     native: str = "ETH"  # crypto qui paie le gaz
     tokens: dict[str, str] = {}  # contrat → symbole (le WETH compte comme ETH)
+    # historique par une API compatible Etherscan sans clé (Blockscout), pour un réseau que
+    # l'offre gratuite d'Etherscan ne couvre pas ; vide : Etherscan V2 avec la clé
+    history_url: str = ""
 
 
 class MarketConfig(BaseModel):
@@ -89,6 +92,7 @@ class MarketConfig(BaseModel):
         "POL": "polygon-ecosystem-token",
         "BNB": "binancecoin",
         "ATOM": "cosmos",
+        "ETHW": "ethereum-pow-iou",  # EthereumPoW (fusion de 2022) : Binance ne le cote pas
     }
     yahoo_url: str = "https://query1.finance.yahoo.com/v8/finance/chart"
     quotes: dict[str, str] = {}  # ISIN ou symbole → symbole Yahoo (par ex. « VWRL.SW »)
@@ -102,7 +106,8 @@ class MarketConfig(BaseModel):
     # de Routescan (compatible Etherscan, sans clé) le fait. Blockscout sans clé coupe après
     # dix appels et protège ses couches 2 derrière Cloudflare.
     eth_history_url: str = "https://api.routescan.io/v2/network/mainnet/evm/1/etherscan/api"
-    # historique des autres réseaux : Etherscan V2, une clé pour tous (`etherscan_key`)
+    # historique des autres réseaux, et d'Ethereum quand la clé est là : Etherscan V2, une clé
+    # pour tous (`etherscan_key`)
     etherscan_url: str = "https://api.etherscan.io/v2/api"
     chain_pause_seconds: int = Field(default=1, ge=0, le=10)  # entre deux pages d'historique
     coingecko_pause_seconds: int = Field(default=3, ge=0, le=30)  # entre deux cours, sans clé
@@ -128,6 +133,7 @@ class MarketConfig(BaseModel):
         "base": EvmNetwork(
             rpc_url="https://base-rpc.publicnode.com",
             chain_id=8453,
+            history_url="https://base.blockscout.com/api",  # hors de l'offre gratuite d'Etherscan
             tokens={
                 "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": "USDC",
                 "0x4200000000000000000000000000000000000006": "ETH",
