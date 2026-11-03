@@ -370,6 +370,17 @@ def test_upload_and_import_detail(client: TestClient, ctx: HubContext, fin: Fina
     assert busy.status_code == 503
 
 
+def test_an_upload_too_big_is_refused_as_it_streams(
+    client: TestClient, ctx: HubContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from hub.domains.finance.sources.interface import api as sources_api
+
+    app_session(ctx, client)
+    monkeypatch.setattr(sources_api, "MAX_UPLOAD", 10)
+    r = client.post("/api/finance/imports?name=gros.xml", content=b"<x>" + b"." * 20)
+    assert (r.status_code, r.json()["type"]) == (422, "validation.params")
+
+
 def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
     r = client.get("/api/health").json()
     assert r["domains"]["finance"] == {"db": "ok", "schema_version": 21, "ok": True}

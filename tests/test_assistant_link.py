@@ -98,6 +98,17 @@ def test_a_spoken_sentence_is_relayed_as_sound(hub: HubContext, client: TestClie
     assert fake.calls[-1][2:] == (b"\x1a\x45", "audio/webm;codecs=opus")
     bad = client.post("/api/assistant/voice", content=b"x", headers={"Content-Type": "text/plain"})
     assert bad.status_code == 422
+    monkeypatch_limit = 4
+    import hub.api.routes_assistant as routes_assistant
+
+    routes_assistant.MAX_AUDIO, kept = monkeypatch_limit, routes_assistant.MAX_AUDIO
+    try:  # trop long : refusé en flux, sans tout lire
+        big = client.post(
+            "/api/assistant/voice", content=b"\x00" * 5, headers={"Content-Type": "audio/webm"}
+        )
+    finally:
+        routes_assistant.MAX_AUDIO = kept
+    assert big.status_code == 422
 
 
 def test_without_an_assistant_the_app_is_told_plainly(hub: HubContext, client: TestClient) -> None:

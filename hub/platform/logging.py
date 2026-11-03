@@ -88,8 +88,8 @@ def processors() -> list[Any]:
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
-        reject_forbidden,
-        structlog.processors.format_exc_info,
+        structlog.processors.format_exc_info,  # d'abord le texte de l'exception…
+        reject_forbidden,  # … puis le filtre, qui le lit aussi (audit m18)
         structlog.processors.JSONRenderer(sort_keys=True),
     ]
 

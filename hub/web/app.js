@@ -81,6 +81,21 @@ async function renderSettings(session) {
     const when = document.createElement("small");
     when.textContent = `ajoutée le ${fmt(k.created_at)}`;
     li.append(name, when);
+    if (keys.items.length > 1) {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn secondary";
+      remove.textContent = "Retirer";
+      remove.addEventListener(
+        "click",
+        guard(async () => {
+          await api(`/auth/passkeys/${encodeURIComponent(k.id)}`, await confirmWithPasskey(), "DELETE");
+          store.invalidate();
+          say("Passkey retirée ; ses sessions sont fermées.");
+        }),
+      );
+      li.append(remove);
+    }
     ul.append(li);
   }
   const badge = $("badge");
@@ -111,8 +126,16 @@ async function refresh() {
   }
 }
 
+// une passkey en place signe tout geste sur les passkeys (Face ID) ; au premier pas, le code
+async function confirmWithPasskey() {
+  const begin = await api("/auth/passkey/confirm/begin", {});
+  const cred = await navigator.credentials.get({ publicKey: requestOptions(begin.options) });
+  return { challenge_id: begin.challenge_id, credential: credentialJSON(cred) };
+}
+
 async function register(code, deviceName) {
-  const begin = await api("/auth/passkey/register/begin", { bootstrap_code: code || null });
+  const confirm = code ? null : await confirmWithPasskey();
+  const begin = await api("/auth/passkey/register/begin", { bootstrap_code: code || null, confirm });
   const cred = await navigator.credentials.create({ publicKey: creationOptions(begin.options) });
   await api("/auth/passkey/register/finish", {
     challenge_id: begin.challenge_id,

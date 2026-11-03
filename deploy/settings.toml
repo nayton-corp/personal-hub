@@ -11,6 +11,8 @@ backup = "/srv/hub/backup"
 [server]
 bind = "0.0.0.0:8710"         # réseau compose « hub » seulement : aucun port publié
 public_origin = "https://hub.example.ts.net"
+# en-têtes X-Forwarded-* crus depuis le réseau compose « hub » (Caddy) ; jamais "*"
+forwarded_allow_ips = "172.16.0.0/12,192.168.0.0/16"
 
 [auth]
 session_hours = 12

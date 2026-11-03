@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from hub.api.app import create_app
-from hub.core import maintenance, proposals, tools
+from hub.core import maintenance, proposal_reconcile, proposals, tools
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.registry import Registry
@@ -219,7 +219,7 @@ def test_an_unknown_send_is_reconciled_with_the_bridge(hub: HubContext, bridge: 
     p, _ = proposals.create(hub, APP, "agenda", "add_reminder", {"title": "Pneus"})
     assert proposals.accept(hub, APP, [p], None)[0].status == "unknown"
     bridge.up = True
-    proposals.reconcile(hub)  # jamais parti : échec, pas appliqué
+    proposal_reconcile.reconcile(hub)  # jamais parti : échec, pas appliqué
     with hub.core.engine.connect() as conn:
         assert proposals.get(conn, p.id).status == "failed"
     # parti mais réponse perdue : le pont le montre, la réconciliation l'applique
@@ -234,7 +234,7 @@ def test_an_unknown_send_is_reconciled_with_the_bridge(hub: HubContext, bridge: 
     agenda.bridge.transport = lost  # type: ignore[attr-defined]
     assert proposals.accept(hub, APP, [q], None)[0].status == "unknown"
     agenda.bridge.transport = real  # type: ignore[attr-defined]
-    proposals.reconcile(hub)
+    proposal_reconcile.reconcile(hub)
     with hub.core.engine.connect() as conn:
         assert proposals.get(conn, q.id).status == "applied"
     assert [r["title"] for r in bridge.reminders].count("Vidange") == 1

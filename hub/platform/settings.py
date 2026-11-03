@@ -38,6 +38,9 @@ class Server(BaseModel):
     bind: str = "127.0.0.1:8710"
     public_origin: str = "http://localhost:8710"
     web_root: Path | None = None  # sert l'app depuis l'API (développement) ; Caddy en production
+    # adresses (ou réseaux CIDR, séparés par des virgules) dont les en-têtes X-Forwarded-* sont
+    # crus : le mandataire (Caddy), jamais « * » (la limite de débit par adresse se contournerait)
+    forwarded_allow_ips: str = "127.0.0.1"
 
     @field_validator("public_origin")
     @classmethod

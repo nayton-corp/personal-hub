@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from hub.core import proposals
+from hub.core import proposal_events
 from hub.core.context import HubContext
 from hub.core.notify import Message
 from hub.domains.finance.classement.app import sentinels
@@ -62,7 +62,7 @@ def test_alerts_are_raised_once_and_notified(
     assert year.run_sentinels() == []  # même occasion : rien de nouveau
     sent: list[Message] = []
     monkeypatch.setattr(ctx.notifier, "send", lambda msg: sent.append(msg) is None)
-    synced = proposals.sync_events(ctx)
+    synced = proposal_events.sync_events(ctx)
     assert synced["notified"] == 2
     assert "Budget : une cible du mois est dépassée" in [m.title for m in sent]
     for m in sent:  # rien de financier ne part vers ntfy : ni montant, ni catégorie
@@ -74,7 +74,7 @@ def test_alerts_are_raised_once_and_notified(
         assert "alimentation" not in m.click
     ids = {sentinels.alert_id(a.key) for a in first}
     assert {m.click.removeprefix("/#alert=") for m in sent} == ids
-    assert proposals.sync_events(ctx)["notified"] == 0
+    assert proposal_events.sync_events(ctx)["notified"] == 0
 
 
 def test_recurring_increase(year: FinanceDomain) -> None:

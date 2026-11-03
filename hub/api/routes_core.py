@@ -33,7 +33,7 @@ from hub.api.schemas import (
 )
 from hub.api.schemas_domains import DomainListOut
 from hub.core import links as linking
-from hub.core import passkeys, profile, proposals
+from hub.core import passkeys, profile, proposal_events, proposals
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal, require
 from hub.core.errors import Problem
 from hub.core.search import fuse
@@ -136,7 +136,7 @@ def list_proposals(
 ) -> ProposalListOut:
     # cartes demandées par les domaines (imports en attente…) : après la réponse, une lecture
     # n'écrit pas ; l'app relit la liste régulièrement
-    background.add_task(proposals.sync_events, hub_ctx)
+    background.add_task(proposal_events.sync_events, hub_ctx)
     with hub_ctx.core.engine.connect() as conn:
         items = proposals.list_by_status(conn, status, limit)
     visible = [

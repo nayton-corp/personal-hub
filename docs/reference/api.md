@@ -14,11 +14,13 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `POST` | `/api/assistant/talk` | Talk |
 | `POST` | `/api/assistant/voice` | Voice |
 | `POST` | `/api/auth/logout` | Logout |
+| `POST` | `/api/auth/passkey/confirm/begin` | Défi qu'une passkey en place signe avant d'en ajouter ou d'en retirer une. |
 | `POST` | `/api/auth/passkey/login/begin` | Login Begin |
 | `POST` | `/api/auth/passkey/login/finish` | Login Finish |
 | `POST` | `/api/auth/passkey/register/begin` | Register Begin |
 | `POST` | `/api/auth/passkey/register/finish` | Register Finish |
 | `GET` | `/api/auth/passkeys` | List Passkeys |
+| `DELETE` | `/api/auth/passkeys/{credential_id}` | Retire une passkey (jamais la dernière) sous Face ID d'une passkey en place ; ses sessions sont fermées, la sienne comprise. |
 | `GET` | `/api/auth/session` | Session |
 | `GET` | `/api/collectors` | List Collectors |
 | `GET` | `/api/collectors/catalog` | Les connecteurs que ce hub sait collecter (méthode, pays, secrets attendus). |

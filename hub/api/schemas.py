@@ -113,49 +113,6 @@ class LinksOut(BaseModel):
     incoming: list[LinkOut]
 
 
-class RegisterBeginIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    bootstrap_code: str | None = Field(default=None, max_length=40)
-
-
-class ChallengeOut(BaseModel):
-    challenge_id: str
-    options: dict[str, Any]
-
-
-class RegisterFinishIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    challenge_id: str
-    credential: dict[str, Any]
-    device_name: str | None = Field(default=None, max_length=60)
-    bootstrap_code: str | None = Field(default=None, max_length=40)
-
-
-class LoginFinishIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    challenge_id: str
-    credential: dict[str, Any]
-
-
-class SessionOut(BaseModel):
-    authenticated: bool
-    actor: str | None = None
-    expires_at: str | None = None
-    passkeys: int
-    needs_bootstrap: bool
-
-
-class PasskeyOut(BaseModel):
-    id: str
-    device_name: str | None
-    created_at: str
-    last_used_at: str | None
-
-
-class PasskeysOut(BaseModel):
-    items: list[PasskeyOut]
-
-
 class ApprovalChallengeIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     proposal_ids: list[str] = Field(min_length=1, max_length=50)

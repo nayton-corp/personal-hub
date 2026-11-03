@@ -10,6 +10,15 @@
   Sans jeton connu, `401` ; l'adresse (`allow_from`) n'est plus qu'une seconde barrière. Le hub
   présente `assistant.token` de `secrets.enc.yaml` (créé par `hub init`) et ne passe plus de
   personne ; `HUB_ASSISTANT__PERSON` disparaît.
+- Passkeys (audit M16) : en ajouter une demande le Face ID d'une passkey en place
+  (`POST /auth/passkey/confirm/begin`, puis `confirm` dans `register/begin`), jamais la session
+  seule ; `DELETE /auth/passkeys/{id}` en retire une (jamais la dernière) et ferme ses sessions.
+  Migration core 0009 (`passkeys.revoked_at`).
+- L'API ne gèle plus pendant un import ou une phrase dite à l'orbe (audit M13) : le corps se
+  lit en flux, borné, et le travail part dans le threadpool ; un test d'architecture interdit
+  à une route `async` d'appeler un port en direct. `server.forwarded_allow_ips` (Caddy) remplace
+  « * » ; une seule lecture d'évènements à la fois ; le texte d'une exception passe aussi par le
+  filtre des journaux.
 
 ### Finance
 

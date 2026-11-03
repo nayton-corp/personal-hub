@@ -16,7 +16,7 @@ from hypothesis import strategies as st
 from sqlalchemy import text
 
 from hub.api.app import create_app
-from hub.core import proposals
+from hub.core import proposal_events, proposals
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
@@ -535,7 +535,7 @@ def test_create_account_replays_waiting_statements(ctx: HubContext, fin: Finance
     load(fin, [Tx("10.00", True, D, counterparty="Zorglub Fictif")])
     assert rows(fin, "SELECT status FROM imports") == [("needs_review",)]
     # compte inconnu : rien qu'une validation puisse lever, donc aucune carte apply_import
-    proposals.sync_events(ctx)
+    proposal_events.sync_events(ctx)
     with ctx.core.engine.connect() as conn:
         assert proposals.list_by_status(conn, "pending") == []
     p = create(ctx, "create_account", {"institution": "BCF", "name": "Privé", "iban": IBAN})
@@ -565,7 +565,7 @@ def test_apply_import_card_validates_the_gap(
     # octobre annonce 900 d'ouverture : le registre dit 1000 -> en attente, carte demandée
     fin.importer.process([Incoming("oct.xml", octo)])
     assert rows(fin, "SELECT status FROM imports") == [("needs_review",)]
-    proposals.sync_events(ctx)  # la lecture n'écrit plus : la carte naît hors requête
+    proposal_events.sync_events(ctx)  # la lecture n'écrit plus : la carte naît hors requête
     listed = client.get("/api/proposals").json()["items"]
     (card,) = [p for p in listed if p["kind"] == "apply_import"]
     assert card["preview"]["details"]["reasons"] == ["ledger_check_failed"]
@@ -575,7 +575,7 @@ def test_apply_import_card_validates_the_gap(
     assert client.get(f"/api/finance/imports/{import_id}").json()["proposal_id"] == card["id"]
     # la tâche de nuit redemande la carte : pas de doublon
     fin.nightly()
-    assert proposals.sync_events(ctx)["requested"] == 0
+    assert proposal_events.sync_events(ctx)["requested"] == 0
     (res,) = signed_accept(client, phone, [card["id"]])
     assert res["status"] == "applied", res
     assert res["result"]["new"] == 1
@@ -608,7 +608,7 @@ def test_apply_import_becomes_obsolete_when_the_gap_fills(
         )
     )
     fin.importer.process([Incoming("b.xml", octo)])
-    proposals.sync_events(ctx)
+    proposal_events.sync_events(ctx)
     with ctx.core.engine.connect() as conn:
         (card,) = proposals.list_by_status(conn, "pending")
     # le relevé manquant arrive : le second s'applique seul, la carte devient sans objet
@@ -617,7 +617,7 @@ def test_apply_import_becomes_obsolete_when_the_gap_fills(
         ("applied",),
         ("applied",),
     ]
-    assert proposals.sync_events(ctx)["obsoleted"] == 1
+    assert proposal_events.sync_events(ctx)["obsoleted"] == 1
     with ctx.core.engine.connect() as conn:
         assert proposals.get(conn, card.id).status == "obsolete"
     assert acc.id

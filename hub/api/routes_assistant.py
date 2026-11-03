@@ -10,9 +10,11 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Header, Query, Request
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from hub.core.assistant_link import AssistantError
 from hub.core.auth import AppSession, Ctx
+from hub.core.body import read_body
 from hub.core.errors import Problem
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
@@ -90,11 +92,13 @@ async def voice(
     content_type: Annotated[str, Header()] = "",
 ) -> AnswerOut:
     mime = content_type.split(";")[0].strip().lower()
-    audio = await request.body()
-    if not mime.startswith("audio/") or not audio or len(audio) > MAX_AUDIO:
+    if not mime.startswith("audio/"):
         raise Problem("validation.params", "son absent, trop long ou d'un type inconnu")
-    try:
-        found = hub_ctx.assistant.voice(audio, content_type)
+    audio = await read_body(request, MAX_AUDIO)  # en flux : rien gardé au-delà
+    if not audio:
+        raise Problem("validation.params", "son absent, trop long ou d'un type inconnu")
+    try:  # l'assistant répond en plusieurs secondes : hors de la boucle d'évènements
+        found = await run_in_threadpool(hub_ctx.assistant.voice, audio, content_type)
     except AssistantError as e:
         raise _relay(e) from None
     return AnswerOut.model_validate(found)

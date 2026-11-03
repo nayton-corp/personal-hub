@@ -9,7 +9,7 @@ from typing import Annotated
 
 import typer
 
-from hub.core import policies, proposals
+from hub.core import policies, proposal_events, proposals
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
@@ -28,7 +28,7 @@ def build(
         limit: Annotated[int, typer.Option(min=1, max=200)] = 50,
     ) -> None:
         hub = ready()
-        proposals.sync_events(hub)
+        proposal_events.sync_events(hub)
         with hub.core.engine.connect() as conn:
             items = proposals.list_by_status(conn, None if status == "all" else status, limit)
         for p in items:

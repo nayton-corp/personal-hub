@@ -12,7 +12,7 @@ import typer
 import yaml
 
 from hub import cli_inbox, cli_ops, cli_proposals, cli_tokens
-from hub.core import connections, connectors, profile, proposals, sessions, tokens
+from hub.core import connections, connectors, profile, proposal_reconcile, sessions, tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
@@ -79,7 +79,7 @@ def serve(
         log_config=None,
         access_log=False,
         proxy_headers=True,
-        forwarded_allow_ips="*",
+        forwarded_allow_ips=settings.server.forwarded_allow_ips,
     )
 
 
@@ -370,7 +370,7 @@ def nightly() -> None:
 def reconcile() -> None:
     """Recale les statuts des propositions sur `applied_proposals` (après une restauration)."""
     hub = _ready()
-    report = proposals.reconcile(hub)
+    report = proposal_reconcile.reconcile(hub)
     typer.echo(json.dumps({"applied": report.marked_applied, "released": report.released}))
 
 

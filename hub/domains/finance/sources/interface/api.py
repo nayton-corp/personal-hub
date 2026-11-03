@@ -7,9 +7,11 @@ import re
 from typing import Annotated, Any, Protocol
 
 from fastapi import APIRouter, Query, Request
+from starlette.concurrency import run_in_threadpool
 
-from hub.core import proposals
+from hub.core import proposal_events, proposals
 from hub.core.auth import AppSession, Ctx
+from hub.core.body import read_body
 from hub.core.errors import Problem
 from hub.domains.finance.registre.app import catalog, reads
 from hub.domains.finance.registre.interface import http
@@ -72,11 +74,11 @@ def build_router(host: Host) -> APIRouter:
             raise Problem(
                 "validation.params", "nom de fichier .xml, .zip, .pdf, .json, .csv ou .xlsx"
             )
-        body = await request.body()
-        if not body or len(body) > MAX_UPLOAD:
+        body = await read_body(request, MAX_UPLOAD)  # en flux : rien gardé au-delà
+        if not body:
             raise Problem("validation.params", "fichier vide ou trop volumineux")
-        try:
-            report = host.importer.receive(name, body)
+        try:  # l'import bloque (lecture, application, instantanés) : hors de la boucle
+            report = await run_in_threadpool(host.importer.receive, name, body)
         except ImportRefused as exc:
             headers = {"Retry-After": "60"} if exc.code == "busy.retry" else None
             raise Problem(exc.code, exc.detail, headers=headers) from None
@@ -98,7 +100,7 @@ def build_router(host: Host) -> APIRouter:
             found = reads.import_detail(conn, import_id)
         if found is None:
             raise Problem("not_found")
-        proposals.sync_events(hub_ctx)
+        proposal_events.sync_events(hub_ctx)
         card = proposals.find(hub_ctx, "finance", APPLY_IMPORT, {"import_id": import_id})
         return {**found, "proposal_id": card.id if card else None}
 

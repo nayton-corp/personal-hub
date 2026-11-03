@@ -1,6 +1,7 @@
 """L0-06 : inscription par code d'amorçage, seconde passkey, connexion, session de 12 h."""
 
 from datetime import timedelta
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,8 +20,23 @@ def _code(hub: HubContext) -> str:
         return sessions.create_bootstrap_code(conn, 10, "system:test")
 
 
-def _register(client: TestClient, auth: SoftAuthenticator, code: str | None, name: str = "iPhone"):  # type: ignore[no-untyped-def]
-    begin = client.post("/api/auth/passkey/register/begin", json={"bootstrap_code": code})
+def _confirm(client: TestClient, holder: SoftAuthenticator) -> dict[str, Any]:
+    """Une passkey en place signe le geste (Face ID)."""
+    begin = client.post("/api/auth/passkey/confirm/begin").json()
+    return {"challenge_id": begin["challenge_id"], "credential": holder.sign(begin["options"])}
+
+
+def _register(  # type: ignore[no-untyped-def]
+    client: TestClient,
+    auth: SoftAuthenticator,
+    code: str | None,
+    name: str = "iPhone",
+    holder: SoftAuthenticator | None = None,
+):
+    confirm = _confirm(client, holder) if holder is not None else None
+    begin = client.post(
+        "/api/auth/passkey/register/begin", json={"bootstrap_code": code, "confirm": confirm}
+    )
     assert begin.status_code == 200, begin.text
     body = begin.json()
     assert body["options"]["rp"]["id"] == "hub.example.ts.net"
@@ -112,12 +128,51 @@ def test_second_passkey_from_session(
 ) -> None:
     _register(client, phone, _code(hub))
     backup_key = SoftAuthenticator("hub.example.ts.net", ORIGIN)
-    r = _register(client, backup_key, None, name="clé de secours")
+    # une session seule n'enrôle rien de durable (audit M16) : la passkey en place signe
+    alone = client.post("/api/auth/passkey/register/begin", json={"bootstrap_code": None})
+    assert (alone.status_code, alone.json()["type"]) == (403, "auth.confirm_required")
+    r = _register(client, backup_key, None, name="clé de secours", holder=phone)
     assert r.status_code == 200, r.text
     assert r.json()["passkeys"] == 2
     client.post("/api/auth/logout")
     client.cookies.clear()
     assert _login(client, backup_key).status_code == 200
+
+
+def test_a_passkey_is_removed_under_face_id_never_the_last(
+    client: TestClient, hub: HubContext, phone: SoftAuthenticator
+) -> None:
+    _register(client, phone, _code(hub))
+    backup_key = SoftAuthenticator("hub.example.ts.net", ORIGIN)
+    _register(client, backup_key, None, name="clé de secours", holder=phone)
+    ids = [k["id"] for k in client.get("/api/auth/passkeys").json()["items"]]
+    assert ids == [phone.id, backup_key.id]
+    # sans signature valable : refusé ; un défi de connexion ne vaut pas un défi de retrait
+    bad = client.request(
+        "DELETE",
+        f"/api/auth/passkeys/{backup_key.id}",
+        json={"challenge_id": "x", "credential": {"id": phone.id}},
+    )
+    assert bad.status_code == 401
+    gone = client.request(
+        "DELETE", f"/api/auth/passkeys/{backup_key.id}", json=_confirm(client, phone)
+    )
+    assert gone.status_code == 204, gone.text
+    assert [k["id"] for k in client.get("/api/auth/passkeys").json()["items"]] == [phone.id]
+    assert _login(client, backup_key).status_code == 401  # retirée : ne connecte plus
+    last = client.request("DELETE", f"/api/auth/passkeys/{phone.id}", json=_confirm(client, phone))
+    assert (last.status_code, last.json()["type"]) == (409, "auth.last_passkey")
+
+
+def test_removing_my_own_passkey_closes_my_session(
+    client: TestClient, hub: HubContext, phone: SoftAuthenticator
+) -> None:
+    _register(client, phone, _code(hub))
+    backup_key = SoftAuthenticator("hub.example.ts.net", ORIGIN)
+    _register(client, backup_key, None, name="clé de secours", holder=phone)
+    gone = client.request("DELETE", f"/api/auth/passkeys/{phone.id}", json=_confirm(client, phone))
+    assert gone.status_code == 204
+    assert client.get("/api/auth/passkeys").status_code == 401
 
 
 def test_session_expires_after_12_hours(

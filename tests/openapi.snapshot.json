@@ -773,6 +773,27 @@
         "title": "CollectorRunsOut",
         "type": "object"
       },
+      "ConfirmIn": {
+        "additionalProperties": false,
+        "description": "Une passkey existante qui signe le geste (défi `confirm`).",
+        "properties": {
+          "challenge_id": {
+            "title": "Challenge Id",
+            "type": "string"
+          },
+          "credential": {
+            "additionalProperties": true,
+            "title": "Credential",
+            "type": "object"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "credential"
+        ],
+        "title": "ConfirmIn",
+        "type": "object"
+      },
       "ConnectionIn": {
         "additionalProperties": false,
         "properties": {
@@ -2106,6 +2127,16 @@
               }
             ],
             "title": "Bootstrap Code"
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfirmIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "RegisterBeginIn",
@@ -2710,6 +2741,28 @@
         ]
       }
     },
+    "/api/auth/passkey/confirm/begin": {
+      "post": {
+        "description": "Défi qu'une passkey en place signe avant d'en ajouter ou d'en retirer une.",
+        "operationId": "confirm_begin_api_auth_passkey_confirm_begin_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Confirm Begin",
+        "tags": [
+          "authentification"
+        ]
+      }
+    },
     "/api/auth/passkey/login/begin": {
       "post": {
         "operationId": "login_begin_api_auth_passkey_login_begin_post",
@@ -2870,6 +2923,53 @@
           }
         },
         "summary": "List Passkeys",
+        "tags": [
+          "authentification"
+        ]
+      }
+    },
+    "/api/auth/passkeys/{credential_id}": {
+      "delete": {
+        "description": "Retire une passkey (jamais la dernière) sous Face ID d'une passkey en place ; ses\nsessions sont fermées, la sienne comprise.",
+        "operationId": "revoke_passkey_api_auth_passkeys__credential_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "title": "Credential Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Passkey",
         "tags": [
           "authentification"
         ]

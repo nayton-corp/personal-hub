@@ -79,13 +79,62 @@ def purge_challenges(conn: Connection) -> int:
 
 
 def _credentials(conn: Connection) -> list[PublicKeyCredentialDescriptor]:
-    rows = conn.execute(text("SELECT credential_id FROM passkeys")).fetchall()
+    rows = conn.execute(
+        text("SELECT credential_id FROM passkeys WHERE revoked_at IS NULL")
+    ).fetchall()
     return [PublicKeyCredentialDescriptor(id=base64url_to_bytes(r[0])) for r in rows]
 
 
 def count(conn: Connection) -> int:
-    value: int = conn.execute(text("SELECT count(*) FROM passkeys")).scalar_one()
+    value: int = conn.execute(
+        text("SELECT count(*) FROM passkeys WHERE revoked_at IS NULL")
+    ).scalar_one()
     return value
+
+
+def confirm_options(conn: Connection, settings: Settings) -> dict[str, Any]:
+    """Défi qu'une passkey existante signe pour un geste sur les passkeys (en ajouter une, en
+    retirer une) : une session volée n'enrôle rien de durable (audit M16)."""
+    options = generate_authentication_options(
+        rp_id=settings.server.rp_id,
+        challenge=secrets.token_bytes(32),
+        user_verification=UserVerificationRequirement.REQUIRED,
+        allow_credentials=_credentials(conn),
+    )
+    challenge_id = _store_challenge(
+        conn, "confirm", options.challenge, settings.auth.challenge_seconds
+    )
+    return {"challenge_id": challenge_id, "options": json.loads(options_to_json(options))}
+
+
+def confirm(
+    conn: Connection, settings: Settings, challenge_id: str, credential: dict[str, Any]
+) -> str:
+    """La passkey qui a signé le défi `confirm` ; refusé sinon."""
+    challenge, _ = _take_challenge(conn, challenge_id, "confirm")
+    return authenticate_with(conn, settings, challenge, credential)
+
+
+def revoke(conn: Connection, credential_id: str, by: str) -> None:
+    """Met une passkey de côté et ferme ses sessions ; la dernière reste."""
+    if count(conn) <= 1:
+        raise Problem("auth.last_passkey")
+    at = now_iso()
+    done = conn.execute(
+        text(
+            "UPDATE passkeys SET revoked_at = :at WHERE credential_id = :id AND revoked_at IS NULL"
+        ),
+        {"at": at, "id": credential_id},
+    ).rowcount
+    if not done:
+        raise Problem("not_found", "passkey inconnue")
+    conn.execute(
+        text(
+            "UPDATE sessions SET revoked_at = :at WHERE credential_id = :id AND revoked_at IS NULL"
+        ),
+        {"at": at, "id": credential_id},
+    )
+    audit(conn, by, "passkey.revoke", actor("passkey", credential_id), "ok")
 
 
 def registration_options(conn: Connection, settings: Settings) -> dict[str, Any]:
@@ -173,11 +222,14 @@ def authenticate_with(
     if not isinstance(credential_id, str):
         raise Problem("auth.passkey_invalid")
     row = conn.execute(
-        text("SELECT public_key, sign_count FROM passkeys WHERE credential_id = :id"),
+        text(
+            "SELECT public_key, sign_count FROM passkeys "
+            "WHERE credential_id = :id AND revoked_at IS NULL"
+        ),
         {"id": credential_id},
     ).fetchone()
     if row is None:
-        raise Problem("auth.passkey_invalid", "passkey inconnue")
+        raise Problem("auth.passkey_invalid", "passkey inconnue ou retirée")
     try:
         verified = verify_authentication_response(
             credential=credential,
@@ -243,7 +295,7 @@ def list_all(conn: Connection) -> list[dict[str, Any]]:
     rows = conn.execute(
         text(
             "SELECT credential_id, device_name, created_at, last_used_at FROM passkeys "
-            "ORDER BY created_at"
+            "WHERE revoked_at IS NULL ORDER BY created_at"
         )
     ).fetchall()
     return [

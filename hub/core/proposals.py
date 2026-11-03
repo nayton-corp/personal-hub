@@ -20,10 +20,9 @@ from hub.core import policies
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.coredb import audit
-from hub.core.domain import Domain, ExternalHandler, LocalHandler, Preview, ProposalKind
+from hub.core.domain import ExternalHandler, LocalHandler, Preview, ProposalKind
 from hub.core.errors import Problem
-from hub.core.links import Owner, owner, owners
-from hub.core.notify import Message
+from hub.core.links import Owner, owner
 from hub.kernel import canonical
 from hub.kernel.clock import iso, now_iso, parse_iso, utcnow
 from hub.kernel.ids import new_id, urn
@@ -86,7 +85,7 @@ class Proposal:
         }
 
 
-def _from_row(r: Row[Any]) -> Proposal:
+def from_row(r: Row[Any]) -> Proposal:
     m = r._mapping
     return Proposal(
         id=m["id"],
@@ -114,7 +113,7 @@ def get(conn: Connection, proposal_id: str) -> Proposal:
     row = conn.execute(text("SELECT * FROM proposals WHERE id = :id"), {"id": proposal_id}).first()
     if row is None:
         raise Problem("proposal.not_found")
-    return _from_row(row)
+    return from_row(row)
 
 
 def find(hub: HubContext, domain: str, kind: str, params: dict[str, Any]) -> Proposal | None:
@@ -132,7 +131,7 @@ def find(hub: HubContext, domain: str, kind: str, params: dict[str, Any]) -> Pro
             ),
             {"d": domain, "k": kind, "h": params_hash},
         ).first()
-    return _from_row(row) if row is not None else None
+    return from_row(row) if row is not None else None
 
 
 def list_by_status(conn: Connection, status: str | None, limit: int = 100) -> list[Proposal]:
@@ -145,7 +144,7 @@ def list_by_status(conn: Connection, status: str | None, limit: int = 100) -> li
             text("SELECT * FROM proposals WHERE status = :s ORDER BY created_at DESC LIMIT :n"),
             {"s": status, "n": limit},
         ).fetchall()
-    return [_from_row(r) for r in rows]
+    return [from_row(r) for r in rows]
 
 
 def _check_allowed(principal: Principal, domain: str, kind: ProposalKind) -> None:
@@ -197,7 +196,7 @@ def _existing(
             text("SELECT * FROM proposals WHERE create_key = :k"), {"k": create_key}
         ).first()
         if row is not None:
-            found = _from_row(row)
+            found = from_row(row)
             if (found.domain, found.kind, found.params_hash) != (domain, kind, params_hash):
                 raise Problem("idempotency.key_mismatch")
             return found
@@ -208,7 +207,7 @@ def _existing(
         ),
         {"d": domain, "k": kind, "h": params_hash},
     ).first()
-    return _from_row(row) if row is not None else None
+    return from_row(row) if row is not None else None
 
 
 def create(
@@ -395,7 +394,7 @@ def release_or_reconcile(hub: HubContext, p: Proposal) -> None:
     """Après une erreur ambiguë (au COMMIT par exemple) : `applied_proposals` décide."""
     done = owner(hub, p.domain).applied([p.id]).get(p.id)
     if done is not None:
-        _mark(hub, p, "applied", done, None, "system:reconcile")
+        mark(hub, p, "applied", done, None, "system:reconcile")
     else:
         release(hub, p.id)
 
@@ -419,7 +418,7 @@ def supersede(hub: HubContext, p: Proposal, fresh: Preview) -> Proposal:
         return get(conn, p.id)
 
 
-def _mark(
+def mark(
     hub: HubContext,
     p: Proposal,
     status: str,
@@ -517,7 +516,7 @@ def accept_one(
         new = supersede(hub, p, conflict)
         raise Problem("conflict.state_changed", proposal=new.public())
     assert result is not None  # noqa: S101 - fixé dans la transaction
-    _mark(hub, p, "applied", result, signature, principal.actor)
+    mark(hub, p, "applied", result, signature, principal.actor)
     _after_commit(domain, kind, params, result)
     return Outcome(p.id, "applied", result)
 
@@ -547,10 +546,10 @@ def _external_apply(
     try:
         res = external.apply(params, f"{p.id}:{p.revision}")
     except Exception:
-        _mark(hub, p, "unknown", None, signature, principal.actor)
+        mark(hub, p, "unknown", None, signature, principal.actor)
         raise
     status = {"ok": "applied", "failed": "failed", "unknown": "unknown"}[res.status]
-    _mark(hub, p, status, res.detail, signature, principal.actor)
+    mark(hub, p, status, res.detail, signature, principal.actor)
     return Outcome(p.id, status, res.detail)
 
 
@@ -603,6 +602,16 @@ def revert(
     return outcome
 
 
+def expire(conn: Connection) -> int:
+    return conn.execute(
+        text(
+            "UPDATE proposals SET status = 'expired', decided_at = :now "
+            "WHERE status = 'pending' AND expires_at <= :now"
+        ),
+        {"now": now_iso()},
+    ).rowcount
+
+
 def digest(hub: HubContext, day: str) -> list[dict[str, Any]]:
     """Effets appliqués au palier `auto_digest` ce jour (UTC), avec leur inverse éventuel."""
     with hub.core.engine.connect() as conn:
@@ -615,7 +624,7 @@ def digest(hub: HubContext, day: str) -> list[dict[str, Any]]:
         ).fetchall()
     out = []
     for r in rows:
-        p = _from_row(r)
+        p = from_row(r)
         kind = owner(hub, p.domain).proposal_kinds.get(p.kind)
         out.append(
             {
@@ -625,194 +634,3 @@ def digest(hub: HubContext, day: str) -> list[dict[str, Any]]:
             }
         )
     return out
-
-
-EVENTS_CONSUMER = "proposals"  # --- événements des domaines ---
-
-
-def sync_events(hub: HubContext, limit: int = 500) -> dict[str, int]:
-    """Lit la boîte de sortie de chaque domaine : `proposal.request` crée une carte (création
-    idempotente), `proposal.obsolete` rend sans objet celle qui attend encore,
-    `notify.request` envoie une notification (texte générique, posé par une sentinelle)."""
-    counts = {"requested": 0, "obsoleted": 0, "notified": 0}
-    for d in hub.registry:
-        with hub.core.engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT cursor FROM event_cursors WHERE consumer = :c AND domain = :d"),
-                {"c": EVENTS_CONSUMER, "d": d.name},
-            ).first()
-        cursor = int(row[0]) if row else 0
-        while events := d.events_since(cursor, limit):
-            for e in events:
-                if e.type == "proposal.request":
-                    counts["requested"] += _requested(hub, d, e.payload)
-                elif e.type == "proposal.obsolete":
-                    counts["obsoleted"] += _obsolete(hub, d.name, e.payload)
-                elif e.type == "notify.request":
-                    counts["notified"] += _notify(hub, e.payload)
-            cursor = events[-1].seq
-            with hub.core.engine.begin() as conn:
-                values = {"c": EVENTS_CONSUMER, "d": d.name, "n": cursor, "at": now_iso()}
-                moved = conn.execute(
-                    text(
-                        "UPDATE event_cursors SET cursor = :n, updated_at = :at "
-                        "WHERE consumer = :c AND domain = :d"
-                    ),
-                    values,
-                ).rowcount
-                if not moved:
-                    conn.execute(
-                        text(
-                            "INSERT INTO event_cursors (consumer, domain, cursor, updated_at) "
-                            "VALUES (:c, :d, :n, :at)"
-                        ),
-                        values,
-                    )
-            if len(events) < limit:
-                break
-    return counts
-
-
-def _notify(hub: HubContext, payload: dict[str, Any]) -> int:
-    title = str(payload.get("title") or "Personal Hub")[:120]
-    body = str(payload.get("body") or "")[:300]
-    click = str(payload.get("click") or "")
-    msg = Message(title, body, tags=str(payload.get("tags") or ""), click=click[:200])
-    return int(hub.notifier.send(msg))
-
-
-def _requested(hub: HubContext, d: Domain, payload: dict[str, Any]) -> int:
-    try:
-        _p, created = create(
-            hub,
-            Principal(f"system:{d.name}", frozenset(), is_app=True),
-            d.name,
-            str(payload.get("kind")),
-            dict(payload.get("params") or {}),
-            reason=payload.get("reason"),
-        )
-    except Problem as exc:  # sans objet entre-temps (import déjà appliqué…)
-        log.info("proposal.request_skipped", domain=d.name, type=exc.type)
-        return 0
-    return int(created)
-
-
-def _obsolete(hub: HubContext, domain: str, payload: dict[str, Any]) -> int:
-    kind = str(payload.get("kind"))
-    d = owner(hub, domain)
-    pk = d.proposal_kinds.get(kind)
-    if pk is None:
-        return 0
-    try:
-        clean = pk.params_model.model_validate(payload.get("params") or {}).model_dump(mode="json")
-    except ValidationError:
-        return 0
-    params_hash = canonical.sha256_hex({"domain": domain, "kind": kind, "params": clean})
-    with hub.core.engine.begin() as conn:
-        n = conn.execute(
-            text(
-                "UPDATE proposals SET status = 'obsolete', decided_at = :at WHERE domain = :d "
-                "AND kind = :k AND params_hash = :h AND status = 'pending'"
-            ),
-            {"d": domain, "k": kind, "h": params_hash, "at": now_iso()},
-        ).rowcount
-    return int(n)
-
-
-def expire(conn: Connection) -> int:
-    return conn.execute(
-        text(
-            "UPDATE proposals SET status = 'expired', decided_at = :now "
-            "WHERE status = 'pending' AND expires_at <= :now"
-        ),
-        {"now": now_iso()},
-    ).rowcount
-
-
-@dataclass(frozen=True)
-class ReconcileReport:
-    marked_applied: int
-    released: int
-
-
-def reconcile(hub: HubContext) -> ReconcileReport:
-    """`applied_proposals` du domaine fait foi ; le statut de `core.db` n'en est qu'un reflet.
-
-    - pending ou applying présente dans `applied_proposals` → applied ;
-    - applying absente depuis plus de 5 minutes → pending.
-    """
-    marked = released = 0
-    cutoff = utcnow() - APPLYING_GRACE
-    for domain in owners(hub):
-        with hub.core.engine.connect() as conn:
-            rows = conn.execute(
-                text(
-                    "SELECT id, status, claimed_at FROM proposals "
-                    "WHERE domain = :d AND status IN ('pending', 'applying')"
-                ),
-                {"d": domain.name},
-            ).fetchall()
-        if not rows:
-            continue
-        applied = domain.applied([r.id for r in rows])
-        with hub.core.engine.begin() as conn:
-            for r in rows:
-                if r.id in applied:
-                    conn.execute(
-                        text(
-                            "UPDATE proposals SET status = 'applied', result_json = :res, "
-                            "decided_at = coalesce(decided_at, :at) WHERE id = :id"
-                        ),
-                        {"id": r.id, "res": canonical.dumps(applied[r.id]), "at": now_iso()},
-                    )
-                    audit(
-                        conn,
-                        "system:reconcile",
-                        "proposal.reconciled",
-                        urn("core", "proposal", r.id),
-                        "applied",
-                    )
-                    marked += 1
-                elif r.status == "applying" and (
-                    r.claimed_at is None or parse_iso(r.claimed_at) < cutoff
-                ):
-                    conn.execute(
-                        text(
-                            "UPDATE proposals SET status = 'pending', claimed_at = NULL "
-                            "WHERE id = :id AND status = 'applying'"
-                        ),
-                        {"id": r.id},
-                    )
-                    audit(
-                        conn,
-                        "system:reconcile",
-                        "proposal.reconciled",
-                        urn("core", "proposal", r.id),
-                        "released",
-                    )
-                    released += 1
-    marked += _reconcile_external(hub)
-    return ReconcileReport(marked, released)
-
-
-def _reconcile_external(hub: HubContext) -> int:
-    """Effet externe au résultat inconnu : on redemande au tiers où il en est."""
-    with hub.core.engine.connect() as conn:
-        rows = conn.execute(text("SELECT * FROM proposals WHERE status = 'unknown'")).fetchall()
-    done = 0
-    for r in rows:
-        p = _from_row(r)
-        kind = owner(hub, p.domain).proposal_kinds.get(p.kind)
-        if kind is None or not kind.external:
-            continue
-        external: ExternalHandler = kind.handler  # type: ignore[assignment]
-        try:
-            res = external.reconcile(p.id)
-        except Exception as exc:
-            log.warning("proposal.reconcile_failed", proposal=p.id, error=type(exc).__name__)
-            continue
-        if res.status != "unknown":
-            status = "applied" if res.status == "ok" else "failed"
-            _mark(hub, p, status, res.detail, None, "system:reconcile")
-            done += 1
-    return done
