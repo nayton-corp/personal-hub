@@ -6,6 +6,7 @@ résultat depuis l'achat comme dans la performance."""
 from __future__ import annotations
 
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -244,3 +245,45 @@ def test_verify_checks_the_figures(finance: FinanceDomain) -> None:
     # la performance compte les 2 SOL sans historique à leur cours ; le résultat les laisse à part
     gap = abs(minor(crypto["performance_max"]) - minor(crypto["since_purchase"]))
     assert gap <= minor(crypto["allowed_gap"])
+
+
+class _Fx:
+    def rate(self, ccy: str, on: str) -> Decimal:
+        return Decimal(1)
+
+
+class _Positions:
+    """Relevés et mouvements d'un compte, un cours de 500 la part."""
+
+    def __init__(self, reports: Any, trades: Any) -> None:
+        self.reports = {"a": reports}
+        self.trades = {"a": trades}
+        self.fx = _Fx()
+
+    def price(self, key: str, on: str) -> tuple[str, Decimal, str]:
+        return on, Decimal(500), "CHF"
+
+
+def test_a_fund_report_rounded_to_the_hundredth_is_not_a_break() -> None:
+    """VIAC arrondit les parts au centième : 12.35 puis 12.36 avec un achat de 0.003 part, c'est
+    l'arrondi (7 millièmes, 3,50 CHF) ; 12.36 puis 12.40 sans achat, ce sont des parts qui
+    manquent."""
+    one = Decimal("1")
+    reports = [
+        ("2026-01-31", {"CH1": (Decimal("12.35"), one, "CHF")}),
+        ("2026-02-28", {"CH1": (Decimal("12.36"), one, "CHF")}),
+    ]
+    trades = [("2026-02-10", "CH1", Decimal("0.003"))]
+    p: Any = _Positions(reports, trades)
+    assert reconcile._unexplained(p, "a", "pillar3a", "2026-03-01", {}) == []
+    reports.append(("2026-03-31", {"CH1": (Decimal("12.40"), one, "CHF")}))
+    (b,) = reconcile._unexplained(p, "a", "pillar3a", "2026-04-01", {})
+    assert (b.asset, b.quantity) == ("CH1", Decimal("0.04"))
+
+
+def test_a_renamed_coin_counts_under_its_new_name() -> None:
+    one = Decimal("1")
+    reports = [("2026-06-01", {"CRYPTO:RENDER": (Decimal("5"), one, "CHF")})]
+    trades = [("2026-01-01", "CRYPTO:RNDR", Decimal("5"))]  # acheté sous l'ancien nom
+    p: Any = _Positions(reports, trades)
+    assert reconcile._unexplained(p, "a", "crypto", "2026-06-02", {}) == []

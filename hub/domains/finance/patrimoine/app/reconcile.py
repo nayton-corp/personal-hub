@@ -7,7 +7,10 @@ Par compte à positions et par actif, les parts relevées se comparent aux opér
   (`trades`) et les lots de tes décisions. Plus de parts que d'opérations : des parts sans
   historique ; moins : des sorties que l'historique ne montre pas ;
 - un compte de titres ou de prévoyance : d'un relevé au suivant, les parts doivent bouger comme
-  les opérations entre les deux (le premier relevé fait l'ouverture).
+  les opérations entre les deux (le premier relevé fait l'ouverture), à l'arrondi du relevé
+  près (moins d'un centième de part, pour des parts fractionnées).
+
+Une crypto renommée (RNDR devenu RENDER, MATIC devenu POL) se compte sous son nouveau nom.
 
 Un écart au-delà de la tolérance (1 CHF) est une rupture `unexplained`. S'y ajoutent, pour les
 cryptos, les envois vers un portefeuille non suivi (`sent_outside`) et les arrivées d'un
@@ -34,6 +37,9 @@ from hub.domains.finance.registre.model.amounts import money
 from hub.kernel.money import CURRENCY_EXPONENTS, DECIMAL_CONTEXT, base_currency
 
 TOLERANCE_MINOR = 100  # 1 CHF par compte et par actif
+ROUNDING = Decimal("0.01")  # un relevé de fonds arrondit ses parts au centième
+# une crypto renommée : ses parts sorties sous l'ancien nom rentrent sous le nouveau
+RENAMED = {"CRYPTO:RNDR": "CRYPTO:RENDER", "CRYPTO:MATIC": "CRYPTO:POL"}
 STALE_DAYS = {"crypto": 3}  # âge d'un cours au-delà duquel il est « ancien »
 STALE_DAYS_OTHER = 14
 ZERO = Decimal(0)
@@ -149,14 +155,16 @@ def _unexplained(
     out = []
     with localcontext(DECIMAL_CONTEXT):
         if kind == "crypto":
-            gaps: dict[str, Decimal] = {k: q for k, (q, _v, _c) in last.items()}
+            gaps: dict[str, Decimal] = {}
+            for k, (q, _v, _c) in last.items():
+                gaps[RENAMED.get(k, k)] = gaps.get(RENAMED.get(k, k), ZERO) + q
             for d, k, q in trades:
                 if d <= last_day:
-                    gaps[k] = gaps.get(k, ZERO) - q
+                    gaps[RENAMED.get(k, k)] = gaps.get(RENAMED.get(k, k), ZERO) - q
             first: dict[str, str] = {}
             for d, held in reports:
                 for k in held:
-                    first.setdefault(k, d)
+                    first.setdefault(RENAMED.get(k, k), d)
         else:  # d'un relevé au suivant ; le premier fait l'ouverture
             gaps, first = {}, {}
             for (d0, before), (d1, after) in pairwise(reports):
@@ -168,6 +176,9 @@ def _unexplained(
                     was = before[k][0] if k in before else ZERO
                     now = after[k][0] if k in after else ZERO
                     gap = now - was - moved.get(k, ZERO)
+                    fractional = any(x % 1 for x in (was, now))
+                    if fractional and abs(gap) < ROUNDING:
+                        continue  # l'arrondi du relevé, pas une opération qui manque
                     if gap:
                         gaps[k] = gaps.get(k, ZERO) + gap
                         first.setdefault(k, d1)
