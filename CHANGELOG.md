@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+## [0.13.19] · 2026-11-03
+
+### Finance
+
+- Rapprochement : un fonds dont le relevé arrondit les parts au centième (VIAC) n'est plus une
+  rupture pour moins d'un centième de part d'écart entre deux relevés ; une crypto renommée
+  (RNDR devenu RENDER, MATIC devenu POL) se compte sous son nouveau nom.
+
 ## [0.13.18] · 2026-11-03
 
 ### Finance
