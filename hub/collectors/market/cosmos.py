@@ -9,20 +9,19 @@ from typing import TYPE_CHECKING, Any
 
 from hub.collectors.base import Failure
 from hub.collectors.http import Http
+from hub.collectors.market import net
 from hub.collectors.runtime import Env
 
 if TYPE_CHECKING:
-    from hub.collectors.market.flow import Move
+    from hub.collectors.market.history import Move
 
 UATOM = Decimal(10) ** 6
 PAGES = 20  # pages de 100 transactions au premier passage, comme les autres historiques
 
 
 def _cosmos(env: Env, http: Http, path: str, step: str) -> Any:
-    from hub.collectors.market import flow  # la pause et ses reprises, partagées
-
     url = f"{env.cfg.market.cosmos_rest_url}{path}"
-    return flow.polite(http, url, step, env.cfg.market.chain_pause_seconds)
+    return net.polite(http, url, step, env.cfg.market.chain_pause_seconds)
 
 
 def _uatom(coins: Any) -> Decimal:

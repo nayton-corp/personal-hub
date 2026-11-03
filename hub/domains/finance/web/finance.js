@@ -10,6 +10,7 @@ import { freshLine } from "../../format.js";
 import * as journal from "./journal.js";
 import { action, go } from "../../shell.js";
 import { api, store } from "../../store.js";
+import { toast } from "../../ui.js";
 import { initWelcome } from "./welcome.js";
 
 export { markup } from "./markup.js";
@@ -26,7 +27,12 @@ export function init() {
   initWelcome();
   window.addEventListener("hub:changed", () => journal.reset());
   // jour de début du mois budgétaire : le mois en cours en dépend
-  api("/finance/settings").then((s) => store.setMonthStart(s.month_start_day)).catch(() => {});
+  api("/finance/settings")
+    .then((s) => store.setMonthStart(s.month_start_day))
+    .catch((e) => {
+      // sans réglages, le mois budgétaire commence au 1er : dit, jamais tu (audit m6)
+      if (!store.offline) toast(`Réglages Finance indisponibles : ${e.message}`, { error: true });
+    });
 }
 
 // sous chaque titre : quand les chiffres ont été reçus, ou qu'ils sont ceux d'avant la coupure

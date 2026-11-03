@@ -13,6 +13,13 @@
 
 ### Finance
 
+- Aucun zéro silencieux (audit M6, M7, M8, m6) : un montant sans change marque la série
+  partielle au lieu de valoir 0 ; un change de plus de 7 jours ouvre une rupture « change
+  ancien » (`stale_fx`, décision « garder tel quel ») ; une décision « sans cours » ou « cours
+  ancien » couvre les parts qu'elle a vues et se rouvre si elles changent ; un collecteur dont
+  une adresse dépasse les pages lues le dit (`partial history.<portefeuille>:truncated`) et
+  relit tout au passage suivant ; une santé « error » et des réglages de mois absents sont
+  journalisés et montrés.
 - Tout passe par le Double Sas (audit C5, M9, m1, m5) : une décision de rapprochement est la
   proposition `decide_break` (annulable par `withdraw_break_decision`), le jour de début du
   mois budgétaire est la proposition `set_month_start`, datée (règles `budget_period_rules` :

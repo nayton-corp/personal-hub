@@ -21,6 +21,7 @@ const NAME = {
   arrived_outside: (s) => `${s} arrivés d'un portefeuille non suivi`,
   no_price: (s) => `${s} sans cours`,
   stale_price: (s) => `Cours ancien : ${s}`,
+  stale_fx: (s) => `Change ancien : ${s}`,
 };
 const CAUSE = {
   no_history: "aucun achat ni arrivée connus (souvent un historique que le hub n'a pas pu lire)",
@@ -28,6 +29,7 @@ const CAUSE = {
   untracked_wallet: "l'autre côté est un portefeuille que le hub ne suit pas",
   no_price: "aucun cours connu, hors du patrimoine",
   stale: "dernier cours trop ancien",
+  stale_fx: "dernier taux de change trop ancien : les valeurs dans cette devise sont converties avec",
 };
 const key = (b) => (b.kind === "unexplained" ? `unexplained${Number(b.quantity) >= 0 ? "+" : "-"}` : b.kind);
 const worth = (b) => (b.value ? Math.abs(units(b.value)) : 0);

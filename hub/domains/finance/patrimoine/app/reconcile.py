@@ -42,6 +42,7 @@ ROUNDING = Decimal("0.01")  # un relevé de fonds arrondit ses parts au centièm
 RENAMED = {"CRYPTO:RNDR": "CRYPTO:RENDER", "CRYPTO:MATIC": "CRYPTO:POL"}
 STALE_DAYS = {"crypto": 3}  # âge d'un cours au-delà duquel il est « ancien »
 STALE_DAYS_OTHER = 14
+STALE_FX_DAYS = 7  # un change plus vieux se signale comme un cours ancien (audit M6)
 ZERO = Decimal(0)
 # les gestes de l'app pour chaque rupture, dans l'ordre où elle les propose
 ACTIONS = {
@@ -50,6 +51,7 @@ ACTIONS = {
     "sent_outside": ["add_wallet", "gone"],
     "arrived_outside": ["add_wallet", "accept"],
     "no_price": ["accept"],
+    "stale_fx": ["accept"],
     "stale_price": ["accept"],
 }
 
@@ -112,11 +114,18 @@ class Report:
         }
 
 
-def _accounts(conn: Connection) -> list[tuple[str, str, str, bool]]:
+Decided = dict[tuple[str, str, str], tuple[str, Decimal | None]]  # (rupture, compte, actif) →
+# (jusqu'à quand, quantité couverte ; None : décision d'avant la quantité, couvre tout)
+
+
+def _accounts(conn: Connection) -> list[tuple[str, str, str, bool, str]]:
     rows = conn.execute(
-        text("SELECT id, kind, coalesce(nullif(name, ''), institution, id), hidden FROM accounts")
+        text(
+            "SELECT id, kind, coalesce(nullif(name, ''), institution, id), hidden, currency "
+            "FROM accounts"
+        )
     ).fetchall()
-    return [(str(r[0]), str(r[1]), str(r[2]), bool(r[3])) for r in rows]
+    return [(str(r[0]), str(r[1]), str(r[2]), bool(r[3]), str(r[4])) for r in rows]
 
 
 def _unit(positions: valuation.Positions, key: str, on: str) -> Decimal | None:
@@ -196,9 +205,7 @@ def _unexplained(
     return out
 
 
-def _outside(
-    legs: list[crypto_cost.Leg], decided: dict[tuple[str, str, str], str], accounts: set[str]
-) -> list[Break]:
+def _outside(legs: list[crypto_cost.Leg], decided: Decided, accounts: set[str]) -> list[Break]:
     """Envois et arrivées crypto sans autre côté connu, après ta dernière décision."""
     sums: dict[tuple[str, str, str], tuple[int, str]] = {}
     for on, role, amount, symbol, _q, internal, account in legs:
@@ -206,7 +213,7 @@ def _outside(
             continue
         kind = "arrived_outside" if role == "in" else "sent_outside"
         key = instruments.crypto_key(symbol)
-        if on <= decided.get((kind, account, key), ""):
+        if on <= decided.get((kind, account, key), ("", None))[0]:
             continue
         total, since = sums.get((kind, account, key), (0, on))
         sums[(kind, account, key)] = (total + abs(amount), min(since, on))
@@ -217,15 +224,20 @@ def _outside(
     ]
 
 
+def _covers(decided: Decided, key: tuple[str, str, str], quantity: Decimal | None) -> str:
+    """Jusqu'à quand une décision couvre cette rupture : une décision porte sur une quantité,
+    elle se rouvre si les parts changent (audit M7) ; une décision d'avant la quantité couvre
+    les parts telles qu'elles sont."""
+    until, covered = decided.get(key, ("", None))
+    return until if covered is None or covered == quantity else ""
+
+
 def _prices(
-    positions: valuation.Positions,
-    account: str,
-    kind: str,
-    on: str,
-    decided: dict[tuple[str, str, str], str],
-) -> tuple[list[Break], int, int]:
-    """Cours absents ou anciens d'un compte, et (valeur du compte, dont au cours ancien)."""
-    out, total, stale = [], 0, 0
+    positions: valuation.Positions, account: str, kind: str, on: str, decided: Decided
+) -> tuple[list[Break], int, int, set[str]]:
+    """Cours absents ou anciens d'un compte, (valeur du compte, dont au cours ancien), et les
+    devises de ses cours."""
+    out, total, stale, currencies = [], 0, 0, set()
     limit = (
         date.fromisoformat(on) - timedelta(days=STALE_DAYS.get(kind, STALE_DAYS_OTHER))
     ).isoformat()
@@ -234,38 +246,56 @@ def _prices(
             continue
         total += x.value
         if x.price is None:
-            if not decided.get(("no_price", account, x.isin)):
+            if not _covers(decided, ("no_price", account, x.isin), x.quantity):
                 out.append(Break("no_price", account, x.isin, x.quantity, None, on, "no_price"))
             continue
+        currencies.add(x.currency)
         if x.price_date and x.price_date < limit and x.value >= TOLERANCE_MINOR:
-            if decided.get(("stale_price", account, x.isin), "") >= x.price_date:
+            if _covers(decided, ("stale_price", account, x.isin), x.quantity) >= x.price_date:
                 continue
             stale += x.value
             out.append(
                 Break("stale_price", account, x.isin, x.quantity, x.value, x.price_date, "stale")
             )
-    return out, total, stale
+    return out, total, stale, currencies
+
+
+def _fx(
+    fx: valuation.FxTable, account: str, currencies: set[str], on: str, decided: Decided
+) -> list[Break]:
+    """Un change plus vieux que `STALE_FX_DAYS` convertit encore, mais se dit (audit M6) ; une
+    décision le couvre jusqu'au jour du change qu'elle a vu."""
+    out = []
+    limit = (date.fromisoformat(on) - timedelta(days=STALE_FX_DAYS)).isoformat()
+    for ccy in sorted(currencies - {fx.base}):
+        known = fx.dated(ccy, on)
+        if known is None or known[0] >= limit:
+            continue  # sans change du tout, la valeur est déjà marquée manquante
+        if _covers(decided, ("stale_fx", account, ccy), None) >= known[0]:
+            continue
+        out.append(Break("stale_fx", account, ccy, None, None, known[0], "stale_fx"))
+    return out
 
 
 def report(conn: Connection, on: str) -> Report:
     positions = valuation.Positions(conn)
     found = decisions.read(conn)
     covered: dict[tuple[str, str], Decimal] = {}
-    decided: dict[tuple[str, str, str], str] = {}  # (rupture, compte, actif) → jusqu'à quand
-    for d in found:
+    decided: Decided = {}
+    for d in found:  # dans l'ordre des décisions : la dernière sur une rupture l'emporte
         if d.break_kind == "unexplained" and d.quantity is not None:
             k = (d.account_id, d.asset)
             covered[k] = covered.get(k, ZERO) + d.quantity
         else:
             k3 = (d.break_kind, d.account_id, d.asset)
-            decided[k3] = max(decided.get(k3, ""), d.on_date)
+            decided[k3] = (max(decided.get(k3, ("", None))[0], d.on_date), d.quantity)
     breaks: list[Break] = []
     total = unexplained = stale = 0
     shown = [a for a in _accounts(conn) if not a[3] and a[0] in positions.accounts]
-    for account, kind, _name, _hidden in shown:
+    for account, kind, _name, _hidden, currency in shown:
         gaps = _unexplained(positions, account, kind, on, covered)
-        priced, value, old = _prices(positions, account, kind, on, decided)
-        breaks += gaps + priced
+        priced, value, old, currencies = _prices(positions, account, kind, on, decided)
+        breaks += gaps + priced + _fx(positions.fx, account, currencies | {currency}, on, decided)
         total += value
         stale += old
         unexplained += sum(b.value or 0 for b in gaps if (b.quantity or ZERO) > 0)
@@ -303,7 +333,7 @@ def decide(
     b = found.get(break_id)
     if b is None:
         raise Problem("not_found", "rupture inconnue ou déjà réglée")
-    quantity = b.quantity if b.kind == "unexplained" else None
+    quantity = b.quantity  # une décision couvre ces parts-là : elle se rouvre si elles changent
     on_date = b.since if b.kind == "unexplained" else on
     if b.kind == "unexplained" and decision == "accept" and quantity and quantity > 0:
         # garder tel quel : les parts entrent à leur valeur du jour où elles sont apparues

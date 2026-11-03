@@ -39,7 +39,9 @@ from hub.core.errors import Problem
 from hub.core.search import fuse
 from hub.kernel.clock import utcnow
 from hub.kernel.ids import Urn
+from hub.platform.logging import get_logger
 
+log = get_logger("hub.api.core")
 router = APIRouter()
 
 
@@ -49,14 +51,16 @@ def health(hub_ctx: Ctx) -> HealthOut:
         revision = hub_ctx.core.revision()
         core_ok = hub_ctx.core.is_current()
         core = CoreHealthOut(db="ok" if core_ok else "outdated", revision=revision, ok=core_ok)
-    except Exception:
+    except Exception as exc:  # une santé « error » dit sa cause au journal (audit m6)
+        log.warning("health.failed", part="core", error=type(exc).__name__)
         core = CoreHealthOut(db="error", revision=None, ok=False)
     domains: dict[str, DomainHealthOut] = {}
     for d in hub_ctx.registry:
         try:
             h = d.health()
             domains[d.name] = DomainHealthOut(db=h.db, schema_version=h.schema_version, ok=h.ok)
-        except Exception:
+        except Exception as exc:
+            log.warning("health.failed", part=d.name, error=type(exc).__name__)
             domains[d.name] = DomainHealthOut(db="error", schema_version=d.schema_version, ok=False)
     ok = core.ok and all(d.ok for d in domains.values())
     return HealthOut(

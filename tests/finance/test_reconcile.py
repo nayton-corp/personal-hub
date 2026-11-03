@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from hub.core.context import HubContext
 from hub.core.errors import Problem
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.patrimoine.app import crypto_cost, reconcile, valuation
+from hub.domains.finance.patrimoine.app import assets, crypto_cost, reconcile, valuation
 from hub.platform.db import begin_immediate
 from tests.finance.conftest import ready_account
 from tests.finance.test_crypto_cost import _crypto_gain, btc, doc, minor, setup
@@ -197,6 +197,49 @@ def test_a_held_coin_without_price_or_with_an_old_one(finance: FinanceDomain) ->
     assert ("stale_price", "SOL") not in {
         (b["kind"], b["symbol"]) for b in breaks(finance, "2026-10-03")["items"]
     }
+
+
+def test_a_no_price_decision_covers_the_parts_it_saw(finance: FinanceDomain) -> None:
+    """« Garder tel quel » sans cours couvre ces parts-là (audit M7) : si les parts changent, la
+    rupture se rouvre au lieu de valoir 0 à vie."""
+    add_ref(finance, "crypto:phantom", "crypto", "Phantom")
+    held = {"account": "crypto:phantom", "instrument": "BONK", "on_date": "2026-10-01"}
+    finance.importer.process([doc(balances=[{**held, "quantity": "1"}])])
+
+    def no_price() -> list[dict[str, Any]]:
+        return [x for x in breaks(finance)["items"] if x["kind"] == "no_price"]
+
+    (b,) = no_price()
+    assert b["quantity"] == "1"
+    decide(finance, b["id"], "accept")
+    assert no_price() == []
+    with finance.engine().connect() as conn:
+        (d,) = reconcile.decisions.read(conn)
+    assert (d.break_kind, d.quantity) == ("no_price", Decimal("1"))
+    finance.importer.process([doc(balances=[{**held, "on_date": "2026-10-20", "quantity": "3"}])])
+    (again,) = no_price()
+    assert again["quantity"] == "3"
+
+
+def test_an_old_exchange_rate_is_said_like_an_old_price(finance: FinanceDomain) -> None:
+    """Un change plus vieux que 7 jours convertit encore, mais ouvre une rupture « change
+    ancien » (audit M6) ; la décision la couvre jusqu'au change qu'elle a vu."""
+    add_ref(finance, "crypto:phantom", "crypto", "Phantom")
+    held = {"account": "crypto:phantom", "instrument": "SOL", "on_date": ON, "quantity": "1"}
+    finance.importer.process([doc(prices=[{**sol(ON, "100"), "currency": "USD"}], balances=[held])])
+    with begin_immediate(finance.engine()) as conn:
+        assets.add_fx(conn, "2026-10-10", "USD", "CHF", Decimal("0.8"), "test")
+    rep = breaks(finance)
+    (b,) = [x for x in rep["items"] if x["kind"] == "stale_fx"]
+    assert (b["symbol"], b["since"], b["actions"]) == ("USD", "2026-10-10", ["accept"])
+    assert rep["invested"]["minor"] == 8_000  # converti quand même, jamais 0 en silence
+    decide(finance, b["id"], "accept")
+    assert not [x for x in breaks(finance)["items"] if x["kind"] == "stale_fx"]
+    with begin_immediate(finance.engine()) as conn:  # un change plus récent, encore trop vieux
+        assets.add_fx(conn, "2026-10-29", "USD", "CHF", Decimal("0.81"), "test")
+    assert [
+        x["since"] for x in breaks(finance, "2026-11-10")["items"] if x["kind"] == "stale_fx"
+    ] == ["2026-10-29"]
 
 
 def test_breaks_route_and_decision(

@@ -54,7 +54,8 @@ def _read_period(dbapi_conn: sqlite3.Connection, _record: Any, _proxy: Any) -> N
         rows = dbapi_conn.execute(
             "SELECT valid_from, start_day FROM budget_period_rules ORDER BY created_at, id"
         ).fetchall()
-    except sqlite3.OperationalError:  # base pas encore migrée
+    except sqlite3.OperationalError as exc:  # base pas encore migrée : dit, jamais tu (audit m6)
+        log.warning("period.rules_unavailable", error=type(exc).__name__)
         rows = []
     period.set_rules([(str(r[0]), int(r[1])) for r in rows])
 

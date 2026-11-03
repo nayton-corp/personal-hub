@@ -18,7 +18,9 @@ reste ouverte.
 - **Un cours a un âge.** Au-delà de 3 jours pour une crypto, 14 jours pour un titre ou un fonds,
   la position est signalée « cours ancien » ; sans aucun cours, « sans cours » : la valeur est
   inconnue, jamais 0 en silence.
-- **Le change** est celui du jour (BCE, puis le dernier connu).
+- **Le change** est celui du jour (BCE, puis le dernier connu). Un change de plus de 7 jours
+  convertit encore, mais se signale « change ancien », comme un cours ; un montant sans change
+  (dividende, frais, paiement d'une dette en devise) ne vaut pas 0 : la série se dit partielle.
 
 ## Prix de revient et gain
 
@@ -69,13 +71,17 @@ entre eux).
   hub a vu ces parts) ou, pour un envoi, « Parti hors de mes comptes » (sortie au coût). La
   décision est une proposition (`decide_break`, un Face ID, annulable : son retrait rouvre
   l'écart) ; gardée, elle sort l'écart de la liste ; une nouvelle opération du même genre le
-  rouvre.
+  rouvre. Une décision couvre les parts qu'elle a vues : si les parts changent (« sans cours »
+  sur 1 BONK, puis 3), ou qu'un cours ou un change plus récent est encore ancien, la rupture
+  se rouvre ; rien ne vaut 0 à vie en silence.
 
 ## Collecteurs
 
 Un passage de collecteur qui saute un réseau faute de clé, lit un historique effacé, ne trouve
 pas de cours ou n'a pas pu lire une partie de la source n'est pas « ok » : il est « incomplet »,
-montré sur l'accueil avec ce qu'il faut faire.
+montré sur l'accueil avec ce qu'il faut faire. Un historique plus long que les pages lues
+(adresse BTC, réseau EVM, Solana) se dit `truncated` et sera relu en entier au passage suivant,
+jamais tenu pour complet.
 
 ## Contrôles
 

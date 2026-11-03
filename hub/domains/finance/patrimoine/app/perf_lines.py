@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.domains.finance.patrimoine.app import crypto_cost, debts, decisions, valuation
+from hub.domains.finance.patrimoine.app.perf_costed import Costed
 from hub.domains.finance.registre.model import institutions
 from hub.kernel.money import DECIMAL_CONTEXT, base_currency
 
@@ -193,6 +194,14 @@ def build(conn: Connection, as_of: str) -> Engine | None:
     def conv(minor: int, currency: str, on: str) -> int | None:
         return 0 if minor == 0 else fx.to_base(minor, currency, on)
 
+    def take(ln: Line, k: int, field_: str, converted: int | None) -> None:
+        """Un montant sans change ne vaut pas 0 : la ligne est marquée incomplète ce jour-là
+        (audit M6), et la série se dit partielle."""
+        if converted is None:
+            ln.missing[k] = 1
+        else:
+            getattr(ln, field_)[k] = converted
+
     def line(id_: str, account_id: str, asset: str, kind: str, hidden: bool) -> Line:
         if id_ not in lines:
             lines[id_] = Line(id_, account_id, asset, kind, hidden, n)
@@ -211,7 +220,7 @@ def build(conn: Connection, as_of: str) -> Engine | None:
         prev_q: dict[str, Decimal] = {}
         costed = None
         if acc_id in crypto:
-            costed = _Costed(
+            costed = Costed(
                 acc_id,
                 legs,
                 lambda i, a=acc_id, h=hidden: line(f"{a}|{i}", a, f"isin:{i}", "position", h),
@@ -238,16 +247,16 @@ def build(conn: Connection, as_of: str) -> Engine | None:
                         cash.value[k] = v
                         inside = conv(total - inc - fee, acc_ccy, on)
                         cash.flow[k] = inside if inside is not None else 0
-                        cash.income[k] = conv(inc, acc_ccy, on) or 0
-                        cash.fees[k] = conv(fee, acc_ccy, on) or 0
+                        take(cash, k, "income", conv(inc, acc_ccy, on))
+                        take(cash, k, "fees", conv(fee, acc_ccy, on))
                         # des parts sans aucun cours : valeur approchée par le registre
                         if values:
                             cash.missing[k] = 1
             else:
                 # revenus et frais du compte à positions : déjà dans la valeur des parts, gardés
                 # pour décomposer le gain ; la ligne « cash » n'a pas de valeur ici
-                cash.income[k] = conv(inc, acc_ccy, on) or 0
-                cash.fees[k] = conv(fee, acc_ccy, on) or 0
+                take(cash, k, "income", conv(inc, acc_ccy, on))
+                take(cash, k, "fees", conv(fee, acc_ccy, on))
                 if costed is not None:
                     costed.day(k, on, values)
                     prev_q = {isin: q for isin, (q, _v) in values.items()}
@@ -286,7 +295,7 @@ def build(conn: Connection, as_of: str) -> Engine | None:
                 continue
             ln.value[k] = -v
             if on in paid:
-                ln.flow[k] = fx.to_base(paid[on], d.currency, on) or 0
+                take(ln, k, "flow", fx.to_base(paid[on], d.currency, on))
 
     # entrées et sorties du patrimoine : le saut est un flux, jamais un effet marché
     for ln in lines.values():
@@ -303,65 +312,6 @@ def build(conn: Connection, as_of: str) -> Engine | None:
             prev = cur
     banks = frozenset(a[0] for a in accts if a[1] == "cash")
     return Engine(days, {i: ln for i, ln in lines.items() if _used(ln)}, ccy, banks)
-
-
-class _Costed:
-    """Les lignes d'un compte crypto : le flux d'un jour, ce sont ses opérations (crypto_cost.walk),
-    et le reste de la variation des parts, que rien n'explique (une rupture, reconcile.py), au
-    cours du jour. Les opérations d'un jour sans cours attendent le premier cours : la ligne
-    entre alors à ce qu'elle a coûté, pas à sa valeur du jour."""
-
-    def __init__(
-        self, account: str, legs: dict[tuple[str, str], dict[str, Any]], line: Any
-    ) -> None:
-        self.line = line
-        self.legs = {key: days for (acc, key), days in legs.items() if acc == account}
-        self.priced: dict[str, Decimal] = {}  # parts au dernier jour valorisé
-        self.pending: dict[str, tuple[Decimal, Decimal]] = {}  # opérations depuis ce jour
-        self.unit: dict[str, Decimal] = {}  # valeur d'une part ce jour-là
-
-    def collect(self, on: str) -> None:
-        """Les opérations du jour, en attente du jour valorisé qui les compte."""
-        zero = Decimal(0)
-        with localcontext(DECIMAL_CONTEXT):
-            for key, days in self.legs.items():
-                if on in days:
-                    pq, pf = self.pending.get(key, (zero, zero))
-                    dq, df = days[on]
-                    self.pending[key] = (pq + dq, pf + df)
-
-    def day(self, k: int, on: str, values: dict[str, tuple[Decimal, int | None]]) -> None:
-        zero = Decimal(0)
-        line = self.line
-        self.collect(on)
-        with localcontext(DECIMAL_CONTEXT):
-            for key, (q, value) in values.items():
-                ln = line(key)
-                if value is None:
-                    ln.missing[k] = 1
-                    continue
-                pq, pf = self.pending.pop(key, (zero, zero))
-                unit = Decimal(value) / q
-                rest = q - self.priced.get(key, zero) - pq  # parts que rien n'explique
-                ln.value[k] = value
-                ln.flow[k] = int((pf + rest * unit).to_integral_value())
-                ln.costed.add(k)
-                self.priced[key], self.unit[key] = q, unit
-            for key in [x for x in self.pending if x not in values]:
-                # tout vendu, ou un aller-retour du jour : valeur 0, ses opérations font le flux
-                pq, pf = self.pending.pop(key)
-                had = self.priced.pop(key, zero)
-                rest = -had - pq
-                ln = line(key)
-                ln.value[k] = 0
-                ln.flow[k] = int((pf + rest * self.unit.get(key, zero)).to_integral_value())
-                ln.costed.add(k)
-            for key in [x for x in self.priced if x not in values]:  # sorti sans opération
-                had = self.priced.pop(key)
-                ln = line(key)
-                ln.value[k] = 0
-                ln.flow[k] = int((-had * self.unit.get(key, zero)).to_integral_value())
-                ln.costed.add(k)
 
 
 def _used(ln: Line) -> bool:

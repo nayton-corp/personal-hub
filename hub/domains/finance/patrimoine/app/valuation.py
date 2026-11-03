@@ -109,11 +109,17 @@ class FxTable:
             self._rates[ccy] = [(r[0], Decimal(r[1])) for r in rows]
             self._dates[ccy] = [r[0] for r in rows]
 
-    def rate(self, currency: str, on_date: str) -> Decimal | None:
+    def dated(self, currency: str, on_date: str) -> tuple[str, Decimal] | None:
+        """(jour du change, taux) utilisé pour `on_date` : le dernier connu ce jour-là ou avant ;
+        son âge se signale au rapprochement (`stale_fx`), jamais caché."""
         if currency == self.base:
-            return Decimal(1)
+            return on_date, Decimal(1)
         k = bisect.bisect_right(self._dates.get(currency, []), on_date)
-        return self._rates[currency][k - 1][1] if k else None
+        return self._rates[currency][k - 1] if k else None
+
+    def rate(self, currency: str, on_date: str) -> Decimal | None:
+        known = self.dated(currency, on_date)
+        return None if known is None else known[1]
 
     def convert(self, amount: Decimal, currency: str, on_date: str) -> int | None:
         """Montant décimal dans `currency` → centimes de la devise de base, ou None sans cours."""

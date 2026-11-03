@@ -22,6 +22,7 @@ from hub.collectors.base import Failure
 from hub.collectors.exchanges import binance, coinbase, kucoin
 from hub.collectors.http import Http
 from hub.collectors.market import flow as market
+from hub.collectors.market import history
 from hub.collectors.runtime import Env
 from hub.domains.finance.sources.infra import market_file
 
@@ -1323,7 +1324,8 @@ def history_api(broken: str | None = None) -> Fake:
             return 503, b""
         if "/txs/chain" in url:
             address = url.split("/address/", 1)[1].split("/", 1)[0]
-            return 200, HISTORY[address]
+            # la page « après <txid> » est vide : tout tient dans la première
+            return 200, [] if url.endswith(("/t1", "/t3")) else HISTORY[address]
         if "api.binance.com" in url:
             q = query(url)
             assert (q["symbol"], q["interval"]) == ("BTCUSDT", "1d")
@@ -1375,7 +1377,7 @@ def test_btc_history_is_read_once_from_the_chain(make_env: Any) -> None:
 
 
 def test_btc_history_pages_and_failures(make_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(market, "TXS_PER_PAGE", 2)
+    monkeypatch.setattr(history, "TXS_PER_PAGE", 2)
     creds = {"wallets": [{"account": "crypto:ledger", "asset": "BTC", "addresses": [A]}]}
     env = make_env("market", creds=creds)
     fake = history_api(broken="api.binance.com")
@@ -1385,6 +1387,20 @@ def test_btc_history_pages_and_failures(make_env: Any, monkeypatch: pytest.Monke
     assert env.memory.get("btc_history") is None  # relu au prochain passage
     down = market.run(make_env("market", creds=creds), "run", Http(history_api(broken="/txs/")))
     assert down.detail == "partial history.ledger:site_unavailable"
+
+
+def test_btc_history_longer_than_the_pages_read_is_said(
+    make_env: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Toutes les pages lues pleines : l'historique continue au-delà, le passage le dit
+    (`truncated`, audit M8) et ne se croit pas complet (relu en entier la prochaine fois)."""
+    monkeypatch.setattr(history, "TXS_PER_PAGE", 2)
+    monkeypatch.setattr(history, "MAX_TX_PAGES", 1)
+    creds = {"wallets": [{"account": "crypto:ledger", "asset": "BTC", "addresses": [A]}]}
+    env = make_env("market", creds=creds)
+    result = market.run(env, "run", Http(history_api()))
+    assert (result.outcome, result.detail) == ("ok", "partial history.ledger:truncated")
+    assert env.memory.get("btc_history") is None
 
 
 def test_coingecko_without_key_is_paced_and_retried(make_env: Any, pauses: list[int]) -> None:

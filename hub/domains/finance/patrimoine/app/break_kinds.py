@@ -30,6 +30,7 @@ NAMES = {
     "arrived_outside": "arrivée hors de mes comptes",
     "no_price": "sans cours",
     "stale_price": "cours ancien",
+    "stale_fx": "change ancien",
 }
 SAID = {"cost": "au prix d'achat saisi", "accept": "gardée telle quelle", "gone": "partie"}
 

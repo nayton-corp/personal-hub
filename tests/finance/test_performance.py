@@ -239,6 +239,19 @@ def test_first_price_is_a_flow_and_marked(fin: FinanceDomain) -> None:
     assert out["missing"] == [f"{acc.id}|cash"]
 
 
+def test_income_without_exchange_rate_is_marked_not_zeroed(fin: FinanceDomain) -> None:
+    """Un dividende en devise sans change ce jour-là ne vaut pas 0 : la ligne se dit incomplète
+    (audit M6)."""
+    acc = ref(fin, "test:usd-titres", "securities", currency="USD")
+    with begin_immediate(fin.engine()) as conn:
+        trade(conn, acc, "2026-04-01", "5", 50_000)
+        price(conn, "2026-04-01", "100")
+        entry(conn, acc, "2026-04-03", 1_000, code="VIAC/INCOME/DIVIDEND")  # 10 USD, sans change
+    out = run(fin, "2026-04-05")
+    assert out["summary"]["complete"] is False
+    assert f"{acc.id}|cash" in out["missing"]
+
+
 # --- dette ----------------------------------------------------------------------------------------
 
 

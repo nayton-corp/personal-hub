@@ -293,8 +293,35 @@ def test_double_sas_migration_keeps_the_month_start_and_the_debt_balances(
                 "VALUES ('d1', '2026-10-01', 500000, 'opening', '2026-10-01T00:00:00.000Z')"
             )
         )
+        conn.execute(
+            text(
+                "INSERT INTO accounts (id, institution, name, kind, currency, created_at) "
+                "VALUES ('a1', 'Phantom', 'Phantom', 'crypto', 'CHF', '2026-10-01T00:00:00.000Z')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO reconcile_decisions (id, account_id, asset, break_kind, decision, "
+                "on_date, quantity, currency, created_at, actor) VALUES ('r1', 'a1', "
+                "'CRYPTO:BONK', 'no_price', 'accept', '2026-10-20', '1', 'CHF', "
+                "'2026-10-20T00:00:00.000Z', 'x')"
+            )
+        )
     engine.dispose()
     runner.upgrade(MIGRATIONS, domain.path)
+    with domain.engine().connect() as conn:
+        # la table des décisions est rebâtie à l'identique, et accepte « change ancien »
+        assert rows_of(
+            conn, "SELECT id, break_kind, quantity, proposal_id FROM reconcile_decisions"
+        ) == [("r1", "no_price", "1", None)]
+    with begin_immediate(domain.engine()) as conn:
+        conn.execute(
+            text(
+                "INSERT INTO reconcile_decisions (id, account_id, asset, break_kind, decision, "
+                "on_date, currency, created_at, actor) VALUES ('r2', 'a1', 'USD', 'stale_fx', "
+                "'accept', '2026-10-27', 'CHF', '2026-10-27T00:00:00.000Z', 'x')"
+            )
+        )
     with domain.engine().connect() as conn:
         assert rows_of(conn, "SELECT valid_from, start_day FROM budget_period_rules") == [
             ("1900-01", 25)
