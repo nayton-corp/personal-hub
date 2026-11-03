@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+## [0.13.15] · 2026-11-03
+
+### Finance
+
+- Budget : les dépenses classées fixes ou variables d'un compte courant non suivi par le budget
+  (l'épargne) comptent maintenant au budget, aux flux, aux totaux et à la tendance. Des impôts
+  payés depuis l'épargne entrent dans Impôts ; les intérêts, virements et écritures sans
+  catégorie de ce compte restent dehors (#105).
+
 ## [0.13.14] · 2026-11-03
 
 ### Finance
