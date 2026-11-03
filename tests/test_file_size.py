@@ -19,7 +19,7 @@ TOO_LONG: dict[str, int] = {
     "domains/finance/web/journal.js": 662,
     "domains/finance/web/connections.js": 730,
     "core/proposals.py": 818,
-    "collectors/market/flow.py": 1035,
+    "collectors/market/flow.py": 936,
 }
 
 

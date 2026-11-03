@@ -62,6 +62,7 @@ class Transaction:
     txid: str
     quantity: Decimal  # net : positif reçu, négatif envoyé (frais compris)
     fee: Decimal  # frais payés par le portefeuille, positifs
+    stake: bool = False  # mise, sortie ou claim d'un staking : les parts restent à moi
 
 
 @dataclass(frozen=True)
@@ -205,6 +206,7 @@ def parse(data: bytes) -> MarketFile:
                 txid,
                 _dec(x.get("quantity")),
                 fee,
+                x.get("kind") == "stake",
             )
         )
     txs.sort(key=lambda t: (t.on_date, t.txid))

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from decimal import Decimal, localcontext
 from typing import Any
 
@@ -103,7 +104,7 @@ def _legs(conn: Connection, on_date: str) -> list[Leg]:
         text(
             "SELECT e.seq, e.booking_date, e.amount_minor, e.bank_tx_code, e.account_id, "
             "json_extract(e.fx_json, '$.currency'), json_extract(e.fx_json, '$.quantity'), "
-            "json_extract(e.fx_json, '$.peer') "
+            "json_extract(e.fx_json, '$.peer'), json_extract(e.fx_json, '$.stake') "
             "FROM entries e JOIN accounts a ON a.id = e.account_id "
             "WHERE a.kind = 'crypto' AND e.booking_date <= :d AND e.fx_json IS NOT NULL "
             "ORDER BY e.booking_date, e.seq"
@@ -112,7 +113,7 @@ def _legs(conn: Connection, on_date: str) -> list[Leg]:
     ).fetchall()
     linked = {int(r[7]) for r in rows if r[7] is not None}
     out = []
-    for seq, on, amount, code, account, symbol, qty, peer in rows:
+    for seq, on, amount, code, account, symbol, qty, peer, stake in rows:
         kind = role(code)
         if kind is None or not symbol or qty is None or instruments.known_currency(str(symbol)):
             continue  # une monnaie (francs en attente chez la plateforme) n'est pas une crypto
@@ -123,7 +124,37 @@ def _legs(conn: Connection, on_date: str) -> list[Leg]:
         if not q:
             continue
         internal = kind in ("in", "out") and (peer is not None or int(seq) in linked)
+        if stake and kind in ("in", "out"):
+            kind, internal = "stake", True
         out.append((str(on), kind, int(amount), str(symbol).upper(), q, internal, str(account)))
+    return _staking_exits(out)
+
+
+STAKE_DAYS = 60  # d'une demande de sortie de staking à son claim
+STAKE_GAIN = Decimal("1.25")  # le claim rend la mise et ses récompenses, pas plus
+
+
+def _staking_exits(legs: list[Leg]) -> list[Leg]:
+    """Une sortie de staking enregistrée avant que le hub reconnaisse le staking (un envoi sans
+    marque) devient une jambe de staking quand un claim marqué du même compte la suit : la mise
+    revient avec ses récompenses, les parts n'ont jamais quitté tes comptes."""
+    out = list(legs)
+    for i, (on, kind, _a, symbol, q, _int, account) in enumerate(legs):
+        if kind != "stake" or q <= 0:
+            continue
+        start = (date.fromisoformat(on) - timedelta(days=STAKE_DAYS)).isoformat()
+        for j in range(i - 1, -1, -1):
+            d, k, a, s, sq, internal, acc = out[j]
+            if d < start:
+                break
+            if (k, internal, s, acc) == (
+                "out",
+                False,
+                symbol,
+                account,
+            ) and -sq <= q <= -sq * STAKE_GAIN:
+                out[j] = (d, "stake", a, s, sq, True, acc)
+                break
     return out
 
 
@@ -161,6 +192,10 @@ def walk(conn: Connection, on_date: str, fx: valuation.FxTable, lots: Sequence[L
                 rate = Decimal(1)
             vu = v / rate
             had_q, had_f = day.get(on, (ZERO, ZERO))
+            if kind == "stake":  # mise, sortie, claim : le coût reste, la récompense est du gain
+                b.held += q
+                day[on] = (had_q + q, had_f)
+                continue
             if internal:
                 b.held += q  # les parts changent de compte, le coût reste
                 day[on] = (had_q + q, had_f + (v if q > 0 else -v))  # au cours, s'annule au total

@@ -262,3 +262,50 @@ def test_a_send_outside_leaves_at_cost_and_a_late_price_keeps_the_gain(
     # 0.01 BTC à 80 000 = 800, coût restant 500 : +300 ; l'envoi ne crée ni gain ni perte
     assert minor(r["result"]) == 30_000
     assert _crypto_gain(finance, "2026-10-27") == 30_000
+
+
+def test_a_staking_exit_keeps_the_cost_and_the_reward_is_a_gain(finance: FinanceDomain) -> None:
+    """Mise chez un staking lue comme un envoi (parts brûlées, sans marque), puis le claim
+    marqué : les deux restent à moi, le coût ne bouge pas, rien n'est sorti ni arrivé."""
+    from hub.domains.finance.patrimoine.app import reconcile
+
+    add_ref(finance, "crypto:binance", "crypto", "Binance")
+    add_ref(finance, "crypto:ledger", "crypto", "Ledger")
+
+    def tx(txid: str, on: str, q: str, **kw: str) -> dict[str, str]:
+        row = {"account": "crypto:ledger", "instrument": "BTC", "on_date": on, "txid": txid}
+        return {**row, "quantity": q, "fee": "0", **kw}
+
+    out = ("BTC", "-0.02", "withdrawal")
+
+    finance.importer.process(
+        [
+            doc(
+                prices=[btc("2026-03-01", "50000"), btc("2026-10-01", "40000")],
+                operations=[
+                    op("fiat:1", "fiat_deposit", "2026-03-01", ("CHF", "1000", "deposit")),
+                    op(
+                        "buy:1",
+                        "trade",
+                        "2026-03-02",
+                        ("CHF", "-1000", "trade"),
+                        ("BTC", "0.02", "trade"),
+                    ),
+                    op("out:1", "withdrawal", "2026-03-03", out, txid="t1"),
+                ],
+            )
+        ]
+    )
+    finance.importer.process([doc(transactions=[tx("t1", "2026-03-03", "0.02")])])
+    finance.importer.process([doc(transactions=[tx("t2", "2026-08-01", "-0.01")])])
+    claim = tx("t3", "2026-09-01", "0.011", kind="stake")
+    finance.importer.process([doc(transactions=[claim])])
+    with finance.engine().connect() as conn:
+        r = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
+        found = reconcile.report(conn, "2026-10-27")
+    assert r is not None
+    # 0.021 BTC à 40 000 = 840 pour 1 000 payés ; la récompense (0.001) entre sans coût
+    assert (minor(r["value"]), minor(r["cost"]), minor(r["result"])) == (84_000, 100_000, -16_000)
+    assert minor(r["sent_outside_cost"]) == 0
+    assert minor(r["arrived_from_outside"]) == 0
+    assert not [b for b in found.breaks if b.kind in ("sent_outside", "arrived_outside")]
