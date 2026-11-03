@@ -399,3 +399,4 @@ fichier dans la boîte d'entrée.
 | `fin rebuild-fts` | index de recherche, après une restauration |
 | `fin viac add-portfolio N° --name …` · `fin viac import-history DOSSIER` | comptes et reprise VIAC |
 | `fin rebuild --out DOSSIER` · `fin compare BASE` | reconstruction par rejeu et comparaison |
+| `fin golden save [--as-of JOUR] [--out FICHIER]` · `fin golden check [FICHIER]` | étalon des agrégats (patrimoine, positions, performance, ruptures, budget, dettes) figé avant une mise à jour, vérifié après : code 1 au moindre écart, chaque écart nommé (section, clé, avant, après) ; rien que des chiffres et des identifiants dans le fichier |

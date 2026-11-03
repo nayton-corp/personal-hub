@@ -15,7 +15,7 @@ from sqlalchemy import text
 
 from hub.core.context import HubContext
 from hub.core.registry import Registry
-from hub.domains.finance import compare, rebuild
+from hub.domains.finance import compare, golden_cli, rebuild
 from hub.domains.finance.classement.interface import cli as classement
 from hub.domains.finance.port import Finance
 from hub.domains.finance.registre.interface import cli as registre
@@ -28,26 +28,22 @@ from hub.platform.settings import Settings
 def build_cli(domain: Finance, make: Callable[[Settings], Finance]) -> typer.Typer:
     """`make` crée une autre instance du domaine (la base reconstruite par `rebuild`)."""
     app = typer.Typer(no_args_is_help=True, help="Domaine Finance")
-    accounts = typer.Typer(no_args_is_help=True, help="Comptes")
-    categories = typer.Typer(no_args_is_help=True, help="Catégories")
-    imports = typer.Typer(no_args_is_help=True, help="Imports")
-    rules_app = typer.Typer(no_args_is_help=True, help="Règles de catégorisation")
-    packs_app = typer.Typer(no_args_is_help=True, help="Packs de règles de départ")
-    rules_app.add_typer(packs_app, name="packs")
-    app.add_typer(rules_app, name="rules")
-    app.add_typer(accounts, name="accounts")
-    app.add_typer(categories, name="categories")
-    app.add_typer(imports, name="imports")
-    viac = typer.Typer(no_args_is_help=True, help="VIAC (pilier 3a)")
-    app.add_typer(viac, name="viac")
-    revolut_app = typer.Typer(no_args_is_help=True, help="Revolut (Enable Banking, CSV)")
-    app.add_typer(revolut_app, name="revolut")
-    ibkr_app = typer.Typer(no_args_is_help=True, help="IBKR (Flex Query)")
-    app.add_typer(ibkr_app, name="ibkr")
-    crypto_app = typer.Typer(no_args_is_help=True, help="Portefeuilles crypto (adresses)")
-    app.add_typer(crypto_app, name="crypto")
-    positions_app = typer.Typer(no_args_is_help=True, help="Positions saisies à la main")
-    app.add_typer(positions_app, name="positions")
+
+    def sub(name: str, help: str, parent: typer.Typer = app) -> typer.Typer:
+        child = typer.Typer(no_args_is_help=True, help=help)
+        parent.add_typer(child, name=name)
+        return child
+
+    rules_app = sub("rules", "Règles de catégorisation")
+    packs_app = sub("packs", "Packs de règles de départ", rules_app)
+    accounts, categories = sub("accounts", "Comptes"), sub("categories", "Catégories")
+    imports, viac = sub("imports", "Imports"), sub("viac", "VIAC (pilier 3a)")
+    revolut_app = sub("revolut", "Revolut (Enable Banking, CSV)")
+    ibkr_app, crypto_app = (
+        sub("ibkr", "IBKR (Flex Query)"),
+        sub("crypto", "Portefeuilles crypto (adresses)"),
+    )
+    positions_app = sub("positions", "Positions saisies à la main")
     engine = domain.engine()
 
     def ready() -> None:
@@ -125,6 +121,7 @@ def build_cli(domain: Finance, make: Callable[[Settings], Finance]) -> typer.Typ
         refreshed = domain.refresh_snapshots(force=True)
         _out({"snapshots": refreshed.rows, **domain.refresh_derived()})
 
+    golden_cli.register(domain, ready, app=app)
     registre.register(domain, ready, accounts=accounts, categories=categories)
     classement.register(domain, ready, rules_app=rules_app, packs_app=packs_app)
     sources.register(

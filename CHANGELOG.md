@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### Finance
+
+- `hub finance golden save | check` : l'étalon des agrégats (patrimoine, positions,
+  performance, ruptures, budget, dettes) se fige avant une mise à jour et se vérifie après, au
+  centime ; le fichier ne contient que des chiffres et des identifiants.
+
 ## [0.13.19] · 2026-11-03
 
 ### Finance

@@ -32,6 +32,8 @@ Un sous-contexte n'importe que ceux de sa colonne « Lit ».
 - `api.py`, `cli.py`, `tools.py` : assemblent les interfaces des sous-contextes.
 - `handlers.py` : les types de proposition, réunis pour le cœur.
 - `rebuild.py`, `compare.py` : reconstruction du registre par rejeu, comparaison de deux bases.
+- `golden.py`, `golden_cli.py` : étalon des agrégats figé avant une mise à jour et vérifié
+  après (`hub finance golden save | check`).
 - `port.py` : `Finance`, ce que ces bords attendent du domaine (ils n'importent pas
   `domain.py`).
 - `public.py` : la seule lecture permise aux autres domaines, des agrégats.
