@@ -93,6 +93,16 @@ class MarketConfig(BaseModel):
         "BNB": "binancecoin",
         "ATOM": "cosmos",
         "ETHW": "ethereum-pow-iou",  # EthereumPoW (fusion de 2022) : Binance ne le cote pas
+        # tenus chez SwissBorg, dont les cours ne venaient que des exports (vieillis entre deux)
+        "BORG": "swissborg",
+        "ADA": "cardano",
+        "XRP": "ripple",
+        "TRX": "tron",
+        "BCH": "bitcoin-cash",
+        "JITOSOL": "jito-staked-sol",
+        "HYPERLIQUID": "hyperliquid",
+        "EIGEN": "eigenlayer",
+        "BITTENSOR": "bittensor",  # le TAO, sous le nom que SwissBorg lui donne
     }
     yahoo_url: str = "https://query1.finance.yahoo.com/v8/finance/chart"
     quotes: dict[str, str] = {}  # ISIN ou symbole → symbole Yahoo (par ex. « VWRL.SW »)

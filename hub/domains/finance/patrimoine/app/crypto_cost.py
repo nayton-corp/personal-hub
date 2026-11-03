@@ -127,7 +127,39 @@ def _legs(conn: Connection, on_date: str) -> list[Leg]:
         if stake and kind in ("in", "out"):
             kind, internal = "stake", True
         out.append((str(on), kind, int(amount), str(symbol).upper(), q, internal, str(account)))
-    return _staking_exits(out)
+    return _transfers(_staking_exits(out))
+
+
+TRANSFER_FEE = Decimal("0.05")  # part d'un virement que les frais de retrait peuvent prendre
+
+
+def _transfers(legs: list[Leg]) -> list[Leg]:
+    """Un envoi et une arrivée sans autre côté, entre deux de mes comptes, de la même crypto, à
+    quelques jours (links) et à frais de retrait près (l'arrivée reçoit au plus 5 % de moins) :
+    un virement entre mes comptes, apparié ici même s'il a été écrit avant d'être reconnu. Les
+    parts perdues en route sont des frais : le coût reste sur les autres."""
+    from hub.domains.finance.patrimoine.app.links import SLACK_DAYS, WINDOW_DAYS
+
+    out = list(legs)
+    for i, (on, kind, a, symbol, q, internal, account) in enumerate(legs):
+        if kind != "in" or internal or q <= 0:
+            continue
+        day = date.fromisoformat(on)
+        start = (day - timedelta(days=WINDOW_DAYS)).isoformat()
+        end = (day + timedelta(days=SLACK_DAYS)).isoformat()
+        best: tuple[int, Decimal, int] | None = None
+        for j, (d, k, _a, s, sq, inner, acc) in enumerate(out):
+            if (k, inner, s) != ("out", False, symbol) or acc == account or not start <= d <= end:
+                continue
+            if -sq * (1 - TRANSFER_FEE) <= q <= -sq:
+                gap = abs((date.fromisoformat(d) - day).days)
+                if best is None or (gap, -sq - q) < best[:2]:
+                    best = (gap, -sq - q, j)
+        if best is not None:
+            j = best[2]
+            out[j] = (*out[j][:5], True, out[j][6])
+            out[i] = (on, kind, a, symbol, q, True, account)
+    return out
 
 
 STAKE_DAYS = 60  # d'une demande de sortie de staking à son claim

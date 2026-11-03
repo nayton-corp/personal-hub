@@ -332,3 +332,42 @@ def test_a_transaction_read_again_with_another_net_gets_a_correction(
         (Decimal("0.001"), 4_000),
         (Decimal("0.01"), 40_000),
     ]
+
+
+def test_a_transfer_with_withdrawal_fees_stays_between_my_accounts(
+    finance: FinanceDomain,
+) -> None:
+    """Un retrait Binance de 0.01 BTC arrive à 0.0098 sur la Ledger, sans txid commun : c'est un
+    virement entre mes comptes, les 0.0002 perdus sont des frais, rien n'est sorti ni arrivé."""
+    from hub.domains.finance.patrimoine.app import reconcile
+
+    add_ref(finance, "crypto:binance", "crypto", "Binance")
+    add_ref(finance, "crypto:ledger", "crypto", "Ledger")
+    finance.importer.process(
+        [
+            doc(
+                prices=[btc("2026-03-01", "50000"), btc("2026-10-01", "40000")],
+                operations=[
+                    op("fiat:1", "fiat_deposit", "2026-03-01", ("CHF", "1000", "deposit")),
+                    op(
+                        "buy:1",
+                        "trade",
+                        "2026-03-02",
+                        ("CHF", "-1000", "trade"),
+                        ("BTC", "0.02", "trade"),
+                    ),
+                    op("out:1", "withdrawal", "2026-04-01", ("BTC", "-0.01", "withdrawal")),
+                ],
+            )
+        ]
+    )
+    row = {"account": "crypto:ledger", "instrument": "BTC", "on_date": "2026-04-02"}
+    finance.importer.process([doc(transactions=[{**row, "txid": "t1", "quantity": "0.0098"}])])
+    with finance.engine().connect() as conn:
+        r = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
+        found = reconcile.report(conn, "2026-10-27")
+    assert r is not None
+    assert minor(r["cost"]) == 100_000  # le coût suit les parts, frais compris
+    assert minor(r["sent_outside_cost"]) == 0
+    assert minor(r["arrived_from_outside"]) == 0
+    assert not [b for b in found.breaks if b.kind in ("sent_outside", "arrived_outside")]
