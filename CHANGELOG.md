@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.13.14] · 2026-11-03
+
 ### Finance
 
 - Cours et cryptos : un réseau en erreur ne bloque plus l'historique des autres réseaux du
@@ -12,6 +14,11 @@
   (CoinGecko).
 - Connexions : les clés d'API se saisissent dans un champ texte masqué ; le trousseau du
   téléphone ne les préremplit plus (il écrasait la clé Etherscan).
+
+## [0.13.13] · 2026-11-02
+
+### Finance
+
 - Patrimoine : un relevé SwissBorg sans cours du jour (valeur 0 pour des parts tenues) ne fait
   plus tomber la ligne à zéro. Elle vaut parts × cours. La Performance des cryptos montrait de
   fausses pertes : environ −2 200 CHF sur l'USDC, et d'autres cryptos SwissBorg touchées.
