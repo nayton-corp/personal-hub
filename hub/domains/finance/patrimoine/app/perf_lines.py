@@ -109,6 +109,8 @@ _FINGERPRINT = (
     "(SELECT coalesce(max(seq), 0) FROM events), "
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM reconcile_decisions), "
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM reconcile_withdrawals), "
+    "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM crypto_links), "
+    "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM crypto_link_withdrawals), "
     "(SELECT group_concat(id || ':' || hidden || ':' || liquid) FROM accounts)"
 )
 

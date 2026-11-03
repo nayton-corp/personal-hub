@@ -219,8 +219,9 @@ def test_counterpart_prefers_the_txid_and_skips_taken_sides(
             finance, "SELECT bank_ref, seq FROM entries WHERE bank_tx_code = 'EXCHANGE/WITHDRAWAL'"
         )
     )
-    assert found == (seqs["withdraw:w0"], -25_000)  # sans txId : la première de même quantité
-    assert by_txid == (seqs["withdraw:w1"], -25_000)
+    # sans txId : la première de même quantité
+    assert found == (seqs["withdraw:w0"], -25_000, "quantity")
+    assert by_txid == (seqs["withdraw:w1"], -25_000, "txid")
     assert none is None  # hors délai
 
 

@@ -53,6 +53,13 @@ from hub.domains.finance.patrimoine.app.debt_kinds import (
     SaveDebt,
     SaveDebtHandler,
 )
+from hub.domains.finance.patrimoine.app.link_kinds import (
+    LinkCryptoMoves,
+    LinkCryptoMovesHandler,
+    UnlinkCryptoMoves,
+    UnlinkCryptoMovesHandler,
+    link_inverse,
+)
 from hub.domains.finance.port import Finance
 from hub.domains.finance.registre.app.entry_kinds import (
     AddNote,
@@ -118,6 +125,14 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
             reversible=True,
             inverse=month_start_inverse,
         ),
+        "link_crypto_moves": ProposalKind(
+            LinkCryptoMoves,
+            LinkCryptoMovesHandler(domain),
+            reversible=True,
+            inverse=link_inverse,
+            ai_allowed=True,
+        ),
+        "unlink_crypto_moves": ProposalKind(UnlinkCryptoMoves, UnlinkCryptoMovesHandler(domain)),
         "categorize_rest": ProposalKind(CategorizeRest, CategorizeRestHandler(domain)),
         "categorize_entries": ProposalKind(
             CategorizeEntries, CategorizeEntriesHandler(domain), ai_allowed=True

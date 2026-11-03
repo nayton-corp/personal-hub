@@ -5,7 +5,9 @@ Les versements sont toutes les écritures, sauf le rendement, les frais et les m
 d'un courtier (codes VIAC/INCOME, VIAC/FEE, IBKR/TRADE, IBKR/FX, IBKR/INCOME, IBKR/FEE) et les
 paiements catégorisés « Achats et ventes de titres » ou « Crypto » : ce paiement achète une
 position tenue hors registre (actions Revolut, cryptos chez SwissBorg ou sur une Ledger), il ne
-sort pas du patrimoine. Un versement au 3a ou à IBKR est un apport, un dividende un effet marché.
+sort pas du patrimoine. Un virement apparié entre deux de mes comptes (banque → SwissBorg, BCF →
+VIAC) n'en est un d'aucun côté, quelle que soit sa catégorie. Un versement au 3a ou à IBKR est un
+apport, un dividende un effet marché.
 """
 
 from __future__ import annotations
@@ -28,9 +30,15 @@ def _in(cats: tuple[str, ...]) -> str:
 
 
 CATEGORY_JOIN = "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq"
+# un virement apparié entre deux de mes comptes (transfers.py) n'est un versement d'aucun côté,
+# quelle que soit sa catégorie (audit M2)
+LINKED_SQL = (
+    "e.seq IN (SELECT debit_seq FROM transfer_links UNION SELECT credit_seq FROM transfer_links)"
+)
 DEPOSITS_SQL = (
     f"sum(CASE WHEN {institutions.like_any('e.bank_tx_code', NOT_DEPOSITS)} "
-    f"OR vc.category_id IN ({_in(OFF_LEDGER_PURCHASES)}) THEN 0 ELSE e.amount_minor END)"
+    f"OR vc.category_id IN ({_in(OFF_LEDGER_PURCHASES)}) OR {LINKED_SQL} "
+    "THEN 0 ELSE e.amount_minor END)"
 )
 INCOME_SQL = (
     f"CASE WHEN vc.category_id IN ({_in(INCOME_CATEGORIES)}) OR "

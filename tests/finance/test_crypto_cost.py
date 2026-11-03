@@ -14,6 +14,8 @@ from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.patrimoine.app import (
     assets,
     crypto_cost,
+    crypto_moves,
+    crypto_pairing,
     holdings,
     perf_lines,
     performance,
@@ -49,6 +51,17 @@ def usd(on: str, rate: str) -> dict[str, str]:
 
 def minor(x: dict[str, Any] | None) -> int | None:
     return None if x is None else int(x["minor"])
+
+
+def validate_links(finance: FinanceDomain, on: str = "2026-10-27") -> list[str]:
+    """Ce que les cartes `link_crypto_moves` demandées par le hub écrivent une fois validées
+    (le vrai chemin, par le Double Sas, est testé dans test_double_sas.py)."""
+    with begin_immediate(finance.engine()) as conn:
+        found = crypto_pairing.candidates(crypto_moves.moves(conn, on))
+        for c in found:
+            method = "claim" if c.kind == "stake" else "window"
+            crypto_moves.link(conn, c.entry_seq, c.kind, c.peer_seq, method, actor="test")
+    return [c.kind for c in found]
 
 
 def setup(finance: FinanceDomain) -> None:
@@ -137,12 +150,12 @@ def test_coins_without_history_have_no_cost(finance: FinanceDomain) -> None:
 
 
 def test_roles_from_codes() -> None:
-    assert crypto_cost.role("EXCHANGE/TRADE/BUY") == "trade"
-    assert crypto_cost.role("SWISSBORG/INCOME/YIELD") == "income"
-    assert crypto_cost.role("CRYPTO/FEE") == "fee"
-    assert crypto_cost.role("CRYPTO/RECEIVE") == "in"
-    assert crypto_cost.role("SWISSBORG/WITHDRAWAL") == "out"
-    assert crypto_cost.role("OPENING") is None
+    assert crypto_moves.role("EXCHANGE/TRADE/BUY") == "trade"
+    assert crypto_moves.role("SWISSBORG/INCOME/YIELD") == "income"
+    assert crypto_moves.role("CRYPTO/FEE") == "fee"
+    assert crypto_moves.role("CRYPTO/RECEIVE") == "in"
+    assert crypto_moves.role("SWISSBORG/WITHDRAWAL") == "out"
+    assert crypto_moves.role("OPENING") is None
 
 
 def test_nothing_held_and_history_below_zero(finance: FinanceDomain) -> None:
@@ -300,6 +313,14 @@ def test_a_staking_exit_keeps_the_cost_and_the_reward_is_a_gain(finance: Finance
     finance.importer.process([doc(transactions=[tx("t2", "2026-08-01", "-0.01")])])
     claim = tx("t3", "2026-09-01", "0.011", kind="stake")
     finance.importer.process([doc(transactions=[claim])])
+    # tant que la carte attend, l'envoi est sorti de mes comptes : rien n'est deviné à la lecture
+    with finance.engine().connect() as conn:
+        pending = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
+        waiting = reconcile.report(conn, "2026-10-27")
+    assert pending is not None
+    assert (minor(pending["cost"]), minor(pending["sent_outside_cost"])) == (50_000, 50_000)
+    assert [b.kind for b in waiting.breaks if b.kind == "sent_outside"] == ["sent_outside"]
+    assert validate_links(finance) == ["stake"]
     with finance.engine().connect() as conn:
         r = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
         found = reconcile.report(conn, "2026-10-27")
@@ -363,6 +384,13 @@ def test_a_transfer_with_withdrawal_fees_stays_between_my_accounts(
     )
     row = {"account": "crypto:ledger", "instrument": "BTC", "on_date": "2026-04-02"}
     finance.importer.process([doc(transactions=[{**row, "txid": "t1", "quantity": "0.0098"}])])
+    # sans lien, l'envoi sort à son coût et l'arrivée entre au cours du jour
+    with finance.engine().connect() as conn:
+        pending = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
+    assert pending is not None
+    assert minor(pending["sent_outside_cost"]) == 50_000
+    assert minor(pending["arrived_from_outside"]) == 49_000  # 0.0098 à 50 000
+    assert validate_links(finance) == ["transfer"]
     with finance.engine().connect() as conn:
         r = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
         found = reconcile.report(conn, "2026-10-27")

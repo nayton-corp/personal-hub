@@ -7,8 +7,8 @@ prix de revient réel, commun à tous les comptes crypto, et le résultat se lit
 - un achat (jambe `…/TRADE` positive) ajoute ce qu'il a coûté ; un échange crypto contre crypto
   est une vente suivie d'un achat, à la même valeur (exchange.py) ;
 - une vente retire sa part du prix de revient (coût moyen) et réalise la différence ;
-- un virement entre deux de mes comptes (une jambe appariée, `peer`, ou l'arrivée qu'elle
-  désigne) déplace les parts sans toucher au coût : il ne repart pas au cours du jour ;
+- un virement entre deux de mes comptes (un lien `crypto_links`, écrit à l'import ou validé par
+  une carte) déplace les parts sans toucher au coût : il ne repart pas au cours du jour ;
 - une récompense (`…/INCOME`) entre sans coût : c'est du gain ; des frais en crypto retirent des
   parts sans retirer de coût ;
 - une arrivée de l'extérieur (sans autre côté connu) coûte sa valeur du jour ; un envoi vers
@@ -18,20 +18,20 @@ prix de revient réel, commun à tous les comptes crypto, et le résultat se lit
 
 Le même calcul est tenu en dollars, chaque montant converti au change de son jour : le résultat en
 dollars, converti au change d'aujourd'hui, est l'effet des cryptos ; le reste du résultat en
-francs est l'effet du change. Des agrégats seulement : aucune opération n'en sort.
+francs est l'effet du change. Des agrégats seulement : aucune opération n'en sort. Les mouvements
+viennent de `crypto_moves` (crypto_moves.py) : rien n'est deviné à la lecture (audit C1).
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date, timedelta
 from decimal import Decimal, localcontext
 from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.patrimoine.app import decisions
+from hub.domains.finance.patrimoine.app import crypto_moves, decisions
 from hub.domains.finance.patrimoine.app.market_data import Positions
 from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.patrimoine.model.fx import FxRates
@@ -41,22 +41,6 @@ from hub.kernel.money import DECIMAL_CONTEXT, base_currency, quantize
 USD = "USD"
 ZERO = Decimal(0)
 EPS = Decimal("1e-9")  # reste d'arrondi des quantités
-
-
-def role(code: str | None) -> str | None:
-    """Rôle d'une écriture crypto d'après son code (EXCHANGE/…, SWISSBORG/…, CRYPTO/…)."""
-    c = code or ""
-    if "/TRADE" in c:
-        return "trade"
-    if "/INCOME" in c:
-        return "income"
-    if "/FEE" in c:
-        return "fee"
-    if c.endswith("/DEPOSIT") or c == "CRYPTO/RECEIVE":
-        return "in"
-    if c.endswith("/WITHDRAWAL") or c == "CRYPTO/SEND":
-        return "out"
-    return None
 
 
 @dataclass
@@ -96,100 +80,7 @@ class Book:
         return c, cu, q - known
 
 
-Leg = tuple[str, str, int, str, Decimal, bool, str]
-
-
-def _legs(conn: Connection, on_date: str) -> list[Leg]:
-    """(jour, rôle, montant, symbole, quantité signée, entre mes comptes, compte) des écritures
-    crypto."""
-    rows = conn.execute(
-        text(
-            "SELECT e.seq, e.booking_date, e.amount_minor, e.bank_tx_code, e.account_id, "
-            "json_extract(e.fx_json, '$.currency'), json_extract(e.fx_json, '$.quantity'), "
-            "json_extract(e.fx_json, '$.peer'), json_extract(e.fx_json, '$.stake') "
-            "FROM entries e JOIN accounts a ON a.id = e.account_id "
-            "WHERE a.kind = 'crypto' AND e.booking_date <= :d AND e.fx_json IS NOT NULL "
-            "ORDER BY e.booking_date, e.seq"
-        ),
-        {"d": on_date},
-    ).fetchall()
-    linked = {int(r[7]) for r in rows if r[7] is not None}
-    out = []
-    for seq, on, amount, code, account, symbol, qty, peer, stake in rows:
-        kind = role(code)
-        if kind is None or not symbol or qty is None or instruments.known_currency(str(symbol)):
-            continue  # une monnaie (francs en attente chez la plateforme) n'est pas une crypto
-        try:
-            q = Decimal(str(qty))
-        except ArithmeticError:
-            continue
-        if not q:
-            continue
-        internal = kind in ("in", "out") and (peer is not None or int(seq) in linked)
-        if stake and kind in ("in", "out"):
-            kind, internal = "stake", True
-        out.append((str(on), kind, int(amount), str(symbol).upper(), q, internal, str(account)))
-    return _transfers(_staking_exits(out))
-
-
-TRANSFER_FEE = Decimal("0.05")  # part d'un virement que les frais de retrait peuvent prendre
-
-
-def _transfers(legs: list[Leg]) -> list[Leg]:
-    """Un envoi et une arrivée sans autre côté, entre deux de mes comptes, de la même crypto, à
-    quelques jours (links) et à frais de retrait près (l'arrivée reçoit au plus 5 % de moins) :
-    un virement entre mes comptes, apparié ici même s'il a été écrit avant d'être reconnu. Les
-    parts perdues en route sont des frais : le coût reste sur les autres."""
-    from hub.domains.finance.patrimoine.app.links import SLACK_DAYS, WINDOW_DAYS
-
-    out = list(legs)
-    for i, (on, kind, a, symbol, q, internal, account) in enumerate(legs):
-        if kind != "in" or internal or q <= 0:
-            continue
-        day = date.fromisoformat(on)
-        start = (day - timedelta(days=WINDOW_DAYS)).isoformat()
-        end = (day + timedelta(days=SLACK_DAYS)).isoformat()
-        best: tuple[int, Decimal, int] | None = None
-        for j, (d, k, _a, s, sq, inner, acc) in enumerate(out):
-            if (k, inner, s) != ("out", False, symbol) or acc == account or not start <= d <= end:
-                continue
-            if -sq * (1 - TRANSFER_FEE) <= q <= -sq:
-                gap = abs((date.fromisoformat(d) - day).days)
-                if best is None or (gap, -sq - q) < best[:2]:
-                    best = (gap, -sq - q, j)
-        if best is not None:
-            j = best[2]
-            out[j] = (*out[j][:5], True, out[j][6])
-            out[i] = (on, kind, a, symbol, q, True, account)
-    return out
-
-
-STAKE_DAYS = 60  # d'une demande de sortie de staking à son claim
-STAKE_GAIN = Decimal("1.25")  # le claim rend la mise et ses récompenses, pas plus
-
-
-def _staking_exits(legs: list[Leg]) -> list[Leg]:
-    """Une sortie de staking enregistrée avant que le hub reconnaisse le staking (un envoi sans
-    marque) devient une jambe de staking quand un claim marqué du même compte la suit : la mise
-    revient avec ses récompenses, les parts n'ont jamais quitté tes comptes."""
-    out = list(legs)
-    for i, (on, kind, _a, symbol, q, _int, account) in enumerate(legs):
-        if kind != "stake" or q <= 0:
-            continue
-        start = (date.fromisoformat(on) - timedelta(days=STAKE_DAYS)).isoformat()
-        for j in range(i - 1, -1, -1):
-            d, k, a, s, sq, internal, acc = out[j]
-            if d < start:
-                break
-            if (k, internal, s, acc) == (
-                "out",
-                False,
-                symbol,
-                account,
-            ) and -sq <= q <= -sq * STAKE_GAIN:
-                out[j] = (d, "stake", a, s, sq, True, acc)
-                break
-    return out
+Leg = crypto_moves.Leg
 
 
 @dataclass
@@ -212,7 +103,8 @@ def walk(conn: Connection, on_date: str, fx: FxRates, lots: Sequence[Leg] = ()) 
     flows: dict[tuple[str, str], dict[str, tuple[Decimal, Decimal]]] = {}
     usd_ok = True
     legs = sorted(
-        [*(x for x in lots if x[0] <= on_date), *_legs(conn, on_date)], key=lambda x: x[0]
+        [*(x for x in lots if x[0] <= on_date), *crypto_moves.legs(conn, on_date)],
+        key=lambda x: x[0],
     )
     with localcontext(DECIMAL_CONTEXT):
         for on, kind, amount, symbol, q, internal, account in legs:

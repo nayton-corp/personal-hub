@@ -24,7 +24,7 @@ from hub.domains.finance.api import build_router
 from hub.domains.finance.classement.app import packs, recurring, sentinels
 from hub.domains.finance.cli import build_cli
 from hub.domains.finance.handlers import build_kinds
-from hub.domains.finance.patrimoine.app import checks, snapshots, transfers
+from hub.domains.finance.patrimoine.app import checks, crypto_pairing, snapshots, transfers
 from hub.domains.finance.registre.app import ledger, reads
 from hub.domains.finance.registre.model import period
 from hub.domains.finance.sources.app import statements
@@ -40,7 +40,7 @@ from hub.platform.logging import get_logger
 from hub.platform.settings import Settings
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 21  # 0021_double_sas
+SCHEMA_VERSION = 22  # 0022_crypto_moves
 log = get_logger("hub.finance")
 LEGACY_ARCHIVE = re.compile(r"\d{4}|duplicates")
 SEVERITY: dict[str, Severity] = {"budget_over": "alert", "budget_likely": "warning"}
@@ -244,12 +244,14 @@ class FinanceDomain:
         return refreshed
 
     def refresh_derived(self) -> dict[str, int]:
-        """Virements appariés, puis abonnements (qui laissent les virements de côté)."""
+        """Virements appariés, abonnements (qui laissent les virements de côté), et les liens
+        crypto que les mouvements non reliés laissent deviner, demandés en cartes."""
         with begin_immediate(self._engine) as conn:
             pairs = transfers.refresh(conn)
             found = recurring.refresh(conn, self.today())
-        log.info("derived.refreshed", transfers=pairs, recurring=found)
-        return {"transfers": pairs, "recurring": found}
+            asked = crypto_pairing.request(conn, self.today().isoformat())
+        log.info("derived.refreshed", transfers=pairs, recurring=found, crypto_links=asked)
+        return {"transfers": pairs, "recurring": found, "crypto_links": asked}
 
     def run_sentinels(self) -> list[sentinels.Alert]:
         with begin_immediate(self._engine) as conn:

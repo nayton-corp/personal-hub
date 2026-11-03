@@ -157,6 +157,7 @@ règle qui sert aussi aux prochains imports.
 | `create_account` · `create_category` | comptes et catégories (le CLI passe par là) | — |
 | `set_month_start` | jour où commence le mois budgétaire, pour les mois dès `valid_from` (le mois en cours par défaut) | oui |
 | `decide_break` | règle une rupture du rapprochement : `cost` (avec `cost_minor`), `accept`, `gone` ; l'assistant peut la proposer | oui (`withdraw_break_decision` : une ligne de retrait, la rupture se rouvre) |
+| `link_crypto_moves` | relie deux mouvements crypto : `transfer` (une arrivée et l'envoi d'un autre de mes comptes) ou `stake` (un envoi et le claim qui l'a rendu) ; le hub la demande quand une fenêtre de quelques jours ou un claim dans les 60 jours le laisse deviner, l'assistant peut la proposer | oui (`unlink_crypto_moves` : une ligne de retrait, le mouvement redevient hors de mes comptes) |
 | `save_debt` · `record_debt_balance` | une dette et ses soldes constatés (en ajout seul : le dernier relevé d'un jour fait foi) | — |
 
 Aucune route d'un domaine n'écrit hors de ces propositions (`tests/test_double_sas_everywhere.py`) ;
@@ -304,8 +305,10 @@ collecteur qui dépose les transactions.
 section « Depuis l'achat » du Patrimoine quand la sélection ne contient que des comptes crypto).
 La performance du patrimoine mesure une période : une crypto y entre au cours du jour où le hub
 la voit. Ici chaque crypto a un prix de revient (coût moyen) commun à tous les comptes crypto,
-tiré des écritures (`fx_json` : quantité, crypto, `peer`) : un achat ajoute ce qu'il a coûté,
-une vente retire sa part du coût et réalise la différence, un mouvement apparié entre deux de
+tiré des mouvements (`crypto_moves` : rôle, crypto, parts, txid ; `crypto_links` : l'autre
+côté d'un mouvement, écrit une fois par la source ou par une carte validée, jamais deviné à la
+lecture) : un achat ajoute ce qu'il a coûté,
+une vente retire sa part du coût et réalise la différence, un mouvement relié entre deux de
 mes comptes déplace les parts sans toucher au coût, une récompense entre sans coût, des frais
 retirent des parts sans retirer de coût, une arrivée de l'extérieur coûte sa valeur du jour, un
 envoi vers l'extérieur retire sa part du coût sans gain ni perte. Les parts tenues sans
@@ -379,8 +382,9 @@ la composent et leur part (touche une case de la carte de répartition).
 **Virements appariés.** Un débit et un crédit de mes comptes à 5 jours au plus s'apparient, par
 ordre de confiance : IBAN de contrepartie, référence commune, puis montant seul quand il est
 unique dans la fenêtre. Le côté sans catégorie d'une paire compte comme `transfer-own` dans le
-budget ; un virement entre mes comptes sans autre côté apparaît dans « À traiter ». Route :
-`GET /api/finance/transfers` (compteurs seuls pour la portée `aggregates`).
+budget ; un virement entre mes comptes sans autre côté apparaît dans « À traiter ». Les deux
+côtés d'une paire ne comptent pas comme versements du patrimoine, quelle que soit leur
+catégorie. Route : `GET /api/finance/transfers` (compteurs seuls pour la portée `aggregates`).
 
 **Abonnements.** Les paiements au même commerçant, au même rythme (semaine, mois, trimestre,
 année) et à montant proche deviennent des abonnements, avec leur prochaine échéance et le total

@@ -22,14 +22,13 @@ from decimal import Decimal, InvalidOperation, localcontext
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.patrimoine.app import assets, links, valuation
+from hub.domains.finance.patrimoine.app import assets, crypto_moves, links, valuation
 from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.patrimoine.model.instruments import AssetError, DocumentError, Result
 from hub.domains.finance.registre.app import catalog, ledger
 from hub.domains.finance.registre.app.opening import open_account
 from hub.domains.finance.sources.app import ibkr_writer, manual
 from hub.domains.finance.sources.infra import xlsx
-from hub.kernel import canonical
 from hub.kernel.ids import urn
 from hub.kernel.money import DECIMAL_CONTEXT, Money, base_currency
 
@@ -337,16 +336,7 @@ def _write_move(
         return
     for leg, code, label, qty, usd, amount in legs:
         if amount:
-            # quantité de la jambe (le net d'un retrait : ce qui arrive sur le portefeuille),
-            # pour l'apparier à son arrivée sur un autre compte
-            detail: dict[str, str | int] = {
-                "quantity": instruments.qty_text(qty),
-                "currency": m.currency,
-                "usd": str(usd),
-            }
-            if peer and leg == "main":
-                detail["peer"] = peer[0]
-            writer.entry(
+            seq = writer.entry(
                 account,
                 f"{m.key}|{leg}",
                 m.day,
@@ -355,8 +345,24 @@ def _write_move(
                 label,
                 counterparty="SwissBorg",
                 remittance=f"{instruments.qty_text(qty)} {m.currency}",
-                fx_json=canonical.dumps(detail),
             )
+            if seq is None:
+                continue
+            # la jambe (le net d'un retrait : ce qui arrive sur le portefeuille), pour l'apparier
+            # à son arrivée sur un autre compte
+            crypto_moves.record(
+                conn, seq, code, m.currency, qty, usd=str(usd), created_at=writer.created
+            )
+            if peer and leg == "main":
+                crypto_moves.link(
+                    conn,
+                    seq,
+                    "transfer",
+                    peer[0],
+                    peer[2],
+                    actor="import",
+                    created_at=writer.created,
+                )
     if m.delta == 0:
         return
     key, _kind, _name = _key(m.currency)

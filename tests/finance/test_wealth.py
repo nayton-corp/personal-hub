@@ -341,6 +341,31 @@ def test_deposits_ignore_off_ledger_purchases(finance: FinanceDomain) -> None:
     assert (v.net_worth, v.deposits) == (400_000, 500_000)
 
 
+def test_deposits_skip_both_sides_of_a_matched_transfer(finance: FinanceDomain) -> None:
+    """Audit M2 : un virement apparié entre mes comptes n'est pas un versement, même si une règle
+    « tout le reste » a classé un de ses côtés en dépense."""
+    without_seed_rules(finance)
+    bcf = add_account(finance)
+    savings = add_account(finance, iban="CH5604835012345678009")
+    open_account(finance, bcf, "2026-09-30", 500_000)
+    open_account(finance, savings, "2026-09-30", 100_000)
+    with begin_immediate(finance.engine()) as conn:
+        a = _entry(conn, bcf, "2026-10-02", -50_000, iban="CH5604835012345678009")
+        _entry(conn, savings, "2026-10-03", 50_000, iban=IBAN)
+        rules.categorize(  # classé à tort en dépense : le lien l'emporte
+            conn,
+            a,
+            rules.Rule("system-viac-trade", "search_text", "x", "any", "alimentation", 99, True),
+            proposal_id=None,
+            created_at="2026-10-02T00:00:00.000Z",
+        )
+    finance.refresh_derived()
+    assert rows(finance, "SELECT count(*) FROM transfer_links") == [(1,)]
+    with finance.engine().connect() as conn:
+        v = valuation.value_at(conn, "2026-10-27")
+    assert (v.net_worth, v.deposits) == (600_000, 600_000)
+
+
 def test_crypto_performance_from_bank_payments_and_arrivals(finance: FinanceDomain) -> None:
     """Investi = virements de la catégorie « Crypto » ; coût par actif = valeur à l'arrivée."""
     without_seed_rules(finance)

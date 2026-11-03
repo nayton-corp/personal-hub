@@ -221,8 +221,8 @@ def test_import_values_history_and_arrival_cost(finance: FinanceDomain) -> None:
     # le net d'un retrait (ce qui arrive sur la Ledger) est gardé pour l'apparier
     sent = rows(
         finance,
-        "SELECT remittance, json_extract(fx_json, '$.quantity') FROM entries "
-        "WHERE bank_tx_code = 'SWISSBORG/WITHDRAWAL'",
+        "SELECT e.remittance, m.quantity FROM entries e JOIN crypto_moves m "
+        "ON m.entry_seq = e.seq WHERE e.bank_tx_code = 'SWISSBORG/WITHDRAWAL'",
     )
     assert sent == [("-0.0098 BTC", "-0.0098")]
     # rien de tout ça n'est un versement au patrimoine

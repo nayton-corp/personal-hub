@@ -715,3 +715,78 @@ def test_yearly_budget_and_account_rule(
         p = proposals.get(conn, p.id)
     kind, params = proposals.inverse_of(ctx, p)
     assert (kind, params["cadence"]) == ("set_budget", "month")
+
+
+# --- link_crypto_moves (R5 : plus rien n'est deviné à la lecture) -----------------------------
+
+
+def test_link_crypto_moves_card_and_inverse(ctx: HubContext, fin: FinanceDomain) -> None:
+    """Un retrait Binance arrive à frais près sur la Ledger, sans txid commun : le hub demande
+    une carte ; validée, le lien est écrit et le prix de revient suit les parts ; son inverse
+    retire le lien par une ligne de retrait, et la carte est redemandée."""
+    from hub.domains.finance.patrimoine.app import crypto_cost, valuation
+    from tests.finance.test_crypto_cost import btc, doc, minor
+    from tests.finance.test_exchange import op
+    from tests.finance.test_wealth import add_ref
+
+    add_ref(fin, "crypto:binance", "crypto", "Binance")
+    add_ref(fin, "crypto:ledger", "crypto", "Ledger")
+    fin.importer.process(
+        [
+            doc(
+                prices=[btc("2026-03-01", "50000")],
+                operations=[
+                    op("fiat:1", "fiat_deposit", "2026-03-01", ("CHF", "1000", "deposit")),
+                    op(
+                        "buy:1",
+                        "trade",
+                        "2026-03-02",
+                        ("CHF", "-1000", "trade"),
+                        ("BTC", "0.02", "trade"),
+                    ),
+                    op("out:1", "withdrawal", "2026-04-01", ("BTC", "-0.01", "withdrawal")),
+                ],
+            )
+        ]
+    )
+    row = {"account": "crypto:ledger", "instrument": "BTC", "on_date": "2026-04-02"}
+    fin.importer.process([doc(transactions=[{**row, "txid": "t1", "quantity": "0.0098"}])])
+
+    def cost() -> int | None:
+        with fin.engine().connect() as conn:
+            r = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
+        assert r is not None
+        return minor(r["cost"])
+
+    assert cost() == 99_000  # l'envoi sort à son coût (500), l'arrivée entre au cours (490)
+    assert proposal_events.sync_events(ctx)["requested"] == 1
+    with ctx.core.engine.connect() as conn:
+        (p,) = [
+            x for x in proposals.list_by_status(conn, "pending") if x.kind == "link_crypto_moves"
+        ]
+    assert p.preview["summary"].startswith(
+        "Virement entre mes comptes : 0.01 BTC envoyés de Binance"
+    )
+    assert p.preview["details"]["move"]["quantity"] == "0.0098"
+    fin.nightly()  # redemandée chaque nuit : pas de doublon
+    assert proposal_events.sync_events(ctx)["requested"] == 0
+    with pytest.raises(Problem, match="même compte"):  # une sortie de staking reste chez soi
+        create(ctx, "link_crypto_moves", {**p.params, "kind": "stake"})
+    out = accept(ctx, p)
+    assert out.status == "applied", out
+    assert cost() == 100_000  # le coût suit les parts, frais compris
+    assert rows(fin, "SELECT kind, method, actor, proposal_id FROM crypto_links") == [
+        ("transfer", "window", "proposal", p.id)
+    ]
+    with pytest.raises(Problem, match="déjà relié"):  # relier deux fois est refusé
+        create(ctx, "link_crypto_moves", p.params)
+    with ctx.core.engine.connect() as conn:
+        p = proposals.get(conn, p.id)
+    kind, inverse = proposals.inverse_of(ctx, p)
+    assert (kind, inverse) == ("unlink_crypto_moves", {**p.params})
+    assert out.result["link_id"]
+    assert proposals.revert(ctx, APP, p, None).status == "applied"
+    assert rows(fin, "SELECT count(*) FROM crypto_link_withdrawals") == [(1,)]
+    assert rows(fin, "SELECT count(*) FROM crypto_links") == [(1,)]  # rien d'effacé
+    assert cost() == 99_000
+    assert proposal_events.sync_events(ctx)["requested"] == 1  # à nouveau proposée

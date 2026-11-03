@@ -31,6 +31,17 @@
   change (les versements cumulés d'un tel compte changent ; le patrimoine, non). Une rupture
   « sans historique » gardée telle quelle sans cours ce jour-là demande un coût au lieu d'en
   poser un à 0. La série est gardée en mémoire par base, tant que rien n'a changé.
+- Les mouvements crypto ont leur table (audit C1, M2) : `crypto_moves` (rôle, crypto, parts,
+  txid) et `crypto_links` (l'autre côté d'un mouvement : virement entre mes comptes, mise ou
+  sortie de staking), écrits une fois par la source ou par une carte validée, retirés par une
+  ligne de retrait ; `fx_json` ne garde que le change. Plus rien n'est deviné à la lecture : un
+  envoi et une arrivée à quelques jours et frais près, ou une sortie de staking suivie de son
+  claim, deviennent des cartes `link_crypto_moves` (inverse `unlink_crypto_moves`), que le hub
+  redemande après chaque import et chaque nuit ; en attente, le mouvement reste « hors de mes
+  comptes » avec sa rupture. La migration finance 0022 reprend les jambes et applique les
+  anciennes règles une dernière fois (liens `legacy|…`, acteur `migration:0022`). Les deux
+  côtés d'un virement apparié entre mes comptes ne comptent plus comme versements, quelle que
+  soit leur catégorie.
 - Aucun zéro silencieux (audit M6, M7, M8, m6) : un montant sans change marque la série
   partielle au lieu de valoir 0 ; un change de plus de 7 jours ouvre une rupture « change
   ancien » (`stale_fx`, décision « garder tel quel ») ; une décision « sans cours » ou « cours

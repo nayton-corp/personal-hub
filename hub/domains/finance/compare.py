@@ -75,6 +75,15 @@ CHECKS: dict[str, Query] = {
     "compositions": _q(
         "SELECT isin, dimension, bucket, weight || '|' || on_date FROM compositions"
     ),
+    "crypto_moves": _q(
+        "SELECT e.id, m.role || '|' || m.asset || '|' || m.quantity FROM crypto_moves m "
+        "JOIN entries e ON e.seq = m.entry_seq"
+    ),
+    "crypto_links": _q(
+        "SELECT e.id, l.kind || '|' || coalesce(p.id, ''), l.method FROM crypto_links l "
+        "JOIN entries e ON e.seq = l.entry_seq LEFT JOIN entries p ON p.seq = l.peer_seq "
+        "LEFT JOIN crypto_link_withdrawals w ON w.link_id = l.id WHERE w.link_id IS NULL"
+    ),
     # tables dérivées, recalculées après le rejeu
     "transfers": _q(
         "SELECT d.id, c.id, l.method FROM transfer_links l "

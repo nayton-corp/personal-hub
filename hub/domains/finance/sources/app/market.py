@@ -29,14 +29,13 @@ from decimal import Decimal, localcontext
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.patrimoine.app import assets, links
+from hub.domains.finance.patrimoine.app import assets, crypto_moves, links
 from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.patrimoine.model.instruments import Result
 from hub.domains.finance.registre.app import catalog, ledger
 from hub.domains.finance.sources.app import exchange, ibkr_writer
 from hub.domains.finance.sources.infra import operations
 from hub.domains.finance.sources.infra.market_file import Balance, MarketFile, Transaction
-from hub.kernel import canonical
 from hub.kernel.ids import urn
 from hub.kernel.money import DECIMAL_CONTEXT, base_currency
 
@@ -186,14 +185,9 @@ class _Chain:
             return result.review("currency_mismatch")
         self.open(account, first)
         self.writer.result = result
-        detail: dict[str, str | int] = {"txid": t.txid, "currency": t.symbol}
         sent = t.quantity + t.fee  # hors frais : ce qui quitte le portefeuille (négatif)
         moved = t.quantity if t.quantity > 0 else sent
         peer = links.counterpart(self.conn, t.account, t.symbol, t.on_date, moved, t.txid)
-        if peer:
-            detail["peer"] = peer[0]
-        if t.stake:
-            detail["stake"] = 1
         if t.quantity > 0:
             amount = -peer[1] if peer else self.value(t, t.quantity)
             legs = [("receive", "CRYPTO/RECEIVE", f"Réception {t.symbol}", t.quantity, amount)]
@@ -210,8 +204,7 @@ class _Chain:
             return result.review("missing_price")
         for leg, code, label, qty, amount in legs:
             if amount:
-                fx = canonical.dumps({**detail, "quantity": instruments.qty_text(qty)})
-                self.writer.entry(
+                seq = self.writer.entry(
                     account,
                     f"{t.txid}|{leg}" if t.symbol == "BTC" else f"{t.txid}|{t.symbol}|{leg}",
                     t.on_date,
@@ -219,8 +212,21 @@ class _Chain:
                     code,
                     label,
                     remittance=f"{instruments.qty_text(qty)} {t.symbol}",
-                    fx_json=fx,
                 )
+                if seq is None:
+                    continue
+                at = self.writer.created
+                crypto_moves.record(self.conn, seq, code, t.symbol, qty, txid=t.txid, created_at=at)
+                if leg == "fee":
+                    continue
+                if peer:
+                    crypto_moves.link(
+                        self.conn, seq, "transfer", peer[0], peer[2], actor="import", created_at=at
+                    )
+                elif t.stake:
+                    crypto_moves.link(
+                        self.conn, seq, "stake", None, "source", actor="import", created_at=at
+                    )
         # une transaction Ethereum porte l'ETH (le gaz) et un jeton : une clé par crypto. Une
         # transaction relue avec une autre quantité nette (lecture corrigée) reçoit un mouvement
         # de correction pour la différence : le registre ne réécrit jamais une ligne

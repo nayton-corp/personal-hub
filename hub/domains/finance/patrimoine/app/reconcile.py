@@ -31,7 +31,7 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.core.errors import Problem
-from hub.domains.finance.patrimoine.app import crypto_cost, decisions
+from hub.domains.finance.patrimoine.app import crypto_moves, decisions
 from hub.domains.finance.patrimoine.app.market_data import Positions
 from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.patrimoine.model.fx import FxRates
@@ -186,7 +186,7 @@ def _unexplained(
     return out
 
 
-def _outside(legs: list[crypto_cost.Leg], decided: Decided, accounts: set[str]) -> list[Break]:
+def _outside(legs: list[crypto_moves.Leg], decided: Decided, accounts: set[str]) -> list[Break]:
     """Envois et arrivées crypto sans autre côté connu, après ta dernière décision."""
     sums: dict[tuple[str, str, str], tuple[int, str]] = {}
     for on, role, amount, symbol, _q, internal, account in legs:
@@ -280,7 +280,7 @@ def report(conn: Connection, on: str) -> Report:
         unexplained += sum(b.value or 0 for b in gaps if (b.quantity or ZERO) > 0)
     crypto = {a[0] for a in shown if a[1] == "crypto"}
     if crypto:
-        breaks += _outside(crypto_cost._legs(conn, on), decided, crypto)
+        breaks += _outside(crypto_moves.legs(conn, on), decided, crypto)
     order = {k: i for i, k in enumerate(ACTIONS)}
     breaks.sort(key=lambda b: (-(abs(b.value or 0)), order.get(b.kind, 9), b.account_id, b.asset))
     explained = max(0, total - unexplained - stale)

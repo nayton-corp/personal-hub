@@ -58,6 +58,9 @@ TABLES = (
     "debt_balance_records",
     "reconcile_withdrawals",
     "budget_period_rules",
+    "crypto_moves",
+    "crypto_links",
+    "crypto_link_withdrawals",
 )
 # clés retirées des agrégats : des mots (noms, libellés, références), jamais des chiffres
 WORDS = frozenset(
