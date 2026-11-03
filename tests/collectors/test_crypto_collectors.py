@@ -93,7 +93,7 @@ def chain(
             return 200, {"prices": []}
         if "/txs/chain" in url:
             return 200, []  # pas d'historique
-        if "etherscan" in url:  # Routescan (Ethereum) ou Etherscan V2 (autres réseaux)
+        if "etherscan" in url or "blockscout" in url:  # Routescan, Etherscan V2, Blockscout
             q = query(url)
             rows = (eth_txs or {}).get(q["action"], []) if q["page"] == "1" else []
             if not rows:
@@ -345,7 +345,7 @@ def test_an_eth_wallet_reads_its_networks_and_staking(make_env: Any) -> None:
                 return 200, {"result": hex(512 * 10**15)}  # 0.512 ETH avec les récompenses
             if to == WETH_POLYGON:
                 return 200, {"result": hex(31 * 10**15 if call != "0x313ce567" else 18)}
-        if "chainid=8453" in url and query(url)["action"] == "txlist":
+        if "base.blockscout" in url and query(url)["action"] == "txlist":
             row = {
                 "hash": "0xb1",
                 "from": "0x" + "cd" * 20,
@@ -391,11 +391,11 @@ def test_an_eth_wallet_reads_its_networks_and_staking(make_env: Any) -> None:
     scans = {
         (urlsplit(u).netloc, query(u).get("chainid"), query(u).get("apikey"))
         for _m, u, _h in fake.calls
-        if "etherscan" in u
+        if "etherscan" in u or "blockscout" in u
     }
     assert scans == {
-        ("api.routescan.io", None, None),  # Ethereum sans clé
-        ("api.etherscan.io", "8453", "cle-gratuite"),
+        ("api.routescan.io", None, None),  # Ethereum, sans clé
+        ("base.blockscout.com", None, None),  # Base : hors de l'offre gratuite d'Etherscan
         ("api.etherscan.io", "137", "cle-gratuite"),
     }
     assert env.memory.get("chain_txs") == [
@@ -1446,6 +1446,55 @@ def test_a_network_outside_the_free_plan_is_flagged(make_env: Any) -> None:
     assert env.memory.get("chain_txs") == ["crypto:trust-wallet"]
 
 
+def test_a_failing_network_is_flagged_with_its_cause_and_the_others_go_on(make_env: Any) -> None:
+    """Un explorateur qui refuse la clé ne bloque plus tout l'historique du portefeuille."""
+    inner = chain(
+        eth_txs={
+            "txlist": [
+                {
+                    "hash": "0xa1",
+                    "from": "0x" + "cd" * 20,
+                    "to": ETH_ME,
+                    "value": str(10**18),
+                    "gasUsed": "1",
+                    "gasPrice": "1",
+                    "isError": "0",
+                    "timeStamp": "1772280000",
+                }
+            ]
+        }
+    )
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        q = query(url) if "etherscan" in url else {}
+        if q.get("chainid") == "42161":
+            return 200, {"status": "0", "message": "NOTOK", "result": "Invalid API Key"}
+        if q.get("chainid") == "137" and q["action"] == "txlistinternal":  # offre gratuite
+            return 200, {"status": "0", "message": "NOTOK", "result": "Invalid API Key (#err2)"}
+        return inner.route(method, url, headers, data)
+
+    wallet = {
+        "account": "crypto:metamask",
+        "asset": "ETH",
+        "addresses": [ETH_ME],
+        "networks": ["ethereum", "arbitrum", "polygon"],
+    }
+    creds = {"wallets": [wallet], "etherscan_key": "cle-gratuite"}
+    env = make_env("market", creds=creds, market={"coingecko_pause_seconds": 0})
+    result = market.run(env, "run", Http(Fake(route)))
+    # Arbitrum refuse la clé : signalé seul ; Polygon sans ses transferts internes passe
+    assert result.detail == "partial history.metamask.arbitrum:key"
+    (doc,) = dropped(env)
+    assert "0xa1" in [t.txid for t in doc.transactions]  # Ethereum gardé
+    assert env.memory.get("chain_txs") == ["crypto:metamask", "crypto:metamask@polygon"]
+
+
+def test_ethw_gets_its_price_from_coingecko() -> None:
+    from hub.collectors.base import MarketConfig
+
+    assert MarketConfig().crypto["ETHW"] == "ethereum-pow-iou"
+
+
 COSMOS = "cosmos15npzl0778xs4tlxjgxueazuxyprdfved26dxgs"
 
 
@@ -1545,14 +1594,14 @@ def test_held_cryptos_get_recent_closes_or_are_flagged(make_env: Any) -> None:
 
     def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
         q = query(url)
-        if q["symbol"] == "ETHWUSDT":
+        if q["symbol"] == "LUNCUSDT":
             return 400, {"code": -1121}
         return 200, [[int(q["startTime"]), "0", "0", "0", "0.00002"]]
 
     env = make_env("binance")
-    held = {"BONK": Decimal(5), "ETHW": Decimal(1), "BTC": Decimal(1), "USDC": Decimal(3)}
+    held = {"BONK": Decimal(5), "LUNC": Decimal(1), "BTC": Decimal(1), "USDC": Decimal(3)}
     rows, notes = recent_prices(env, Http(Fake(route)), {**held, "OLD": Decimal(0)})
     assert {(r["instrument"], r["currency"]) for r in rows} == {("BONK", "USD")}
     assert min(r["on_date"] for r in rows) == "2026-10-20"  # sept jours avant le passage
-    assert notes == ["prices.ethw:no_pair"]
-    assert parse("partial " + " ".join(notes)) == [{"scope": "prices.ethw", "reason": "no_pair"}]
+    assert notes == ["prices.lunc:no_pair"]
+    assert parse("partial " + " ".join(notes)) == [{"scope": "prices.lunc", "reason": "no_pair"}]

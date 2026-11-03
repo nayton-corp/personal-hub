@@ -26,13 +26,14 @@ import urllib.parse
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, localcontext
-from typing import Any, NamedTuple
+from typing import Any
 
 from embit import bip32, script
 
 from hub.collectors.base import Failure, Kind, Result
 from hub.collectors.dropbox import is_market_json
 from hub.collectors.http import Http
+from hub.collectors.market.evm import Network, networks
 from hub.collectors.runtime import Env
 from hub.kernel.money import base_currency
 
@@ -444,33 +445,6 @@ def _scaled(raw: Any, places: int) -> Decimal:
     return Decimal(int(raw)) / (Decimal(10) ** places)
 
 
-class Network(NamedTuple):
-    name: str
-    rpc: str
-    native: str  # crypto qui paie le gaz
-    tokens: dict[str, str]  # contrat → symbole
-    scan: str  # API d'historique compatible Etherscan
-    params: dict[str, str]  # paramètres en plus (réseau, clé) ; `None` : clé manquante
-
-
-def networks(env: Env, w: dict[str, Any]) -> list[Network]:
-    """Réseaux lus pour un portefeuille ETH : Ethereum, et ceux qu'il nomme (`networks`)."""
-    m = env.cfg.market
-    key = env.creds.get("etherscan_key")
-    out = []
-    for name in w.get("networks") or ["ethereum"]:
-        if name == "ethereum":
-            tokens = {c: s for s, c in m.erc20_tokens.items()}
-            out.append(Network(name, m.eth_rpc_url, "ETH", tokens, m.eth_history_url, {}))
-        else:
-            n = m.evm_networks[name]
-            params = (
-                {"chainid": str(n.chain_id), "apikey": key} if isinstance(key, str) and key else {}
-            )
-            out.append(Network(name, n.rpc_url, n.native, dict(n.tokens), m.etherscan_url, params))
-    return out
-
-
 def _uint(url: str, http: Http, step: str, contract: str, data: str) -> int:
     return int(
         str(_rpc(url, http, step, "eth_call", [{"to": contract, "data": data}, "latest"])), 16
@@ -598,22 +572,31 @@ def eth_moves(
         days[txid] = datetime.fromtimestamp(int(stamp), UTC).date().isoformat()
         net[(txid, symbol)] = net.get((txid, symbol), Decimal(0)) + amount
 
+    wallet = account.split(":", 1)[1]
     try:
         for network in networks(env, w):
             label = account if network.name == "ethereum" else f"{account}@{network.name}"
             if network.scan == env.cfg.market.etherscan_url and not network.params:
-                notes.append(f"history.{account.split(':', 1)[1]}.{network.name}:needs_key")
+                notes.append(f"history.{wallet}.{network.name}:needs_key")
                 continue
             full = label not in chained
             tokens = {**network.tokens, **staking} if network.name == "ethereum" else network.tokens
             tokens = {c.lower(): s for c, s in tokens.items()}
             native = network.native
-            seen = len(days)
+            before = (set(days), set(net), set(fees))  # un réseau en erreur est retiré en entier
             try:
                 for address in addresses:
                     for action in ("txlist", "txlistinternal", "tokentx"):
                         for page in range(1, (CHAIN_PAGES if full else 1) + 1):
-                            rows = _scan(env, http, network, action, address, page)
+                            try:
+                                rows = _scan(env, http, network, action, address, page)
+                            except Failure as f:
+                                # Polygon : l'offre gratuite refuse les transferts internes en
+                                # disant « Invalid API Key » ; un écart éventuel se voit au
+                                # rapprochement
+                                if action != "txlistinternal" or not f.detail.endswith(":key"):
+                                    raise
+                                break
                             for r in rows:
                                 txid = str(r["hash"])
                                 sender = str(r.get("from", "")).lower()
@@ -638,13 +621,18 @@ def eth_moves(
                             if len(rows) < 100:
                                 break
             except Failure as f:
-                if not f.detail.endswith(":unsupported"):
-                    raise
-                # réseau hors de l'offre gratuite d'Etherscan : signalé, les autres continuent
-                notes.append(f"history.{account.split(':', 1)[1]}.{network.name}:unsupported")
+                # un réseau en erreur est signalé avec sa cause ; les autres continuent
+                cause = f.detail.rpartition(":")[2] if ":" in f.detail else f.outcome
+                notes.append(f"history.{wallet}.{network.name}:{cause}")
+                for k in set(days) - before[0]:
+                    del days[k]
+                for kn in set(net) - before[1]:
+                    del net[kn]
+                for k in set(fees) - before[2]:
+                    del fees[k]
                 continue
             if full:
-                found = list(days.values())[seen:]
+                found = [v for k, v in days.items() if k not in before[0]]
                 first[label] = min(found, default=env.today.isoformat())
     except (KeyError, TypeError, ValueError):
         raise Failure("invalid_file", "history.eth") from None

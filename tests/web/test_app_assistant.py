@@ -110,6 +110,9 @@ def test_an_answer_that_arrives_elsewhere_waits_in_a_glass_card(page: Any) -> No
 
 
 def test_without_an_assistant_the_orb_says_so(hub: tuple[HubContext, str], page: Any) -> None:
+    # la lecture du démarrage (état puis historique, assistant présent) doit finir avant de le
+    # retirer : sinon son historique tombe sur l'assistant retiré et répond 503
+    page.wait_for_load_state("networkidle")
     hub[0].assistant = AssistantLink(None)
     page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")  # tout se relit
     # attendre la relecture de l'état avant de toucher l'orbe : sous charge (tests en

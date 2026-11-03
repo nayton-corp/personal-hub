@@ -10,6 +10,12 @@ export function gapText(g) {
   if (g.reason === "needs_key") return `Réseau ${net(parts[2])} non lu : ajoute la clé Etherscan`;
   if (g.reason === "pruned") return `Historique ${net(parts[2])} effacé par le nœud public : importe-le ou saisis le coût`;
   if (g.reason === "unsupported") return `Réseau ${net(parts[2])} pas encore lu par le hub`;
+  if (step === "history" && parts[2]) {
+    const where = `Historique ${net(parts[2])} de ${parts[1]}`;
+    if (g.reason === "key" || g.reason === "auth_error") return `${where} non lu : clé Etherscan refusée, vérifie-la dans Identifiants`;
+    if (g.reason === "http_429" || g.reason === "site_unavailable") return `${where} non lu : explorateur saturé, nouvel essai au prochain passage`;
+    return `${where} non lu : réponse illisible de l'explorateur, nouvel essai au prochain passage`;
+  }
   if (g.reason === "no_pair") return `${(parts[1] || "").toUpperCase()} sans cours`;
   if (g.reason.startsWith("skipped=")) return `${g.reason.slice(8)} période${g.reason.slice(8) === "1" ? "" : "s"} refusée${g.reason.slice(8) === "1" ? "" : "s"} par la source (${step})`;
   if (step === "prices" || step === "crypto" || step === "quotes" || step === "history_prices") return `Cours ${parts[1] ? `de ${parts[1].toUpperCase()} ` : ""}non lus, nouvel essai au prochain passage`;

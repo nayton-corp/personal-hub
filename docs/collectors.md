@@ -362,12 +362,11 @@ gaz payés par mes adresses — et SOL par le RPC (`getSignaturesForAddress` pui
 `CHAIN_PAGES` pages par adresse, mémoire `chain_txs`), ensuite la dernière page. Un jeton et
 le gaz d'une même transaction donnent deux écritures. Le solde passé, lui, n'est pas
 reconstitué : la courbe de patrimoine de ces portefeuilles part du jour où ils sont branchés.
-Arbitrum, Base, BNB Smart Chain et Polygon passent par l'API Etherscan V2 (`etherscan_url`, `chainid`), qui
+Arbitrum, BNB Smart Chain et Polygon passent par l'API Etherscan V2 (`etherscan_url`, `chainid`), qui
 demande une clé gratuite (etherscan.io → API Keys), une seule pour tous les réseaux : le secret
 `etherscan_key` de « Cours et cryptos » (champ « Clé Etherscan » dans l'app). Sans elle, leur
 solde est lu mais pas leur historique (détail `partial history.<nom>.<réseau>:needs_key`) ; il
-est relu en entier dès que la clé arrive (mémoire `chain_txs` : `<compte>@<réseau>`). Un réseau hors de l'offre gratuite d'Etherscan est signalé (`:unsupported`) sans bloquer les autres. Blockscout,
-essayé d'abord, coupe après dix appels sans clé et protège ses couches 2 derrière Cloudflare.
+est relu en entier dès que la clé arrive (mémoire `chain_txs` : `<compte>@<réseau>`). Un réseau hors de l'offre gratuite d'Etherscan est signalé (`:unsupported`). Base en est sorti : il passe par l'explorateur Blockscout sans clé (`history_url` du réseau dans `evm_networks`), qui peut couper après quelques appels ; BNB Smart Chain n'a pas d'autre source gratuite. Un réseau en erreur est signalé avec sa cause (`history.<nom>.<réseau>:key`, `:http_429`, …) et retiré du passage ; les autres réseaux du portefeuille continuent, et il est relu en entier au passage suivant. Les transferts internes de Polygon sont refusés par l'offre gratuite (« Invalid API Key » avec une clé valide) : ils sont sautés, un écart éventuel se voit au rapprochement.
 Les sources publiques limitent le débit : une pause avant chaque page d'historique
 (`chain_pause_seconds`) et chaque cours CoinGecko sans clé (`coingecko_pause_seconds`), et sur
 un refus (429, « rate limit ») une attente de 10, 30 puis 60 secondes avant de réessayer.
