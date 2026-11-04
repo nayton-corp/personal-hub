@@ -15,8 +15,8 @@ import pytest
 from hub.collectors.base import Failure
 from hub.collectors.http import Http
 from hub.collectors.ibkr import flow as ibkr
-from hub.collectors.market import net
 from hub.collectors.market import flow as market
+from hub.collectors.market import net
 from hub.collectors.runtime import Env
 from hub.domains.finance.sources.infra import market_file
 from tests.factories import ibkr as f
