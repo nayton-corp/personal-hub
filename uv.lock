@@ -661,7 +661,7 @@ wheels = [
 
 [[package]]
 name = "personal-hub"
-version = "0.13.19"
+version = "0.14.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },

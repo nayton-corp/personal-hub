@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.14.0] · 2026-11-04
+
 ### Assistant et sécurité
 
 - L'assistant de la maison reconnaît ses appelants à leur jeton (`listen.callers`,
