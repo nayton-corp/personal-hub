@@ -146,7 +146,7 @@ export function ago(ms, now = Date.now()) {
 // Ligne sous les titres : la dernière donnée reçue par le hub (tous comptes visibles), ou, hors
 // ligne, l'heure des chiffres affichés. 45 jours sans donnée sur un compte : en orange.
 // jours sans donnée au-delà desquels un compte est à rafraîchir (réglage `stale_account_days`,
-// lu dans /finance/settings)
+// lu dans les réglages du domaine)
 let stale = 45;
 export const staleDays = () => stale;
 /** @param {number | null | undefined} n */

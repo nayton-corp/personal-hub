@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import itertools
 import json
-import time
+
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -73,13 +73,13 @@ def _locked(lock_file: Path) -> Any:
         lock_file.unlink(missing_ok=True)
 
 
-def lock_is_stale(lock_file: Path, now: float | None = None) -> bool:
+def lock_is_stale(lock_file: Path, now: datetime | None = None) -> bool:
     """Le verrou existe et a dépassé LOCK_MAX_AGE : la reprise qui l'a posé n'est plus là."""
     try:
-        age = (now if now is not None else time.time()) - lock_file.stat().st_mtime
+        posed = datetime.fromtimestamp(lock_file.stat().st_mtime, UTC)
     except FileNotFoundError:
         return False
-    return age > LOCK_MAX_AGE.total_seconds()
+    return (now or datetime.now(UTC)) - posed > LOCK_MAX_AGE
 
 
 def _day_before(iso_date: str) -> str:
