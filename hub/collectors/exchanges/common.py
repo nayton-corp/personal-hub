@@ -21,7 +21,7 @@ from typing import Any
 
 from hub.collectors.base import Failure, Kind, Result
 from hub.collectors.dropbox import is_market_json
-from hub.collectors.exchanges.binance_history import FIAT, STABLE
+from hub.collectors.exchanges.binance_api import FIAT, STABLE
 from hub.collectors.http import Http
 from hub.collectors.market.flow import binance_prices, holdings
 from hub.collectors.runtime import Env
@@ -102,6 +102,7 @@ def runner(fetch: Fetch, history: History) -> Callable[..., Result]:
         past = history(env, http, account, set(held))
         recent, missing = recent_prices(env, http, held)
         doc.update(operations=past.operations, prices=past.prices + recent, fx=past.fx)
+        doc["gaps"] = list(getattr(past, "gaps", []))
         data = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
         dropped = env.inbox.drop(f"{env.name}.json", data, is_market_json, step=f"{env.name}.file")
         past.commit()

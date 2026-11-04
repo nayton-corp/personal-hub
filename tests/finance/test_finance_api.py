@@ -383,7 +383,7 @@ def test_an_upload_too_big_is_refused_as_it_streams(
 
 def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
     r = client.get("/api/health").json()
-    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 23, "ok": True}
+    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 24, "ok": True}
     events = loaded.events_since(0, 10)
     assert [e.type for e in events] == ["entries.appended", "import.applied"]
     assert loaded.applied([]) == {}

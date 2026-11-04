@@ -352,3 +352,40 @@ def test_a_renamed_coin_counts_under_its_new_name() -> None:
     trades = [("2026-01-01", "CRYPTO:RNDR", Decimal("5"))]  # acheté sous l'ancien nom
     p: Any = _Positions(reports, trades)
     assert reconcile._unexplained(p, "a", "crypto", "2026-06-02", {}) == []
+
+
+def test_source_gap_is_a_break_until_accepted_or_filled(
+    ctx: HubContext,  # noqa: F811
+    client_fin: tuple[TestClient, FinanceDomain],
+) -> None:
+    """Audit M15 : ce qu'un collecteur n'a pas pu lire est une rupture « historique non lu »,
+    pas une note de passage ; « garder tel quel » la couvre jusqu'à sa fin, un trou plus large la
+    rouvre, un passage complet l'efface."""
+    from tests.finance.test_double_sas import accept, create
+
+    http, finance = client_fin
+    account = add_ref(finance, "crypto:binance", "crypto", "Binance")
+    gap = {"account": "crypto:binance", "step": "fiat", "from": "2019-01-01", "to": "2020-06-30"}
+    delisted = {**gap, "step": "trades:BTCBUSD", "reason": "delisted"}
+    finance.importer.process([doc(gaps=[gap, delisted])])
+
+    def open_gaps() -> dict[str, Any]:
+        items = http.get(f"/api/finance/breaks?on={ON}").json()["items"]
+        return {b["asset"]: b for b in items if b["kind"] == "source_gap"}
+
+    found = open_gaps()
+    assert set(found) == {"fiat", "trades:BTCBUSD"}
+    assert (found["fiat"]["since"], found["fiat"]["cause"]) == ("2019-01-01", "refused")
+    assert found["fiat"]["actions"] == ["accept"]
+    assert found["fiat"]["account_id"] == account.id
+    # garder tel quel : la rupture sort de la liste
+    p = create(ctx, "decide_break", {"break_id": found["fiat"]["id"], "decision": "accept"})
+    assert "historique non lu" in p.preview["summary"]
+    assert accept(ctx, p).status == "applied"
+    assert set(open_gaps()) == {"trades:BTCBUSD"}
+    # un trou plus large la rouvre ; un passage sans trou l'efface
+    finance.importer.process([doc(fetched_at="2026-10-28", gaps=[{**gap, "to": "2026-10-28"}])])
+    assert set(open_gaps()) == {"fiat"}
+    balance = {"account": "crypto:binance", "instrument": "BTC", "on_date": ON, "quantity": "0"}
+    finance.importer.process([doc(fetched_at="2026-10-29", gaps=[], balances=[balance])])
+    assert open_gaps() == {}

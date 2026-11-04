@@ -56,7 +56,7 @@ def last_clbd(conn: Connection, account_id: str) -> dict[str, Any] | None:
     computed = conn.execute(
         text(
             "SELECT coalesce(sum(amount_minor), 0) FROM entries WHERE account_id = :a "
-            "AND booking_date <= :d AND kind != 'correction'"
+            "AND booking_date <= :d"
         ),
         {"a": account_id, "d": row[0]},
     ).scalar_one()

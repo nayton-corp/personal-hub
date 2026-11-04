@@ -31,6 +31,7 @@ NAMES = {
     "no_price": "sans cours",
     "stale_price": "cours ancien",
     "stale_fx": "change ancien",
+    "source_gap": "historique non lu",
 }
 SAID = {"cost": "au prix d'achat saisi", "accept": "gardée telle quelle", "gone": "partie"}
 

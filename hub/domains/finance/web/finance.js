@@ -4,6 +4,7 @@
 // dettes n'ont pas d'onglet, leurs actions passent par ici. Aucun chiffre n'est inventé : tout
 // vient de /api/finance, en centimes.
 import * as accounts from "./accounts.js";
+import * as correct from "./correct.js";
 import * as debts from "./debts.js";
 import { initConnections } from "./connections.js";
 import { freshLine } from "../../format.js";
@@ -15,7 +16,7 @@ import { initWelcome } from "./welcome.js";
 
 export { markup } from "./markup.js";
 
-export const actions = { ...accounts.actions, ...debts.actions };
+export const actions = { ...accounts.actions, ...correct.actions, ...debts.actions };
 
 // tx : all, todo, in, out ; txcat : { id, month } quand le journal suit une catégorie du budget ;
 // jf : filtres du journal (compte, catégorie, from, to, min, max en unités, tri)

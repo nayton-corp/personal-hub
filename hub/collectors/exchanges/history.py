@@ -11,7 +11,8 @@ from datetime import date, timedelta
 from typing import Any
 
 from hub.collectors.base import Failure
-from hub.collectors.exchanges.binance_history import OVERLAP_DAYS, History, Op, _price_rows
+from hub.collectors.exchanges.binance_api import OVERLAP_DAYS, Op
+from hub.collectors.exchanges.binance_history import History, _price_rows
 from hub.collectors.http import Http
 from hub.collectors.market.flow import fx_rates
 from hub.collectors.runtime import Env

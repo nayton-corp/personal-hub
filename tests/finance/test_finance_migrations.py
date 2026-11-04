@@ -558,3 +558,67 @@ def test_budget_cadence_migration_keeps_old_targets_readable(tmp_path: Path) -> 
         )
         assert rows_of(conn, "SELECT hash_v FROM budgets ORDER BY seq") == [(1,), (2,)]
     domain.engine().dispose()
+
+
+def test_source_gaps_migration_keeps_decisions_and_withdrawals(tmp_path: Path) -> None:
+    """0024 : `source_gaps` apparaît et `reconcile_decisions` accepte `source_gap` ; les
+    décisions et leurs retraits traversent la migration tels quels (recopiés ligne pour ligne)."""
+    from hub.domains.finance.domain import MIGRATIONS
+    from hub.domains.finance.patrimoine.app import decisions
+    from hub.platform import migrations as runner
+    from tests.finance.conftest import finance_settings
+
+    settings = finance_settings(tmp_path)
+    domain = FinanceDomain(settings)
+    runner.upgrade(MIGRATIONS, domain.path, "0023_budget_cadence")
+    engine = make_engine(domain.path)
+    at = "2026-10-01T00:00:00.000Z"
+    with begin_immediate(engine) as conn:
+        conn.execute(
+            text(
+                "INSERT INTO accounts (id, institution, name, kind, currency, external_ref, "
+                "created_at) VALUES ('acc1', 'Binance', 'Binance', 'crypto', 'CHF', "
+                "'crypto:binance', :at)"
+            ),
+            {"at": at},
+        )
+        for i, kind in enumerate(("no_price", "stale_fx")):
+            conn.execute(
+                text(
+                    "INSERT INTO reconcile_decisions (id, account_id, asset, break_kind, "
+                    "decision, on_date, currency, created_at, actor) VALUES (:i, 'acc1', 'X', "
+                    ":k, 'accept', '2026-09-01', 'CHF', :at, 'test')"
+                ),
+                {"i": f"d{i}", "k": kind, "at": at},
+            )
+        conn.execute(
+            text(
+                "INSERT INTO reconcile_withdrawals (decision_id, created_at, actor) "
+                "VALUES ('d1', :at, 'test')"
+            ),
+            {"at": at},
+        )
+    engine.dispose()
+    runner.upgrade(MIGRATIONS, domain.path)
+    with domain.engine().connect() as conn:
+        live = [(d.id, d.break_kind) for d in decisions.read(conn)]
+        assert live == [("d0", "no_price")]  # d1 reste retirée
+        withdrawn = conn.execute(text("SELECT decision_id FROM reconcile_withdrawals")).scalars()
+        assert list(withdrawn) == ["d1"]
+        assert conn.execute(text("SELECT count(*) FROM source_gaps")).scalar_one() == 0
+    with begin_immediate(domain.engine()) as conn:
+        decisions.add(
+            conn,
+            account_id="acc1",
+            asset="fiat",
+            break_kind="source_gap",
+            decision="accept",
+            on_date="2026-10-27",
+            quantity=None,
+            cost_minor=None,
+            currency="CHF",
+            note=None,
+            actor="test",
+        )
+    with domain.engine().connect() as conn:
+        assert [d.break_kind for d in decisions.read(conn)] == ["no_price", "source_gap"]

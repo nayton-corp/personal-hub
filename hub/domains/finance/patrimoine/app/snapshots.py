@@ -26,7 +26,7 @@ from hub.platform.logging import get_logger
 
 log = get_logger("hub.finance.snapshots")
 TRIGGER = "import.applied"
-TRIGGERS = (TRIGGER, "debt.changed", "crypto.linked")
+TRIGGERS = (TRIGGER, "debt.changed", "crypto.linked", "entry.corrected")
 
 
 def month_ends(first: date, as_of: date) -> list[date]:
@@ -99,8 +99,8 @@ def refresh(engine: Engine, as_of: date, *, force: bool = False) -> Refresh:
             conn.execute(text("SELECT coalesce(max(seq), 0) FROM categorizations")).scalar_one()
         )
         applied = conn.execute(
-            text("SELECT count(*) FROM events WHERE seq > :c AND type IN (:t, :u, :v)"),
-            {"c": cursor, "t": TRIGGERS[0], "u": TRIGGERS[1], "v": TRIGGERS[2]},
+            text("SELECT count(*) FROM events WHERE seq > :c AND type IN (:t, :u, :v, :w)"),
+            {"c": cursor, **dict(zip("tuvw", TRIGGERS, strict=True))},
         ).scalar_one()
         if force:
             reason = "forced"

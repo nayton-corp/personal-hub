@@ -266,7 +266,7 @@ def _write(
         balance = conn.execute(
             text(
                 "SELECT coalesce(sum(amount_minor), 0) FROM entries WHERE account_id = :a "
-                "AND booking_date <= :d AND kind != 'correction'"
+                "AND booking_date <= :d"
             ),
             {"a": target.id, "d": st.to_date},
         ).scalar_one()

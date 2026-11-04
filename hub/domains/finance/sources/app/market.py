@@ -15,7 +15,10 @@ Le fichier porte ces listes, chacune facultative :
   txId, sinon même quantité, à quelques jours près : `links`) en prend la valeur : c'est un
   virement entre mes comptes ;
 - `operations` : une opération d'une plateforme (dépôt, retrait, échange, récompense), au
-  registre de son compte (`exchange`).
+  registre de son compte (`exchange`) ;
+- `gaps` : ce que le collecteur n'a pas pu lire (fenêtre refusée, paire retirée), vers
+  `source_gaps` : la liste du passage remplace celle d'avant pour ce compte, et le
+  rapprochement la montre en rupture « historique non lu » (audit M15).
 
 Relevé 0 : les cours ; puis un relevé par portefeuille, un par transaction, un par opération. Un
 portefeuille dont le compte n'est pas encore déclaré (`hub finance crypto add-wallet`) attend,
@@ -36,8 +39,38 @@ from hub.domains.finance.registre.app import catalog, ledger
 from hub.domains.finance.sources.app import exchange, ibkr_writer
 from hub.domains.finance.sources.infra import operations
 from hub.domains.finance.sources.infra.market_file import Balance, MarketFile, Transaction
+from hub.kernel.clock import now_iso
 from hub.kernel.ids import urn
 from hub.kernel.money import DECIMAL_CONTEXT, base_currency
+
+
+def _apply_gaps(conn: Connection, doc: MarketFile) -> None:
+    """Les fenêtres non lues des comptes du fichier : celles d'un passage remplacent celles du
+    passage d'avant (un flux relu en entier n'a plus de trou)."""
+    accounts = {b.account for b in doc.balances} | {g.account for g in doc.gaps}
+    at = now_iso()
+    for ref in sorted(accounts):
+        account = catalog.account_by_ref(conn, ref)
+        if account is None:
+            continue
+        conn.execute(text("DELETE FROM source_gaps WHERE account_id = :a"), {"a": account.id})
+        for g in doc.gaps:
+            if g.account != ref:
+                continue
+            conn.execute(
+                text(
+                    "INSERT INTO source_gaps (account_id, step, from_date, to_date, reason, "
+                    "seen_at) VALUES (:a, :s, :f, :t, :r, :at)"
+                ),
+                {
+                    "a": account.id,
+                    "s": g.step,
+                    "f": g.from_date,
+                    "t": g.to_date,
+                    "r": g.reason,
+                    "at": at,
+                },
+            )
 
 
 def _apply_rates(conn: Connection, import_id: str, doc: MarketFile) -> Result:
@@ -264,6 +297,7 @@ def apply(
     out = []
     if indexes is None or 0 in indexes:
         out.append((0, _apply_rates(conn, import_id, doc)))
+        _apply_gaps(conn, doc)
     applied: dict[tuple[str, str], set[str]] = {}
     for i, b in enumerate(doc.balances, start=1):
         if indexes is None or i in indexes:
@@ -280,7 +314,7 @@ def apply(
         for i, t in enumerate(doc.transactions, start=len(doc.balances) + 1):
             if indexes is None or i in indexes:
                 out.append((i, chain.apply(t, firsts[t.account])))
-        _appended(conn, import_id, chain.writer.touched)
+        appended(conn, import_id, chain.writer.touched)
     if doc.operations:
         journal = exchange.Journal(conn, import_id)
         starts: dict[str, str] = {}
@@ -290,11 +324,11 @@ def apply(
         for i, o in enumerate(doc.operations, start=first):
             if indexes is None or i in indexes:
                 out.append((i, journal.apply(o, starts[o.account])))
-        _appended(conn, import_id, journal.writer.touched)
+        appended(conn, import_id, journal.writer.touched)
     return out
 
 
-def _appended(conn: Connection, import_id: str, touched: dict[str, int]) -> None:
+def appended(conn: Connection, import_id: str, touched: dict[str, int]) -> None:
     for account_id, count in sorted(touched.items()):
         ledger.append_event(
             conn,

@@ -354,13 +354,13 @@ SHEETS.tx = (id, sh) => {
     body: `<div class="sheet-big num ${amt > 0 && !internal(e) ? "amt-in" : ""}">${amt > 0 ? "+" : "−"}${amount2(Math.abs(amt))} <small>${esc(e.amount.currency)}</small></div>
       <dl class="dl"><dt>Date</dt><dd>${dayName(e.booking_date)} ${e.booking_date.slice(0, 4)}</dd><dt>Compte</dt><dd>${esc(a ? `${a.institution} · ${a.name}` : "")}</dd>${e.counterparty_iban ? `<dt>IBAN</dt><dd class="mono">${esc(e.counterparty_iban)}</dd>` : ""}${raw ? `<dt>Libellé bancaire</dt><dd class="mono">${esc(raw)}</dd>` : ""}${e.notes && e.notes.length ? `<dt>Note</dt><dd>${esc(e.notes.map((n) => n.text).join(" · "))}</dd>` : ""}</dl>
       ${e.category ? `<dl class="dl"><dt>Classé par</dt><dd>${esc(classedBy(e))}</dd></dl>` : ""}
-      ${internal(e) ? `<div class="status">${ic("info")}<span>Virement entre tes comptes : exclu des revenus et des dépenses.</span></div>` : ""}
+      ${internal(e) ? `<div class="status">${ic("info")}<span>Virement entre tes comptes : exclu des revenus et des dépenses.</span></div>` : ""}${e.corrections && e.corrections.length ? `<div class="status warn">${ic("alert")}<span>Écriture corrigée : ${e.corrections.map((c) => `${amount2(u(c.amount))} le ${date(c.booking_date)}`).join(", ")}.</span></div>` : ""}
       ${ruleKey(e) && ruleKey(e).length >= 3 ? `<button class="link-row" type="button" data-a="tx-same" data-v="${esc(ruleKey(e))}">Voir les autres écritures de « ${esc(capital(ruleKey(e)))} »${ic("chev")}</button>` : ""}
       ${e.kind === "movement" ? `<h3>Catégorie</h3>${grid(cats, direction, sh.tmp, "txcat")}
       ${ruleKey(e) ? `<label class="check"><input type="checkbox" id="tx-always" ${sh.always ? "checked" : ""}>Toujours classer « ${esc(ruleKey(e))} » ainsi</label>` : ""}
       ${ruleKey(e) && sh.always ? `<label class="check check-in"><input type="checkbox" id="tx-only" ${sh.only ? "checked" : ""}>Seulement depuis ${esc(a ? a.name : "ce compte")}</label>` : ""}
       ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}` : ""}
-      ${e.kind === "movement" && amt > 0 && !internal(e) ? `<button class="link-row" type="button" data-a="debt-from" data-v="${esc([e.id, e.booking_date, amt, (e.counterparty || "").replace(/\|/g, " ")].join("|"))}">Créer une dette depuis ce versement${ic("chev")}</button>` : ""}`,
+      ${e.kind !== "opening" && !(e.corrections && e.corrections.length) ? `<button class="link-row" type="button" data-a="tx-correct" data-v="${esc(e.id)}">Corriger le montant, la date ou le compte${ic("chev")}</button>` : ""}${e.kind === "movement" && amt > 0 && !internal(e) ? `<button class="link-row" type="button" data-a="debt-from" data-v="${esc([e.id, e.booking_date, amt, (e.counterparty || "").replace(/\|/g, " ")].join("|"))}">Créer une dette depuis ce versement${ic("chev")}</button>` : ""}`,
     foot: e.kind === "movement" ? `<button class="primary" type="button" data-a="tx-ok" ${changed && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer avec Face ID"}</button>` : "",
   };
 };

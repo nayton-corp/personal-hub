@@ -61,7 +61,11 @@ class Fake:
 
 
 def dropped(env: Env) -> list[market_file.MarketFile]:
-    files = sorted(p for p in env.inbox_root.glob("*") if p.is_file())
+    """Les fichiers déposés, du plus ancien au plus récent (le nom partage sa seconde)."""
+    files = sorted(
+        (p for p in env.inbox_root.glob("*") if p.is_file()),
+        key=lambda p: (p.stat().st_mtime_ns, p.name),
+    )
     return [market_file.parse(p.read_bytes()) for p in files]
 
 
@@ -1656,3 +1660,48 @@ def test_a_staking_claim_on_a_delegated_wallet_is_one_stake_arrival(make_env: An
     (doc,) = dropped(env)
     got = [(t.txid, t.symbol, t.quantity, t.stake) for t in doc.transactions]
     assert got == [("0xc1", "ETH", Decimal("0.529299999999999999"), True)]
+
+
+def test_binance_refused_window_keeps_the_stream_cursor_and_reports_a_gap(make_env: Any) -> None:
+    """Audit M15 : une fenêtre refusée (400) n'est jamais tenue pour lue. Le flux garde son
+    curseur au début de la fenêtre refusée et la redemande au passage suivant ; le trou part
+    dans le fichier (`gaps`), les autres flux avancent. Une paire déclarée que `myTrades`
+    refuse (retirée de la cote) est un trou `trades:<paire>`."""
+    creds = {"api_key": "cle-test", "api_secret": "secret-test", "pairs": ["BTC/BUSD", "bad"]}
+    env = make_env("binance", creds=creds)
+    inner = binance_history_route()
+
+    def route(path: str, q: dict[str, str]) -> Any:
+        if path == "/sapi/v1/fiat/orders" and int(q["beginTime"]) < at("2026-06-01", 0):
+            return 400  # trop ancien pour ce flux
+        if path == "/api/v3/myTrades" and q["symbol"] == "BTCBUSD":
+            return 400  # paire retirée
+        return inner(path, q)
+
+    result = binance.run(env, "run", Http(binance_api(history=route)))
+    assert result.outcome == "ok"
+    assert result.detail is not None
+    assert "fiat:skipped=" in result.detail
+    assert "trades:skipped=1" in result.detail
+    (doc,) = dropped(env)
+    gaps = [(g.step, g.from_date, g.to_date, g.reason) for g in doc.gaps]
+    assert ("trades:BTCBUSD", "2017-07-01", "2026-10-27", "delisted") in gaps
+    fiat = [g for g in gaps if g[0] == "fiat"]
+    assert fiat
+    assert all(g[3] == "refused" for g in fiat)
+    assert fiat[0][1] == "2017-07-01"  # depuis le début demandé à l'API
+    since = env.memory.get("stream_since")
+    assert since["deposits"] == since["withdrawals"] == "2026-10-27"
+    assert since["fiat"] == "2017-07-01"  # le flux refusé n'avance pas
+    assert since["trades"] == "2017-07-01"
+    # le passage suivant redemande la fenêtre refusée, et rien de plus ancien pour les autres
+    later = binance_api(history=route)
+    binance.run(env, "run", Http(later))
+    fiat_calls = [query(u) for _m, u, _h in later.calls if "fiat/orders" in u]
+    assert min(int(q["beginTime"]) for q in fiat_calls) <= at("2026-03-01", 0)
+    deposits = [query(u) for _m, u, _h in later.calls if "deposit/hisrec" in u]
+    assert [int(q["startTime"]) for q in deposits] == [at("2026-10-24", 0)]
+    # un passage sans refus referme le trou : plus de `gaps`, le curseur rejoint les autres
+    binance.run(env, "run", Http(binance_api(history=binance_history_route())))
+    assert dropped(env)[-1].gaps == []
+    assert env.memory.get("stream_since")["fiat"] == "2026-10-27"

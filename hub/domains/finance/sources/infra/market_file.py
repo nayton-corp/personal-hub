@@ -1,5 +1,6 @@
 """Fichier `hub.market.v1` du collecteur « market » (lot 6) : lecture et contrôle des listes
-(cours de change, cours, soldes, transactions, opérations), sans rien écrire."""
+(cours de change, cours, soldes, transactions, opérations, fenêtres non lues), sans rien
+écrire."""
 
 from __future__ import annotations
 
@@ -66,6 +67,18 @@ class Transaction:
 
 
 @dataclass(frozen=True)
+class Gap:
+    """Ce qu'un collecteur n'a pas pu lire d'une plateforme (audit M15) : un flux et ses dates ;
+    la liste d'un passage remplace celle du passage d'avant pour ce compte."""
+
+    account: str  # référence externe : crypto:<nom>
+    step: str  # fiat, dust, trades:BTCBUSD
+    from_date: str
+    to_date: str
+    reason: str  # refused, delisted
+
+
+@dataclass(frozen=True)
 class MarketFile:
     fetched_on: str
     fx: list[Fx] = field(default_factory=list)
@@ -73,6 +86,7 @@ class MarketFile:
     balances: list[Balance] = field(default_factory=list)
     transactions: list[Transaction] = field(default_factory=list)
     operations: list[operations.Operation] = field(default_factory=list)
+    gaps: list[Gap] = field(default_factory=list)
 
     @property
     def on_date(self) -> str:
@@ -214,4 +228,16 @@ def parse(data: bytes) -> MarketFile:
         ops = operations.parse(doc.get("operations") or [], _dec, _iso)
     except operations.ExchangeError as exc:
         raise MarketError(str(exc)) from None
-    return MarketFile(_iso(doc.get("fetched_at")), fx, prices, balances, txs, ops)
+    gaps = []
+    for x in doc.get("gaps") or []:
+        if not isinstance(x, dict):
+            continue
+        account, step = str(x.get("account") or ""), str(x.get("step") or "")
+        if not re.match(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$", account):
+            raise MarketError("portefeuille illisible")
+        if not re.match(r"^[a-z_]{2,20}(:[A-Z0-9]{2,20})?$", step):
+            raise MarketError("flux illisible")
+        reason = str(x.get("reason") or "refused")[:20]
+        gaps.append(Gap(account, step, _iso(x.get("from")), _iso(x.get("to")), reason))
+    gaps.sort(key=lambda g: (g.account, g.step, g.from_date))
+    return MarketFile(_iso(doc.get("fetched_at")), fx, prices, balances, txs, ops, gaps)

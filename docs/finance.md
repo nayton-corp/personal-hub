@@ -45,7 +45,7 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
 | `budget?month=&period=m\|q` | réel et cible par catégorie de dépense, dépassements, reste à vivre ; par ligne `state` (`untracked`, `over`, `likely_over`, `paid`, `ok`), `projected` (fin de période, en cours seulement) et `rest` ; sur la période `current`, `pace` (part écoulée), `expected` (part du budget attendue à ce jour), `projection`, `state` (`no_budget`, `closed_ok`, `closed_over`, `over`, `likely_over`, `on_pace`, avec `over_by`) : la règle de `classement/model/pace.py`, la même que les sentinelles, le front n'en calcule aucun ; `missing_fx` liste les écritures en devise sans change ce jour-là, laissées de côté |
 | `budget/totals?month=&period=m\|q` | revenus, dépenses fixes et variables, épargne, placements, taux |
 | `budget/months?month=&months=6` | les mêmes totaux, mois par mois (graphique Tendance) |
-| `breaks` | soldes non expliqués d'aujourd'hui (rapprochement) : compte, actif, parts, valeur, cause, et leur total ; règle dans [finance-politique.md](finance-politique.md) |
+| `breaks` | soldes non expliqués d'aujourd'hui (rapprochement) : compte, actif, parts, valeur, cause, et leur total ; une fenêtre d'historique non lue (`source_gap`) donne `since` et `until` ; règle dans [finance-politique.md](finance-politique.md) |
 | `export.csv?from=&to=` | journal complet en CSV (session passkey seulement) |
 
 - **Mois.** Le mois affiché est toujours un paramètre ; l'app part du mois budgétaire en cours dans le fuseau de l'instance (`HUB_TZ`, Zurich par défaut).
@@ -148,6 +148,7 @@ règle qui sert aussi aux prochains imports.
 | Proposition | Effet | Inverse |
 |---|---|---|
 | `recategorize` | catégorie d'une écriture (ou ventilation en lignes) | oui |
+| `correct_entry` | montant, date ou compte d'une écriture (`reason` obligatoire) : une annulation (`kind` `correction`, le montant opposé, `corrects_seq`) puis une remplaçante, la catégorie suivant ; l'original reste et porte ses corrections ; refusée pour une ouverture, une annulation ou une écriture déjà corrigée | oui (corrige la remplaçante avec les valeurs d'origine) |
 | `create_rule` · `disable_rule` | règle, appliquée tout de suite à ce qu'elle peut toucher | — |
 | `set_budget` | cible d'une catégorie de dépense, `amount_minor` tel que saisi avec sa `cadence` (`month` ou `year`, l'annuel n'est plus divisé par douze), dès le 1er du mois | oui |
 | `add_note` | note sur une écriture | — |
@@ -338,6 +339,14 @@ chaque jour où un solde bouge devient un relevé complet des positions (cryptos
 attente en `SYM:CHF`), avec le cours du jour tiré du fichier (contre-valeur USD ÷ quantité) et
 le change USD/CHF de ses mouvements en francs. Achat, dépôt, rendement et remise de frais
 créditent le net ; vente, retrait et frais périodiques débitent.
+
+**Binance, paires retirées.** Ce que l'API ne rend plus (une paire retirée comme BTC/BUSD) se
+reprend par l'export « Trade History » de Binance (Commandes → Historique des échanges →
+Exporter, `.csv` avec `Date(UTC),Pair,Side,Price,Executed,Amount,Fee`), déposé tel quel : chaque
+exécution devient un échange du compte `crypto:binance` avec ses frais, une seule fois quelle que
+soit la relecture, valorisé par son prix (en dollar pour un stablecoin). Un frais en BNB attend
+le cours du jour comme les autres opérations. Le collecteur relit d'abord ce qu'il peut : une
+paire déclarée dans `pairs` des secrets est demandée à chaque passage.
 
 Chaque ligne est aussi une opération au registre du compte, en CHF (contre-valeur USD au change
 du jour, le franc tel quel), la quantité en communication, et un mouvement de parts (`trades`)

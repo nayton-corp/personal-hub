@@ -55,6 +55,7 @@ ACTIONS = {
     "no_price": ["accept"],
     "stale_fx": ["accept"],
     "stale_price": ["accept"],
+    "source_gap": ["accept"],
 }
 
 
@@ -67,6 +68,7 @@ class Break:
     value: int | None  # centimes de la devise de base ; None sans cours
     since: str
     cause: str
+    until: str | None = None  # fin de la fenêtre non lue (`source_gap`) : la décision la couvre
 
     @property
     def id(self) -> str:
@@ -85,6 +87,7 @@ class Break:
             "quantity": None if self.quantity is None else str(self.quantity.normalize()),
             "value": None if self.value is None else money(self.value, base_currency()),
             "since": self.since,
+            "until": self.until,
             "cause": self.cause,
             "actions": acts,
         }
@@ -256,6 +259,36 @@ def _fx(fx: FxRates, account: str, currencies: set[str], on: str, decided: Decid
     return out
 
 
+def _source_gaps(conn: Connection, account: str, decided: Decided) -> list[Break]:
+    """Ce qu'un collecteur n'a pas pu lire (fenêtre refusée, paire retirée : `source_gaps`,
+    audit M15) : une rupture tant que l'export de la plateforme n'est pas importé, ou que tu ne
+    l'as pas gardée telle quelle ; une fenêtre plus large que celle décidée la rouvre."""
+    rows = conn.execute(
+        text(
+            "SELECT step, from_date, to_date, reason FROM source_gaps WHERE account_id = :a "
+            "ORDER BY step, from_date"
+        ),
+        {"a": account},
+    ).fetchall()
+    out = []
+    for step, from_date, to_date, reason in rows:
+        if _covers(decided, ("source_gap", account, str(step)), None) >= str(to_date):
+            continue
+        out.append(
+            Break(
+                "source_gap",
+                account,
+                str(step),
+                None,
+                None,
+                str(from_date),
+                str(reason),
+                str(to_date),
+            )
+        )
+    return out
+
+
 def report(conn: Connection, on: str) -> Report:
     positions = Positions(conn)
     found = decisions.read(conn)
@@ -281,6 +314,9 @@ def report(conn: Connection, on: str) -> Report:
     crypto = {a[0] for a in shown if a[1] == "crypto"}
     if crypto:
         breaks += _outside(crypto_moves.legs(conn, on), decided, crypto)
+    for account, _kind, _name, hidden, _ccy in _accounts(conn):
+        if not hidden:  # un compte encore sans position peut déjà avoir un historique non lu
+            breaks += _source_gaps(conn, account, decided)
     order = {k: i for i, k in enumerate(ACTIONS)}
     breaks.sort(key=lambda b: (-(abs(b.value or 0)), order.get(b.kind, 9), b.account_id, b.asset))
     explained = max(0, total - unexplained - stale)
@@ -313,7 +349,7 @@ def decide(
     if b is None:
         raise Problem("not_found", "rupture inconnue ou déjà réglée")
     quantity = b.quantity  # une décision couvre ces parts-là : elle se rouvre si elles changent
-    on_date = b.since if b.kind == "unexplained" else on
+    on_date = b.since if b.kind == "unexplained" else (b.until or on)
     if b.kind == "unexplained" and decision == "accept" and quantity and quantity > 0:
         # garder tel quel : les parts entrent à leur valeur du jour où elles sont apparues
         worth = Positions(conn).worth(b.asset, quantity, b.since)

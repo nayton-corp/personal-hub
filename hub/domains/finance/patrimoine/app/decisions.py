@@ -29,7 +29,15 @@ from hub.core.errors import Problem
 from hub.kernel.clock import now_iso
 from hub.kernel.ids import new_id
 
-KINDS = ("unexplained", "sent_outside", "arrived_outside", "no_price", "stale_price", "stale_fx")
+KINDS = (
+    "unexplained",
+    "sent_outside",
+    "arrived_outside",
+    "no_price",
+    "stale_price",
+    "stale_fx",
+    "source_gap",
+)
 DECISIONS = {
     "unexplained": ("cost", "accept"),
     "sent_outside": ("gone", "accept"),
@@ -37,6 +45,7 @@ DECISIONS = {
     "no_price": ("accept",),
     "stale_price": ("accept",),
     "stale_fx": ("accept",),
+    "source_gap": ("accept",),
 }
 
 

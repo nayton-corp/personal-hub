@@ -64,6 +64,19 @@
   période viennent du serveur (`classement/model/pace.py`), la même règle pour l'app et les
   sentinelles, et le front ne divise plus par 100 : l'exposant de la devise vient du profil
   (`currency_exponent`). La table des changes est lue par le registre (`registre/app/fx.py`).
+- Corriger une écriture (audit M14) : la proposition `correct_entry` (montant, date ou compte,
+  avec un motif) écrit une annulation puis une remplaçante (`kind` `correction`,
+  `corrects_seq`), la catégorie suit, l'original reste et montre ses corrections dans le
+  Journal, qui propose le geste ; inverse : corriger la remplaçante avec les valeurs d'origine.
+  Les corrections comptent dans les soldes vérifiés contre les relevés (BCF, IBKR, VIAC) ; les
+  instantanés se recalculent après une correction.
+- Historique Binance jamais tenu pour lu (audit M15) : chaque flux garde son curseur
+  (`stream_since`) ; une fenêtre refusée reste à relire, est déposée dans le fichier (`gaps`,
+  format `hub.market.v1`) et devient une rupture « historique non lu » (`source_gap`, avec
+  `until`, décision « garder tel quel » couvrant la fenêtre vue) ; une paire que l'API ne liste
+  plus se déclare dans `pairs` des secrets, et l'export CSV « Trade History » de Binance se
+  dépose comme un relevé (`binance_csv`). Migration 0024 (`source_gaps`, décisions acceptant
+  cette rupture).
 - `hub finance golden save | check` : l'étalon des agrégats (patrimoine, positions,
   performance, ruptures, budget, dettes) se fige avant une mise à jour et se vérifie après, au
   centime ; le fichier ne contient que des chiffres et des identifiants.

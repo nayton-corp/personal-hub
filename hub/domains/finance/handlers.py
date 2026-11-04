@@ -61,6 +61,11 @@ from hub.domains.finance.patrimoine.app.link_kinds import (
     link_inverse,
 )
 from hub.domains.finance.port import Finance
+from hub.domains.finance.registre.app.correct_kinds import (
+    CorrectEntry,
+    CorrectEntryHandler,
+    correct_inverse,
+)
 from hub.domains.finance.registre.app.entry_kinds import (
     AddNote,
     AddNoteHandler,
@@ -99,6 +104,13 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
             ai_allowed=True,
         ),
         "add_note": ProposalKind(AddNote, AddNoteHandler(), ai_allowed=True),
+        "correct_entry": ProposalKind(
+            CorrectEntry,
+            CorrectEntryHandler(domain),
+            reversible=True,
+            inverse=correct_inverse,
+            ai_allowed=True,
+        ),
         "apply_import": ProposalKind(
             ApplyImport, ApplyImportHandler(domain), ttl=timedelta(days=7)
         ),

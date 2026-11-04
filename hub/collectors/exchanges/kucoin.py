@@ -18,7 +18,8 @@ from typing import Any
 
 from hub.collectors.base import Failure
 from hub.collectors.exchanges import history
-from hub.collectors.exchanges.binance_history import DAY_MS, History, Op, _qty
+from hub.collectors.exchanges.binance_api import DAY_MS, Op, _qty
+from hub.collectors.exchanges.binance_history import History
 from hub.collectors.exchanges.common import now_ms, runner
 from hub.collectors.http import Http
 from hub.collectors.runtime import Env

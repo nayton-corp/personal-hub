@@ -85,6 +85,10 @@ entre eux).
   rouvre. Une décision couvre les parts qu'elle a vues : si les parts changent (« sans cours »
   sur 1 BONK, puis 3), ou qu'un cours ou un change plus récent est encore ancien, la rupture
   se rouvre ; rien ne vaut 0 à vie en silence.
+- Une fenêtre d'historique qu'une source n'a pas rendue (« historique non lu » : Binance a
+  refusé une période, une paire a été retirée) est une rupture du compte jusqu'à ce qu'un
+  passage la lise ou qu'un fichier la comble ; « Garder tel quel » couvre la fenêtre vue, une
+  fenêtre plus large la rouvre.
 
 ## Collecteurs
 
@@ -92,7 +96,9 @@ Un passage de collecteur qui saute un réseau faute de clé, lit un historique e
 pas de cours ou n'a pas pu lire une partie de la source n'est pas « ok » : il est « incomplet »,
 montré sur l'accueil avec ce qu'il faut faire. Un historique plus long que les pages lues
 (adresse BTC, réseau EVM, Solana) se dit `truncated` et sera relu en entier au passage suivant,
-jamais tenu pour complet.
+jamais tenu pour complet. Une fenêtre refusée par la plateforme n'est jamais tenue pour lue :
+le curseur de ce flux (`stream_since`) reste au premier jour refusé, la fenêtre est redemandée
+au passage suivant et déposée avec le fichier (`gaps`), où elle devient une rupture du compte.
 
 ## Budget
 

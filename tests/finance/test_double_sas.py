@@ -22,7 +22,7 @@ from hub.core.context import HubContext
 from hub.core.errors import Problem
 from hub.core.registry import Registry
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.registre.app import ledger
+from hub.domains.finance.registre.app import ledger, reads
 from hub.domains.finance.sources.infra.files import Incoming
 from tests.factories.camt import IBAN, IBAN_2, Stmt, Tx, camt053
 from tests.finance.conftest import finance_settings, ready_account, rows
@@ -794,3 +794,102 @@ def test_link_crypto_moves_card_and_inverse(ctx: HubContext, fin: FinanceDomain)
     assert rows(fin, "SELECT count(*) FROM crypto_links") == [(1,)]  # rien d'effacé
     assert cost() == 99_000
     assert proposal_events.sync_events(ctx)["requested"] == 1  # à nouveau proposée
+
+
+# --- correct_entry (audit M14) ----------------------------------------------------------------
+
+
+def original(fin: FinanceDomain, counterparty: str) -> str:
+    ((value,),) = rows(
+        fin, "SELECT id FROM entries WHERE counterparty = :c AND kind = 'movement'", c=counterparty
+    )
+    return str(value)
+
+
+def balance(fin: FinanceDomain, iban: str) -> int:
+    ((value,),) = rows(
+        fin,
+        "SELECT coalesce(sum(e.amount_minor), 0) FROM entries e JOIN accounts a "
+        "ON a.id = e.account_id WHERE a.iban = :i",
+        i=iban,
+    )
+    return int(value)
+
+
+def test_correct_entry_reverses_then_replaces_and_inverts(
+    ctx: HubContext, fin: FinanceDomain
+) -> None:
+    ready_account(fin)
+    load(fin, [Tx("12.50", True, D, counterparty="Migros", label="Courses")])
+    accept(
+        ctx,
+        create(
+            ctx,
+            "recategorize",
+            {"entry_id": original(fin, "Migros"), "category_id": "alimentation"},
+        ),
+    )
+    before = balance(fin, IBAN)
+    p = create(
+        ctx,
+        "correct_entry",
+        {"entry_id": original(fin, "Migros"), "amount_minor": -1500, "reason": "ticket relu"},
+    )
+    assert p.preview["summary"] == "Corriger Migros : -12.50 CHF → -15.00 CHF"
+    assert p.preview["details"]["changes"] == {"amount": {"from": "-12.50 CHF", "to": "-15.00 CHF"}}
+    out = accept(ctx, p)
+    assert out.status == "applied", out
+    assert balance(fin, IBAN) == before - 250
+    lines = rows(
+        fin,
+        "SELECT e.kind, e.amount_minor, e.corrects_seq IS NOT NULL, vc.category_id FROM entries e "
+        "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq WHERE e.counterparty = 'Migros' "
+        "ORDER BY e.seq",
+    )
+    assert [tuple(r) for r in lines] == [
+        ("movement", -1250, 0, "alimentation"),
+        ("correction", 1250, 1, "alimentation"),
+        ("correction", -1500, 1, "alimentation"),
+    ]
+    assert fin.verify_ledger().ok
+    # la carte vue de l'écriture : ses corrections, l'évènement, et l'instantané relancé
+    with fin.engine().connect() as conn:
+        detail = reads.entry_detail(conn, original(fin, "Migros"))
+    assert detail is not None
+    assert [c["amount"]["minor"] for c in detail["corrections"]] == [1250, -1500]
+    (event,) = rows(fin, "SELECT count(*) FROM events WHERE type = 'entry.corrected'")
+    assert event[0] == 1
+    # l'originale ne se corrige pas deux fois, l'annulation jamais
+    with pytest.raises(Problem, match="déjà corrigée"):
+        create(
+            ctx,
+            "correct_entry",
+            {"entry_id": original(fin, "Migros"), "amount_minor": -1, "reason": "x"},
+        )
+    reversal = str(out.result["reversal_id"])
+    with pytest.raises(Problem, match="annulation ne se corrige pas"):
+        create(ctx, "correct_entry", {"entry_id": reversal, "amount_minor": -1, "reason": "x"})
+    # l'inverse corrige la remplaçante avec les valeurs d'origine
+    inverse = fin.proposal_kinds["correct_entry"].inverse
+    assert inverse is not None
+    kind, params = inverse(p.params, out.result)
+    assert kind == "correct_entry"
+    assert params["amount_minor"] == -1250
+    back = accept(ctx, create(ctx, kind, params))
+    assert back.status == "applied", back
+    assert balance(fin, IBAN) == before
+
+
+def test_correct_entry_refusals(ctx: HubContext, fin: FinanceDomain) -> None:
+    ready_account(fin)
+    load(fin, [Tx("12.50", True, D, counterparty="Migros", label="Courses")])
+    eid = original(fin, "Migros")
+    with pytest.raises(Problem, match="rien à corriger"):
+        create(ctx, "correct_entry", {"entry_id": eid, "amount_minor": -1250, "reason": "x"})
+    with pytest.raises(Problem, match="de 0"):
+        create(ctx, "correct_entry", {"entry_id": eid, "amount_minor": 0, "reason": "x"})
+    with pytest.raises(Problem, match="compte inconnu"):
+        create(ctx, "correct_entry", {"entry_id": eid, "account_id": "nope", "reason": "x"})
+    ((opening,),) = rows(fin, "SELECT id FROM entries WHERE kind = 'opening'")
+    with pytest.raises(Problem, match="ouverture"):
+        create(ctx, "correct_entry", {"entry_id": str(opening), "amount_minor": 5, "reason": "x"})
