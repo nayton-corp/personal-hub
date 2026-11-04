@@ -1,10 +1,13 @@
 """Collecteur KuCoin : tous les comptes (main, trade, marge…) et les placements Earn, par l'API
 officielle (signature HMAC-SHA256, clé v2). Clé avec la permission « General » seulement.
 
-L'historique vient du grand livre du compte (`/api/v1/accounts/ledgers`), que KuCoin garde un
-an et rend par tranches de 24 heures : dépôts, retraits, échanges (les deux côtés d'un ordre
-regroupés), conversions, récompenses. Les transferts entre comptes KuCoin (principal, trading)
-sont internes ; un type inconnu est compté dans le détail (`type.<nom>:skipped=n`)."""
+L'historique vient du grand livre du compte (`/api/v1/accounts/ledgers`), rendu par tranches de
+24 heures. Le premier passage le lit depuis le plus ancien dépôt ou retrait (listes rendues sans
+limite de date), et au moins sur un an : un compte immobile depuis plus d'un an garde son
+historique (constaté en 2026 sur des dépôts de 2024). On y trouve dépôts, retraits, échanges
+(les deux côtés d'un ordre regroupés), conversions, récompenses. Les transferts entre comptes
+KuCoin (principal, trading) sont internes ; un type inconnu est compté dans le détail
+(`type.<nom>:skipped=n`)."""
 
 from __future__ import annotations
 
@@ -69,7 +72,26 @@ def fetch(env: Env, http: Http) -> list[tuple[str, Any]]:
     return out
 
 
-LEDGER_DAYS = 365  # ce que KuCoin garde
+LEDGER_DAYS = 365  # lu au minimum au premier passage
+HISTORY_VERSION = 2  # 2 : depuis le plus ancien dépôt (avant : un an seulement)
+
+
+def _earliest(env: Env, http: Http) -> date | None:
+    """Jour du plus ancien dépôt ou retrait du compte, toutes dates confondues."""
+    first: date | None = None
+    for path, step in (
+        ("/api/v1/deposits", "kucoin.deposits"),
+        ("/api/v1/withdrawals", "kucoin.withdrawals"),
+    ):
+        for page in range(1, MAX_PAGES + 1):
+            history.pause(env)
+            data = get(env, http, f"{path}?currentPage={page}&pageSize=100", step)
+            for r in data["items"]:
+                day = datetime.fromtimestamp(int(r["createdAt"]) // 1000, UTC).date()
+                first = day if first is None else min(first, day)
+            if page >= int(data.get("totalPage") or 1):
+                break
+    return first
 
 
 def _role(biz: str) -> str | None:
@@ -104,8 +126,12 @@ def _context(raw: Any) -> dict[str, Any]:
 
 
 def read_history(env: Env, http: Http, start: date | None) -> tuple[list[Op], list[str]]:
-    oldest = env.today - timedelta(days=LEDGER_DAYS - 1)
-    first = max(start, oldest) if start else oldest
+    if start is None:
+        oldest = env.today - timedelta(days=LEDGER_DAYS - 1)
+        earliest = _earliest(env, http)
+        first = min(oldest, earliest) if earliest else oldest
+    else:
+        first = start
     cursor = int(datetime(first.year, first.month, first.day, tzinfo=UTC).timestamp()) * 1000
     stop = (
         int(datetime.combine(env.today + timedelta(days=1), datetime.min.time(), UTC).timestamp())
@@ -156,7 +182,7 @@ def read_history(env: Env, http: Http, start: date | None) -> tuple[list[Op], li
 
 
 def history_of(env: Env, http: Http, account: str, held: set[str]) -> History:
-    return history.collect(env, http, account, read_history)
+    return history.collect(env, http, account, read_history, version=HISTORY_VERSION)
 
 
 run = runner(fetch, history_of)

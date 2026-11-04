@@ -1,7 +1,8 @@
 """Historique d'une plateforme lu par son API (Coinbase, KuCoin), sur le modèle de Binance
 (`binance_history`) : chaque passage dépose les opérations, leurs cours et, au premier
 passage, le change BCE ; le premier passage est complet ou ne dépose rien ; ensuite, quelques
-jours de recouvrement (mémoire `history_since`)."""
+jours de recouvrement (mémoire `history_since`). Un lecteur qui lit plus loin qu'avant relève
+sa `version` : le passage suivant relit tout une fois (mémoire `history_version`)."""
 
 from __future__ import annotations
 
@@ -33,10 +34,10 @@ def pause(env: Env) -> None:
         sleep(env.cfg.exchanges.history_pause_ms)
 
 
-def collect(env: Env, http: Http, account: str, read: Reader) -> History:
+def collect(env: Env, http: Http, account: str, read: Reader, version: int = 1) -> History:
     memory = env.memory
     since = memory.get("history_since")
-    full = since is None
+    full = since is None or int(memory.get("history_version") or 1) < version
     start = None if full else date.fromisoformat(since) - timedelta(days=OVERLAP_DAYS)
     failed: list[str] = []
     try:
@@ -66,5 +67,6 @@ def collect(env: Env, http: Http, account: str, read: Reader) -> History:
     def commit() -> None:
         if not broken:
             memory.put("history_since", env.today.isoformat())
+            memory.put("history_version", version)
 
     return History([op.doc(account) for op in ops], prices, fx, failed, commit)

@@ -2,6 +2,13 @@
 
 ## [Non publié]
 
+### Collecteurs
+
+- KuCoin : le premier passage lit le grand livre depuis le plus ancien dépôt ou retrait, et non
+  plus sur un an seulement. Un compte resté sans mouvement depuis plus d'un an retrouve ses
+  dépôts et retraits anciens. Les comptes déjà lus sont relus une fois d'eux-mêmes (version
+  d'historique 2), sans réglage à toucher.
+
 ## [0.14.0] · 2026-11-04
 
 ### Assistant et sécurité
