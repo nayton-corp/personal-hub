@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.domains.finance.patrimoine.app import valuation
-from hub.domains.finance.registre.app.reads import last_clbd
+from hub.domains.finance.registre.app.reads import closing_balances
 from hub.domains.finance.registre.model.amounts import (
     money,
 )
@@ -56,8 +56,9 @@ def accounts(conn: Connection) -> list[dict[str, Any]]:
         )
     ):
         spend[acc] = {"rule_id": rid, "category_id": cat}
+    clbds = closing_balances(conn)
     for r in rows:
-        clbd = last_clbd(conn, r[0])
+        clbd = clbds.get(r[0])
         value, missing = valuation.account_value(positions, r[0], int(r[8]), "9999-12-31")
         out.append(
             {

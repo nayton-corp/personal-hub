@@ -67,6 +67,11 @@ def test_a_sentence_goes_to_the_assistant_and_its_answer_comes_back(
     # le hub ne nomme jamais la personne : l'assistant la tient de son jeton
     assert json.loads(data or b"") == {"text": "le lave-vaisselle affiche E24", "client": "hub"}
     assert fake.auth[-1] == "Bearer hub-secret"
+    # le jeton de la question posée avant est relayé tel quel (audit m18)
+    r = client.post("/api/assistant/talk", json={"text": "oui", "confirm": "abcd1234"})
+    assert r.status_code == 200
+    _m, _u, data, _mime = fake.calls[-1]
+    assert json.loads(data or b"")["confirm"] == "abcd1234"
 
 
 def test_the_history_and_the_status_are_read_through_the_hub(

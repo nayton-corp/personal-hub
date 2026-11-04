@@ -18,6 +18,10 @@ from hub.domains.finance.registre.model.amounts import (
 from hub.kernel.text import normalize
 
 REVIEW_IDS = 50  # identifiants rendus par groupe : de quoi proposer un lot de recatégorisations
+# bornes des lectures (audit m17) : les écritures à classer les plus récentes, et les écritures
+# classées les plus récentes dont on tire l'historique d'un commerçant
+REVIEW_ROWS = 5_000
+HISTORY_ROWS = 20_000
 
 
 def _direction(amounts: list[int]) -> str:
@@ -72,9 +76,10 @@ def _past_categories(conn: Connection, keys: set[str], pack: CountryPack) -> dic
             "LEFT JOIN categorizations c ON c.seq = vc.categorization_seq "
             "LEFT JOIN rules r ON r.id = c.rule_id "
             "WHERE e.kind = 'movement' AND vc.category_id IS NOT NULL "
-            f"AND vc.category_id != :uncat AND NOT ({CATCH_ALL})"
+            f"AND vc.category_id != :uncat AND NOT ({CATCH_ALL}) "
+            "ORDER BY e.booking_date DESC, e.seq DESC LIMIT :n"
         ),
-        {"uncat": UNCATEGORIZED},
+        {"uncat": UNCATEGORIZED, "n": HISTORY_ROWS},
     ).fetchall()
     counts: dict[str, dict[str, int]] = {}
     for counterparty, label, category in rows:
@@ -98,8 +103,9 @@ def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
             "LEFT JOIN rules r ON r.id = c.rule_id "
             "WHERE e.kind = 'movement' AND (vc.category_id IS NULL OR ("
             f"{CATCH_ALL}))"
-            "ORDER BY e.booking_date DESC, e.seq DESC"
-        )
+            "ORDER BY e.booking_date DESC, e.seq DESC LIMIT :n"
+        ),
+        {"n": REVIEW_ROWS},
     ).fetchall()
     pack = packs.current()
     groups: dict[tuple[str, str, str | None], list[Any]] = {}

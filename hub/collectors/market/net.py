@@ -77,3 +77,15 @@ def uint(url: str, http: Http, step: str, contract: str, data: str) -> int:
     return int(
         str(rpc(url, http, step, "eth_call", [{"to": contract, "data": data}, "latest"])), 16
     )
+
+
+QUOTE_KINDS = {"ETF": "fund", "MUTUALFUND": "fund", "EQUITY": "stock"}
+
+
+def quote_kind(instrument_type: object, instrument: str) -> str:
+    """Le type que la source donne (`instrumentType` de Yahoo) ; à défaut, le préfixe de l'ISIN
+    (IE, LU : un fonds), faute de mieux (audit m13)."""
+    found = QUOTE_KINDS.get(str(instrument_type or "").upper())
+    if found is not None:
+        return found
+    return "fund" if instrument.upper().startswith(("IE", "LU")) else "stock"

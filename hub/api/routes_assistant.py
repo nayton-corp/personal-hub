@@ -29,6 +29,7 @@ class AssistantStatusOut(BaseModel):
 
 class TalkIn(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+    confirm: str | None = Field(default=None, max_length=40)  # jeton de la question posée avant
 
 
 class AnswerOut(BaseModel):
@@ -78,7 +79,7 @@ def history(
 @router.post("/talk", response_model=AnswerOut)
 def talk(body: TalkIn, hub_ctx: Ctx, _principal: AppSession) -> AnswerOut:
     try:
-        found = hub_ctx.assistant.talk(body.text.strip())
+        found = hub_ctx.assistant.talk(body.text.strip(), confirm=body.confirm)
     except AssistantError as e:
         raise _relay(e) from None
     return AnswerOut.model_validate(found)

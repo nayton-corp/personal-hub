@@ -41,6 +41,16 @@ def test_the_whole_house_waits_for_a_yes_from_the_same_speaker():
     assert domia.gestures == [("PUT", "/api/situation", {"value": "AWAY"}, "robin")]
 
 
+def test_a_yes_with_another_token_plays_nothing():
+    assistant, domia, _, _, _clock = make()
+    asked = assistant.talk("on part", ROBIN)
+    assert assistant.talk("oui", ROBIN, confirm="pas-celui-la")["answer"].startswith("Ce oui ne répond plus")
+    assert domia.gestures == []
+    asked = assistant.talk("on part", ROBIN)
+    assert assistant.talk("oui", ROBIN, confirm=asked["confirm"])["answer"] == "Mode Absent."
+    assert len(domia.gestures) == 1
+
+
 def test_no_or_too_late_plays_nothing():
     assistant, domia, _, _, clock = make([say("Rien à faire.")])
     assistant.talk("éteins tout", ROBIN)

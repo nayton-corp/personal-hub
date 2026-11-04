@@ -472,6 +472,7 @@ export interface DebtOut {
   currency: string;
   original: MoneyOut;
   rate_pct: string | null;
+  day_count: string;
   payment: MoneyOut | null;
   ends_on: string | null;
   category_id: string | null;
@@ -1166,6 +1167,7 @@ export interface TabOut {
 
 export interface TalkIn {
   text: string;
+  confirm?: string | null;
 }
 
 export interface ToolCallOut {

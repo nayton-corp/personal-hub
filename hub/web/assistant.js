@@ -84,6 +84,7 @@ function reason(e) {
 function answered(question, a, voice) {
   const item = { kind: "talk", at: new Date().toISOString(), text: a.heard ?? question, answer: a.answer, voice };
   S.items = [...(S.items || []), item];
+  S.confirm = a.confirm || null; // jeton de la question posée : renvoyé avec la prochaine phrase
   if (!here()) {
     S.card = item;
     S.unread = true;
@@ -105,7 +106,7 @@ async function send(question) {
   paintOrb();
   store.notify();
   try {
-    answered(text, await api("/assistant/talk", { text }), false);
+    answered(text, await api("/assistant/talk", S.confirm ? { text, confirm: S.confirm } : { text }), false);
   } catch (e) {
     S.error = reason(e);
     if (!here()) S.card = { text, answer: S.error, failed: true };

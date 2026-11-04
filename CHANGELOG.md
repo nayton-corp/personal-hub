@@ -133,6 +133,39 @@
   sous `money` (l'ancien `chf` est relu). Le nom du module `pillar3a` et les défauts du noyau
   (`DEFAULT_TZ`, `DEFAULT_BASE`, quand compose ne pose rien) restent.
 
+### Mineurs de l'audit
+
+- Seuils en réglages (m2, m16) : la section `[finance]` règle la tolérance du rapprochement,
+  les délais d'un compte, d'un cours et d'un change anciens, l'epsilon des quantités et les
+  seuils des événements de la courbe de performance (`event_floor_minor`, `event_share_pct`,
+  `event_income_floor_minor`) ; l'app reçoit `stale_days` par `/finance/settings`.
+- Chaque dette porte sa convention de décompte des intérêts (m3) : `act/365` (le défaut, ce
+  que le hub faisait pour toutes), `act/360` ou `30/360` (hypothèques). Migration 0025,
+  `save_debt.day_count`, choix dans la fiche de la dette.
+- `last_used_at` d'un jeton s'écrit au plus une fois par minute (m7) : une requête de
+  collecteur ne prend plus le verrou d'écriture pour rien.
+- La reprise des règles de l'ancien script sort du hub (m10) : `scripts/legacy_rules.py`, à
+  lancer à la main ; la commande `rules import-legacy` disparaît.
+- Corrections de lecture d'une transaction crypto à l'arrondi bancaire (m11) ; une seule forme
+  de clé (`txid|symbole|jambe`), les bitcoins écrits avant gardent la leur sans doublon. Deux
+  opérations IBKR identiques sans identifiant se suivent d'un numéro (m12).
+- À date égale, la source d'un cours qui fait foi est déclarée (m13, `assets.PRICE_SOURCES` :
+  rapport du dépositaire, relevé saisi, clôture de marché, puis prix d'une opération), plus
+  l'ordre alphabétique de son nom ; un type d'instrument connu n'est plus remplacé par une
+  autre source ; Yahoo donne le type de ce qu'il cote. Les avis VIAC gardent une clé de
+  contenu (un même avis réexporté reste un doublon).
+- Le verrou de reprise d'historique expire après 6 h (m14) ; l'export CSV neutralise les
+  formules sur toutes les colonnes de texte (m15).
+- Compositions de fonds versionnées (m16, migration 0026) : la transparence à une date lit la
+  composition connue à cette date ; la table des pays est gelée.
+- Les listes de comptes, la fraîcheur et les comptes à rafraîchir se lisent en une requête par
+  liste (m17) ; « À classer » et l'historique d'un commerçant lisent les écritures les plus
+  récentes, bornées.
+- Le planificateur note la dernière minute servie (`scheduler.last` dans les données) et
+  rejoue une fois, au redémarrage, chaque job manqué pendant l'arrêt, au plus un jour en
+  arrière (m18). Un « oui » à l'assistant ne joue que la question dont il renvoie le jeton
+  (`confirm`, relayé par le hub et l'app) ; sans jeton, la voix garde son oui d'une minute.
+
 ## [0.13.19] · 2026-11-03
 
 ### Finance

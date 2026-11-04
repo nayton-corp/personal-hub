@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from hub.platform.cron import parse, tick
+from hub.platform.cron import missed, parse, tick
 
 CRONTAB = """
 # commentaire
@@ -38,6 +38,17 @@ def test_tick_runs_due_jobs() -> None:
     results = tick(parse(CRONTAB), datetime(2026, 10, 27, 3, 0), runner)
     assert ran == [("hub", "nightly")]
     assert results[0][1] == 0
+
+
+def test_missed_jobs_are_replayed_once_at_most_a_day_back() -> None:
+    jobs = parse(CRONTAB)
+    # arrêt de 02:00 à 03:05 (le tour de 03:05 lui-même n'est pas compris)
+    found = missed(jobs, datetime(2026, 10, 27, 2, 0), datetime(2026, 10, 27, 3, 5))
+    assert [j.command[1] for j in found] == ["verify", "backup", "nightly"]
+    # trois jours d'arrêt : un seul tour de chaque, celui des dernières 24 heures
+    found = missed(jobs, datetime(2026, 10, 24, 2, 0), datetime(2026, 10, 27, 3, 5))
+    assert [j.command[-1] for j in found] == ["jours ouvrés", "verify", "backup", "nightly"]
+    assert missed(jobs, datetime(2026, 10, 27, 3, 1), datetime(2026, 10, 27, 3, 5)) == []
 
 
 @pytest.mark.parametrize("bad", ["* * * * hub", "61 * * * * x", "*/0 * * * * x", "5-1 * * * * x"])

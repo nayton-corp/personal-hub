@@ -2435,6 +2435,18 @@
       },
       "TalkIn": {
         "properties": {
+          "confirm": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm"
+          },
           "text": {
             "maxLength": 2000,
             "minLength": 1,

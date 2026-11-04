@@ -15,6 +15,7 @@ import pytest
 from hub.collectors.base import Failure
 from hub.collectors.http import Http
 from hub.collectors.ibkr import flow as ibkr
+from hub.collectors.market import net
 from hub.collectors.market import flow as market
 from hub.collectors.runtime import Env
 from hub.domains.finance.sources.infra import market_file
@@ -187,10 +188,10 @@ def test_market_check_reads_latest_rates(make_env: Any) -> None:
 
 def test_quote_kind_comes_from_the_source_then_from_the_isin() -> None:
     """m13 : Yahoo dit le type ; sans lui, le préfixe de l'ISIN, faute de mieux."""
-    assert market.quote_kind("ETF", "US00TEST") == "fund"
-    assert market.quote_kind("EQUITY", "IE00TEST") == "stock"
-    assert market.quote_kind(None, "IE00TEST") == "fund"
-    assert market.quote_kind("", "GB00TEST") == "stock"
+    assert net.quote_kind("ETF", "US00TEST") == "fund"
+    assert net.quote_kind("EQUITY", "IE00TEST") == "stock"
+    assert net.quote_kind(None, "IE00TEST") == "fund"
+    assert net.quote_kind("", "GB00TEST") == "stock"
 
 
 def test_market_run_drops_a_file_the_finance_domain_reads(make_env: Any) -> None:

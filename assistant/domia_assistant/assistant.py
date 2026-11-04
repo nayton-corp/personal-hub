@@ -106,16 +106,20 @@ class Assistant:
         self.engagements = engagements
         self.route = route
 
-    def talk(self, text: str, who: Speaker, voice: bool = False) -> dict[str, Any]:
+    def talk(self, text: str, who: Speaker, voice: bool = False, confirm: str | None = None) -> dict[str, Any]:
+        """`confirm` : le jeton rendu avec la question posée ; s'il est donné, un « oui » ne joue que
+        la proposition qui le porte (audit m18)."""
         text = text.strip()
-        answer = self._talk(text, who)
+        answer = self._talk(text, who, confirm)
         self.memory.log(who.person, who.room, text, answer.get("answer", ""), voice=voice, done=answer.get("done"))
         return answer
 
-    def _talk(self, text: str, who: Speaker) -> dict[str, Any]:
+    def _talk(self, text: str, who: Speaker, confirm: str | None = None) -> dict[str, Any]:
         key = who.client or who.person or who.room or "_"
         with self.lock:
             pending = self.pending.pop(key, None)
+        if pending and confirm is not None and confirm != pending.token and grammar.is_yes(text):
+            return reply("Ce oui ne répond plus à ma dernière question : redis-moi ce que tu veux.")
         if pending and grammar.is_no(text):
             # un « non » clôt la proposition, même après le délai : un oui plus tard ne la rejouera pas
             for name, args in pending.calls:

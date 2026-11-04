@@ -421,12 +421,12 @@ def restore(
 
 
 @app.command()
-def scheduler(crontab: Path) -> None:
-    """Exécute la crontab du dépôt (conteneur `scheduler`)."""
+def scheduler(crontab: Path, state: Path | None = None) -> None:
+    """Exécute la crontab du dépôt (conteneur `scheduler`) ; `state` : dernière minute servie."""
     from hub.platform.cron import run_forever
 
     hub_logging.configure(get_settings().log_level)
-    run_forever(crontab)
+    run_forever(crontab, state=state or get_settings().paths.data / "scheduler.last")
 
 
 def main() -> None:

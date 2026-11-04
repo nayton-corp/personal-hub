@@ -17,7 +17,7 @@ from sqlalchemy import Connection, text
 from hub.domains.finance import thresholds
 from hub.domains.finance.classement.app.totals import Line, Lines, Totals, period_report
 from hub.domains.finance.packs import CountryPack
-from hub.domains.finance.registre.app.reads import budget_accounts, in_list, last_data
+from hub.domains.finance.registre.app.reads import budget_accounts, in_list, last_dates
 from hub.domains.finance.registre.model import institutions
 from hub.domains.finance.registre.model.amounts import (
     MIN_COUNT_FOR_AGGREGATES,
@@ -181,7 +181,8 @@ def stale_accounts(conn: Connection, today: date, days: int | None = None) -> in
     ids = conn.execute(
         text("SELECT id FROM accounts WHERE closed_on IS NULL AND hidden = 0")
     ).scalars()
-    return sum(1 for a in ids if (d := last_data(conn, a)) is not None and d < limit)
+    dates = last_dates(conn)
+    return sum(1 for a in ids if (d := dates.get(a)) is not None and d < limit)
 
 
 def to_categorize(conn: Connection) -> int:

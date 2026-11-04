@@ -153,8 +153,9 @@ def handler(
                 self._send(403, {"error": str(e)})
                 return
             started = time.monotonic()
+            confirm = body.get("confirm")
             try:
-                answer = assistant.talk(text, who)
+                answer = assistant.talk(text, who, confirm=confirm if isinstance(confirm, str) else None)
             except Exception:  # une phrase ne fait jamais tomber le service
                 LOG.exception("talk_failed correlation_id=%s", body.get("correlation_id"))
                 self._send(500, {"error": "l'assistant a trébuché"})

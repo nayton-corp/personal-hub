@@ -100,8 +100,10 @@ class AssistantLink:
         query = {"days": str(days), "limit": str(limit)}
         return self._call("GET", "/history?" + urllib.parse.urlencode(query))
 
-    def talk(self, text: str) -> dict[str, Any]:
-        body = {"text": text, "client": "hub"}
+    def talk(self, text: str, confirm: str | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {"text": text, "client": "hub"}
+        if confirm:
+            body["confirm"] = confirm  # un oui ne joue que la question qui porte ce jeton
         return self._call("POST", "/talk", json.dumps(body).encode(), timeout=TALK_SECONDS)
 
     def voice(self, audio: bytes, mime: str) -> dict[str, Any]:
