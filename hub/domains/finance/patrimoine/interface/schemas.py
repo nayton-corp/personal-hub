@@ -168,6 +168,7 @@ class DebtOut(Out):
     currency: str
     original: MoneyOut
     rate_pct: str | None
+    day_count: str
     payment: MoneyOut | None
     ends_on: str | None
     category_id: str | None

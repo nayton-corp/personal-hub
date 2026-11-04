@@ -3,11 +3,11 @@
 Une dette n'a pas de relevé. Son solde à une date part du dernier solde constaté
 (`debt_balance_records`, en ajout seul : l'ouverture, puis les relevés du prêteur ; le dernier
 relevé d'un même jour fait foi), gagne les intérêts courus jour par
-jour au taux annuel de la dette (sur 365 jours, sans capitalisation entre deux paiements), puis
-baisse de chaque paiement : les écritures de la catégorie de la dette, depuis son compte de
-paiement s'il est donné, dans la devise de la dette. Un remboursement reçu dans cette catégorie
-(montant positif) la remonte. Le solde ne descend pas sous zéro ; une dette close vaut zéro dès
-sa date de clôture.
+jour au taux annuel de la dette (selon sa convention de décompte, sans capitalisation entre deux
+paiements), puis baisse de chaque paiement : les écritures de la catégorie de la dette, depuis
+son compte de paiement s'il est donné, dans la devise de la dette. Un remboursement reçu dans
+cette catégorie (montant positif) la remonte. Le solde ne descend pas sous zéro ; une dette
+close vaut zéro dès sa date de clôture.
 
 Le patrimoine retranche le solde, converti dans la devise de base (enveloppe « dettes ») ; il
 compte aussi comme versement, de sorte qu'un remboursement ne passe pas pour un effet marché :
@@ -40,6 +40,10 @@ KIND_LABEL = {
 }
 KEY_PREFIX = "debt:"  # clé d'une dette dans by_account
 MAX_PROJECTION_MONTHS = 600
+# convention de décompte des intérêts : jours réels sur 365 ou 360, ou mois de trente jours sur
+# une année de 360 (30E/360, l'usage des hypothèques suisses)
+DAY_COUNTS = ("act/365", "act/360", "30/360")
+DEFAULT_DAY_COUNT = "act/365"
 
 
 def key(debt_id: str) -> str:
@@ -60,6 +64,7 @@ class Debt:
     category_id: str | None
     account_id: str | None
     closed_on: str | None
+    day_count: str = DEFAULT_DAY_COUNT
 
 
 @dataclass
@@ -83,7 +88,7 @@ def load(conn: Connection) -> list[Debt]:
     rows = conn.execute(
         text(
             "SELECT id, name, lender, kind, currency, original_minor, rate, payment_minor, "
-            "ends_on, category_id, account_id, closed_on FROM debts ORDER BY name, id"
+            "ends_on, category_id, account_id, closed_on, day_count FROM debts ORDER BY name, id"
         )
     ).fetchall()
     return [
@@ -100,13 +105,28 @@ def load(conn: Connection) -> list[Debt]:
             r[9],
             r[10],
             r[11],
+            r[12],
         )
         for r in rows
     ]
 
 
-def _days(a: str, b: str) -> int:
-    return (date.fromisoformat(b) - date.fromisoformat(a)).days
+def year_fraction(a: str, b: str, day_count: str = DEFAULT_DAY_COUNT) -> Decimal:
+    """La part d'année entre deux dates selon la convention ; 0 au plus (b avant a)."""
+    d1, d2 = date.fromisoformat(a), date.fromisoformat(b)
+    if d2 <= d1:
+        return Decimal(0)
+    if day_count == "30/360":
+        days = (
+            360 * (d2.year - d1.year)
+            + 30 * (d2.month - d1.month)
+            + min(d2.day, 30)
+            - min(d1.day, 30)
+        )
+        return Decimal(days) / 360
+    if day_count == "act/360":
+        return Decimal((d2 - d1).days) / 360
+    return Decimal((d2 - d1).days) / 365
 
 
 def _minor(x: Decimal) -> int:
@@ -164,7 +184,7 @@ class Book:
                     continue
                 if on > on_date:
                     break
-                accrued = bal * debt.rate * _days(last, on) / 365
+                accrued = bal * debt.rate * year_fraction(last, on, debt.day_count)
                 bal += accrued
                 interest += accrued
                 bal = max(Decimal(0), bal - amount)
@@ -172,7 +192,7 @@ class Book:
                 out.payments += 1
                 out.last_payment = on
                 last = on
-            accrued = bal * debt.rate * _days(last, on_date) / 365
+            accrued = bal * debt.rate * year_fraction(last, on_date, debt.day_count)
             bal += accrued
             interest += accrued
         out.balance = _minor(bal)
@@ -317,6 +337,7 @@ def items(conn: Connection, today: str) -> list[dict[str, Any]]:
                 "original": _money(d.original_minor, d.currency),
                 # taux annuel en %, texte décimal ('2.5') ; None sans intérêt
                 "rate_pct": format((d.rate * 100).normalize(), "f") if d.rate else None,
+                "day_count": d.day_count,
                 "payment": _money(d.payment_minor, d.currency),
                 "ends_on": d.ends_on,
                 "category_id": d.category_id,

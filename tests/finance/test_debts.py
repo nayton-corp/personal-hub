@@ -255,6 +255,35 @@ def test_interest_accrues_between_payments() -> None:
     assert debts.projected_end(d, 0, "2026-01-01", 1_000) is None
 
 
+def test_day_count_conventions() -> None:
+    yf = debts.year_fraction
+    assert yf("2025-01-01", "2026-01-01") == 1
+    assert yf("2025-01-01", "2026-01-01", "30/360") == 1
+    assert yf("2025-01-31", "2025-02-28", "30/360") == Decimal(28) / 360  # 30E/360
+    assert yf("2025-01-01", "2026-01-01", "act/360") == Decimal(365) / 360
+    assert yf("2025-07-02", "2025-07-01", "30/360") == 0
+    d = debts.Debt(
+        "d2",
+        "Hypothèque",
+        "Banque",
+        "mortgage",
+        "CHF",
+        None,
+        Decimal("0.036"),
+        None,
+        None,
+        "logement",
+        None,
+        None,
+        "30/360",
+    )
+    book = debts.Book([d], {"d2": [("2025-01-01", 1_000_000)]}, {})
+    # six mois de trente jours à 3,6 % : 18 000, quel que soit le nombre de jours réels
+    mid = book.state(d, "2025-07-01")
+    assert mid is not None
+    assert (mid.balance, mid.interest) == (1_018_000, 18_000)
+
+
 def test_recategorized_payment_reaches_the_history(
     client: TestClient, ctx: HubContext, fin: FinanceDomain, loan: dict[str, Any]
 ) -> None:

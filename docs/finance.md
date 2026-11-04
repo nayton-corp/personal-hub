@@ -161,7 +161,7 @@ règle qui sert aussi aux prochains imports.
 | `set_month_start` | jour où commence le mois budgétaire, pour les mois dès `valid_from` (le mois en cours par défaut) | oui |
 | `decide_break` | règle une rupture du rapprochement : `cost` (avec `cost_minor`), `accept`, `gone` ; l'assistant peut la proposer | oui (`withdraw_break_decision` : une ligne de retrait, la rupture se rouvre) |
 | `link_crypto_moves` | relie deux mouvements crypto : `transfer` (une arrivée et l'envoi d'un autre de mes comptes) ou `stake` (un envoi et le claim qui l'a rendu) ; le hub la demande quand une fenêtre de quelques jours ou un claim dans les 60 jours le laisse deviner, l'assistant peut la proposer | oui (`unlink_crypto_moves` : une ligne de retrait, le mouvement redevient hors de mes comptes) |
-| `save_debt` · `record_debt_balance` | une dette et ses soldes constatés (en ajout seul : le dernier relevé d'un jour fait foi) | — |
+| `save_debt` · `record_debt_balance` | une dette (taux annuel et convention de décompte des intérêts : `act/365` par défaut, `act/360`, `30/360`) et ses soldes constatés (en ajout seul : le dernier relevé d'un jour fait foi) | — |
 
 Aucune route d'un domaine n'écrit hors de ces propositions (`tests/test_double_sas_everywhere.py`) ;
 une lecture n'écrit pas non plus : le rafraîchissement des instantanés part après la réponse.

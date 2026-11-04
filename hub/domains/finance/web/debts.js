@@ -15,6 +15,7 @@ const ACCOUNTS = "/finance/accounts", CATS = "/finance/categories";
 export const DEBT_KIND = { loan: "Crédit", mortgage: "Hypothèque", leasing: "Leasing", student: "Prêt étudiant", credit: "Carte de crédit", other: "Autre dette" };
 const KIND_IC = { loan: "car", mortgage: "home", leasing: "car", student: "briefcase", credit: "wallet", other: "landmark" };
 export const debtMark = (d, size = "") => ibox(ic(KIND_IC[d.kind] || "landmark"), "var(--neg)", size);
+const DAY_COUNT = { "act/365": "Jours réels / 365", "act/360": "Jours réels / 360", "30/360": "30 / 360 (hypothèques)" };
 
 const today = () => new Date().toISOString().slice(0, 10);
 const u = (m) => units(m);
@@ -28,8 +29,8 @@ function minor(s) {
 const find = (id) => ((store.data(DEBTS) || {}).items || []).find((d) => d.id === id) || null;
 
 function initial(d, seed) {
-  if (!d) return { name: "", lender: "", kind: "loan", mode: "date", balance: "", balance_on: today(), original: "", rate: "", payment: "", ends_on: "", category_id: "", account_id: "", ...seed };
-  return { name: d.name, lender: d.lender, kind: d.kind, original: txt(d.original), rate: d.rate_pct || "", payment: txt(d.payment), ends_on: d.ends_on || "", category_id: d.category_id || "", account_id: d.account_id || "", stmt: "", stmt_on: today() };
+  if (!d) return { name: "", lender: "", kind: "loan", mode: "date", balance: "", balance_on: today(), original: "", rate: "", day_count: "act/365", payment: "", ends_on: "", category_id: "", account_id: "", ...seed };
+  return { name: d.name, lender: d.lender, kind: d.kind, original: txt(d.original), rate: d.rate_pct || "", day_count: d.day_count, payment: txt(d.payment), ends_on: d.ends_on || "", category_id: d.category_id || "", account_id: d.account_id || "", stmt: "", stmt_on: today() };
 }
 
 // paramètres de save_debt : tout pour une création, les seuls champs changés sinon
@@ -47,6 +48,7 @@ function params(d, t) {
   const rate = String(t.rate || "").replace(",", ".").trim();
   if (rate && !/^\d{1,2}(\.\d{1,4})?$/.test(rate)) throw new Error("Taux illisible (en %, par exemple 2,5)");
   if (d ? (rate || "0") !== (d.rate_pct || "0") : rate) out.rate_pct = rate || "0";
+  if (d ? t.day_count !== d.day_count : t.day_count !== "act/365") out.day_count = t.day_count;
   put("ends_on", t.ends_on || "", d && (d.ends_on || ""));
   put("category_id", t.category_id || "", d && (d.category_id || ""));
   put("account_id", t.account_id || "", d && (d.account_id || ""));
@@ -103,6 +105,7 @@ SHEETS.debt = (id, sh) => {
       <label class="field" for="debt-acc">Depuis le compte<select id="debt-acc" data-k="account_id" class="select-full"><option value="" ${t.account_id ? "" : "selected"}>Tous les comptes</option>${accOpts}</select></label>
       <p class="hint">Chaque paiement de cette catégorie fait baisser le solde, quel que soit son montant : une mensualité qui change suit d'elle-même.</p>
       <div class="two">${money("payment", "Mensualité actuelle (facultatif)", t)}${input("rate", "Taux annuel en %", t, 'inputmode="decimal" placeholder="0"')}</div>
+      <label class="field" for="debt-dc">Décompte des intérêts<select id="debt-dc" data-k="day_count" class="select-full">${Object.entries(DAY_COUNT).map(([v, l]) => `<option value="${v}" ${t.day_count === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <div class="two">${money("original", "Montant emprunté (facultatif)", t)}${day("ends_on", "Échéance (facultatif)", t)}</div>
       ${d ? `<div class="setrow"><span id="debt-close-lbl">${d.closed_on ? `Soldée le ${date(d.closed_on)}` : "Dette soldée"}<small>${d.closed_on ? "Elle ne compte plus dans le patrimoine." : "La sortir du patrimoine à partir d'aujourd'hui."}</small></span><button class="secondary" type="button" data-a="debt-close" ${sh.busy ? "disabled" : ""}>${d.closed_on ? "Rouvrir" : "Marquer soldée"}</button></div>` : ""}
       ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}`,
