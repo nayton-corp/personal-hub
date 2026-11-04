@@ -57,15 +57,15 @@ const VIEWS = `
 
 const RUBRICS = `
       <section class="card" data-rubric="conn" aria-labelledby="t-conn">
-        <div class="head"><h2 id="t-conn">Connexions</h2><span><button class="link" id="conn-refresh" type="button">Tout actualiser</button> <button class="link" id="conn-add" type="button">Ajouter</button></span></div>
-        <p class="note">Banques, plateformes et cours que le hub collecte, chacun à son horaire ; « Actualiser » le lance tout de suite. Les identifiants sont chiffrés à la saisie et ne s'affichent plus jamais.</p>
+        <div class="head"><h2 id="t-conn">Connexions</h2><button class="link" id="conn-refresh" type="button">Tout actualiser</button></div>
+        <p class="note">Banques, plateformes et cours que le hub collecte, chacun à son horaire ; « Actualiser » le lance tout de suite. Une connexion se crée en ajoutant un compte ; ses identifiants sont chiffrés à la saisie et ne s'affichent plus jamais.</p>
         <div id="coll-list"></div>
         <p id="coll-msg" class="message" role="status"></p>
       </section>
       <section class="card form" data-rubric="conn" id="conn-editor" hidden></section>
 
       <section class="card" data-rubric="conn" aria-labelledby="t-pending">
-        <div class="head"><h2 id="t-pending">Comptes en attente</h2><button class="link" id="acct-add" type="button">Ajouter</button></div>
+        <div class="head"><h2 id="t-pending">Comptes en attente</h2><button class="link" id="acct-add" type="button">Ajouter un compte</button></div>
         <p class="note">Les relevés d'un compte inconnu attendent sa création, validée avec Face ID.</p>
         <div id="acct-pending"></div>
         <p id="acct-msg" class="message" role="status"></p>

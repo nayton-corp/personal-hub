@@ -1,10 +1,12 @@
 // Réglages d'un compte : nom, objectif et montant visé, disponibilité, catégorie, masquage et catégorie de toutes
 // ses dépenses (une poche Vacances), enregistrés par un seul Face ID. Le panneau s'ouvre depuis le patrimoine (détail d'un
 // compte) ou depuis la carte « Comptes » des réglages, qui montre aussi la fraîcheur.
-import { date, daysSince, staleDays, units } from "../../format.js";
+import { ago, date, daysSince, staleDays, units } from "../../format.js";
+import { sourceOf } from "./addaccount.js";
+import { paths } from "./connections.js";
 import { FACET, GROUP_LABEL, facetMark, facetName, setInstitutions } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
-import { store } from "../../store.js";
+import { api, store } from "../../store.js";
 import { SHEETS, SH, closeSheet, esc, failure, fill, ibox, ic, openSheet, renderSheet, toast } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -29,6 +31,17 @@ function changes(a, t) {
   return "name" in out && !out.name.trim() ? null : out;
 }
 
+// d'où viennent les relevés du compte : sa connexion, son dernier relevé et « Actualiser »
+function feedLine(a) {
+  const cs = store.use(paths.connections).data, st = store.use(paths.states).data;
+  if (!cs) return "";
+  const src = sourceOf(a, cs.items);
+  if (!src) return '<p class="hint">Alimenté par des fichiers déposés ou à la main.</p>';
+  const s = st && st.items.find((x) => x.name === src.id);
+  const last = s && s.last_success_at ? ` · dernier relevé ${ago(Date.parse(s.last_success_at))}` : "";
+  return `<p class="hint">Alimenté par ${esc(src.label)}${last} · <button class="link" type="button" data-a="acc-refresh" data-v="${esc(src.id)}">Actualiser</button></p>`;
+}
+
 const radio = (key, list, cur) => `<div class="catgrid" role="radiogroup" aria-label="${esc(FACET[key === "availability" ? "liq" : key === "category" ? "cat" : key].label)}">${list.map(([v, label, mark]) =>
   `<button type="button" role="radio" aria-checked="${cur === v}" data-a="acc-pick" data-v="${key}|${v}">${mark}${esc(label)}</button>`).join("")}</div>`;
 
@@ -49,6 +62,7 @@ SHEETS.account = (id, sh) => {
     body: `
       <label class="field" for="acc-name">Nom<input id="acc-name" maxlength="60" autocomplete="off" value="${esc(t.name)}"></label>
       <p class="hint">${esc(a.institution)} · ${esc(KIND[a.kind] || a.kind)}${a.iban ? ` · ${esc(a.iban)}` : ""}</p>
+      ${feedLine(a)}
       <h3 class="field">Objectif</h3>
       ${radio("goal", facet("goal"), t.goal)}
       <label class="field" for="acc-target">Montant visé (${esc(a.balance.currency)})<input id="acc-target" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="off" placeholder="aucun" value="${esc(t.target)}"></label>
@@ -105,6 +119,14 @@ export function accountsList() {
 
 export const actions = {
   "acc-edit": (id) => openSheet("account", id),
+  "acc-refresh": async (id) => {
+    try {
+      await api(`/collectors/${id}/refresh`, {});
+      toast("Actualisation demandée : le relevé arrive dans les minutes qui viennent");
+    } catch (e) {
+      toast(failure(e), { error: true });
+    }
+  },
   "acc-pick": (v) => {
     if (!SH.tmp) return;
     const [k, val] = v.split("|");

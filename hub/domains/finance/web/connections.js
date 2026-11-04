@@ -1,14 +1,13 @@
-// Connexions et comptes dans l'app (chantier « hub générique », G5) : ajouter une banque ou une
-// plateforme, donner ses identifiants (chiffrés à la saisie, jamais relus), son horaire, ses
-// réglages et ses portefeuilles, lier un consentement Enable Banking, actualiser une connexion
-// (ou toutes) hors horaire, puis créer les comptes dont les relevés attendent, par une
-// proposition validée avec Face ID.
+// Connexions dans l'app (chantier « hub générique », G5) : régler une banque ou une plateforme,
+// remplacer ses identifiants (chiffrés à la saisie, jamais relus), son horaire, ses réglages et
+// ses portefeuilles, lier un consentement Enable Banking, actualiser une connexion (ou toutes)
+// hors horaire. Une connexion se crée en ajoutant un compte (addaccount.js), qui reprend les
+// champs et les aides d'ici.
 //
 // La liste se redessine à chaque réponse ; les formulaires, eux, ne sont construits qu'à
 // l'ouverture, pour ne jamais effacer une saisie en cours.
-import { ago, base, date, el, initials } from "../../format.js";
+import { ago, date, el, initials } from "../../format.js";
 import { brandColors, brandSvg, instLook } from "./meta.js";
-import { approve, propose } from "./proposals.js";
 import { api, store } from "../../store.js";
 
 const $ = (id) => document.getElementById(id);
@@ -22,7 +21,7 @@ export const paths = {
 };
 
 // sigle et teinte de l'institution quand on la connaît, sinon initiales
-function instAv(key, label, cls = "av") {
+export function instAv(key, label, cls = "av") {
   const l = instLook(key) || instLook(label);
   if (!l) return el("div", cls, initials(label));
   if (l.brand) {
@@ -45,7 +44,7 @@ const OUTCOME_LABEL = {
   auth_error: "connexion refusée", site_unavailable: "site indisponible",
   selector_missing: "page changée", invalid_file: "fichier refusé", unknown: "erreur",
 };
-const FIELD_LABEL = {
+export const FIELD_LABEL = {
   contract: "Numéro de contrat", password: "Mot de passe", email: "E-mail",
   application_id: "Identifiant de l'application", private_key: "Clé privée (PEM)",
   flex_token: "Jeton Flex", query_id: "Numéro de la requête Flex", api_key: "Clé API",
@@ -60,7 +59,6 @@ const FIELD_LABEL = {
 const JSON_SETTINGS = new Set(["currencies", "crypto", "quotes"]);
 const NUMBER_SETTINGS = new Set(["consent_days", "max_syncs_per_day"]);
 const MULTILINE_SECRETS = new Set(["private_key"]);
-const KIND_LABEL = { cash: "Cash", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" };
 const POLL_MS = 4000;
 const STATES_POLL_MS = 10_000;
 const IMPORT_MS = 45_000;
@@ -68,17 +66,17 @@ const IMPORT_MS = 45_000;
 const DETAIL_LABEL = { "quota.day": "quota du jour atteint" };
 
 let busy = false;
-let editing = null; // { id } ou { create: true }
+let editing = null; // { id } de la connexion ouverte
 let poller = null;
 let statesPoller = null; // tant qu'une actualisation ou un contrôle attend le service
 
-function say(id, text, error = false) {
+export function say(id, text, error = false) {
   const n = $(id);
   n.textContent = text || "";
   n.classList.toggle("error", error);
 }
 
-function refresh(...keys) {
+export function refresh(...keys) {
   for (const k of keys) store.cache.delete(k);
   store.notify();
 }
@@ -98,7 +96,7 @@ async function act(msgId, fn) {
   }
 }
 
-function link(label, fn) {
+export function link(label, fn) {
   const b = el("button", "link", label);
   b.type = "button";
   b.disabled = busy;
@@ -106,7 +104,7 @@ function link(label, fn) {
   return b;
 }
 
-function field(form, id, label, input, hint) {
+export function field(form, id, label, input, hint) {
   const l = el("label", "", label);
   l.htmlFor = id;
   input.id = id;
@@ -115,7 +113,7 @@ function field(form, id, label, input, hint) {
   return input;
 }
 
-function input(value, type = "text") {
+export function input(value, type = "text") {
   const i = el("input");
   i.type = type;
   i.value = value ?? "";
@@ -124,7 +122,7 @@ function input(value, type = "text") {
   return i;
 }
 
-function button(label, cls = "btn") {
+export function button(label, cls = "btn") {
   const b = el("button", cls, label);
   b.type = "button";
   return b;
@@ -238,7 +236,7 @@ function close() {
   stopPolling();
 }
 
-function open(what) {
+export function open(what) {
   editing = what;
   const box = $("conn-editor");
   box.replaceChildren(el("p", "note", "Chargement…"));
@@ -246,24 +244,21 @@ function open(what) {
   Promise.all([api(paths.catalog), api(paths.connections)])
     .then(([cat, cs]) => {
       if (editing !== what) return;
-      if (what.create) buildCreate(box, cat.items, cs.items);
-      else {
-        const c = cs.items.find((x) => x.id === what.id);
-        const spec = cat.items.find((x) => x.name === c?.connector);
-        if (!c || !spec) return close();
-        buildEdit(box, c, spec, what.wallet);
-      }
+      const c = cs.items.find((x) => x.id === what.id);
+      const spec = cat.items.find((x) => x.name === c?.connector);
+      if (!c || !spec) return close();
+      buildEdit(box, c, spec);
       box.scrollIntoView({ behavior: "smooth", block: "start" });
     })
     .catch((e) => box.replaceChildren(el("p", "message error", e.message)));
 }
 
-function slug(s) {
+export function slug(s) {
   return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "").slice(0, 40);
 }
 
-function settingInput(key, value) {
+export function settingInput(key, value) {
   if (JSON_SETTINGS.has(key)) {
     const t = el("textarea");
     t.value = value === undefined ? "" : JSON.stringify(value, null, 1);
@@ -273,7 +268,7 @@ function settingInput(key, value) {
   return input(value, NUMBER_SETTINGS.has(key) ? "number" : "text");
 }
 
-function readSetting(key, node) {
+export function readSetting(key, node) {
   const raw = node.value.trim();
   if (!raw) return undefined;
   if (JSON_SETTINGS.has(key)) {
@@ -288,90 +283,7 @@ function readSetting(key, node) {
   return raw;
 }
 
-function buildCreate(box, catalog, existing) {
-  box.replaceChildren(el("h2", "", "Nouvelle connexion"));
-  const pick = el("select");
-  for (const c of catalog) {
-    const o = el("option", "", c.name === "market" ? `${c.label} (portefeuilles crypto : Ledger, MetaMask, Coinbase Wallet…)` : c.label);
-    o.value = c.name;
-    pick.append(o);
-  }
-  field(box, "conn-new-connector", "Connecteur", pick);
-  const label = field(box, "conn-new-label", "Nom affiché", input(""));
-  const id = field(box, "conn-new-id", "Identifiant", input(""),
-    "Minuscules, chiffres et tirets ; il ne change plus (état, mémoire et adresse de retour).");
-  const extra = el("div");
-  box.append(extra);
-  let touched = false;
-  id.addEventListener("input", () => { touched = true; });
-  // connecteur unique déjà présent (Cours et cryptos) : on règle celui-là, sans doublon
-  const taken = () => {
-    const spec = catalog.find((c) => c.name === pick.value);
-    return spec.single ? existing.find((x) => x.connector === spec.name) : undefined;
-  };
-  const fill = () => {
-    const spec = catalog.find((c) => c.name === pick.value);
-    const already = taken();
-    for (const n of [label, id]) {
-      n.hidden = !!already;
-      n.labels.forEach((l) => { l.hidden = !!already; });
-    }
-    if (id.nextElementSibling?.classList.contains("hint")) id.nextElementSibling.hidden = !!already;
-    go.textContent = already ? "Ajouter un portefeuille" : "Créer";
-    if (already) {
-      extra.replaceChildren(el("p", "hint", `« ${already.label} » existe déjà : un portefeuille crypto s'ajoute dans ses réglages, section Portefeuilles.`));
-      return;
-    }
-    if (!label.value || label.dataset.auto === "1") {
-      label.value = spec.label;
-      label.dataset.auto = "1";
-    }
-    if (!touched) id.value = slug(spec.name === "enable_banking" ? "banque" : spec.name);
-    extra.replaceChildren();
-    for (const key of spec.required_settings) {
-      const n = field(extra, `conn-new-${key}`, `${FIELD_LABEL[key] || key} *`, settingInput(key));
-      n.dataset.key = key;
-    }
-    if (spec.name === "enable_banking") {
-      extra.append(el("p", "hint", "Nom et pays tels qu'Enable Banking les liste, par exemple Revolut et LT, ou N26 et DE."));
-    }
-  };
-  label.addEventListener("input", () => { label.dataset.auto = "0"; if (!touched) id.value = slug(label.value); });
-  const msg = el("p", "message");
-  const acts = el("div", "acts");
-  const go = button("Créer");
-  const cancel = button("Annuler", "btn secondary");
-  acts.append(go, cancel);
-  box.append(acts, msg);
-  pick.addEventListener("change", fill);
-  fill();
-  cancel.addEventListener("click", close);
-  go.addEventListener("click", async () => {
-    const already = taken();
-    if (already) return open({ id: already.id, wallet: true });
-    go.disabled = true;
-    msg.textContent = "";
-    try {
-      const settings = {};
-      for (const n of extra.querySelectorAll("[data-key]")) {
-        const v = readSetting(n.dataset.key, n);
-        if (v !== undefined) settings[n.dataset.key] = v;
-      }
-      const c = await api(paths.connections, {
-        id: id.value.trim(), connector: pick.value, label: label.value.trim() || null, settings,
-      });
-      refresh(paths.states, paths.connections);
-      say("coll-msg", `${c.label} ajoutée : donne maintenant ses identifiants.`);
-      open({ id: c.id });
-    } catch (e) {
-      msg.textContent = e.message;
-      msg.classList.add("error");
-      go.disabled = false;
-    }
-  });
-}
-
-function buildEdit(box, c, spec, newWallet = false) {
+function buildEdit(box, c, spec) {
   box.replaceChildren(el("h2", "", c.label));
   box.append(el("p", "note", `${spec.label} · ${c.runner === "browser" ? "navigateur" : "API"} · identifiant ${c.id}`));
   const msg = el("p", "message");
@@ -388,7 +300,7 @@ function buildEdit(box, c, spec, newWallet = false) {
     inputs[key] = field(box, `ce-${key}`, `${FIELD_LABEL[key] || key}${req ? " *" : ""}`, settingInput(key, c.settings[key]),
       JSON_SETTINGS.has(key) ? "JSON ; vide : la valeur du service (deploy/settings.toml)." : null);
   }
-  const wallets = spec.settings.includes("wallets") ? walletsEditor(box, c.settings.wallets || [], newWallet) : null;
+  const wallets = spec.settings.includes("wallets") ? walletsEditor(box, c.settings.wallets || []) : null;
   const save = button("Enregistrer les réglages");
   box.append(save);
   save.addEventListener("click", () => run(save, msg, async () => {
@@ -416,9 +328,7 @@ function buildEdit(box, c, spec, newWallet = false) {
       : spec.secrets.length ? "Pas encore donnés : la connexion ne tourne pas sans eux." : "Facultatifs."));
     const secretInputs = {};
     for (const key of fields) {
-      const pass = key === "password", multi = MULTILINE_SECRETS.has(key), node = multi ? el("textarea") : input("", pass ? "password" : "text");
-      node.autocomplete = "off"; if (!pass && !multi) Object.assign(node, { spellcheck: false, autocapitalize: "off" }).style.webkitTextSecurity = "disc";
-      secretInputs[key] = field(box, `ce-secret-${key}`, FIELD_LABEL[key] || key, node);
+      secretInputs[key] = field(box, `ce-secret-${key}`, FIELD_LABEL[key] || key, secretInput(key));
     }
     const store_ = button(c.has_secrets ? "Remplacer les identifiants" : "Enregistrer les identifiants", "btn secondary");
     box.append(store_);
@@ -468,7 +378,15 @@ function buildEdit(box, c, spec, newWallet = false) {
   linkStatus();
 }
 
-async function run(btn, msg, fn) {
+// identifiant dans un champ texte masqué, que le trousseau ne préremplit pas ; une clé PEM sur plusieurs lignes
+export function secretInput(key) {
+  const pass = key === "password", multi = MULTILINE_SECRETS.has(key), node = multi ? el("textarea") : input("", pass ? "password" : "text");
+  node.autocomplete = "off";
+  if (!pass && !multi) Object.assign(node, { spellcheck: false, autocapitalize: "off" }).style.webkitTextSecurity = "disc";
+  return node;
+}
+
+export async function run(btn, msg, fn) {
   btn.disabled = true;
   msg.textContent = "";
   msg.classList.remove("error");
@@ -488,7 +406,41 @@ async function run(btn, msg, fn) {
 
 const NETWORK_LABEL = { ethereum: "Ethereum", arbitrum: "Arbitrum", base: "Base", bsc: "BNB Smart Chain", polygon: "Polygon" };
 
-function walletsEditor(box, initial, newWallet = false) {
+export const WALLET_ASSETS = ["BTC", "ETH", "SOL", "ATOM"];
+
+// réseaux d'un portefeuille ETH : la même adresse sur Ethereum et ses couches 2
+export function networkChecks(networks) {
+  const nets = el("div", "networks");
+  const chosen = new Set(networks || ["ethereum"]);
+  const boxes = {};
+  for (const n of Object.keys(NETWORK_LABEL)) {
+    const lab = el("label", "check");
+    const cb = el("input");
+    cb.type = "checkbox";
+    cb.checked = chosen.has(n);
+    boxes[n] = cb;
+    lab.append(cb, document.createTextNode(` ${NETWORK_LABEL[n]}`));
+    nets.append(lab);
+  }
+  return { nets, boxes };
+}
+
+// le portefeuille tel que `market` l'attend : xpub à part, adresses, réseaux s'ils changent
+export function walletOf(w, account, asset, text, boxes) {
+  const lines = text.split(/\s+/).filter(Boolean);
+  const xpubs = lines.filter((s) => /^[xyz]pub/.test(s));
+  const addresses = lines.filter((s) => !/^[xyz]pub/.test(s));
+  const { xpub: _x, xpubs: _xs, addresses: _a, networks: _n, ...rest } = w;
+  const out = { ...rest, account, asset };
+  const networks = Object.keys(boxes).filter((n) => boxes[n].checked);
+  if (asset === "ETH" && networks.join() !== "ethereum") out.networks = networks;
+  if (xpubs.length === 1) out.xpub = xpubs[0];
+  else if (xpubs.length) out.xpubs = xpubs;
+  if (addresses.length) out.addresses = addresses;
+  return out;
+}
+
+function walletsEditor(box, initial) {
   box.append(el("h3", "", "Portefeuilles"));
   box.append(el("p", "hint", "Adresses publiques, ou clé publique étendue (xpub, ypub, zpub) d'un compte BTC. Jamais de clé privée ni de phrase de récupération."));
   const list = el("div");
@@ -502,7 +454,7 @@ function walletsEditor(box, initial, newWallet = false) {
     const i = rows.length;
     const account = field(wrap, `w-${i}-account`, "Compte (crypto:nom)", input(w.account || "crypto:"));
     const asset = el("select");
-    for (const a of ["BTC", "ETH", "SOL", "ATOM"]) {
+    for (const a of WALLET_ASSETS) {
       const o = el("option", "", a);
       o.value = a;
       asset.append(o);
@@ -513,19 +465,7 @@ function walletsEditor(box, initial, newWallet = false) {
     keys.value = [...(w.xpubs || (w.xpub ? [w.xpub] : [])), ...(w.addresses || [])].join("\n");
     keys.spellcheck = false;
     field(wrap, `w-${i}-keys`, "Adresses ou xpub, une par ligne", keys);
-    // réseaux d'un portefeuille ETH : la même adresse sur Ethereum et ses couches 2
-    const nets = el("div", "networks");
-    const chosen = new Set(w.networks || ["ethereum"]);
-    const boxes = {};
-    for (const n of ["ethereum", "arbitrum", "base", "bsc", "polygon"]) {
-      const lab = el("label", "check");
-      const cb = el("input");
-      cb.type = "checkbox";
-      cb.checked = chosen.has(n);
-      boxes[n] = cb;
-      lab.append(cb, document.createTextNode(` ${NETWORK_LABEL[n]}`));
-      nets.append(lab);
-    }
+    const { nets, boxes } = networkChecks(w.networks);
     const netLabel = el("label", "", "Réseaux");
     wrap.append(netLabel, nets);
     const showNets = () => { netLabel.hidden = nets.hidden = asset.value !== "ETH"; };
@@ -539,27 +479,10 @@ function walletsEditor(box, initial, newWallet = false) {
   };
   for (const w of initial) addRow(w);
   add.addEventListener("click", () => addRow());
-  if (newWallet) {
-    addRow({ asset: "ETH" });
-    const last = rows[rows.length - 1].account;
-    setTimeout(() => { last.scrollIntoView({ behavior: "smooth", block: "center" }); last.focus(); }, 0);
-  }
 
   return {
     read() {
-      return rows.filter((r) => !r.removed).map((r) => {
-        const lines = r.keys.value.split(/\s+/).map((s) => s.trim()).filter(Boolean);
-        const xpubs = lines.filter((s) => /^[xyz]pub/.test(s));
-        const addresses = lines.filter((s) => !/^[xyz]pub/.test(s));
-        const { xpub: _x, xpubs: _xs, addresses: _a, networks: _n, ...rest } = r.w;
-        const out = { ...rest, account: r.account.value.trim(), asset: r.asset.value };
-        const networks = Object.keys(r.boxes).filter((n) => r.boxes[n].checked);
-        if (r.asset.value === "ETH" && networks.join() !== "ethereum") out.networks = networks;
-        if (xpubs.length === 1) out.xpub = xpubs[0];
-        else if (xpubs.length) out.xpubs = xpubs;
-        if (addresses.length) out.addresses = addresses;
-        return out;
-      });
+      return rows.filter((r) => !r.removed).map((r) => walletOf(r.w, r.account.value.trim(), r.asset.value, r.keys.value, r.boxes));
     },
   };
 }
@@ -568,7 +491,7 @@ function walletsEditor(box, initial, newWallet = false) {
 
 function linkStatus() {
   const node = document.getElementById("ce-link");
-  if (!node || !editing || editing.create) return;
+  if (!node || !editing) return;
   const st = store.data(paths.states);
   const s = st && st.items.find((x) => x.name === editing.id);
   node.replaceChildren();
@@ -602,129 +525,6 @@ function stopPolling() {
   poller = null;
 }
 
-// --- comptes ---------------------------------------------------------------------------------
-
-function walletAccounts() {
-  const cs = store.data(paths.connections);
-  const out = [];
-  for (const c of (cs && cs.items) || []) {
-    for (const w of c.settings.wallets || []) out.push({ ref: w.account, asset: w.asset });
-  }
-  return out;
-}
-
-const PLATFORM_LABEL = { binance: "Binance", kucoin: "KuCoin", coinbase: "Coinbase" };
-
-// comptes que les relevés attendent : Revolut (Enable Banking), portefeuilles, plateformes
-export function accountsCard() {
-  const list = $("acct-pending");
-  list.replaceChildren();
-  const pe = store.use(paths.pending);
-  const ac = store.use(paths.accounts);
-  if (pe.status !== "ok" || ac.status !== "ok") {
-    const e = pe.error || ac.error;
-    list.append(el("div", "empty", e ? `Impossible de charger : ${e.message}` : "Chargement…"));
-    return;
-  }
-  const known = new Set(ac.data.items.map((a) => a.external_ref).filter(Boolean));
-  const todo = pe.data.items.map((p) => ({
-    ref: p.ref,
-    title: p.ref,
-    sub: `${p.entries} écriture${p.entries > 1 ? "s" : ""} en attente${p.from ? ` du ${date(p.from)} au ${date(p.to)}` : ""}`,
-    preset: { institution: p.institution, name: `${p.institution} ${p.currency || ""}`.trim(), kind: p.kind, currency: p.currency || base(), external_ref: p.ref, liquid: true, budget_account: true },
-  }));
-  const seen = new Set(todo.map((t) => t.ref));
-  for (const w of walletAccounts()) {
-    if (known.has(w.ref) || seen.has(w.ref)) continue;
-    seen.add(w.ref);
-    const name = w.ref.slice(7);
-    todo.push({ ref: w.ref, title: w.ref, sub: `portefeuille ${w.asset} suivi, compte à créer`,
-      preset: { institution: name.charAt(0).toUpperCase() + name.slice(1), name: name.charAt(0).toUpperCase() + name.slice(1), kind: "crypto", currency: base(), external_ref: w.ref } });
-  }
-  const cs = store.data(paths.connections);
-  for (const c of (cs && cs.items) || []) {
-    const ref = `crypto:${c.connector}`;
-    if (!PLATFORM_LABEL[c.connector] || known.has(ref) || seen.has(ref)) continue;
-    seen.add(ref);
-    todo.push({ ref, title: ref, sub: "plateforme reliée, compte à créer",
-      preset: { institution: PLATFORM_LABEL[c.connector], name: PLATFORM_LABEL[c.connector], kind: "crypto", currency: base(), external_ref: ref } });
-  }
-  if (!todo.length) list.append(el("div", "empty", "Aucun compte en attente."));
-  for (const t of todo) {
-    const r = el("div", "row");
-    const n = el("div", "n");
-    n.append(el("b", "", t.title), el("span", "", t.sub));
-    const v = el("div", "v");
-    v.append(link("Créer", () => openAccount(t.preset)));
-    r.append(instAv(t.preset.institution, t.preset.institution, "av g"), n, v);
-    list.append(r);
-  }
-}
-
-function openAccount(preset = {}) {
-  const box = $("acct-editor");
-  box.replaceChildren(el("h2", "", "Nouveau compte"));
-  box.hidden = false;
-  const institution = field(box, "ac-institution", "Établissement", input(preset.institution || ""));
-  const name = field(box, "ac-name", "Nom du compte", input(preset.name || ""));
-  const kind = el("select");
-  for (const [k, l] of Object.entries(KIND_LABEL)) {
-    const o = el("option", "", l);
-    o.value = k;
-    kind.append(o);
-  }
-  kind.value = preset.kind || "cash";
-  field(box, "ac-kind", "Type", kind);
-  const currency = field(box, "ac-currency", "Devise", input(preset.currency || base()));
-  const iban = field(box, "ac-iban", "IBAN (compte bancaire)", input(preset.iban || ""));
-  const ref = field(box, "ac-ref", "Référence externe (sinon)", input(preset.external_ref || ""),
-    "Celle des relevés : revolut:CHF, crypto:ledger, crypto:binance… Un IBAN ou une référence.");
-  const check = (id, text, on) => {
-    const l = el("label", "check");
-    const b = input("", "checkbox");
-    b.id = id;
-    b.checked = Boolean(on);
-    l.append(b, document.createTextNode(text));
-    box.append(l);
-    return b;
-  };
-  const liquid = check("ac-liquid", "Compte de liquidités", preset.liquid);
-  const budget = check("ac-budget", "Suivi par le budget", preset.budget_account);
-  const msg = el("p", "message");
-  const acts = el("div", "acts");
-  const go = button("Créer avec Face ID");
-  const cancel = button("Annuler", "btn secondary");
-  acts.append(go, cancel);
-  box.append(acts, msg);
-  cancel.addEventListener("click", () => { box.hidden = true; box.replaceChildren(); });
-  go.addEventListener("click", () => run(go, msg, async () => {
-    const params = {
-      institution: institution.value.trim(),
-      name: name.value.trim(),
-      kind: kind.value,
-      currency: currency.value.trim().toUpperCase(),
-      liquid: liquid.checked,
-      budget_account: budget.checked,
-    };
-    if (iban.value.trim()) params.iban = iban.value.replace(/\s+/g, "").toUpperCase();
-    if (ref.value.trim()) params.external_ref = ref.value.trim();
-    const p = await propose("create_account", params);
-    const [result] = await approve([p.id]);
-    if (!result || result.status !== "applied") {
-      const why = result && result.problem && (result.problem.detail || result.problem.title);
-      throw new Error(why || "Proposition non appliquée : relis-la dans l'accueil.");
-    }
-    box.hidden = true;
-    box.replaceChildren();
-    say("acct-msg", `Compte « ${params.name} » créé ; ses relevés en attente sont repris.`);
-    store.invalidate();
-    return null;
-  }));
-  box.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
 export function initConnections() {
-  $("conn-add").addEventListener("click", () => open({ create: true }));
   $("conn-refresh").addEventListener("click", refreshAll);
-  $("acct-add").addEventListener("click", () => openAccount());
 }

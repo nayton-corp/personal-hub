@@ -39,8 +39,14 @@ sélecteur, jamais un montant ni un texte de page. Un fichier qui n'a pas la for
 
 ## Gérer les connexions
 
-**Depuis l'app** (onglet Sources, carte **Connexions**) : « Ajouter » choisit un connecteur du
-catalogue, un nom et un identifiant ; « Régler » change le nom, l'horaire (cron, vide pour
+**Depuis l'app** (onglet Sources) : « Ajouter un compte », sur la carte **Comptes en attente**,
+demande le type du compte (banque, titres, prévoyance, plateforme crypto, portefeuille, autre),
+sa plateforme parmi les connecteurs du catalogue qui alimentent ce type, puis ce que la
+plateforme demande : identifiants, banque Enable Banking, adresses publiques, ou rien pour un
+compte tenu à la main. La connexion se crée en passant (son identifiant vient du nom) et sert
+les comptes suivants de la même plateforme ; pour une plateforme crypto, le compte
+`crypto:<identifiant>` se crée aussitôt, avec Face ID, et le premier passage part tout de suite.
+Sur la carte **Connexions**, « Régler » change le nom, l'horaire (cron, vide pour
 celui du catalogue), les réglages, les portefeuilles, et remplace les identifiants (tapés une
 fois, chiffrés aussitôt, jamais réaffichés). Pour une banque Enable Banking, « Lier le compte »
 demande un consentement : le service `collector-api` ouvre l'autorisation dans la minute,
@@ -49,9 +55,10 @@ retour. La carte **Comptes** liste les comptes que des relevés attendent (Revol
 Banking, portefeuilles, plateformes) et les crée par une proposition validée avec Face ID ;
 un compte Revolut s'ouvre au solde déduit de sa reprise, comme `fin revolut add-account`.
 
-Un portefeuille crypto (Ledger, MetaMask, Coinbase Wallet…) n'est pas une connexion : il
-s'ajoute dans les réglages de « Cours et cryptos », section Portefeuilles. Cette connexion est
-unique ; « Ajouter » sur ce connecteur ouvre ses réglages avec un portefeuille à remplir.
+Un portefeuille crypto (Ledger, MetaMask, Coinbase Wallet…) n'est pas une connexion : « Ajouter
+un compte » → portefeuille l'ajoute aux réglages de « Cours et cryptos » (créée au premier
+portefeuille), crée son compte `crypto:<nom>` et lance la lecture. Ses réglages restent dans
+la section Portefeuilles de cette connexion, qui est unique.
 
 **Actualiser** : hors de son horaire, « Actualiser » sur une connexion (ou « Tout actualiser »
 en tête de la carte) demande un run complet que le service lance dans la minute (`POST

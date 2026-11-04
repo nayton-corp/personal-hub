@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+### App
+
+- « Ajouter un compte » en trois étapes : le type (banque, titres, prévoyance, plateforme
+  crypto, portefeuille, autre), la plateforme, puis ce qu'elle demande (identifiants, banque
+  Enable Banking, adresses publiques, ou rien pour un compte tenu à la main). La connexion se
+  crée en passant et sert les comptes suivants de la même plateforme ; une plateforme crypto
+  ou un portefeuille a son compte tout de suite, avec Face ID. Le bouton « Ajouter » de la
+  carte Connexions disparaît : ses réglages restent sous « Régler ».
+- La fiche d'un compte dit ce qui l'alimente (« Alimenté par KuCoin · dernier relevé il y a
+  2 h ») et l'actualise d'un toucher.
+
 ### Collecteurs
 
 - KuCoin : le premier passage lit le grand livre depuis le plus ancien dépôt ou retrait, et non

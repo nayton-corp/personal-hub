@@ -1,8 +1,9 @@
 // Rubriques de la finance dans Sources et réglages (la page est celle de la coquille, sources.js) :
-// connexions et comptes en attente (connections.js, formulaires construits à l'ouverture),
+// connexions (connections.js), ajout d'un compte et comptes en attente (addaccount.js),
 // comptes avec leur fraîcheur et leurs réglages (accounts.js), dettes (debts.js), budget, impôts.
 import { accountsList } from "./accounts.js";
-import { accountsCard, connectionsCard } from "./connections.js";
+import { accountsCard } from "./addaccount.js";
+import { connectionsCard } from "./connections.js";
 import { debtsList } from "./debts.js";
 import { daysSince, locale, staleDays } from "../../format.js";
 import { TAX_RATES, taxRate } from "./meta.js";
