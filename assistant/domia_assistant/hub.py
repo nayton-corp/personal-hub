@@ -48,7 +48,7 @@ class HubSettings:
     state: Path = Path.home() / "PersonalHub" / "brain"  # commerçants déjà proposés
 
 
-def settings(raw: dict | None, env: dict[str, str]) -> HubSettings | None:
+def settings(raw: dict[str, Any] | None, env: dict[str, str]) -> HubSettings | None:
     """La section `hub:` de config.yaml ; absente ou sans propriétaire : pas d'outils du hub."""
     raw = raw or {}
     owners = tuple(str(p) for p in raw.get("owners") or ())
@@ -89,7 +89,9 @@ def token(cfg: HubSettings, name: str = "aggregates") -> str:
 MODES = ("suggest", "catchup", "direct")
 
 
-def classify(cfg: HubSettings, model_url: str, model: str, mode: str = "suggest", dry_run: bool = False) -> dict:
+def classify(
+    cfg: HubSettings, model_url: str, model: str, mode: str = "suggest", dry_run: bool = False
+) -> dict[str, Any]:
     """Le classement du brain du hub, avec le modèle résident de l'assistant (un seul modèle chargé) : `suggest` les
     commerçants jamais vus (le matin), `catchup` une règle par commerçant, `direct` les achats uniques. Rend des
     compteurs, jamais un montant ni un libellé."""
@@ -144,10 +146,10 @@ def build(cfg: HubSettings, api: Any) -> HubModule:
     return HubModule(tools, families, "\n".join(notes), Speaker(person=cfg.owners[0]))
 
 
-def _tool(api: Any, domain: str, spec: dict, allowed: Callable[[Speaker | None], bool]) -> Tool:
+def _tool(api: Any, domain: str, spec: dict[str, Any], allowed: Callable[[Speaker | None], bool]) -> Tool:
     name = str(spec["name"])
 
-    def run(args: dict, who: Speaker) -> Any:
+    def run(args: dict[str, Any], who: Speaker) -> Any:
         if not allowed(who):
             return {"error": NOT_YOURS}
         try:

@@ -24,9 +24,9 @@ iPhone / app Domia ──POST /api/talk──▶ Domia (Pi) ──POST /talk─�
 
 | Dossier | Ce qu'il contient |
 |---|---|
-| `domia_assistant/grammar.py` | la voie rapide : la maison et les synonymes appris → des gestes du catalogue |
-| `domia_assistant/assistant.py` | la conversation : voie rapide, sinon le modèle et ses outils ; le « oui » avant un geste pour toute la maison |
-| `domia_assistant/tools.py` | les outils, dont les gestes générés de `GET /api/commands/catalog` (jamais `Toggle`) |
+| `domia_assistant/grammar.py` | la voie rapide : la maison et les synonymes appris → des gestes du catalogue (`grammar_lexicon.py` : les mots et le lexique de la maison ; `grammar_acts.py` : les actes) |
+| `domia_assistant/assistant.py` | la conversation : voie rapide, sinon le modèle et ses outils ; le « oui » avant un geste pour toute la maison (`phrasing.py` : ce qu'il dit) |
+| `domia_assistant/tools.py` | la boîte à outils (`Toolbox`, `build`) ; `tools_base.py` : qui parle, un outil, ses familles ; `tools_house.py` : les gestes générés de `GET /api/commands/catalog` (jamais `Toggle`) et les lectures ; `tools_knowledge.py` : bibliothèque, réglages, mémoire ; `tools_agenda.py` : Rappels, web, plan de demain |
 | `domia_assistant/reading.py` | savoir la maison : des lectures ciblées (pièce, sorte, objet, période), le journal en agrégats, les réglages en index puis en fiche, et le plafond d'une réponse (`fit`) |
 | `domia_assistant/settings.py` | régler avec un oui : les changements typés sur une copie de la config, le résumé en unités de l'écran, la vérification par Domia, l'écriture après le oui (`If-Match`) et l'annulation |
 | `parity/coverage.yaml` | rien d'impossible : pour chaque route de Domia, l'outil qui la sert, le lot qui l'apportera, ou pourquoi elle reste à l'écran |
@@ -215,7 +215,7 @@ puis jouer les phrases de `bench/cases.yaml` à la main et noter les résultats 
 
 ```sh
 pip install -r requirements-dev.txt && python -m pytest -q          # l'assistant, avec un faux Domia et un modèle scripté
-python -m ruff check . && python -m ruff format --check . && python -m mypy   # ce que la CI exige aussi (ruff format . pour reformater)
+python -m ruff check . && python -m ruff format --check . && python -m mypy   # ce que la CI exige aussi (mypy strict ; ruff format . pour reformater)
 cd eventkit && pip install -r requirements-dev.txt && python -m pytest -q   # le pont, avec un faux magasin
 python -m domia_assistant say "éteins le salon" --person robin      # une phrase, sans passer par Domia
 ```

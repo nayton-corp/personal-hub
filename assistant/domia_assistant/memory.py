@@ -11,6 +11,7 @@ import sqlite3
 import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 CONVERSATION_DAYS = 90
 FIRST_SILENCE = timedelta(days=7)
@@ -67,7 +68,7 @@ class Memory:
         self.db.commit()
         self.lock = threading.Lock()
 
-    def _exec(self, sql: str, args=()) -> sqlite3.Cursor:
+    def _exec(self, sql: str, args: tuple[Any, ...] | list[Any] = ()) -> sqlite3.Cursor:
         with self.lock:
             cur = self.db.execute(sql, args)
             self.db.commit()
@@ -84,7 +85,7 @@ class Memory:
         )
         return int(cur.lastrowid or 0)
 
-    def recall(self, question: str, person: str | None, limit: int = 8) -> list[dict]:
+    def recall(self, question: str, person: str | None, limit: int = 8) -> list[dict[str, Any]]:
         """Les notes qui partagent des mots avec la question, les plus récentes d'abord ; celles du foyer et celles de
         la personne qui demande."""
         terms = {w for w in _words(question) if len(w) > 2}
@@ -99,7 +100,7 @@ class Memory:
         scored.sort(key=lambda s: -s[0])
         return [s[1] for s in scored[:limit]]
 
-    def about(self, person: str) -> list[dict]:
+    def about(self, person: str) -> list[dict[str, Any]]:
         """« Qu'est-ce que tu sais de moi ? » : les notes dites par la personne ou à elle seule."""
         rows = self._exec(
             "SELECT * FROM notes WHERE person = ? OR said_by = ? ORDER BY at", (person, person)
@@ -149,7 +150,7 @@ class Memory:
         )
         self._exec("DELETE FROM conversations WHERE at < ?", ((at - timedelta(days=CONVERSATION_DAYS)).isoformat(),))
 
-    def recent(self, person: str | None, limit: int = 6) -> list[dict]:
+    def recent(self, person: str | None, limit: int = 6) -> list[dict[str, Any]]:
         rows = self._exec(
             "SELECT * FROM conversations WHERE person IS ? ORDER BY at DESC LIMIT ?", (person, limit)
         ).fetchall()
@@ -163,11 +164,11 @@ class Memory:
         )
         self._exec("DELETE FROM messages WHERE at < ?", ((at - timedelta(days=CONVERSATION_DAYS)).isoformat(),))
 
-    def messages(self, since: datetime) -> list[dict]:
+    def messages(self, since: datetime) -> list[dict[str, Any]]:
         rows = self._exec("SELECT * FROM messages WHERE at >= ? ORDER BY at", (since.isoformat(),)).fetchall()
         return [dict(r) for r in rows]
 
-    def history(self, person: str | None, since: datetime, limit: int = 60) -> list[dict]:
+    def history(self, person: str | None, since: datetime, limit: int = 60) -> list[dict[str, Any]]:
         """La conversation d'une personne (ou celle sans personne) et les messages de l'assistant au foyer, du plus
         ancien au plus récent ; les `limit` derniers."""
         talks = self._exec(
@@ -200,8 +201,8 @@ class Memory:
     def refuse(self, subject: str, at: datetime) -> datetime:
         """Un « non » : une semaine de silence, puis le double à chaque refus suivant ; rend la fin du silence."""
         row = self._exec("SELECT refusals FROM remarks WHERE subject = ?", (subject,)).fetchone()
-        refusals = (row["refusals"] if row else 0) + 1
-        until = at + FIRST_SILENCE * (2 ** (refusals - 1))
+        refusals = (int(row["refusals"]) if row else 0) + 1
+        until = at + FIRST_SILENCE * (1 << (refusals - 1))
         self._exec(
             "INSERT INTO remarks (subject, refusals, quiet_until) VALUES (?, ?, ?) "
             "ON CONFLICT(subject) DO UPDATE SET refusals = ?, quiet_until = ?",
@@ -227,12 +228,12 @@ class Memory:
         )
         return int(cur.lastrowid or 0)
 
-    def engagements(self, *states: str) -> list[dict]:
+    def engagements(self, *states: str) -> list[dict[str, Any]]:
         marks = ",".join("?" * len(states))
         rows = self._exec(f"SELECT * FROM engagements WHERE state IN ({marks}) ORDER BY id", states).fetchall()
         return [dict(r) for r in rows]
 
-    def engagement(self, engagement_id: int) -> dict | None:
+    def engagement(self, engagement_id: int) -> dict[str, Any] | None:
         row = self._exec("SELECT * FROM engagements WHERE id = ?", (engagement_id,)).fetchone()
         return dict(row) if row else None
 
@@ -251,7 +252,7 @@ class Memory:
             "UPDATE engagements SET state = ?, person = COALESCE(?, person), outcome = COALESCE(?, outcome), "
             "armed_at = COALESCE(?, armed_at) WHERE id = ?"
         )
-        args: list = [state, person, outcome, armed_at.isoformat() if armed_at else None, engagement_id]
+        args: list[Any] = [state, person, outcome, armed_at.isoformat() if armed_at else None, engagement_id]
         if only_from:
             sql += f" AND state IN ({','.join('?' * len(only_from))})"
             args += list(only_from)
@@ -277,9 +278,9 @@ class Memory:
         self,
         person: str | None,
         revision: int,
-        changes: list,
-        undo: list,
-        summary: list,
+        changes: list[Any],
+        undo: list[Any],
+        summary: list[Any],
         at: datetime,
         undoes: int | None = None,
     ) -> int:
@@ -295,16 +296,16 @@ class Memory:
         )
         return int(cur.lastrowid or 0)
 
-    def settings_change(self, change_id: int) -> dict | None:
+    def settings_change(self, change_id: int) -> dict[str, Any] | None:
         return _setting(self._exec("SELECT * FROM settings_changes WHERE id = ?", (change_id,)).fetchone())
 
-    def settings_applied(self, change_id: int, undo: list, at: datetime) -> None:
+    def settings_applied(self, change_id: int, undo: list[Any], at: datetime) -> None:
         self._exec(
             "UPDATE settings_changes SET state = 'APPLIED', undo = ?, applied_at = ? WHERE id = ?",
             (json.dumps(undo, ensure_ascii=False), at.isoformat(), change_id),
         )
 
-    def last_applied_settings(self, person: str | None) -> dict | None:
+    def last_applied_settings(self, person: str | None) -> dict[str, Any] | None:
         """Le dernier réglage appliqué pour cette personne et pas encore annulé."""
         return _setting(
             self._exec(
@@ -321,7 +322,7 @@ class Memory:
         self._exec("UPDATE settings_changes SET undone_by = ? WHERE id = ?", (by, change_id))
 
 
-def _setting(row: sqlite3.Row | None) -> dict | None:
+def _setting(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if row is None:
         return None
     out = dict(row)

@@ -4,7 +4,6 @@ l'assistant. Le pilier 3a selon le pays : tests/finance/test_profile_modules.py.
 from __future__ import annotations
 
 import json
-from datetime import date
 from pathlib import Path
 
 import pytest
@@ -12,7 +11,6 @@ from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
 from hub import cli
-from hub.brain import agent
 from hub.core import profile
 from hub.core.context import HubContext
 from hub.kernel import clock
@@ -106,20 +104,6 @@ def test_cli_show_and_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     bad = runner.invoke(cli.app, ["profile", "set", "--country", "Belgique"])
     assert bad.exit_code == 2
     get_settings.cache_clear()
-
-
-def test_system_prompt_uses_the_profile() -> None:
-    today = date(2026, 10, 28)
-    named = agent.system_prompt(today, {"display_name": "Camille", "country": "CH"})
-    assert "assistant financier personnel de Camille, en Suisse." in named
-    assert "carte que Camille valide" in named
-    anonymous = agent.system_prompt(today, {"country": "XX"})
-    assert "de la personne qui utilise ce hub. Nous sommes" in anonymous
-    assert "Nathan" not in named + anonymous + agent.system_prompt(today)
-    assert "montants en CHF" in named
-    euro = agent.system_prompt(today, {"country": "FR", "currency": "EUR"})
-    assert "en France" in euro
-    assert "(ex. 412.30 EUR)" in euro
 
 
 IGNORED = {".venv", "node_modules", "__pycache__"}

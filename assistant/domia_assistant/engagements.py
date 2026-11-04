@@ -9,6 +9,7 @@ import json
 import logging
 from dataclasses import asdict
 from datetime import UTC, date, datetime, time, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from .agenda import Agenda, AgendaUnavailable
@@ -54,11 +55,11 @@ class Engagements:
             ids.append(self.memory.offer(o.kind, o.question, json.dumps(body, ensure_ascii=False), expires, now))
         return ids
 
-    def waiting(self, now: datetime) -> list[dict]:
+    def waiting(self, now: datetime) -> list[dict[str, Any]]:
         """Les propositions qui attendent encore un « oui »."""
         return [e for e in self.memory.engagements(OFFERED) if _when(e["expires"]) > now]
 
-    def accept(self, engagement_id: int | None, person: str | None, now: datetime) -> list[dict]:
+    def accept(self, engagement_id: int | None, person: str | None, now: datetime) -> list[dict[str, Any]]:
         """« Oui » : une proposition, ou toutes celles qui attendent ; rend celles acceptées."""
         chosen = [e for e in self.waiting(now) if engagement_id is None or e["id"] == engagement_id]
         return [e for e in chosen if self.memory.settle(e["id"], ACCEPTED, person=person, only_from=(OFFERED,))]
@@ -81,7 +82,7 @@ class Engagements:
             return self.cancel(engagement_id)
         raise ValueError(decision)
 
-    def listing(self, now: datetime) -> list[dict]:
+    def listing(self, now: datetime) -> list[dict[str, Any]]:
         """Ce qui est prévu (accepté) ou proposé, pour « qu'est-ce que tu as prévu ? » et l'écran « Ce qui est
         prévu » ; `accepted` et `at` (ou `after_away_min`) pour l'écran."""
         out = []
@@ -148,7 +149,7 @@ class Engagements:
             said.append(self._play(e, offer))
         return [s for s in said if isinstance(s, str) and s]
 
-    def _holds(self, condition: dict, house: dict) -> tuple[bool, str]:
+    def _holds(self, condition: dict[str, Any], house: dict[str, Any]) -> tuple[bool, str]:
         situation = (house.get("situation") or {}).get("value")
         if situation == "NIGHT":
             return False, "c'est la nuit"
@@ -182,7 +183,7 @@ class Engagements:
                 return False, "il est déjà coché"
         return True, ""
 
-    def _play(self, e: dict, offer: dict) -> str | None:
+    def _play(self, e: dict[str, Any], offer: dict[str, Any]) -> str | None:
         try:
             if offer.get("gesture"):
                 g = offer["gesture"]
@@ -198,7 +199,7 @@ class Engagements:
         LOG.info("engagement_done id=%s kind=%s", e["id"], e["kind"])
         return message
 
-    def _end(self, e: dict, offer: dict, state: str, why: str) -> str:
+    def _end(self, e: dict[str, Any], offer: dict[str, Any], state: str, why: str) -> str:
         self.memory.settle(e["id"], state, outcome=why)
         LOG.info("engagement_%s id=%s kind=%s why=%s", state.lower(), e["id"], e["kind"], why)
         message = f"Je n'ai pas {offer['what']} : {why}."

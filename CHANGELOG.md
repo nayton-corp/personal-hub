@@ -82,6 +82,24 @@
   et un test vérifie, sur un jeu de données complet, qu'aucune réponse ne porte un champ hors
   modèle. `make openapi` génère aussi `hub/web/api.d.ts` depuis l'OpenAPI, et `make web` passe
   `tsc` sur les modules marqués `// @ts-check` (`format.js`, `bmodel.js` pour commencer).
+- L'assistant à parité avec l'app (audit M11, M12) : 47 outils Finance au lieu de 16. Chaque
+  route de lecture a son outil (écritures, une écriture, ordres, réglages, flux, budget mois
+  par mois, historique du patrimoine, positions, performance, transparence, cours, ruptures,
+  dettes, virements, packs de règles, comptes à ouvrir), et chaque type de proposition ouvert à
+  l'assistant (tous sauf `apply_import`) a le sien, engendré de son modèle de paramètres quand
+  aucun outil écrit à la main ne le couvre (`finance_propose_<type>`). Les montants restent du
+  texte, jamais d'IBAN ; le jeton des agrégats voit 20 outils de totaux. Un test tient la
+  parité routes ↔ outils ↔ types. Une seule boucle d'agent, celle de l'assistant :
+  `hub.brain.agent` et `hub-brain ask` disparaissent (leurs tests avec eux ; ceux de
+  l'assistant couvrent la boucle), `hub-brain check` fait un tour de conversation et vérifie
+  que le modèle demande `finance_month_summary` ; `brain.max_steps` n'a plus d'effet.
+- L'assistant sous les mêmes barrières que le hub (audit M12) : `mypy --strict` sur
+  `assistant/` (tout `dict` et `list` paramétré, chaque fonction annotée) et la règle des 400
+  lignes, tenue par le test du hub : `tools.py` devient la boîte à outils seule, ses familles
+  d'outils vont dans `tools_base`, `tools_house`, `tools_knowledge`, `tools_agenda` ;
+  `grammar.py` garde l'enchaînement, le lexique dans `grammar_lexicon`, les actes dans
+  `grammar_acts` ; `assistant.py` laisse ce qu'il dit à `phrasing`. Rien ne change pour qui
+  importe `domia_assistant.tools`, `.grammar` ou `.assistant`.
 - `hub finance golden save | check` : l'étalon des agrégats (patrimoine, positions,
   performance, ruptures, budget, dettes) se fige avant une mise à jour et se vérifie après, au
   centime ; le fichier ne contient que des chiffres et des identifiants.

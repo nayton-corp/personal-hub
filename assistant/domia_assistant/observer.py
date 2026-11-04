@@ -8,6 +8,7 @@ from __future__ import annotations
 import contextlib
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import planner
@@ -31,7 +32,7 @@ class Remark:
     message: str
 
 
-def phrase(o: dict) -> Remark:
+def phrase(o: dict[str, Any]) -> Remark:
     """Un constat de Domia (ou d'entretien) en une remarque courte."""
     kind, name, v = o["kind"], o.get("subject_name") or o.get("subject"), o.get("values") or {}
     if kind == "CLEANING_DUE":
@@ -68,7 +69,7 @@ def phrase(o: dict) -> Remark:
     return Remark(o["id"], kind, "Maison", f"{kind} : {name}")
 
 
-def maintenance_observations(library: Library | None, today: date) -> list[dict]:
+def maintenance_observations(library: Library | None, today: date) -> list[dict[str, Any]]:
     if library is None:
         return []
     try:
@@ -88,7 +89,7 @@ def maintenance_observations(library: Library | None, today: date) -> list[dict]
     ]
 
 
-def watching_tv(facts: dict) -> bool:
+def watching_tv(facts: dict[str, Any]) -> bool:
     for e in (facts.get("estimates") or {}).values():
         if e.get("kind") == "WATCHING_TV" and (e.get("fact") or {}).get("value") is True:
             return True
@@ -146,8 +147,8 @@ class Observer:
     def plan(self, now: datetime, tomorrow: date) -> tuple[planner.Plan, list[str]]:
         """Le plan de demain (spec « préparer demain » §5), et ce qui a manqué pour le faire (Rappels, météo)."""
         missing: list[str] = []
-        events: list[dict] = []
-        reminders: list[dict] = []
+        events: list[dict[str, Any]] = []
+        reminders: list[dict[str, Any]] = []
         if self.agenda:
             try:
                 events = self.agenda.calendar(tomorrow.isoformat(), (tomorrow + timedelta(days=1)).isoformat())

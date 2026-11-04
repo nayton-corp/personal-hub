@@ -8,7 +8,8 @@ import logging
 import time
 import urllib.error
 import urllib.request
-from typing import Protocol
+from collections.abc import Callable
+from typing import Any, Protocol, cast
 
 LOG = logging.getLogger("assistant.model")
 MAX_TOKENS = 600
@@ -19,7 +20,7 @@ class ModelError(Exception):
 
 
 class Model(Protocol):
-    def chat(self, messages: list[dict], tools: list[dict]) -> dict:
+    def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
         """Le message de l'assistant : {"role": "assistant", "content": ..., "tool_calls": [...]}."""
 
 
@@ -40,7 +41,7 @@ class OpenAICompatible:
         self.keep_alive = keep_alive  # Ollama le lit aussi sur /v1 ; les autres serveurs l'ignorent
         self.reasoning = reasoning
 
-    def _post(self, path: str, body: dict) -> dict:
+    def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         request = urllib.request.Request(
             self.base_url + path,
             data=json.dumps(body).encode("utf-8"),
@@ -50,11 +51,11 @@ class OpenAICompatible:
         )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                return json.loads(response.read())
+                return cast("dict[str, Any]", json.loads(response.read()))
         except (urllib.error.URLError, TimeoutError, ValueError) as e:
             raise ModelError(f"le modèle ne répond pas ({e})") from None
 
-    def chat(self, messages: list[dict], tools: list[dict]) -> dict:
+    def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
         # une réponse de l'assistant tient en deux phrases ou quelques appels d'outils : au banc, un appel sur 15 à 20
         # tournait 120 s sans fin ; borné, il s'arrête et la boucle répond quand même
         body = {"model": self.model, "messages": messages, "temperature": 0.2, "max_tokens": MAX_TOKENS}
@@ -80,7 +81,7 @@ class OpenAICompatible:
             usage.get("completion_tokens"),
             ",".join(c["function"]["name"] for c in message.get("tool_calls") or []) or "-",
         )
-        return message
+        return cast("dict[str, Any]", message)
 
     def look(self, image: bytes, mime: str, question: str, model: str) -> str:
         """Une photo et une question à un modèle de vision (lire une plaque signalétique, spec §8.2)."""
@@ -107,7 +108,13 @@ class Fallback:
     est laissé de côté `pause_s` secondes : on n'attend pas son délai à chaque phrase. Les vecteurs et la vision
     restent toujours sur le modèle local (`embed`, `look`)."""
 
-    def __init__(self, primary: Model, local: OpenAICompatible, pause_s: float = 300.0, clock=time.monotonic):
+    def __init__(
+        self,
+        primary: Model,
+        local: OpenAICompatible,
+        pause_s: float = 300.0,
+        clock: Callable[[], float] = time.monotonic,
+    ):
         self.primary = primary
         self.local = local
         self.pause_s = pause_s
@@ -115,7 +122,7 @@ class Fallback:
         self.paused_until = 0.0
         self.last = "primary"  # qui a répondu à la dernière phrase : primary ou local
 
-    def chat(self, messages: list[dict], tools: list[dict]) -> dict:
+    def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
         if self.clock() >= self.paused_until:
             try:
                 message = self.primary.chat(messages, tools)
@@ -137,25 +144,25 @@ class Fallback:
 class ScriptedModel:
     """Rejoue des messages, un par appel ; garde ce qu'on lui a demandé (les outils proposés, les résultats rendus)."""
 
-    def __init__(self, replies: list[dict]):
+    def __init__(self, replies: list[dict[str, Any]]):
         self.replies = list(replies)
-        self.requests: list[tuple[list[dict], list[dict]]] = []
+        self.requests: list[tuple[list[dict[str, Any]], list[dict[str, Any]]]] = []
 
-    def chat(self, messages: list[dict], tools: list[dict]) -> dict:
+    def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
         self.requests.append(([dict(m) for m in messages], tools))
         if not self.replies:
             raise ModelError("plus de réponse scriptée")
         return self.replies.pop(0)
 
 
-def call(name: str, arguments: dict, call_id: str = "c1") -> dict:
+def call(name: str, arguments: dict[str, Any], call_id: str = "c1") -> dict[str, Any]:
     """Un appel d'outil, à la forme OpenAI (pour écrire les scripts)."""
     return {"id": call_id, "type": "function", "function": {"name": name, "arguments": json.dumps(arguments)}}
 
 
-def say(content: str) -> dict:
+def say(content: str) -> dict[str, Any]:
     return {"role": "assistant", "content": content}
 
 
-def calls(*tool_calls: dict) -> dict:
+def calls(*tool_calls: dict[str, Any]) -> dict[str, Any]:
     return {"role": "assistant", "content": None, "tool_calls": list(tool_calls)}

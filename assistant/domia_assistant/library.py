@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 LOG = logging.getLogger("assistant.library")
 INBOX = "à-trier"
@@ -63,17 +63,17 @@ class Library:
         found = self._call("documents_search", {"q": question[:200], "limit": max(1, min(k, 20))}) or {}
         return [Passage(p["cite"], p.get("page"), p["text"]) for p in found.get("passages", [])]
 
-    def cards(self) -> dict[str, dict]:
+    def cards(self) -> dict[str, dict[str, Any]]:
         return {c["card_id"]: c for c in self._call("documents_cards") or []}
 
-    def card(self, card_id: str) -> dict | None:
-        return self._call("documents_card", {"card_id": card_id})
+    def card(self, card_id: str) -> dict[str, Any] | None:
+        return cast("dict[str, Any] | None", self._call("documents_card", {"card_id": card_id}))
 
-    def save_card(self, card_id: str, fields: dict) -> dict:
+    def save_card(self, card_id: str, fields: dict[str, Any]) -> dict[str, Any]:
         """Propose de créer ou de compléter une fiche : une carte dans l'app, pas une écriture."""
         return self._call("documents_propose_card", {"card_id": card_id, "fields": fields}) or {}
 
-    def maintenance_due(self, today: date | None = None) -> list[dict]:
+    def maintenance_due(self, today: date | None = None) -> list[dict[str, Any]]:
         """Les entretiens dus, à la date du hub (`today` est gardé pour l'appel d'avant)."""
         return list(self._call("documents_maintenance_due") or [])
 

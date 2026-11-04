@@ -12,7 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from .memory import Memory
@@ -43,11 +43,11 @@ class Domia:
         self,
         method: str,
         path: str,
-        body=None,
+        body: Any = None,
         person: str | None = None,
         raw: bool = False,
         headers: dict[str, str] | None = None,
-    ):
+    ) -> Any:
         data = None if body is None else json.dumps(body).encode("utf-8")
         request = urllib.request.Request(self.base_url + path, data=data, method=method)
         if path.startswith("/api/config") and method != "GET" and self.config_auth:
@@ -79,33 +79,33 @@ class Domia:
         return json.loads(text) if text.strip() else None
 
     # lectures (spec §7.1)
-    def house(self) -> dict:
-        return self._call("GET", "/api/house")
+    def house(self) -> dict[str, Any]:
+        return cast("dict[str, Any]", self._call("GET", "/api/house"))
 
-    def facts(self) -> dict:
-        return self._call("GET", "/api/facts")
+    def facts(self) -> dict[str, Any]:
+        return cast("dict[str, Any]", self._call("GET", "/api/facts"))
 
-    def observations(self) -> list[dict]:
-        return self._call("GET", "/api/observations")["observations"]
+    def observations(self) -> list[dict[str, Any]]:
+        return cast("list[dict[str, Any]]", self._call("GET", "/api/observations")["observations"])
 
-    def catalog(self) -> dict:
-        return self._call("GET", "/api/commands/catalog")
+    def catalog(self) -> dict[str, Any]:
+        return cast("dict[str, Any]", self._call("GET", "/api/commands/catalog"))
 
-    def memory_summary(self) -> dict:
-        return self._call("GET", "/api/memory/summary")
+    def memory_summary(self) -> dict[str, Any]:
+        return cast("dict[str, Any]", self._call("GET", "/api/memory/summary"))
 
-    def memory(self, start: str, end: str) -> list[dict]:
+    def memory(self, start: str, end: str) -> list[dict[str, Any]]:
         """Les lignes de la mémoire longue de ces jours (AAAA-MM-JJ, au plus 92)."""
         text = self._call("GET", "/api/memory?" + urllib.parse.urlencode({"from": start, "to": end}), raw=True)
         return [json.loads(line) for line in text.splitlines() if line.strip()]
 
-    def weather(self) -> dict:
+    def weather(self) -> dict[str, Any]:
         """La prévision de la maison ; `reason` dit pourquoi il n'y en a pas, `stale` si elle est vieille."""
-        return self._call("GET", "/api/weather")
+        return cast("dict[str, Any]", self._call("GET", "/api/weather"))
 
-    def habits(self, days: int = 28) -> dict:
+    def habits(self, days: int = 28) -> dict[str, Any]:
         """Le coucher, le lever, les départs et retours habituels, par jour de semaine."""
-        return self._call("GET", f"/api/memory/habits?days={days}")
+        return cast("dict[str, Any]", self._call("GET", f"/api/memory/habits?days={days}"))
 
     def journal(
         self,
@@ -113,7 +113,7 @@ class Domia:
         end: str | None = None,
         types: list[str] | None = None,
         entities: list[str] | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Le journal ; avec `types` et `entities`, un extrait (sans les tics ni les points de reprise : 59 Mo par jour
         sur la vraie maison, 14 s de transfert depuis le Pi)."""
         pairs = [(k, v) for k, v in (("from", start), ("to", end)) if v]
@@ -122,38 +122,47 @@ class Domia:
         text = self._call("GET", "/api/journal" + (f"?{query}" if query else ""), raw=True)
         return [json.loads(line) for line in text.splitlines() if line.strip()]
 
-    def config(self) -> dict:
+    def config(self) -> dict[str, Any]:
         """Le document de config normalisé et sa révision."""
-        return self._call("GET", "/api/config")
+        return cast("dict[str, Any]", self._call("GET", "/api/config"))
 
-    def config_preview(self, config: dict, revision: int) -> dict:
+    def config_preview(self, config: dict[str, Any], revision: int) -> dict[str, Any]:
         """Domia vérifie une config sans l'appliquer : valid, messages, warnings, removed."""
-        return self._call("POST", "/api/config/preview", config, headers={"If-Match": f'"{revision}"'})
+        return cast(
+            "dict[str, Any]", self._call("POST", "/api/config/preview", config, headers={"If-Match": f'"{revision}"'})
+        )
 
-    def config_put(self, config: dict, revision: int, person: str | None) -> dict:
-        return self._call("PUT", "/api/config", config, person=person, headers={"If-Match": f'"{revision}"'})
+    def config_put(self, config: dict[str, Any], revision: int, person: str | None) -> dict[str, Any]:
+        return cast(
+            "dict[str, Any]",
+            self._call("PUT", "/api/config", config, person=person, headers={"If-Match": f'"{revision}"'}),
+        )
 
-    def health(self) -> dict:
-        return self._call("GET", "/api/health")
+    def health(self) -> dict[str, Any]:
+        return cast("dict[str, Any]", self._call("GET", "/api/health"))
 
-    def notifications(self) -> list[dict]:
-        return self._call("GET", "/api/notifications")
+    def notifications(self) -> list[dict[str, Any]]:
+        return cast("list[dict[str, Any]]", self._call("GET", "/api/notifications"))
 
-    def notify_services(self) -> list[dict]:
-        return self._call("GET", "/api/notify/services")
+    def notify_services(self) -> list[dict[str, Any]]:
+        return cast("list[dict[str, Any]]", self._call("GET", "/api/notify/services"))
 
-    def ha_entities(self) -> list[dict]:
-        return self._call("GET", "/api/ha/entities")
+    def ha_entities(self) -> list[dict[str, Any]]:
+        return cast("list[dict[str, Any]]", self._call("GET", "/api/ha/entities"))
 
-    def notify_test(self, service: str, person: str | None) -> dict | None:
-        return self._call("POST", "/api/notify/test", {"service": service}, person=person)
+    def notify_test(self, service: str, person: str | None) -> dict[str, Any] | None:
+        return cast(
+            "dict[str, Any] | None", self._call("POST", "/api/notify/test", {"service": service}, person=person)
+        )
 
     # gestes (spec §7.2) : la route et le corps viennent du catalogue
-    def gesture(self, method: str, path: str, body: dict | None, person: str | None) -> dict | None:
-        return self._call(method, path, body, person=person)
+    def gesture(self, method: str, path: str, body: dict[str, Any] | None, person: str | None) -> dict[str, Any] | None:
+        return cast("dict[str, Any] | None", self._call(method, path, body, person=person))
 
-    def notify(self, title: str, message: str) -> dict | None:
-        return self._call("POST", "/api/notify/assistant", {"title": title, "message": message})
+    def notify(self, title: str, message: str) -> dict[str, Any] | None:
+        return cast(
+            "dict[str, Any] | None", self._call("POST", "/api/notify/assistant", {"title": title, "message": message})
+        )
 
 
 class Noting:
@@ -168,7 +177,7 @@ class Noting:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._domia, name)
 
-    def notify(self, title: str, message: str) -> dict | None:
+    def notify(self, title: str, message: str) -> dict[str, Any] | None:
         result = self._domia.notify(title, message)
         self._memory.message(title, message)
         LOG.info(

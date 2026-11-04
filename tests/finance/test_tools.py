@@ -1,4 +1,5 @@
-"""Lot 7 : les seize outils Finance de l'assistant, par les routes `/api/tools`.
+"""Lot 7, puis audit M11 : les outils Finance de l'assistant, par les routes `/api/tools`, à
+parité avec les routes de lecture de l'app et les types de proposition du Double Sas.
 
 Le jeton « brain » lit tout et propose ; le jeton « agrégats » ne voit que des totaux.
 """
@@ -15,9 +16,11 @@ from hub.core import proposals
 from hub.core.context import HubContext
 from hub.domains.finance.classement.interface.tools import ClassementTools
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.tools import HANDWRITTEN, ORDER, ROUTE_TOOLS, propose_tool_name
 from hub.platform.settings import Auth
 from tests.conftest import add_connections
 from tests.factories.camt import IBAN
+from tests.finance.test_api_contracts import finance_routes
 from tests.finance.test_app_reads import (  # noqa: F401 - fixtures
     client,
     ctx,
@@ -30,11 +33,26 @@ AGGREGATE_TOOLS = {
     "finance_list_accounts",
     "finance_data_freshness",
     "finance_list_categories",
+    "finance_settings",
     "finance_month_summary",
     "finance_budget_status",
+    "finance_budget_months",
+    "finance_flows",
     "finance_category_trend",
     "finance_networth",
+    "finance_networth_history",
+    "finance_holdings",
+    "finance_performance",
+    "finance_lookthrough",
+    "finance_prices",
+    "finance_breaks",
+    "finance_debts",
+    "finance_transfers",
+    "finance_rule_packs",
+    "finance_pending_accounts",
 }
+# les arguments qu'un outil de totaux exige (les autres s'appellent sans)
+AGGREGATE_ARGS: dict[str, dict[str, Any]] = {"finance_prices": {"isin": "CH0000000000"}}
 
 
 def call(client: TestClient, headers: dict[str, str], name: str, **args: Any) -> Any:
@@ -43,10 +61,16 @@ def call(client: TestClient, headers: dict[str, str], name: str, **args: Any) ->
     return r.json()["result"]
 
 
-def test_capabilities_by_token(client: TestClient, ctx: HubContext) -> None:
+def test_capabilities_by_token(client: TestClient, ctx: HubContext, fin: FinanceDomain) -> None:
     brain = client.get("/api/tools", headers=token(ctx, "brain=finance")).json()["domains"]
     assert [d["domain"] for d in brain] == ["finance"]
-    assert len(brain[0]["tools"]) == 16
+    generated = sorted(
+        propose_tool_name(k)
+        for k, kind in fin.proposal_kinds.items()
+        if kind.ai_allowed and k not in HANDWRITTEN
+    )
+    assert brain[0]["tools"] == [*ORDER, *generated]
+    assert len(generated) == 15
     assert brain[0]["aggregates_only"] is False
     agg = client.get("/api/tools", headers=token(ctx, "aggregates")).json()["domains"]
     assert set(agg[0]["tools"]) == AGGREGATE_TOOLS
@@ -133,12 +157,117 @@ def test_aggregates_never_reach_entries(
         r = client.post(f"/api/tools/finance/{name}", headers=agg, json=args)
         assert r.status_code == 403, name
     seen = json.dumps(
-        [call(client, agg, n) for n in sorted(AGGREGATE_TOOLS - {"finance_category_trend"})]
+        [
+            call(client, agg, n, **AGGREGATE_ARGS.get(n, {}))
+            for n in sorted(AGGREGATE_TOOLS - {"finance_category_trend"})
+        ]
     )
     assert IBAN not in seen
     assert IBAN[:4] + " " not in seen
     assert "Bistrot" not in seen
     assert "Kiosque" not in seen
+    assert "e01" not in seen.replace("e010", "")  # aucun identifiant d'écriture
+
+
+def test_tools_cover_the_routes_and_the_kinds(
+    client: TestClient, ctx: HubContext, fin: FinanceDomain
+) -> None:
+    """M11 : chaque route de lecture de l'app a son outil (ou est réservée à l'app), chaque
+    type de proposition ouvert à l'assistant a le sien, et aucun outil ne pointe dans le vide."""
+    listed = client.get("/api/tools/finance", headers=token(ctx, "brain=finance")).json()
+    names = {t["name"] for t in listed["items"]}
+    gets = {
+        path.removeprefix("/api/finance")
+        for path, r in finance_routes(client)
+        if "GET" in (r.methods or set())
+    }
+    assert gets == set(ROUTE_TOOLS)
+    assert {t for t in ROUTE_TOOLS.values() if t} <= names
+    for name, kind in fin.proposal_kinds.items():
+        assert (propose_tool_name(name) in names) is kind.ai_allowed, name
+    assert HANDWRITTEN.keys() <= fin.proposal_kinds.keys()
+    schema = next(t for t in listed["items"] if t["name"] == "finance_propose_disable_rule")
+    assert set(schema["input_schema"]["properties"]) == {"rule_id", "reason"}
+    assert schema["input_schema"]["required"] == ["rule_id"]
+    assert "finance_propose_disable_rule" not in [
+        t["name"]
+        for t in client.get("/api/tools/finance", headers=token(ctx, "aggregates")).json()["items"]
+    ]
+
+
+def test_reads_at_parity_with_the_app(
+    client: TestClient, ctx: HubContext, year: FinanceDomain
+) -> None:
+    """Les écritures, une écriture, les ordres et les réglages : des montants en texte, sans
+    IBAN, et la mention « texte de tiers » sur ce qui vient des relevés."""
+    brain = token(ctx, "brain=finance")
+    page = call(client, brain, "finance_entries", month="2026-10", limit=5)
+    assert page["items"]
+    assert all(isinstance(i["amount"], str) for i in page["items"])
+    assert "iban" not in json.dumps(page)
+    assert "tiers" in page["external_text"]
+    first = page["items"][0]["id"]
+    detail = call(client, brain, "finance_entry", entry_id=first)
+    assert detail["id"] == first
+    assert {"categorizations", "notes", "corrections"} <= detail.keys()
+    assert "counterparty_iban" not in detail
+    r = client.post(
+        "/api/tools/finance/finance_entry", headers=brain, json={"entry_id": "e0ffffff"}
+    )
+    assert r.status_code == 404
+    assert call(client, brain, "finance_trades", isin="CH0000000000")["items"] == []
+    settings = call(client, brain, "finance_settings")
+    assert settings["current_month"] == "2026-10"
+    assert settings["month_start_day"] == 1
+    assert call(client, brain, "finance_breaks")["items"] == []
+    assert call(client, brain, "finance_debts")["debts"] == []
+    assert call(client, brain, "finance_rule_packs")["suggested"]
+    history = call(client, brain, "finance_networth_history")["items"]
+    assert history[-1]["on_date"] >= "2026-10-25"
+    assert all(isinstance(p["net_worth"], str) for p in history)
+    assert "summary" in call(client, brain, "finance_performance")
+    # le jeton « agrégats » voit les virements sans leur détail
+    agg = token(ctx, "aggregates")
+    assert "unmatched_items" not in call(client, agg, "finance_transfers")
+    assert "unmatched_items" in call(client, brain, "finance_transfers")
+
+
+def test_generated_proposals_go_through_a_card(
+    client: TestClient, ctx: HubContext, year: FinanceDomain
+) -> None:
+    """Un type ouvert à l'assistant sans outil écrit à la main : ses paramètres sont ceux du
+    type, validés par son modèle ; la proposition est une carte à valider, rien n'est appliqué."""
+    brain = token(ctx, "brain=finance")
+    out = call(
+        client,
+        brain,
+        "finance_propose_set_month_start",
+        start_day=25,
+        valid_from="2026-11",
+        reason="Salaire le 25.",
+    )
+    assert out["status"] == "pending"
+    with ctx.core.engine.connect() as conn:
+        p = proposals.get(conn, out["proposal_id"])
+    assert p.kind == "set_month_start"
+    assert p.params == {"start_day": 25, "valid_from": "2026-11"}
+    assert p.reason == "Salaire le 25."
+    assert p.tier == "human"
+    assert call(client, brain, "finance_settings")["month_start_day"] == 1  # rien d'appliqué
+    r = client.post(
+        "/api/tools/finance/finance_propose_set_month_start",
+        headers=brain,
+        json={"start_day": 40},
+    )
+    assert r.status_code == 422
+    r = client.post(
+        "/api/tools/finance/finance_propose_disable_rule",
+        headers=brain,
+        json={"rule_id": "x", "extra": 1},
+    )
+    assert r.status_code == 422
+    r = client.post("/api/tools/finance/finance_propose_apply_import", headers=brain, json={})
+    assert r.status_code == 404
 
 
 def test_reads_for_the_local_model(

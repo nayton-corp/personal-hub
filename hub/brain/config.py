@@ -24,7 +24,6 @@ class BrainConfig(BaseModel):
     llm_url: str = "http://127.0.0.1:11434/v1"
     model: str = "qwen3:32b"
     timeout: int = Field(default=300, ge=10, le=3600)
-    max_steps: int = Field(default=8, ge=1, le=20)  # appels d'outils par question
     suggest_groups: int = Field(default=5, ge=1, le=20)  # commerçants par passage
     suggest_entries: int = Field(default=10, ge=1, le=50)  # écritures par commerçant
     state_dir: Path = Path.home() / "PersonalHub" / "brain"

@@ -16,7 +16,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
@@ -25,6 +25,9 @@ from .assistant import Assistant
 from .callers import Caller, Callers, Refused, identify, person, speaker
 from .observer import Observer
 from .voice import SPEECH_MIME, Voice, VoiceUnavailable, kind
+
+if TYPE_CHECKING:
+    from .engagements import Engagements
 
 LOG = logging.getLogger("assistant")
 MAX_BODY = 16 * 1024
@@ -36,19 +39,19 @@ DECISIONS = ("ACCEPT", "REFUSE", "CANCEL")
 def handler(
     assistant: Assistant,
     allow_from: tuple[str, ...],
-    status: Callable[[], dict],
+    status: Callable[[], dict[str, Any]],
     voice: Voice | None = None,
     callers: Callers | None = None,
-):
+) -> type[BaseHTTPRequestHandler]:
     known: Callers = callers or {}
 
     class Handler(BaseHTTPRequestHandler):
         server_version = f"domia-assistant/{VERSION}"
 
-        def log_message(self, fmt, *args):  # les accès vont au journal, pas sur stderr
+        def log_message(self, fmt: str, *args: Any) -> None:  # les accès vont au journal, pas sur stderr
             LOG.debug("http %s", fmt % args)
 
-        def _send(self, code: int, body: dict) -> None:
+        def _send(self, code: int, body: dict[str, Any]) -> None:
             data = json.dumps(body, ensure_ascii=False).encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -75,7 +78,7 @@ def handler(
                 self._send(403, {"error": str(e)})
                 raise
 
-        def do_GET(self):
+        def do_GET(self) -> None:
             caller = self._allowed()
             if caller is None:
                 return
@@ -94,7 +97,7 @@ def handler(
             else:
                 self._send(404, {"error": "route inconnue"})
 
-        def _history(self, query: dict, who: str | None) -> dict:
+        def _history(self, query: dict[str, Any], who: str | None) -> dict[str, Any]:
             now = datetime.now(UTC)
             days = min(max(_int(query.get("days"), 7), 1), 90)
             limit = min(max(_int(query.get("limit"), 60), 1), 200)
@@ -102,12 +105,12 @@ def handler(
             waiting = assistant.engagements.waiting(now) if assistant.engagements is not None else []
             return {"items": items, "waiting": [{"id": e["id"], "question": e["question"]} for e in waiting]}
 
-        def _planned(self) -> dict:
+        def _planned(self) -> dict[str, Any]:
             now = datetime.now(UTC)
             listing = assistant.engagements.listing(now) if assistant.engagements is not None else []
             return {"planned": listing, "remarks": assistant.memory.messages(now - timedelta(days=7))}
 
-        def _json_body(self) -> dict | None:
+        def _json_body(self) -> dict[str, Any] | None:
             length = int(self.headers.get("Content-Length") or 0)
             if length <= 0 or length > MAX_BODY:
                 self._send(400, {"error": "corps absent ou trop long"})
@@ -121,7 +124,7 @@ def handler(
                 return None
             return body
 
-        def do_POST(self):
+        def do_POST(self) -> None:
             caller = self._allowed()
             if caller is None:
                 return
@@ -184,7 +187,7 @@ def handler(
                 200 if done else 409, {"done": done} if done else {"error": "rien à faire : déjà réglé ou expiré"}
             )
 
-        def _voice(self, caller: Caller, query: dict) -> None:
+        def _voice(self, caller: Caller, query: dict[str, Any]) -> None:
             """Un son relayé par Domia ou le hub : transcrit, joué comme une phrase dite, la réponse dite en retour.
             Le son n'est gardé nulle part ; seule la phrase transcrite entre dans la conversation."""
             length = int(self.headers.get("Content-Length") or 0)
@@ -253,7 +256,7 @@ def serve(
     host: str,
     port: int,
     allow_from: tuple[str, ...],
-    status: Callable[[], dict],
+    status: Callable[[], dict[str, Any]],
     voice: Voice | None = None,
     callers: Callers | None = None,
 ) -> ThreadingHTTPServer:
@@ -270,7 +273,7 @@ def clock(
     brief_at: str | None,
     stop: threading.Event,
     tick: float = 30.0,
-    engagements=None,
+    engagements: Engagements | None = None,
     daily: dict[str, Callable[[], Any]] | None = None,
 ) -> None:
     """L'horloge de l'observateur : à chaque heure pile, un réveil ; à `brief_at`, le brief du soir ; à chaque tour, les

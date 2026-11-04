@@ -95,7 +95,7 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
             ai_allowed=True,
         ),
         "create_rule": ProposalKind(CreateRule, CreateRuleHandler(domain), ai_allowed=True),
-        "disable_rule": ProposalKind(DisableRule, DisableRuleHandler()),
+        "disable_rule": ProposalKind(DisableRule, DisableRuleHandler(), ai_allowed=True),
         "set_budget": ProposalKind(
             SetBudget,
             SetBudgetHandler(domain),
@@ -114,13 +114,17 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
         "apply_import": ProposalKind(
             ApplyImport, ApplyImportHandler(domain), ttl=timedelta(days=7)
         ),
-        "create_account": ProposalKind(CreateAccount, CreateAccountHandler(domain)),
-        "create_category": ProposalKind(CreateCategory, CreateCategoryHandler()),
-        "set_account_goal": ProposalKind(SetAccountGoal, SetAccountGoalHandler()),
-        "edit_account": ProposalKind(EditAccount, EditAccountHandler()),
-        "install_pack": ProposalKind(InstallPack, InstallPackHandler()),
-        "save_debt": ProposalKind(SaveDebt, SaveDebtHandler(domain)),
-        "record_debt_balance": ProposalKind(RecordDebtBalance, RecordDebtBalanceHandler(domain)),
+        "create_account": ProposalKind(
+            CreateAccount, CreateAccountHandler(domain), ai_allowed=True
+        ),
+        "create_category": ProposalKind(CreateCategory, CreateCategoryHandler(), ai_allowed=True),
+        "set_account_goal": ProposalKind(SetAccountGoal, SetAccountGoalHandler(), ai_allowed=True),
+        "edit_account": ProposalKind(EditAccount, EditAccountHandler(), ai_allowed=True),
+        "install_pack": ProposalKind(InstallPack, InstallPackHandler(), ai_allowed=True),
+        "save_debt": ProposalKind(SaveDebt, SaveDebtHandler(domain), ai_allowed=True),
+        "record_debt_balance": ProposalKind(
+            RecordDebtBalance, RecordDebtBalanceHandler(domain), ai_allowed=True
+        ),
         "decide_break": ProposalKind(
             DecideBreak,
             DecideBreakHandler(domain),
@@ -129,13 +133,14 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
             ai_allowed=True,
         ),
         "withdraw_break_decision": ProposalKind(
-            WithdrawBreakDecision, WithdrawBreakDecisionHandler(domain)
+            WithdrawBreakDecision, WithdrawBreakDecisionHandler(domain), ai_allowed=True
         ),
         "set_month_start": ProposalKind(
             SetMonthStart,
             SetMonthStartHandler(domain),
             reversible=True,
             inverse=month_start_inverse,
+            ai_allowed=True,
         ),
         "link_crypto_moves": ProposalKind(
             LinkCryptoMoves,
@@ -144,8 +149,12 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
             inverse=link_inverse,
             ai_allowed=True,
         ),
-        "unlink_crypto_moves": ProposalKind(UnlinkCryptoMoves, UnlinkCryptoMovesHandler(domain)),
-        "categorize_rest": ProposalKind(CategorizeRest, CategorizeRestHandler(domain)),
+        "unlink_crypto_moves": ProposalKind(
+            UnlinkCryptoMoves, UnlinkCryptoMovesHandler(domain), ai_allowed=True
+        ),
+        "categorize_rest": ProposalKind(
+            CategorizeRest, CategorizeRestHandler(domain), ai_allowed=True
+        ),
         "categorize_entries": ProposalKind(
             CategorizeEntries, CategorizeEntriesHandler(domain), ai_allowed=True
         ),

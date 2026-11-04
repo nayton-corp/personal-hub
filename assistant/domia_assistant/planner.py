@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 ROBOT_AWAY = "ROBOT_AWAY"
@@ -35,10 +36,10 @@ class Offer:
     kind: str
     question: str
     what: str  # « lancé le robot » : pour dire « c'est fait » ou « je n'ai pas … »
-    condition: dict
+    condition: dict[str, Any]
     because: list[str]
-    gesture: dict | None = None
-    notify: dict | None = None
+    gesture: dict[str, Any] | None = None
+    notify: dict[str, Any] | None = None
     at: datetime | None = None
     after_away_min: int | None = None
 
@@ -66,7 +67,7 @@ def _dt(raw: str | None, tz: ZoneInfo) -> datetime | None:
     return (value if value.tzinfo else value.replace(tzinfo=tz)).astimezone(tz)
 
 
-def absences(events: list[dict], tz: ZoneInfo) -> list[tuple[str, datetime | None, datetime | None]]:
+def absences(events: list[dict[str, Any]], tz: ZoneInfo) -> list[tuple[str, datetime | None, datetime | None]]:
     """Les sorties de demain dans l'agenda : un événement avec un lieu, toute la journée ou d'au moins 2 h."""
     out: list[tuple[str, datetime | None, datetime | None]] = []
     for e in events:
@@ -81,11 +82,11 @@ def absences(events: list[dict], tz: ZoneInfo) -> list[tuple[str, datetime | Non
     return out
 
 
-def habit(habits: dict | None, day: date) -> dict:
+def habit(habits: dict[str, Any] | None, day: date) -> dict[str, Any]:
     return ((habits or {}).get("groups") or {}).get(WEEKDAYS[day.weekday()]) or {}
 
 
-def habitual_departure(habits: dict | None, day: date, tz: ZoneInfo) -> datetime | None:
+def habitual_departure(habits: dict[str, Any] | None, day: date, tz: ZoneInfo) -> datetime | None:
     """L'heure du départ habituel de ce jour de la semaine, s'il part au moins 4 jours sur 5."""
     group = habit(habits, day)
     departure = (group.get("departure") or {}).get("median")
@@ -97,12 +98,12 @@ def habitual_departure(habits: dict | None, day: date, tz: ZoneInfo) -> datetime
 def plan(
     tomorrow: date,
     zone: str,
-    events: list[dict],
-    reminders: list[dict],
-    weather: dict | None,
-    habits: dict | None,
-    observations: list[dict],
-    house: dict,
+    events: list[dict[str, Any]],
+    reminders: list[dict[str, Any]],
+    weather: dict[str, Any] | None,
+    habits: dict[str, Any] | None,
+    observations: list[dict[str, Any]],
+    house: dict[str, Any],
 ) -> Plan:
     tz = ZoneInfo(zone)
     out = Plan()
@@ -132,7 +133,7 @@ def plan(
     return out
 
 
-def _agenda_line(events: list[dict], tz: ZoneInfo) -> str | None:
+def _agenda_line(events: list[dict[str, Any]], tz: ZoneInfo) -> str | None:
     parts = []
     for e in events[:3]:
         start, end = _dt(e.get("start"), tz), _dt(e.get("end"), tz)
@@ -145,7 +146,7 @@ def _agenda_line(events: list[dict], tz: ZoneInfo) -> str | None:
     return "Demain : " + ", ".join(parts) + "." if parts else None
 
 
-def _weather_line(weather: dict | None, tz: ZoneInfo) -> tuple[str | None, datetime | None]:
+def _weather_line(weather: dict[str, Any] | None, tz: ZoneInfo) -> tuple[str | None, datetime | None]:
     """La météo de demain en une phrase, et la première heure de pluie ; rien d'une prévision vieille ou absente."""
     if not weather or weather.get("reason"):
         return None, None
@@ -163,7 +164,12 @@ def _weather_line(weather: dict | None, tz: ZoneInfo) -> tuple[str | None, datet
 
 
 def _robot(
-    tomorrow: date, tz: ZoneInfo, events: list[dict], habits: dict | None, observations: list[dict], house: dict
+    tomorrow: date,
+    tz: ZoneInfo,
+    events: list[dict[str, Any]],
+    habits: dict[str, Any] | None,
+    observations: list[dict[str, Any]],
+    house: dict[str, Any],
 ) -> Offer | None:
     """Une pièce à nettoyer et une absence demain (agenda ou habitude) : le robot 15 min après le départ."""
     due = [o for o in observations if o.get("kind") == "CLEANING_DUE"]
@@ -207,7 +213,7 @@ def _robot(
     )
 
 
-def _close(rain_from: datetime | None, tz: ZoneInfo, house: dict) -> Offer | None:
+def _close(rain_from: datetime | None, tz: ZoneInfo, house: dict[str, Any]) -> Offer | None:
     """Un volet ou un store ouvert et la pluie annoncée de jour : le fermer 30 min avant."""
     if rain_from is None:
         return None
@@ -243,7 +249,7 @@ def _close(rain_from: datetime | None, tz: ZoneInfo, house: dict) -> Offer | Non
     )
 
 
-def _remind(tomorrow: date, tz: ZoneInfo, due: list[dict], habits: dict | None) -> Offer | None:
+def _remind(tomorrow: date, tz: ZoneInfo, due: list[dict[str, Any]], habits: dict[str, Any] | None) -> Offer | None:
     """Un rappel de demain sans heure, et un départ habituel : le rappeler au moment de partir."""
     departure = habitual_departure(habits, tomorrow, tz)
     reminder = next((r for r in due if len(r.get("due") or "") <= 10 and r["due"][:10] == tomorrow.isoformat()), None)

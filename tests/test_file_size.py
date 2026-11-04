@@ -1,4 +1,5 @@
-"""Conventions : un fichier de code tient en 400 lignes (Python et JavaScript de hub/).
+"""Conventions : un fichier de code tient en 400 lignes (Python et JavaScript de hub/, Python de
+l'assistant : audit M12).
 
 Les fichiers plus longs aujourd'hui sont listés avec leur taille : ils ne peuvent que rétrécir,
 et sortent de la liste dès qu'ils repassent sous la barre. On n'y ajoute jamais un fichier : un
@@ -7,25 +8,28 @@ fichier qui grossit se découpe (chantier S0 du plan « Socle du hub »).
 
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1] / "hub"
+REPO = Path(__file__).resolve().parents[1]
+ROOTS = ("hub", "assistant/domia_assistant", "assistant/bench")
 LIMIT = 400
 
-# chemin relatif à hub/ → taille maximale tolérée, en attendant le découpage (S5, S6)
+# chemin relatif au dépôt → taille maximale tolérée, en attendant le découpage (S5, S6)
 TOO_LONG: dict[str, int] = {
-    "core/collectors.py": 460,
-    "cli.py": 445,
-    "collectors/exchanges/binance_history.py": 507,
-    "domains/finance/web/budget.js": 560,
-    "domains/finance/web/journal.js": 662,
-    "domains/finance/web/connections.js": 730,
-    "core/proposals.py": 636,
-    "collectors/market/flow.py": 593,
+    "hub/core/collectors.py": 460,
+    "hub/cli.py": 445,
+    "hub/collectors/exchanges/binance_history.py": 507,
+    "hub/domains/finance/web/budget.js": 560,
+    "hub/domains/finance/web/journal.js": 662,
+    "hub/domains/finance/web/connections.js": 730,
+    "hub/core/proposals.py": 636,
+    "hub/collectors/market/flow.py": 593,
 }
 
 
 def _sizes() -> dict[str, int]:
-    files = [*ROOT.rglob("*.py"), *ROOT.rglob("*.js")]
-    return {str(p.relative_to(ROOT)): len(p.read_text().splitlines()) for p in files}
+    files = [
+        p for root in ROOTS for p in (*(REPO / root).rglob("*.py"), *(REPO / root).rglob("*.js"))
+    ]
+    return {str(p.relative_to(REPO)): len(p.read_text().splitlines()) for p in files}
 
 
 def test_new_files_stay_under_the_limit() -> None:

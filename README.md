@@ -89,7 +89,7 @@ d'API se valide avec `make openapi` (l'instantané du cœur et les types de l'ap
 | `hub ops databases` · `hub ops litestream` | bases montées et configuration de la réplication |
 | `hub scheduler deploy/crontab` | tâches planifiées du conteneur `scheduler` |
 | `hub finance …` | comptes, catégories, règles, imports, reprises, reconstruction ([docs/finance.md](docs/finance.md)) |
-| `hub-brain mcp` · `ask` · `suggest` · `check` | IA locale ([docs/brain.md](docs/brain.md)) |
+| `hub-brain mcp` · `suggest` · `catchup` · `direct` · `check` | IA locale ([docs/brain.md](docs/brain.md)) |
 
 Portées d'un jeton : `brain` (= `*:aggregates`), `brain=finance,agenda` (en plus, lecture et
 propositions des domaines nommés), `aggregates` (= `*:aggregates`), `collector`

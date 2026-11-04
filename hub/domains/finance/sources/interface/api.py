@@ -13,13 +13,12 @@ from hub.core import proposal_events, proposals
 from hub.core.auth import AppSession, Ctx
 from hub.core.body import read_body
 from hub.core.errors import Problem
-from hub.domains.finance.registre.app import catalog, reads
+from hub.domains.finance.registre.app import reads
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.http import (
     Reader,
 )
 from hub.domains.finance.registre.model.errors import ImportRefused
-from hub.domains.finance.sources.app import revolut_accounts
 from hub.domains.finance.sources.app.importer import ImportService
 from hub.domains.finance.sources.app.statements import APPLY_IMPORT
 from hub.domains.finance.sources.interface.schemas import (
@@ -27,10 +26,10 @@ from hub.domains.finance.sources.interface.schemas import (
     PendingAccountsOut,
     UploadOut,
 )
+from hub.domains.finance.sources.interface.tools import pending_accounts
 
 MAX_UPLOAD = 50 * 1024 * 1024
 _NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip|pdf|json|csv|xlsx)$", re.I)
-_REVOLUT_REF = re.compile(r"revolut:([A-Z]{3})(:[a-z0-9-]+)?")
 
 
 class Host(http.Host, Protocol):
@@ -42,30 +41,10 @@ def build_router(host: Host) -> APIRouter:
     engine = host.engine()
 
     @r.get("/accounts/pending", response_model=PendingAccountsOut)
-    def pending_accounts(_p: Reader) -> dict[str, Any]:
+    def pending_accounts_route(_p: Reader) -> dict[str, Any]:
         """Comptes vus dans des relevés en attente (Enable Banking, CSV Revolut) mais pas encore
         créés : clé, devise, nombre d'écritures et période. Aucun montant."""
-        out = []
-        for ref, items in sorted(revolut_accounts.revolut_pending(host.importer).items()):
-            with engine.connect() as conn:
-                if catalog.account_by_ref(conn, ref) is not None:
-                    continue
-            dates = [e.booking_date for _, st in items for e in st.entries]
-            m = _REVOLUT_REF.fullmatch(ref)
-            out.append(
-                {
-                    "ref": ref,
-                    "institution": "Revolut",
-                    "kind": "cash",
-                    "currency": m.group(1) if m else None,
-                    "imports": len({i for i, _ in items}),
-                    "entries": sum(len(st.entries) for _, st in items),
-                    "from": min(dates, default=None),
-                    "to": max(dates, default=None),
-                    "can_open": any(st.derived_opening for _, st in items),
-                }
-            )
-        return {"items": out}
+        return {"items": pending_accounts(host)}
 
     @r.post("/imports", status_code=202, response_model=UploadOut)
     async def upload(

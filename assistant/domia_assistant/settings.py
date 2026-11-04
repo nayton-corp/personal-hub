@@ -9,6 +9,7 @@ suivante de la même personne (`Assistant._ask`) ; le MCP exige `confirmed: true
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -53,7 +54,7 @@ def human(value: Any, field: str) -> str:
     return str(value)
 
 
-def _get(obj: dict, path: str) -> Any:
+def _get(obj: dict[str, Any], path: str) -> Any:
     value: Any = obj
     for part in path.split("."):
         if not isinstance(value, dict):
@@ -62,7 +63,7 @@ def _get(obj: dict, path: str) -> Any:
     return value
 
 
-def _put(obj: dict, path: str, value: Any) -> None:
+def _put(obj: dict[str, Any], path: str, value: Any) -> None:
     parts = path.split(".")
     for part in parts[:-1]:
         obj = obj.setdefault(part, {})
@@ -75,13 +76,13 @@ def _put(obj: dict, path: str, value: Any) -> None:
 class Draft:
     """La copie de la config que les changements modifient, avec son résumé et l'inverse de chaque changement."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict[str, Any]):
         self.config = copy.deepcopy(config)
         self.rooms_before = _rooms(config)  # la pièce de chaque objet : l'inverse d'un retrait l'y remet
         self.summary: list[str] = []
-        self.undo: list[dict] = []
+        self.undo: list[dict[str, Any]] = []
 
-    def _find(self, kind: str, id: str | None) -> tuple[list, dict, str]:
+    def _find(self, kind: str, id: str | None) -> tuple[list[Any], dict[str, Any], str]:
         """La liste qui porte l'objet, l'objet, et son nom lisible (« Couloir › Plafonnier »)."""
         if kind in KINDS:
             for room in self.config.get("rooms") or []:
@@ -97,7 +98,7 @@ class Draft:
             raise ValueError(f"sorte inconnue : {kind}")
         raise ValueError(f"aucun {kind} d'id {id} : lis l'index avec settings")
 
-    def change(self, c: dict) -> None:
+    def change(self, c: dict[str, Any]) -> None:
         op, kind, fields = c.get("op"), c.get("kind"), c.get("fields") or {}
         if kind not in NOUNS:
             raise ValueError(f"sorte inconnue : {kind}")
@@ -152,7 +153,7 @@ class Draft:
             raise ValueError(f"op inconnue : {op} (set, add, remove)")
 
 
-def _rooms(config: dict) -> dict[tuple[str, str], str]:
+def _rooms(config: dict[str, Any]) -> dict[tuple[str, str], str]:
     return {
         (k, str(o.get("id"))): r["id"]
         for r in config.get("rooms") or []
@@ -161,7 +162,7 @@ def _rooms(config: dict) -> dict[tuple[str, str], str]:
     }
 
 
-def _ids(config: dict, kind: str) -> set[str]:
+def _ids(config: dict[str, Any], kind: str) -> set[str]:
     if kind in KINDS:
         return {o.get("id") for r in config.get("rooms") or [] for o in r.get(KINDS[kind]) or []}
     return {o.get("id") for o in config.get(LISTED.get(kind, ""), []) or []}
@@ -170,12 +171,12 @@ def _ids(config: dict, kind: str) -> set[str]:
 class Settler:
     """Proposer, appliquer, annuler : la mémoire garde chaque proposition (15 minutes) et l'inverse de chaque réglage."""
 
-    def __init__(self, domia: Domia, memory: Memory, now=lambda: datetime.now(UTC)):
+    def __init__(self, domia: Domia, memory: Memory, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.domia = domia
         self.memory = memory
         self.now = now
 
-    def propose(self, changes: list[dict], who: str | None, undoes: int | None = None) -> dict:
+    def propose(self, changes: list[dict[str, Any]], who: str | None, undoes: int | None = None) -> dict[str, Any]:
         read = self.domia.config()
         draft = Draft(read["config"])
         if not changes:
@@ -204,7 +205,7 @@ class Settler:
             + ". Domia l'accepte. Je l'applique ?",
         }
 
-    def apply(self, proposal: int, who: str | None) -> dict:
+    def apply(self, proposal: int, who: str | None) -> dict[str, Any]:
         row = self.memory.settings_change(int(proposal))
         if row is None or row["state"] != "PROPOSED" or row["person"] != who:
             return {"error": "pas de proposition en attente sous ce numéro, pour cette personne"}
@@ -225,14 +226,14 @@ class Settler:
         return {"appliqué": row["summary"]}
 
     @staticmethod
-    def _resolve(undo: dict, before: dict, after: dict) -> dict:
+    def _resolve(undo: dict[str, Any], before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
         """L'inverse d'un ajout : retirer l'objet que Domia vient de créer, dont l'id n'est connu qu'après."""
         if undo["op"] != "remove-new":
             return undo
         fresh = sorted(_ids(after, undo["kind"]) - before.get(undo["kind"], set()))
         return {"op": "remove", "kind": undo["kind"], "id": fresh[0]} if fresh else {"op": "noop"}
 
-    def undo(self, who: str | None) -> dict:
+    def undo(self, who: str | None) -> dict[str, Any]:
         row = self.memory.last_applied_settings(who)
         if row is None:
             return {"error": "aucun réglage de l'assistant à annuler"}

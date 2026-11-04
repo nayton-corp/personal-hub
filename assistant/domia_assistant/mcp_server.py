@@ -8,17 +8,21 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from .tools import Speaker, Toolbox
 
+if TYPE_CHECKING:
+    from mcp.server.lowlevel import Server
 
-def make_server(toolbox: Callable[[], Toolbox], who: Speaker):
+
+def make_server(toolbox: Callable[[], Toolbox], who: Speaker) -> Server:
     import mcp.types as types
     from mcp.server.lowlevel import Server
 
     server = Server("domia-assistant")
 
-    @server.list_tools()
+    @server.list_tools()  # type: ignore[no-untyped-call, untyped-decorator]
     async def list_tools() -> list[types.Tool]:
         out = []
         for tool in toolbox().tools.values():
@@ -31,8 +35,8 @@ def make_server(toolbox: Callable[[], Toolbox], who: Speaker):
             out.append(types.Tool(name=tool.name, description=tool.description, inputSchema=schema))
         return out
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+    @server.call_tool()  # type: ignore[untyped-decorator]
+    async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
         box = toolbox()
         tool = box.get(name)
         args = dict(arguments or {})

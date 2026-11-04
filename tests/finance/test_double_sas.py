@@ -506,7 +506,8 @@ def test_create_category_and_account_kinds(
             "items"
         ]
     }
-    # un modèle ne crée ni compte ni catégorie
+    # un modèle propose un compte (une carte à valider, rien d'appliqué : audit M11) ; jamais
+    # un import
     r = client.post(
         "/api/proposals",
         json={
@@ -514,6 +515,13 @@ def test_create_category_and_account_kinds(
             "kind": "create_account",
             "params": {"institution": "BCF", "name": "x", "iban": IBAN},
         },
+        headers=token(ctx, "brain=finance"),
+    )
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["status"] == "pending"
+    r = client.post(
+        "/api/proposals",
+        json={"domain": "finance", "kind": "apply_import", "params": {}},
         headers=token(ctx, "brain=finance"),
     )
     assert (r.status_code, r.json()["type"]) == (403, "proposal.kind_not_allowed")
