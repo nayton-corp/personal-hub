@@ -153,6 +153,8 @@ def seed_every_table(finance: FinanceDomain) -> None:
             {
                 "category_id": "divers",
                 "monthly_minor": 100,
+                "amount_minor": 100,
+                "cadence": "month",
                 "currency": "CHF",
                 "valid_from": "2026-10-01",
                 "proposal_id": None,
@@ -494,4 +496,65 @@ def test_crypto_moves_migration_takes_the_legs_and_links_them_once(tmp_path: Pat
         begin_immediate(domain.engine()) as conn,
     ):
         conn.execute(text("UPDATE crypto_links SET peer_seq = 1 WHERE id = 'legacy|window|8'"))
+    domain.engine().dispose()
+
+
+def test_budget_cadence_migration_keeps_old_targets_readable(tmp_path: Path) -> None:
+    """0023 : une ancienne cible annuelle (un douzième arrondi, réglage `budget_cadence`) se
+    relit telle quelle ; une nouvelle garde le montant saisi, exact."""
+    from hub.domains.finance.classement.app import insights
+    from hub.domains.finance.domain import MIGRATIONS
+    from hub.platform import migrations as runner
+    from tests.finance.conftest import finance_settings
+
+    settings = finance_settings(tmp_path)
+    domain = FinanceDomain(settings)
+    runner.upgrade(MIGRATIONS, domain.path, "0022_crypto_moves")
+    engine = make_engine(domain.path)
+    at = "2026-10-01T00:00:00.000Z"
+    with begin_immediate(engine) as conn:
+        conn.execute(
+            text(
+                "INSERT INTO budgets (category_id, monthly_minor, currency, valid_from, "
+                "created_at, hash_v) VALUES ('voyages', 8333, 'CHF', '2026-01-01', :at, 1)"
+            ),
+            {"at": at},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO budget_cadence (category_id, cadence, updated_at, actor) "
+                "VALUES ('voyages', 'year', :at, 'x')"
+            ),
+            {"at": at},
+        )
+    engine.dispose()
+    runner.upgrade(MIGRATIONS, domain.path)
+    with domain.engine().connect() as conn:
+        old = insights.targets(conn, "2026-10")["voyages"]
+        assert (old.amount, old.cadence, old.annual, old.monthly) == (99_996, "year", 99_996, 8333)
+        assert insights.yearly(conn) == {"voyages"}
+    with begin_immediate(domain.engine()) as conn:
+        ledger.append(
+            conn,
+            "budgets",
+            {
+                "category_id": "voyages",
+                "monthly_minor": 8333,
+                "amount_minor": 100_000,
+                "cadence": "year",
+                "currency": "CHF",
+                "valid_from": "2026-01-01",
+                "proposal_id": None,
+                "created_at": at,
+            },
+        )
+    with domain.engine().connect() as conn:
+        new = insights.targets(conn, "2026-10")["voyages"]
+        assert (new.amount, new.cadence, new.annual, new.monthly) == (
+            100_000,
+            "year",
+            100_000,
+            8333,
+        )
+        assert rows_of(conn, "SELECT hash_v FROM budgets ORDER BY seq") == [(1,), (2,)]
     domain.engine().dispose()

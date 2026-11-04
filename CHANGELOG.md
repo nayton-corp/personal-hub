@@ -57,6 +57,13 @@
   et `POST /finance/settings` disparaissent ; `GET /finance/settings` rend les règles. Une
   lecture n'écrit plus : `transfers`, `networth/history` et `/proposals` rafraîchissent après
   la réponse. Migration 0021, additive.
+- Budget (audit C3, M3, M4, M5, m9) : une dépense en devise compte au change de son jour, et
+  sans change elle est signalée (`missing_fx`) au lieu de valoir 0 ; une cible est gardée telle
+  que saisie avec sa cadence (`set_budget` prend `amount_minor` et `cadence`, migration 0023,
+  les anciennes lignes mensuelles restent lisibles) ; le rythme, l'état et la projection d'une
+  période viennent du serveur (`classement/model/pace.py`), la même règle pour l'app et les
+  sentinelles, et le front ne divise plus par 100 : l'exposant de la devise vient du profil
+  (`currency_exponent`). La table des changes est lue par le registre (`registre/app/fx.py`).
 - `hub finance golden save | check` : l'étalon des agrégats (patrimoine, positions,
   performance, ruptures, budget, dettes) se fige avant une mise à jour et se vérifie après, au
   centime ; le fichier ne contient que des chiffres et des identifiants.

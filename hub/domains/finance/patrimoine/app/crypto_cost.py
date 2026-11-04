@@ -34,8 +34,8 @@ from sqlalchemy import Connection, text
 from hub.domains.finance.patrimoine.app import crypto_moves, decisions
 from hub.domains.finance.patrimoine.app.market_data import Positions
 from hub.domains.finance.patrimoine.model import instruments
-from hub.domains.finance.patrimoine.model.fx import FxRates
 from hub.domains.finance.registre.model.amounts import money
+from hub.domains.finance.registre.model.fx import FxRates
 from hub.kernel.money import DECIMAL_CONTEXT, base_currency, quantize
 
 USD = "USD"

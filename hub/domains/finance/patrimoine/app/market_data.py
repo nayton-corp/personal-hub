@@ -1,37 +1,17 @@
-"""Lecture, une fois par calcul, des cours de change (model/fx.py) et des parts, relevés et cours
-des comptes à positions (model/positions.py) depuis la base."""
+"""Lecture, une fois par calcul, des cours de change (registre/app/fx.py) et des parts, relevés
+et cours des comptes à positions (model/positions.py) depuis la base."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from decimal import Decimal
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.patrimoine.model import fx, positions
-from hub.kernel.money import base_currency
+from hub.domains.finance.patrimoine.model import positions
+from hub.domains.finance.registre.app.fx import FxTable as FxTable
+from hub.domains.finance.registre.model import fx
 
 Line = positions.Line
-
-
-class FxTable(fx.FxRates):
-    """Cours vers la devise de base, lus en base : toutes les devises connues, ou `currencies`."""
-
-    def __init__(self, conn: Connection, currencies: Sequence[str] | None = None) -> None:
-        if currencies is None:
-            currencies = list(conn.execute(text("SELECT code FROM currencies")).scalars())
-        base = base_currency()
-        rates: dict[str, list[tuple[str, Decimal]]] = {}
-        for ccy in sorted(set(currencies) - {base}):
-            rows = conn.execute(
-                text(
-                    "SELECT on_date, rate FROM fx_rates WHERE base = :b AND quote = :q "
-                    "ORDER BY on_date, source"
-                ),
-                {"b": ccy, "q": base},
-            ).fetchall()
-            rates[ccy] = [(r[0], Decimal(r[1])) for r in rows]
-        super().__init__(base, rates)
 
 
 class Positions(positions.Positions):

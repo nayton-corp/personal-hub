@@ -258,12 +258,12 @@ class ClassementTools(ToolBox):
             cat = self._category(conn, a.category)
         if cat["group"] not in insights.EXPENSE_GROUPS:
             raise Problem("validation.params", "budget : catégorie de dépense seulement")
-        minor = Money.from_decimal(a.amount, base_currency()).minor
-        if a.cadence == "year":
-            minor = (minor + 6) // 12  # cible mensuelle stockée, arrondie au centime
+        minor = Money.from_decimal(
+            a.amount, base_currency()
+        ).minor  # tel que saisi, dans sa cadence
         return caller.propose(
             "set_budget",
-            {"category_id": a.category, "monthly_minor": minor, "cadence": a.cadence},
+            {"category_id": a.category, "amount_minor": minor, "cadence": a.cadence},
             a.reason,
         )
 

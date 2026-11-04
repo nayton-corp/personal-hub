@@ -8,7 +8,7 @@
 import { SHEETS, amount, closeSheet, esc, failure, ic, openSheet, toast } from "../../ui.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { store } from "../../store.js";
-import { base, date } from "../../format.js";
+import { base, date, toMinor } from "../../format.js";
 import { go } from "../../shell.js";
 import { units } from "./perf.js";
 
@@ -101,7 +101,7 @@ export const actions = {
     const raw = (document.getElementById("brk-cost") || {}).value || "";
     const n = Number(raw.replace(/['’\s]/g, "").replace(",", "."));
     if (!raw || !Number.isFinite(n) || n < 0) return toast("Montant invalide", { error: true });
-    decide(v, "cost", Math.round(n * 100));
+    decide(v, "cost", toMinor(n));
   },
   "w-brk-conn": () => { closeSheet(true); go("sources", { rubric: "conn" }); },
 };

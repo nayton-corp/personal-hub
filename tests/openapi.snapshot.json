@@ -1848,6 +1848,10 @@
             "title": "Currency",
             "type": "string"
           },
+          "currency_exponent": {
+            "title": "Currency Exponent",
+            "type": "integer"
+          },
           "display_name": {
             "anyOf": [
               {
@@ -1876,6 +1880,7 @@
           "country",
           "timezone",
           "currency",
+          "currency_exponent",
           "modules"
         ],
         "title": "ProfileOut",

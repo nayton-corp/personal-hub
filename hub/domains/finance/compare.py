@@ -60,7 +60,10 @@ CHECKS: dict[str, Query] = {
     "taggings": _q(
         "SELECT e.id, t.tag_id, 1 FROM v_taggings t JOIN entries e ON e.seq = t.entry_seq"
     ),
-    "budgets": _q("SELECT category_id, valid_from, monthly_minor || ' ' || currency FROM budgets"),
+    "budgets": _q(
+        "SELECT category_id, valid_from, coalesce(amount_minor, monthly_minor) || '|' || "
+        "coalesce(cadence, '') || ' ' || currency FROM budgets"
+    ),
     "checkpoints": _q("SELECT account_id, on_date, kind, amount_minor FROM checkpoints"),
     "imports": _q("SELECT id, status FROM imports"),
     "trades": _q(

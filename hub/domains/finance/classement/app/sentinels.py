@@ -21,6 +21,7 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.domains.finance.classement.app import insights
+from hub.domains.finance.classement.model import pace
 from hub.domains.finance.registre.app import ledger
 from hub.domains.finance.registre.model import amounts, period
 from hub.domains.finance.registre.model.amounts import money
@@ -28,8 +29,8 @@ from hub.kernel import canonical
 from hub.kernel.clock import now_iso
 from hub.kernel.ids import urn
 
-MIN_DAY_FOR_PROJECTION = 7  # avant le 7, une projection linéaire ne dit rien
-LIKELY_MARGIN_PCT = 10  # « va dépasser » : projection au-delà de la cible + 10 %
+MIN_DAY_FOR_PROJECTION = pace.MIN_DAY_FOR_PROJECTION  # la règle est dans model/pace.py
+LIKELY_MARGIN_PCT = pace.LIKELY_MARGIN_PCT
 RECURRING_UP_PCT = 5  # hausse d'abonnement : au moins 5 % …
 RECURRING_UP_MIN = 100  # … et au moins 1 franc
 PILLAR3A_MONTHS = (11, 12)
@@ -49,7 +50,8 @@ class Projection:
 
 
 def budget_projection(conn: Connection, month: str, today: date) -> list[Projection]:
-    """Catégories de dépense qui ont une cible : dépensé, projection à fin de mois."""
+    """Catégories de dépense qui ont une cible : dépensé, projection à fin de mois et état, par
+    la règle commune (model/pace.py : la même que le budget de l'app)."""
     goal = insights.targets(conn, month)
     groups = insights.category_groups(conn)
     names = insights.category_names(conn)
@@ -59,21 +61,27 @@ def budget_projection(conn: Connection, month: str, today: date) -> list[Project
         if x.group in insights.EXPENSE_GROUPS:
             spent[x.category] = spent.get(x.category, 0) - x.minor
     start, after = period.bounds(month)
-    current = period.month_of(today) == month
-    elapsed, length = (today - start).days + 1, (after - start).days
+    clock = pace.clock(start, after, today)
     out = []
-    for cat, target in sorted(goal.items()):
+    for cat, t in sorted(goal.items()):
         group = groups.get(cat)
+        target = t.monthly
         if group not in insights.EXPENSE_GROUPS or target <= 0 or cat in year:
             continue  # une catégorie suivie à l'année n'a pas de cible du mois (voir _yearly)
         value = max(0, spent.get(cat, 0))
-        projected = value
-        if current and group == "variable" and elapsed >= MIN_DAY_FOR_PROJECTION:
-            projected = value * length // elapsed
-        over = value > target
-        likely = not over and current and projected * 100 > target * (100 + LIKELY_MARGIN_PCT)
+        state = pace.line_state(value, group, target, clock)
+        projected = pace.projected(value, group, target, clock)
         out.append(
-            Projection(cat, names.get(cat, cat), group, value, target, projected, over, likely)
+            Projection(
+                cat,
+                names.get(cat, cat),
+                group,
+                value,
+                target,
+                projected,
+                state == "over",
+                state == "likely_over",
+            )
         )
     return out
 
@@ -134,7 +142,7 @@ def _yearly(conn: Connection, month: str) -> list[Alert]:
             done[x.category] = done.get(x.category, 0) - x.minor
     out = []
     for cat in sorted(year):
-        annual = goal.get(cat, 0) * 12
+        annual = goal[cat].annual if cat in goal else 0
         if annual > 0 and done.get(cat, 0) > annual:
             out.append(
                 Alert(

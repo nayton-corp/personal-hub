@@ -397,26 +397,26 @@ def test_set_budget_and_inverse(client: TestClient, ctx: HubContext, fin: Financ
     p = create(
         ctx,
         "set_budget",
-        {"category_id": "alimentation", "monthly_minor": 60_000, "valid_from": "2026-10-01"},
+        {"category_id": "alimentation", "amount_minor": 60_000, "valid_from": "2026-10-01"},
     )
     assert p.preview["summary"] == "Budget Alimentation : 600.00 CHF par mois, dès 2026-10"
     accept(ctx, p)
     q = create(
         ctx,
         "set_budget",
-        {"category_id": "alimentation", "monthly_minor": 50_000, "valid_from": "2026-10-01"},
+        {"category_id": "alimentation", "amount_minor": 50_000, "valid_from": "2026-10-01"},
     )
     assert "avant 600.00 CHF" in q.preview["summary"]
     accept(ctx, q)
     with ctx.core.engine.connect() as conn:
         q = proposals.get(conn, q.id)
     kind, params = proposals.inverse_of(ctx, q)
-    assert (kind, params["monthly_minor"]) == ("set_budget", 60_000)
+    assert (kind, params["amount_minor"]) == ("set_budget", 60_000)
     proposals.revert(ctx, APP, q, None)
-    assert rows(fin, "SELECT monthly_minor FROM budgets ORDER BY seq DESC LIMIT 1") == [(60_000,)]
+    assert rows(fin, "SELECT amount_minor FROM budgets ORDER BY seq DESC LIMIT 1") == [(60_000,)]
     with pytest.raises(Problem):
-        create(ctx, "set_budget", {"category_id": "salaire", "monthly_minor": 1})
-    default = create(ctx, "set_budget", {"category_id": "loisirs", "monthly_minor": 1})
+        create(ctx, "set_budget", {"category_id": "salaire", "amount_minor": 1})
+    default = create(ctx, "set_budget", {"category_id": "loisirs", "amount_minor": 1})
     assert default.preview["details"]["valid_from"] == fin.today().replace(day=1).isoformat()
 
 
@@ -691,13 +691,17 @@ def test_yearly_budget_and_account_rule(
         # en vigueur depuis janvier : le test ne dépend pas du mois où il tourne
         {
             "category_id": "voyages",
-            "monthly_minor": 5_000,
+            "amount_minor": 60_000,
             "cadence": "year",
             "valid_from": "2026-01-01",
         },
     )
     assert p.preview["summary"].startswith("Budget Vacances : 600.00 CHF par an")
     accept(ctx, p)
+    # gardé tel que saisi, avec sa cadence (audit M4) ; le mensuel n'est qu'une lecture
+    assert rows(fin, "SELECT amount_minor, cadence, monthly_minor FROM budgets") == [
+        (60_000, "year", 5_000)
+    ]
     h = token(ctx, "brain=finance")
     b = client.get("/api/finance/budget?month=2026-10", headers=h).json()
     line = {x["category"]: x for x in b["lines"]}["voyages"]

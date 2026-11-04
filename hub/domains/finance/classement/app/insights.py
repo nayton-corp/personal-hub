@@ -8,12 +8,13 @@ sont des décimales en texte (`"0.2534"`), jamais des flottants.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.classement.app.totals import Line, Totals, period_lines
+from hub.domains.finance.classement.app.totals import Line, Lines, Totals, period_report
 from hub.domains.finance.registre.app.reads import budget_accounts, in_list, last_data
 from hub.domains.finance.registre.model import institutions
 from hub.domains.finance.registre.model.amounts import (
@@ -50,17 +51,47 @@ def category_names(conn: Connection) -> dict[str, str]:
     return {**names, **NAMES_EXTRA}
 
 
-def targets(conn: Connection, month: str) -> dict[str, int]:
-    """Cible mensuelle en vigueur au début du mois, par catégorie (la dernière ligne gagne)."""
+@dataclass(frozen=True)
+class Target:
+    """La cible d'une catégorie telle que saisie, avec sa cadence (audit M4)."""
+
+    amount: int
+    cadence: str  # month | year
+
+    @property
+    def monthly(self) -> int:
+        """La cible du mois ; d'une cible annuelle, un douzième (lecture seulement)."""
+        return self.amount if self.cadence == "month" else (self.amount + 6) // 12
+
+    @property
+    def annual(self) -> int:
+        return self.amount if self.cadence == "year" else self.amount * 12
+
+
+def target_of(monthly: int, amount: int | None, cadence: str | None, fallback: str) -> Target:
+    """Une ligne de `budgets` : le montant saisi s'il est là, sinon l'ancien mensuel relu avec la
+    cadence du réglage (`budget_cadence`)."""
+    if amount is not None and cadence is not None:
+        return Target(int(amount), cadence)
+    cadence = fallback or "month"
+    return Target(int(monthly) * 12 if cadence == "year" else int(monthly), cadence)
+
+
+_TARGETS = (
+    "SELECT b.category_id, b.monthly_minor, b.amount_minor, b.cadence, c.cadence FROM budgets b "
+    "LEFT JOIN budget_cadence c ON c.category_id = b.category_id "
+    "WHERE b.currency = :ccy AND b.seq = (SELECT max(seq) FROM budgets "
+    "WHERE category_id = b.category_id{where})"
+)
+
+
+def targets(conn: Connection, month: str) -> dict[str, Target]:
+    """Cible en vigueur au début du mois, par catégorie (la dernière ligne gagne)."""
     rows = conn.execute(
-        text(
-            "SELECT b.category_id, b.monthly_minor FROM budgets b "
-            "WHERE b.currency = :ccy AND b.seq = (SELECT max(seq) FROM budgets "
-            "WHERE category_id = b.category_id AND valid_from <= :m)"
-        ),
+        text(_TARGETS.format(where=" AND valid_from <= :m")),
         {"m": f"{month}-01", "ccy": base_currency()},
     )
-    return {r[0]: int(r[1]) for r in rows}
+    return {r[0]: target_of(r[1], r[2], r[3], r[4]) for r in rows}
 
 
 def category_groups(conn: Connection) -> dict[str, str]:
@@ -68,17 +99,20 @@ def category_groups(conn: Connection) -> dict[str, str]:
 
 
 def yearly(conn: Connection) -> frozenset[str]:
-    """Catégories suivies à l'année (vacances, entretien) : leur cible mensuelle est le douzième
-    de la cible annuelle, et elles sortent du budget et du reste à vivre du mois."""
-    rows = conn.execute(text("SELECT category_id FROM budget_cadence WHERE cadence = 'year'"))
-    return frozenset(str(r[0]) for r in rows)
+    """Catégories suivies à l'année (vacances, entretien) : la cadence de leur dernière cible,
+    sinon le réglage `budget_cadence` ; elles sortent du budget et du reste à vivre du mois."""
+    rows = conn.execute(text(_TARGETS.format(where="")), {"ccy": base_currency()}).fetchall()
+    found = {str(r[0]) for r in rows if target_of(r[1], r[2], r[3], r[4]).cadence == "year"}
+    known = {str(r[0]) for r in rows}
+    settings = conn.execute(text("SELECT category_id FROM budget_cadence WHERE cadence = 'year'"))
+    return frozenset(found | {str(r[0]) for r in settings if str(r[0]) not in known})
 
 
 def expense_budget(conn: Connection, month: str) -> int | None:
     groups, year = category_groups(conn), yearly(conn)
     found = {
-        c: v
-        for c, v in targets(conn, month).items()
+        c: t.monthly
+        for c, t in targets(conn, month).items()
         if groups.get(c) in EXPENSE_GROUPS and c not in year
     }
     return sum(found.values()) if found else None
@@ -89,9 +123,13 @@ def monthly_expenses(lines: list[Line], year: frozenset[str]) -> int:
     return -sum(x.minor for x in lines if x.group in EXPENSE_GROUPS and x.category not in year)
 
 
-def lines_for(conn: Connection, months: list[str]) -> list[Line]:
+def report_for(conn: Connection, months: list[str]) -> Lines:
     start, end = span(months)
-    return period_lines(conn, start, end, base_currency())
+    return period_report(conn, start, end)
+
+
+def lines_for(conn: Connection, months: list[str]) -> list[Line]:
+    return report_for(conn, months).lines
 
 
 def merge_small(items: list[dict[str, Any]], key: str = "total") -> list[dict[str, Any]]:

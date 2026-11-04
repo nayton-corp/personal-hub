@@ -2,12 +2,13 @@
 // (patrimoine, reste à vivre) ; ses lignes « À faire » et « À savoir » rejoignent celles des
 // autres domaines (accueil.js).
 import { hiddenIds } from "./accounts.js";
-import { budgetPath, model } from "./budget.js";
+import { model } from "./bmodel.js";
+import { budgetPath } from "./budget.js";
 import { go } from "../../shell.js";
-import { base, date, monthName } from "../../format.js";
+import { base, date, monthName, units } from "../../format.js";
 import { catMark, taxRate } from "./meta.js";
 import { shiftMonth, store } from "../../store.js";
-import { esc, fill, ic, n0, nf, pctOnly, pf, pref, setPref, sgn, skel } from "../../ui.js";
+import { esc, fill, ic, n0, n2, nf, pctOnly, pf, pref, setPref, sgn, skel } from "../../ui.js";
 import { gapRows } from "./gaps.js";
 import { breaksPath } from "./wplace.js";
 import * as wealth from "./wealth.js";
@@ -50,11 +51,11 @@ export function rows() {
   // à savoir : dépassements, hausses, marge 3a, réserve
   const b = store.data(budgetPath(store.today, "m"));
   for (const l of b ? b.lines.filter((x) => x.over).sort((x, y) => Number(y.ratio) - Number(x.ratio)) : []) {
-    const y = l.yearly, spent = (y ? y.spent : l.spent).minor / 100, target = (y ? y.target : l.target).minor / 100;
+    const y = l.yearly, spent = units(y ? y.spent : l.spent), target = units(y ? y.target : l.target);
     out.push({ info: true, mark: catMark(l.category, l.group), t: `${l.name} dépasse de ${n0(spent - target)} ${base()}`, s: `${n0(spent)} sur ${n0(target)}${y ? " depuis janvier" : " ce mois"}`, a: "cat", v: l.category });
   }
   const br = store.data(breaksPath);
-  if (br && br.count > 0) out.push({ info: true, ic: "alert", c: "var(--s3)", t: `${br.count} solde${br.count > 1 ? "s" : ""} non expliqué${br.count > 1 ? "s" : ""} dans le patrimoine`, s: `${n0(br.open_value.minor / 100)} ${base()} qu'aucune opération connue n'explique`, a: "tab", v: "patrimoine" });
+  if (br && br.count > 0) out.push({ info: true, ic: "alert", c: "var(--s3)", t: `${br.count} solde${br.count > 1 ? "s" : ""} non expliqué${br.count > 1 ? "s" : ""} dans le patrimoine`, s: `${n0(units(br.open_value))} ${base()} qu'aucune opération connue n'explique`, a: "tab", v: "patrimoine" });
   if (k.unmatched_transfers > 0) out.push({ info: true, ic: "swap", c: "var(--s6)", t: `${k.unmatched_transfers} virement${k.unmatched_transfers > 1 ? "s" : ""} sans autre côté`, s: "Un relevé manque peut-être sur l'autre compte", a: "rubric", v: "accounts" });
   const alerts = store.data(alertsPath);
   for (const a of alerts ? alerts.items : []) {
@@ -63,18 +64,18 @@ export function rows() {
     const d = a.detail;
     const s = a.kind === "recurring_up"
       ? `${amount2Text(d.usual)} → ${amount2Text(d.last)} ${d.last.currency} · le ${date(a.on_date)}`
-      : `${n0(d.spent.minor / 100)} sur ${n0(d.target.minor / 100)} ${base()}${a.kind === "budget_likely" ? ` · ${n0(d.projected.minor / 100)} projetés` : ""}`;
+      : `${n0(units(d.spent))} sur ${n0(units(d.target))} ${base()}${a.kind === "budget_likely" ? ` · ${n0(units(d.projected))} projetés` : ""}`;
     const cat = a.kind === "recurring_up" ? null : d.category;
     out.push({ info: true, ic: a.kind === "recurring_up" ? "repeat" : "alert", c: a.kind === "recurring_up" ? "var(--s4)" : "var(--s3)", mark: cat ? catMark(cat) : null, t: a.title, s, a: a.kind === "recurring_up" ? "subs" : cat ? "cat" : "tab", v: cat || "budget" });
   }
   const p3 = k.pillar3a;
   if (p3 && p3.margin.minor > 0) {
-    const m = p3.margin.minor / 100;
+    const m = units(p3.margin);
     out.push({ info: true, ic: "piggy", c: "var(--s1)", t: `Marge 3a ${p3.year} : ${n0(m)} ${base()}`, s: `Jusqu'au 31 décembre · environ ${n0(m * taxRate())} ${base()} d'impôt en moins`, a: "ret3a" });
   }
   const cover = k.months_covered == null ? null : Number(k.months_covered);
   if (cover != null) {
-    const liquid = k.liquid.minor / 100, avg = cover > 0 ? liquid / cover : 0, extra = liquid - RESERVE_MONTHS * avg;
+    const liquid = units(k.liquid), avg = cover > 0 ? liquid / cover : 0, extra = liquid - RESERVE_MONTHS * avg;
     const s = cover < 3 ? `Moins de 3 mois : à renforcer avant d'investir` : extra > 0 && cover > RESERVE_MONTHS ? `Environ ${n0(extra)} ${base()} au-delà de ${RESERVE_MONTHS} mois, sur des comptes à presque 0 %` : `Entre 3 et ${RESERVE_MONTHS} mois : la zone conseillée`;
     out.push({ info: true, ic: "shield", c: cover < 3 ? "var(--neg)" : "var(--s2)", t: `Réserve : ${cover.toFixed(1).replace(".", ",")} mois de dépenses`, s, a: "w-only", v: "cat|cash" });
   }
@@ -91,8 +92,8 @@ function bilan(cur) {
   const pb = store.use(budgetPath(prev, "m")).data;
   const pf2 = store.use(`/finance/flows?month=${prev}&period=m`).data;
   if (!pb || !pf2) return "";
-  const m = model(pb, false);
-  const I = pf2.income.minor / 100, S = (pf2.groups.find((x) => x.group === "savings")?.total.minor || 0) / 100;
+  const m = model(pb);
+  const I = units(pf2.income), S = units(pf2.groups.find((x) => x.group === "savings")?.total) || 0;
   const over = m.lines.filter((l) => l.over).length;
   const name = monthName(prev).split(" ")[0];
   const res = m.T == null ? `${n0(m.spent)} ${base()} dépensés` : m.rest >= 0 ? `${n0(m.rest)} ${base()} sous le budget` : `${n0(-m.rest)} ${base()} au-dessus du budget`;
@@ -103,7 +104,7 @@ function bilan(cur) {
   </section>`;
 }
 
-const amount2Text = (m) => Math.abs(m.minor / 100).toFixed(2);
+const amount2Text = (m) => n2(units(m));
 
 export function render(box) {
   const ke = store.use(kpisPath());
@@ -128,11 +129,11 @@ export function render(box) {
   const hidden = hiddenIds();
   // courbe et rendement sans les comptes masqués ; le rendement ne compte pas les versements
   const sum30 = se && se.data ? se.data.summary : null;
-  const vals = sum30 ? se.data.items.map((i) => i.value.minor / 100) : [];
-  const net = hidden.size && vals.length ? vals[vals.length - 1] : k.net_worth.minor / 100;
+  const vals = sum30 ? se.data.items.map((i) => units(i.value)) : [];
+  const net = hidden.size && vals.length ? vals[vals.length - 1] : units(k.net_worth);
   const p30 = sum30 && sum30.twr != null ? Number(sum30.twr) : null;
-  const g30 = sum30 ? sum30.gain.minor / 100 : null;
-  const m = be.data ? model(be.data, true) : null;
+  const g30 = sum30 ? units(sum30.gain) : null;
+  const m = be.data ? model(be.data) : null;
   let budgetTile;
   if (!m) budgetTile = `<span class="tile-lbl">${ic("wallet")}Reste à vivre</span>${skel("block")}`;
   else if (m.T == null) {

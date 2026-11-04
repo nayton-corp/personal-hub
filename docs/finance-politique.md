@@ -94,6 +94,21 @@ montré sur l'accueil avec ce qu'il faut faire. Un historique plus long que les 
 (adresse BTC, réseau EVM, Solana) se dit `truncated` et sera relu en entier au passage suivant,
 jamais tenu pour complet.
 
+## Budget
+
+Les totaux par catégorie (`summary`, `budget`, `flows`, `trend`) sont dans la devise de base.
+Une écriture dans une autre devise (carte en euros) compte au change du jour de l'écriture ; sans
+change ce jour-là, elle est laissée de côté et signalée (`missing_fx`), jamais comptée pour 0.
+
+Une cible est gardée telle que saisie, avec sa cadence (`amount_minor`, `cadence`) : une cible
+annuelle de 1'000 reste 1'000 par an, et vaut 83 par mois en lecture seulement. Les anciennes
+lignes (`monthly_minor`) se relisent avec le réglage de cadence de la catégorie.
+
+Le rythme, l'état et la projection d'une période se calculent une fois, côté serveur
+(`classement/model/pace.py`), pour l'app comme pour les sentinelles : une projection dès le
+7e jour (fixes au plus haut de payé et cible, variables au rythme), « au-dessus du rythme » à
+plus de 10 % au-delà de la cible. Le front met en mots, il ne calcule pas.
+
 ## Contrôles
 
 `hub verify` contrôle aussi les chiffres : le gain depuis l'achat et la performance « Max »

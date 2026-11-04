@@ -17,7 +17,7 @@ from hub.core.errors import Problem
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.patrimoine.app import assets, crypto_cost, reconcile, valuation
 from hub.domains.finance.patrimoine.model import positions
-from hub.domains.finance.patrimoine.model.fx import FxRates
+from hub.domains.finance.registre.model.fx import FxRates
 from hub.platform.db import begin_immediate
 from tests.finance.conftest import ready_account
 from tests.finance.test_crypto_cost import _crypto_gain, btc, doc, minor, setup

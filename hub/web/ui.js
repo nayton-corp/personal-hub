@@ -2,7 +2,7 @@
 // annonces pour les lecteurs d'écran. Le HTML est construit en texte : chaque valeur venue des
 // données passe par esc(). Aucun attribut style (CSP) : data-css="prop:valeur;…" est appliqué
 // en CSSOM par paint() après chaque rendu.
-import { base } from "./format.js";
+import { base, decimals } from "./format.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -91,10 +91,11 @@ export function fill(node, html) {
 const group = (s) => s.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
 export const n0 = (v) => group(String(Math.round(Math.abs(v))));
 export const n2 = (v) => {
-  const [i, d] = Math.abs(v).toFixed(2).split(".");
+  if (decimals() === 0) return n0(v);
+  const [i, d] = Math.abs(v).toFixed(decimals()).split(".");
   return `${group(i)}.${d}`;
 };
-const minus = (v, s) => (v < 0 && s !== "0" && s !== "0.00" ? "−" : "") + s;
+const minus = (v, s) => (v < 0 && Number(s.replace(/'/g, "")) !== 0 ? "−" : "") + s;
 export const nf = (v) => minus(v, n0(v));
 export const nf2 = (v) => minus(v, n2(v));
 export const pf = (x, d = 1) => (x * 100).toFixed(d).replace(".", ",");

@@ -15,7 +15,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal, localcontext
 
-from hub.domains.finance.patrimoine.model.fx import FxRates
+from hub.domains.finance.registre.model.fx import FxRates
 from hub.kernel.money import DECIMAL_CONTEXT
 
 Report = tuple[

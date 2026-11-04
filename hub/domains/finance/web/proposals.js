@@ -2,7 +2,7 @@
 // aussitôt, et la carte « plusieurs écritures, une catégorie » dont chaque écriture se décoche
 // dans « À valider » (approvals.js).
 import { approve, pendingPath } from "../../approvals.js";
-import { date } from "../../format.js";
+import { date, units } from "../../format.js";
 import { api, store } from "../../store.js";
 import { esc, n2 } from "../../ui.js";
 
@@ -39,7 +39,7 @@ export function detail(p) {
   const list = p.preview.details.entries || [];
   return `<details class="prop-more"${off.size ? " open" : ""}><summary>Voir les ${list.length} écritures${off.size ? ` · ${off.size} retirée${off.size > 1 ? "s" : ""}` : ""}</summary>
     ${list.map((e) => `<label class="check-in"><input type="checkbox" data-pentry="${esc(p.id)}" data-eid="${esc(e.id)}" ${off.has(e.id) ? "" : "checked"}>
-      <span>${esc(e.merchant ? capital(e.merchant) : e.counterparty || "Écriture")}</span><span class="num">${date(e.booking_date)} · ${n2(e.amount.minor / 100)}</span></label>`).join("")}
+      <span>${esc(e.merchant ? capital(e.merchant) : e.counterparty || "Écriture")}</span><span class="num">${date(e.booking_date)} · ${n2(units(e.amount))}</span></label>`).join("")}
   </details>`;
 }
 

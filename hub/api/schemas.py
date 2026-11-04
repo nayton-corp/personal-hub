@@ -345,6 +345,7 @@ class ProfileOut(BaseModel):
     country: str
     timezone: str
     currency: str  # devise de base, HUB_CURRENCY
+    currency_exponent: int  # ses décimales (2 : centimes) ; le front ne divise jamais par 100
     modules: list[str]
 
 

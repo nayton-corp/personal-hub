@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { chf, chf2, date, initials, monthName, pct, signed, spct } from "../../hub/web/format.js";
+import { chf, chf2, date, decimals, initials, monthName, pct, setBase, signed, spct, toMinor, units } from "../../hub/web/format.js";
 
 test("montants à la suisse : apostrophe des milliers, vrai signe moins", () => {
   assert.equal(chf(1234567.4), "1'234'567");
@@ -25,4 +25,18 @@ test("dates sans dépendre du fuseau de la machine", () => {
   assert.equal(date("2026-12-31T23:30:00Z"), "31 déc. 2026");
   assert.equal(monthName("2026-08"), "août 2026");
   assert.equal(initials("Banque cantonale · épargne"), "BC");
+});
+
+test("montants par l'exposant de la devise de base, jamais par 100 en dur", () => {
+  assert.equal(units({ minor: 123456, currency: "CHF" }), 1234.56);
+  assert.equal(toMinor("12.345"), 1235);
+  assert.equal(units(null), null);
+  assert.equal(setBase("JPY", 0), true);
+  assert.equal(decimals(), 0);
+  assert.equal(units({ minor: 1234, currency: "JPY" }), 1234);
+  assert.equal(toMinor(99.6), 100);
+  assert.equal(chf2(-1234), "−1'234");
+  assert.equal(setBase("CHF", 2), true);
+  assert.equal(setBase("CHF", 2), false);
+  assert.equal(chf2(-1234.5), "−1'234.50");
 });

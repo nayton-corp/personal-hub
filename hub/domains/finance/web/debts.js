@@ -3,7 +3,7 @@
 // sa catégorie (depuis son compte s'il est choisi), et un relevé du prêteur le corrige. La
 // mensualité et l'échéance sont facultatives : sans mensualité, la fin projetée suit les
 // derniers paiements. Tout s'enregistre avec un seul Face ID.
-import { date } from "../../format.js";
+import { date, toMinor, units } from "../../format.js";
 import { GROUP_LABEL } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { store } from "../../store.js";
@@ -17,13 +17,13 @@ const KIND_IC = { loan: "car", mortgage: "home", leasing: "car", student: "brief
 export const debtMark = (d, size = "") => ibox(ic(KIND_IC[d.kind] || "landmark"), "var(--neg)", size);
 
 const today = () => new Date().toISOString().slice(0, 10);
-const u = (m) => (m == null ? null : m.minor / 100);
-const txt = (m) => (m == null ? "" : String(m.minor / 100));
+const u = (m) => units(m);
+const txt = (m) => (m == null ? "" : String(units(m)));
 // « 12'500,50 » → centimes ; "" → null ; illisible → NaN
 function minor(s) {
   const t = String(s ?? "").replace(/['’\s]/g, "").replace(",", ".");
   if (!t) return null;
-  return /^\d+(\.\d{1,2})?$/.test(t) ? Math.round(Number(t) * 100) : NaN;
+  return /^\d+(\.\d{1,2})?$/.test(t) ? toMinor(t) : NaN;
 }
 const find = (id) => ((store.data(DEBTS) || {}).items || []).find((d) => d.id === id) || null;
 

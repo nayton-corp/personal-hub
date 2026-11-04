@@ -67,7 +67,7 @@ def history(ctx: HubContext, fin: FinanceDomain) -> None:
         create(
             ctx,
             "set_budget",
-            {"category_id": "alimentation", "monthly_minor": 60_000, "valid_from": "2026-10-01"},
+            {"category_id": "alimentation", "amount_minor": 60_000, "valid_from": "2026-10-01"},
         ),
     )
     accept(

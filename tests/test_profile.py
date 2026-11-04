@@ -68,6 +68,7 @@ def test_api_read_by_app_and_tokens_write_by_app_only(
         "country": "CH",
         "timezone": "Europe/Zurich",
         "currency": "CHF",
+        "currency_exponent": 2,
         "modules": ["pillar3a"],
     }
     assert client.post("/api/profile", json={"country": "FR"}, headers=reader).status_code == 403

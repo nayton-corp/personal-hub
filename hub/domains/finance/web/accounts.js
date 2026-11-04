@@ -1,7 +1,7 @@
 // Réglages d'un compte : nom, objectif et montant visé, disponibilité, catégorie, masquage et catégorie de toutes
 // ses dépenses (une poche Vacances), enregistrés par un seul Face ID. Le panneau s'ouvre depuis le patrimoine (détail d'un
 // compte) ou depuis la carte « Comptes » des réglages, qui montre aussi la fraîcheur.
-import { date, daysSince } from "../../format.js";
+import { date, daysSince, units } from "../../format.js";
 import { FACET, GROUP_LABEL, facetMark, facetName, setInstitutions } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { store } from "../../store.js";
@@ -21,7 +21,7 @@ export const hiddenIds = () => new Set(((store.data(ACCOUNTS) || {}).items || []
 
 // état saisi : ce que le compte vaut aujourd'hui, modifié par les choix du panneau
 function initial(a) {
-  return { name: a.name, goal: a.goal, target: a.target ? String(Math.round(a.target.minor / 100)) : "", availability: a.availability_set ? a.availability : "auto", category: a.category || "auto", hidden: a.hidden, spend: a.spend_rule ? a.spend_rule.category_id : "" };
+  return { name: a.name, goal: a.goal, target: a.target ? String(Math.round(units(a.target))) : "", availability: a.availability_set ? a.availability : "auto", category: a.category || "auto", hidden: a.hidden, spend: a.spend_rule ? a.spend_rule.category_id : "" };
 }
 function changes(a, t) {
   const now = initial(a), out = {};

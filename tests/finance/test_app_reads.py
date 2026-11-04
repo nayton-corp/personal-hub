@@ -103,6 +103,8 @@ def set_budget(fin: FinanceDomain, category: str, minor: int) -> None:
             {
                 "category_id": category,
                 "monthly_minor": minor,
+                "amount_minor": minor,
+                "cadence": "month",
                 "currency": "CHF",
                 "valid_from": "2025-12-01",
                 "proposal_id": None,

@@ -20,7 +20,7 @@ from sqlalchemy.exc import OperationalError
 from hub.core.coredb import audit
 from hub.core.registry import contributions
 from hub.kernel.clock import local_tz, now_iso
-from hub.kernel.money import base_currency
+from hub.kernel.money import base_currency, exponent
 from hub.platform.db import make_engine
 from hub.platform.settings import Settings
 
@@ -62,6 +62,7 @@ class Profile:
             "country": self.country,
             "timezone": self.timezone,
             "currency": base_currency(),
+            "currency_exponent": exponent(base_currency()),
             "modules": sorted(self.modules),
         }
 

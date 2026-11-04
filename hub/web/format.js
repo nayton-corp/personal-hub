@@ -1,17 +1,25 @@
 // Mise en forme suisse : 12'345 CHF, 12,3 %. Les montants arrivent en {minor, currency, display}.
 
-// Devise de base de l'instance, donnée par le profil (HUB_CURRENCY) ; CHF jusqu'à sa réponse.
+// Devise de base de l'instance et son exposant (centimes : 2), donnés par le profil
+// (HUB_CURRENCY) ; CHF et 2 jusqu'à sa réponse. Le front ne divise jamais par 100 lui-même
+// (audit m9) : `units` et `toMinor` passent par l'exposant.
 let baseCcy = "CHF";
+let baseExp = 2;
 export const base = () => baseCcy;
-export function setBase(code) {
-  const changed = Boolean(code) && code !== baseCcy;
-  if (changed) baseCcy = code;
+export const decimals = () => baseExp;
+export function setBase(code, exponent = baseExp) {
+  const changed = (Boolean(code) && code !== baseCcy) || (Number.isInteger(exponent) && exponent !== baseExp);
+  if (code) baseCcy = code;
+  if (Number.isInteger(exponent) && exponent >= 0) baseExp = exponent;
   return changed;
 }
 
 const group = (s) => s.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
 
-export const units = (m) => (m == null ? null : m.minor / 100);
+// un montant {minor, currency} en unités (12345 → 123.45) ; null reste null
+export const units = (m) => (m == null ? null : m.minor / 10 ** baseExp);
+// une saisie en unités vers les centimes de la devise de base (123.45 → 12345)
+export const toMinor = (value) => Math.round(Number(value) * 10 ** baseExp);
 
 export function chf(value) {
   if (value == null || Number.isNaN(value)) return "—";
@@ -19,9 +27,11 @@ export function chf(value) {
   return (value < 0 && n !== 0 ? "−" : "") + group(String(n));
 }
 
+// aux décimales de la devise de base (12'345.50)
 export function chf2(value) {
   if (value == null || Number.isNaN(value)) return "—";
-  const [int, dec] = Math.abs(value).toFixed(2).split(".");
+  if (baseExp === 0) return chf(value);
+  const [int, dec] = Math.abs(value).toFixed(baseExp).split(".");
   return (value < 0 ? "−" : "") + group(int) + "." + dec;
 }
 

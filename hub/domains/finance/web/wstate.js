@@ -2,7 +2,7 @@
 // dans un compte, une dette) et la page ouverte. Les lignes viennent de /finance/accounts,
 // /finance/holdings et /finance/debts, valorisées au dernier point de /finance/networth/history.
 import { CCY_NAME, FACETS, assetMark, facetMark, facetName, instMark, setInstitutions } from "./meta.js";
-import { MOIS, MOIS_L, base } from "../../format.js";
+import { MOIS, MOIS_L, base, units } from "../../format.js";
 import { pref, setPref } from "../../ui.js";
 import { store } from "../../store.js";
 
@@ -84,21 +84,21 @@ export function lines() {
   const out = [];
   for (const a of acc.items) {
     if (a.hidden) continue;
-    const total = byAcc[a.id] ? byAcc[a.id].minor / 100 : 0;
+    const total = byAcc[a.id] ? units(byAcc[a.id]) : 0;
     const own = hold.items.filter((p) => p.account_id === a.id);
-    const meta = { acc: a.id, accName: a.name, inst: a.institution, liq: a.availability, goal: a.goal, kind: a.kind, target: a.target ? a.target.minor / 100 : null };
+    const meta = { acc: a.id, accName: a.name, inst: a.institution, liq: a.availability, goal: a.goal, kind: a.kind, target: a.target ? units(a.target) : null };
     let held = 0;
     for (const p of own) {
-      const v = p.value.minor / 100;
+      const v = units(p.value);
       held += v;
       const crypto = p.kind === "crypto";
-      out.push({ ...meta, asset: `isin:${p.isin}`, isin: p.isin, name: p.name, symbol: crypto ? p.isin : null, cat: a.category || (crypto ? "crypto" : "funds"), qty: p.quantity, unit: crypto ? p.isin : "parts", value: v, price: p.price, priceCcy: p.price_currency, priceDate: p.price_date, cost: p.cost ? p.cost.minor / 100 : null });
+      out.push({ ...meta, asset: `isin:${p.isin}`, isin: p.isin, name: p.name, symbol: crypto ? p.isin : null, cat: a.category || (crypto ? "crypto" : "funds"), qty: p.quantity, unit: crypto ? p.isin : "parts", value: v, price: p.price, priceCcy: p.price_currency, priceDate: p.price_date, cost: p.cost ? units(p.cost) : null });
     }
     const rest = total - held;
     if (!own.length || Math.abs(rest) >= 1) {
       // sans positions : le solde, dans la devise du compte ; avec : le reste, déjà converti
       const ccy = own.length ? base() : a.balance.currency;
-      const q = own.length ? rest : a.balance.minor / 100;
+      const q = own.length ? rest : units(a.balance);
       out.push({ ...meta, asset: `ccy:${ccy}`, name: CCY_NAME[ccy] || ccy, symbol: ccy, cat: a.category || (a.kind === "crypto" && !own.length ? "crypto" : "cash"), qty: q, unit: ccy, value: own.length ? rest : total });
     }
   }
@@ -106,7 +106,7 @@ export function lines() {
   for (const d of owed.items) {
     const v = byAcc[d.key];
     if (!v || !v.minor) continue;
-    out.push({ acc: d.key, debt: d.id, accName: d.name, inst: d.lender, liq: null, goal: null, kind: "debt", debtKind: d.kind, asset: `debt:${d.id}`, name: d.name, symbol: null, cat: "debt", qty: v.minor / 100, unit: base(), value: v.minor / 100 });
+    out.push({ acc: d.key, debt: d.id, accName: d.name, inst: d.lender, liq: null, goal: null, kind: "debt", debtKind: d.kind, asset: `debt:${d.id}`, name: d.name, symbol: null, cat: "debt", qty: units(v), unit: base(), value: units(v) });
   }
   // critères Compte et Actif : ce que les lignes contiennent
   ACC_F.values = [...new Set(out.map((l) => l.acc))];

@@ -53,7 +53,7 @@ function row(dl, label, value, ok) {
 
 function renderProfile(p) {
   const tz = setTimeZone(p.timezone);
-  const ccy = setBase(p.currency);
+  const ccy = setBase(p.currency, p.currency_exponent);
   if (tz || ccy) store.invalidate();
   $("profile-name").value = p.display_name || "";
   $("profile-country").value = p.country;

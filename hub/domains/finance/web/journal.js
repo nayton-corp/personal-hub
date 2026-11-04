@@ -2,7 +2,7 @@
 // période, montant) et tri, écritures par jour, détail d'une écriture et classement avec Face ID ;
 // « À classer » groupe par contrepartie avec ses libellés, comptes, dates et montants, un choix
 // par groupe, une validation pour tout le lot.
-import { MOIS, dayName, date } from "../../format.js";
+import { MOIS, dayName, date, toMinor, units } from "../../format.js";
 import { GROUP_LABEL, catIc, catMark, txMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { api, monthSpan, shiftMonth, store } from "../../store.js";
@@ -28,7 +28,7 @@ let busy = false;
 const ALWAYS_PRIORITY = 4;
 
 const internal = (e) => Boolean(e.category && e.category.id.startsWith("transfer"));
-const u = (m) => m.minor / 100;
+const u = (m) => units(m);
 
 const F = () => P.jf || {};
 // lien suivi depuis le Patrimoine : { token, label, jf d'avant, asset } ; un actif montre ses ordres
@@ -51,8 +51,8 @@ function query(more) {
     qs.set("from", monthSpan(P.txcat.from)[0]);
     qs.set("to", monthSpan(P.txcat.to)[1]);
   }
-  if (f.min != null && f.min !== "") qs.set("min_minor", String(Math.round(Number(f.min) * 100)));
-  if (f.max != null && f.max !== "") qs.set("max_minor", String(Math.round(Number(f.max) * 100)));
+  if (f.min != null && f.min !== "") qs.set("min_minor", String(toMinor(f.min)));
+  if (f.max != null && f.max !== "") qs.set("max_minor", String(toMinor(f.max)));
   if (f.sort === "amount") qs.set("sort", "amount");
   if (more && tx.cursor) qs.set("cursor", tx.cursor);
   return qs;

@@ -42,7 +42,7 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
 | `review` | écritures sans catégorie groupées par contrepartie : nombre, total, sens, comptes, première et dernière date, plus petit et plus gros montant, libellés, communications, codes bancaires et les 10 dernières écritures |
 | `budget` (suite) | une catégorie suivie à l'année (`set_budget` avec `cadence: year`) porte `yearly` : cible annuelle, cumul depuis janvier ; elle sort de `budget`, `budgeted_expenses` et `rest_to_live` |
 | `settings` | `month_start_day` (1 à 28) du mois en cours, mois budgétaire en cours et ses dates, règles datées (`rules`) ; le jour se change par la proposition `set_month_start` |
-| `budget?month=&period=m\|q` | réel et cible par catégorie de dépense, dépassements, reste à vivre |
+| `budget?month=&period=m\|q` | réel et cible par catégorie de dépense, dépassements, reste à vivre ; par ligne `state` (`untracked`, `over`, `likely_over`, `paid`, `ok`), `projected` (fin de période, en cours seulement) et `rest` ; sur la période `current`, `pace` (part écoulée), `expected` (part du budget attendue à ce jour), `projection`, `state` (`no_budget`, `closed_ok`, `closed_over`, `over`, `likely_over`, `on_pace`, avec `over_by`) : la règle de `classement/model/pace.py`, la même que les sentinelles, le front n'en calcule aucun ; `missing_fx` liste les écritures en devise sans change ce jour-là, laissées de côté |
 | `budget/totals?month=&period=m\|q` | revenus, dépenses fixes et variables, épargne, placements, taux |
 | `budget/months?month=&months=6` | les mêmes totaux, mois par mois (graphique Tendance) |
 | `breaks` | soldes non expliqués d'aujourd'hui (rapprochement) : compte, actif, parts, valeur, cause, et leur total ; règle dans [finance-politique.md](finance-politique.md) |
@@ -149,7 +149,7 @@ règle qui sert aussi aux prochains imports.
 |---|---|---|
 | `recategorize` | catégorie d'une écriture (ou ventilation en lignes) | oui |
 | `create_rule` · `disable_rule` | règle, appliquée tout de suite à ce qu'elle peut toucher | — |
-| `set_budget` | cible mensuelle d'une catégorie de dépense, dès le 1er du mois | oui |
+| `set_budget` | cible d'une catégorie de dépense, `amount_minor` tel que saisi avec sa `cadence` (`month` ou `year`, l'annuel n'est plus divisé par douze), dès le 1er du mois | oui |
 | `add_note` | note sur une écriture | — |
 | `apply_import` | applique un relevé en attente dont les motifs se forcent | — |
 | `set_account_goal` | objectif d'un compte (filtre « Objectif » du patrimoine) | — |
