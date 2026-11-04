@@ -64,13 +64,13 @@ tests/              pytest, Hypothesis, Playwright à 375 px ; domaine factice
 uv sync --frozen && uv run pre-commit install   # ou : make install
 make check                                       # ruff, mypy --strict, import-linter, tests
 make dev                                         # API + app sur http://localhost:8710
-make web                                         # lint et tests des modules de l'app (Node 22)
+make web                                         # lint, types (tsc) et tests des modules de l'app (Node 22)
 ```
 
 En développement, les passkeys exigent `localhost` ou HTTPS : `make dev` sert l'app sur
 `http://localhost:8710` (données dans `./var`, ignoré par git). Un changement voulu du contrat
-d'API se valide avec `make openapi` ; une route, un outil ou un connecteur nouveau, avec
-`make reference`.
+d'API se valide avec `make openapi` (l'instantané du cœur et les types de l'app,
+`hub/web/api.d.ts`) ; une route, un outil ou un connecteur nouveau, avec `make reference`.
 
 ## Commande `hub`
 

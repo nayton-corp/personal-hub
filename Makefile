@@ -19,8 +19,9 @@ test:
 migrations-test:
 	uv run pytest -q -m migrations
 
-web:  # app web : lint (Biome) et tests des modules (node --test) ; Node 22
+web:  # app web : lint (Biome), types des modules `// @ts-check` (tsc, jsconfig.json) et tests (node --test) ; Node 22
 	npx --yes @biomejs/biome@2.5.15 lint
+	npx --yes -p typescript@5.9.3 tsc -p jsconfig.json
 	node --test "tests/web/*.test.mjs"
 
 trial:  # instance d'essai jetable : l'image TAG migre des données fictives et répond
@@ -49,8 +50,8 @@ domia-contract:  # reprend le contrat avec Domia depuis un clone : make domia-co
 reference:  # docs/reference/ (routes, outils, connecteurs), après un changement voulu
 	UPDATE_REFERENCE=1 uv run pytest -q tests/test_reference_docs.py
 
-openapi:  # après un changement voulu du contrat d'API
-	UPDATE_OPENAPI=1 uv run pytest -q tests/test_openapi_snapshot.py
+openapi:  # après un changement voulu du contrat d'API : instantané du cœur et types JSDoc de l'app
+	UPDATE_OPENAPI=1 uv run pytest -q tests/test_openapi_snapshot.py tests/test_api_types.py
 
 dev:  # API locale sur http://localhost:8710, app servie par l'API, données dans ./var
 	HUB_PATHS__DATA=var/data HUB_PATHS__INBOX=var/inbox HUB_PATHS__ARCHIVE=var/archive \

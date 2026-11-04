@@ -1,14 +1,25 @@
+// @ts-check
 // Le budget en mots : l'état d'une période et de chaque catégorie, tels que le serveur les
 // calcule (/finance/budget : state, pace, expected, projection ; model/pace.py, la même règle que
 // les sentinelles, audit M3). Ici on lit et on met en mots, on ne calcule pas.
 import { base, ratio, units } from "../../format.js";
 import { n0, pf } from "../../ui.js";
 
-const u = (m) => (m ? units(m) : 0);
+/** @typedef {import("../../api").BudgetOut} BudgetOut */
+/** @typedef {import("../../api").BudgetLineOut} BudgetLineOut */
+/** @typedef {import("../../api").MoneyOut} MoneyOut */
+/** @typedef {BudgetLineOut & {s: number, t: number | null, p: number | null}} Line */
+
+/** @param {MoneyOut | null | undefined} m */
+const u = (m) => (m == null ? 0 : (units(m) ?? 0));
 
 
 // l'état de la période, en mots, d'après `state.kind` du serveur (no_budget, closed_ok,
 // closed_over, over, likely_over, on_pace)
+/**
+ * @param {string} kind
+ * @param {{rest: number | null, over: number, ratio: number, expected: number | null}} x
+ */
 function periodState(kind, { rest, over, ratio, expected }) {
   const pace = expected != null ? `${pf(ratio, 0)} % dépensés, ${pf(expected, 0)} % attendus à ce jour` : `${pf(ratio, 0)} % du budget dépensé`;
   switch (kind) {
@@ -23,13 +34,15 @@ function periodState(kind, { rest, over, ratio, expected }) {
 
 // chiffres d'une période, tels que le serveur les donne : dépensé, budget, reste, rythme (part
 // de la période écoulée), part attendue à ce jour, état, projection à la fin de la période
+/** @param {BudgetOut} b */
 export function model(b) {
+  /** @type {Line[]} */
   const lines = b.lines.map((l) => ({ ...l, s: u(l.spent), t: l.target ? units(l.target) : null, p: l.projected ? units(l.projected) : null }));
   const T = b.budget ? units(b.budget) : null;
   // hors catégories suivies à l'année : elles ont leur propre jauge, depuis janvier
   const spent = u(b.budgeted_expenses || b.expenses);
   const rest = T == null ? null : u(b.rest_to_live);
-  const over = b.state && b.state.over_by ? units(b.state.over_by) : 0;
+  const over = b.state && b.state.over_by ? (units(b.state.over_by) ?? 0) : 0;
   const r = T ? spent / T : 0;
   const expected = ratio(b.expected);
   const state = periodState(b.state ? b.state.kind : "no_budget", { rest, over, ratio: r, expected });
@@ -39,25 +52,33 @@ export function model(b) {
 
 // l'état d'une catégorie, en mots, d'après `state` du serveur (untracked, over, likely_over,
 // paid, ok)
+/** @param {Line} l */
 export function catState(l) {
+  const t = l.t ?? 0;
   switch (l.state) {
-    case "over": return { k: "bad", col: "var(--neg)", txt: `Dépassé de ${n0(l.s - l.t)}` };
-    case "likely_over": return { k: "warn", col: "var(--s3)", txt: `Reste ${n0(l.t - l.s)}, au-dessus du rythme` };
+    case "over": return { k: "bad", col: "var(--neg)", txt: `Dépassé de ${n0(l.s - t)}` };
+    case "likely_over": return { k: "warn", col: "var(--s3)", txt: `Reste ${n0(t - l.s)}, au-dessus du rythme` };
     case "paid": return { k: "ok", col: "var(--pos)", txt: "Payé" };
-    case "ok": return { k: "ok", col: "var(--pos)", txt: `Reste ${n0(l.t - l.s)}` };
+    case "ok": return { k: "ok", col: "var(--pos)", txt: `Reste ${n0(t - l.s)}` };
     default: return { k: "ok", col: "var(--faint)", txt: "Hors budget" };
   }
 }
 
 
 // catégorie suivie à l'année : le cumul depuis janvier face à la cible annuelle
+/** @param {Line} c */
 export function yearState(c) {
-  const y = c.yearly, done = u(y.spent), goal = y.target ? u(y.target) : null;
+  const y = c.yearly;
+  if (!y) return { k: "ok", col: "var(--faint)", txt: "Sans cible annuelle" };
+  const done = u(y.spent), goal = y.target ? u(y.target) : null;
   return goal == null ? { k: "ok", col: "var(--faint)", txt: "Sans cible annuelle" }
     : c.state === "over" ? { k: "bad", col: "var(--neg)", txt: `Dépassé de ${n0(done - goal)} sur l'année` }
     : { k: "ok", col: "var(--pos)", txt: `Reste ${n0(goal - done)} sur l'année` };
 }
 
 // gravité pour le tri : dépassé, puis au-dessus du rythme, puis le reste par part consommée
-export const rank = (c) => ({ over: 2, likely_over: 1 })[c.state] || 0;
+/** @type {Record<string, number>} */
+const RANK = { over: 2, likely_over: 1 };
+/** @param {Line} c */
+export const rank = (c) => (c.state ? RANK[c.state] || 0 : 0);
 

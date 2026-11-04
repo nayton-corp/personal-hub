@@ -77,6 +77,11 @@
   plus se déclare dans `pairs` des secrets, et l'export CSV « Trade History » de Binance se
   dépose comme un relevé (`binance_csv`). Migration 0024 (`source_gaps`, décisions acceptant
   cette rupture).
+- Contrats d'API (audit M10, m9) : les trente routes Finance déclarent leur modèle de sortie
+  (`response_model`, un module `schemas.py` par sous-contexte ; `search` rend `EntrySearchOut`)
+  et un test vérifie, sur un jeu de données complet, qu'aucune réponse ne porte un champ hors
+  modèle. `make openapi` génère aussi `hub/web/api.d.ts` depuis l'OpenAPI, et `make web` passe
+  `tsc` sur les modules marqués `// @ts-check` (`format.js`, `bmodel.js` pour commencer).
 - `hub finance golden save | check` : l'étalon des agrégats (patrimoine, positions,
   performance, ruptures, budget, dettes) se fige avant une mise à jour et se vérifie après, au
   centime ; le fichier ne contient que des chiffres et des identifiants.

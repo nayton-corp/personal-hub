@@ -22,6 +22,11 @@ from hub.domains.finance.registre.model.errors import ImportRefused
 from hub.domains.finance.sources.app import revolut_accounts
 from hub.domains.finance.sources.app.importer import ImportService
 from hub.domains.finance.sources.app.statements import APPLY_IMPORT
+from hub.domains.finance.sources.interface.schemas import (
+    ImportDetailOut,
+    PendingAccountsOut,
+    UploadOut,
+)
 
 MAX_UPLOAD = 50 * 1024 * 1024
 _NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip|pdf|json|csv|xlsx)$", re.I)
@@ -36,7 +41,7 @@ def build_router(host: Host) -> APIRouter:
     r = APIRouter()
     engine = host.engine()
 
-    @r.get("/accounts/pending")
+    @r.get("/accounts/pending", response_model=PendingAccountsOut)
     def pending_accounts(_p: Reader) -> dict[str, Any]:
         """Comptes vus dans des relevés en attente (Enable Banking, CSV Revolut) mais pas encore
         créés : clé, devise, nombre d'écritures et période. Aucun montant."""
@@ -62,7 +67,7 @@ def build_router(host: Host) -> APIRouter:
             )
         return {"items": out}
 
-    @r.post("/imports", status_code=202)
+    @r.post("/imports", status_code=202, response_model=UploadOut)
     async def upload(
         request: Request,
         _session: AppSession,
@@ -94,7 +99,7 @@ def build_router(host: Host) -> APIRouter:
             ]
         return {"items": items, "counters": report.counters()}
 
-    @r.get("/imports/{import_id}")
+    @r.get("/imports/{import_id}", response_model=ImportDetailOut)
     def import_detail(_session: AppSession, hub_ctx: Ctx, import_id: str) -> dict[str, Any]:
         with engine.connect() as conn:
             found = reads.import_detail(conn, import_id)

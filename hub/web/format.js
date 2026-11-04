@@ -1,4 +1,7 @@
+// @ts-check
 // Mise en forme suisse : 12'345 CHF, 12,3 %. Les montants arrivent en {minor, currency, display}.
+/** @typedef {import("./api").MoneyOut} MoneyOut */
+/** @typedef {import("./api").FreshnessListOut} FreshnessListOut */
 
 // Devise de base de l'instance et son exposant (centimes : 2), donnés par le profil
 // (HUB_CURRENCY) ; CHF et 2 jusqu'à sa réponse. Le front ne divise jamais par 100 lui-même
@@ -7,6 +10,7 @@ let baseCcy = "CHF";
 let baseExp = 2;
 export const base = () => baseCcy;
 export const decimals = () => baseExp;
+/** @param {string | null | undefined} code @param {number} [exponent] */
 export function setBase(code, exponent = baseExp) {
   const changed = (Boolean(code) && code !== baseCcy) || (Number.isInteger(exponent) && exponent !== baseExp);
   if (code) baseCcy = code;
@@ -14,13 +18,17 @@ export function setBase(code, exponent = baseExp) {
   return changed;
 }
 
+/** @param {string} s */
 const group = (s) => s.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
 
 // un montant {minor, currency} en unités (12345 → 123.45) ; null reste null
+/** @param {MoneyOut | null | undefined} m @returns {number | null} */
 export const units = (m) => (m == null ? null : m.minor / 10 ** baseExp);
 // une saisie en unités vers les centimes de la devise de base (123.45 → 12345)
+/** @param {string | number} value */
 export const toMinor = (value) => Math.round(Number(value) * 10 ** baseExp);
 
+/** @param {number | null | undefined} value */
 export function chf(value) {
   if (value == null || Number.isNaN(value)) return "—";
   const n = Math.round(Math.abs(value));
@@ -28,6 +36,7 @@ export function chf(value) {
 }
 
 // aux décimales de la devise de base (12'345.50)
+/** @param {number | null | undefined} value */
 export function chf2(value) {
   if (value == null || Number.isNaN(value)) return "—";
   if (baseExp === 0) return chf(value);
@@ -35,45 +44,56 @@ export function chf2(value) {
   return (value < 0 ? "−" : "") + group(int) + "." + dec;
 }
 
+/** @param {number | null | undefined} v */
 export const signed = (v) => (v == null ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + chf(Math.abs(v)));
 
+/** @param {number | null | undefined} x @param {number} [digits] */
 export function pct(x, digits = 0) {
   if (x == null || Number.isNaN(x)) return "—";
   return (x * 100).toFixed(digits).replace(".", ",") + " %";
 }
 
+/** @param {number | null | undefined} x @param {number} [d] */
 export const spct = (x, d = 1) => (x == null ? "—" : (x > 0 ? "+" : x < 0 ? "−" : "") + pct(Math.abs(x), d));
 
 // rapport du serveur (texte décimal) en nombre
+/** @param {string | null | undefined} s @returns {number | null} */
 export const ratio = (s) => (s == null ? null : Number(s));
 
 export const MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 export const MOIS_L = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
 
+/** @param {string} iso */
 const utc = (iso) => new Date(`${iso.slice(0, 10)}T00:00:00Z`);
 
+/** @param {string | null | undefined} iso */
 export function date(iso) {
   if (!iso) return "—";
   const d = utc(iso);
   return `${d.getUTCDate()} ${MOIS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+/** @param {string} iso */
 export function dayName(iso) {
   const d = utc(iso);
   return `${JOURS[d.getUTCDay()]} ${d.getUTCDate()} ${MOIS[d.getUTCMonth()]}`;
 }
 
+/** @param {string} month */
 export const monthName = (month) => `${MOIS_L[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
 
+/** @param {string | null | undefined} iso @param {Date} [now] @returns {number | null} */
 export function daysSince(iso, now = new Date()) {
   if (!iso) return null;
-  return Math.floor((now - utc(iso)) / 86_400_000);
+  return Math.floor((now.getTime() - utc(iso).getTime()) / 86_400_000);
 }
 
+/** @param {string | null | undefined} s */
 export const initials = (s) =>
   (s || "?").split(/[\s·]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
+/** @param {string} tag @param {string} [cls] @param {string | null} [txt] */
 export function el(tag, cls, txt) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -82,6 +102,7 @@ export function el(tag, cls, txt) {
 }
 
 // « il y a 2 h », « hier à 07:31 », « le 26 oct. »
+/** @param {number} ms @param {number} [now] */
 export function ago(ms, now = Date.now()) {
   const min = Math.round((now - ms) / 60_000);
   if (min < 2) return "à l'instant";
@@ -98,6 +119,7 @@ export function ago(ms, now = Date.now()) {
 // Ligne sous les titres : la dernière donnée reçue par le hub (tous comptes visibles), ou, hors
 // ligne, l'heure des chiffres affichés. 45 jours sans donnée sur un compte : en orange.
 export const STALE_DAYS = 45;
+/** @param {FreshnessListOut | null | undefined} fr @param {boolean} offline @param {number | null} [lastOk] */
 export function freshLine(fr, offline, lastOk) {
   if (offline) return { text: lastOk ? `Hors ligne · chiffres ${ago(lastOk)}` : "Hors ligne", warn: true };
   if (!fr) return { text: "", warn: false };

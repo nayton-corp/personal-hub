@@ -17,6 +17,15 @@ from hub.domains.finance.registre.interface.http import (
     AnyReader,
     Reader,
 )
+from hub.domains.finance.registre.interface.schemas import (
+    CategoryListOut,
+    EntryDetailOut,
+    EntryListOut,
+    EntrySearchOut,
+    FreshnessListOut,
+    SettingsOut,
+    TradeListOut,
+)
 from hub.domains.finance.registre.model import period
 
 
@@ -37,7 +46,7 @@ def build_router(host: http.Host) -> APIRouter:
             "rules": [{"valid_from": v, "start_day": d} for v, d in dict(rules).items()],
         }
 
-    @r.get("/entries")
+    @r.get("/entries", response_model=EntryListOut)
     def entries(
         _p: Reader,
         account: str | None = None,
@@ -64,7 +73,7 @@ def build_router(host: http.Host) -> APIRouter:
             raise Problem("validation.params", "curseur invalide") from None
         return {"items": items, "next_cursor": next_cursor}
 
-    @r.get("/trades")
+    @r.get("/trades", response_model=TradeListOut)
     def trades_route(
         _p: Reader, isin: Annotated[str, Query(max_length=40)], account: str | None = None
     ) -> dict[str, Any]:
@@ -72,7 +81,7 @@ def build_router(host: http.Host) -> APIRouter:
         with engine.connect() as conn:
             return {"items": reads.trades(conn, isin, account)}
 
-    @r.get("/entries/{entry_id}")
+    @r.get("/entries/{entry_id}", response_model=EntryDetailOut)
     def entry(_p: Reader, entry_id: str) -> dict[str, Any]:
         with engine.connect() as conn:
             found = reads.entry_detail(conn, entry_id)
@@ -80,7 +89,7 @@ def build_router(host: http.Host) -> APIRouter:
             raise Problem("not_found")
         return found
 
-    @r.get("/search")
+    @r.get("/search", response_model=EntrySearchOut)
     def search(
         _p: Reader, q: Annotated[str, Query(min_length=3, max_length=100)]
     ) -> dict[str, Any]:
@@ -89,12 +98,12 @@ def build_router(host: http.Host) -> APIRouter:
         with engine.connect() as conn:
             return {"items": reads.search(conn, q)}
 
-    @r.get("/categories")
+    @r.get("/categories", response_model=CategoryListOut)
     def categories(_p: AnyReader) -> dict[str, Any]:
         with engine.connect() as conn:
             return {"items": reads.categories(conn)}
 
-    @r.get("/freshness")
+    @r.get("/freshness", response_model=FreshnessListOut)
     def freshness(_p: AnyReader) -> dict[str, Any]:
         with engine.connect() as conn:
             return {"items": reads.freshness(conn)}
@@ -118,7 +127,7 @@ def build_router(host: http.Host) -> APIRouter:
             headers={"Content-Disposition": f'attachment; filename="{name}"'},
         )
 
-    @r.get("/settings")
+    @r.get("/settings", response_model=SettingsOut)
     def get_settings(_p: AnyReader) -> dict[str, Any]:
         """Réglages du budget : jour où commence le mois en cours, mois en cours et ses dates,
         règles datées (`set_month_start` en pose une nouvelle)."""

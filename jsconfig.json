@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "rootDirs": ["hub/web", "hub/domains"]
+  },
+  "include": ["hub/web/**/*.js", "hub/web/**/*.d.ts", "hub/domains/*/web/**/*.js"]
+}

@@ -28,7 +28,11 @@ alias fin='hubc run --rm --no-deps importer hub finance'
 ## L'app (lot 2)
 
 L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes de
-`/api/finance` ; chaque chiffre est calculé côté serveur, en centimes.
+`/api/finance` ; chaque chiffre est calculé côté serveur, en centimes. Chaque route déclare la
+forme de sa réponse (`<sous-contexte>/interface/schemas.py`, dans l'OpenAPI) ; un champ rendu
+sans être déclaré passe, et `tests/finance/test_api_contracts.py` le signale. L'app lit ces
+formes dans `hub/web/api.d.ts` (généré par `make openapi`), que `// @ts-check` vérifie module
+par module (`make web`).
 
 | Route | Ce qu'elle donne |
 |---|---|

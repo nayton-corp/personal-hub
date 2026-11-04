@@ -20,6 +20,18 @@ from hub.domains.finance.patrimoine.app import (
     transfers,
 )
 from hub.domains.finance.patrimoine.app import holdings as positions
+from hub.domains.finance.patrimoine.interface.schemas import (
+    AccountListOut,
+    BreaksOut,
+    DebtListOut,
+    HoldingsOut,
+    KpisOut,
+    LookthroughOut,
+    NetworthHistoryOut,
+    PerformanceOut,
+    PricesOut,
+    TransfersOut,
+)
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.http import (
     DATE,
@@ -43,13 +55,13 @@ def build_router(host: Host) -> APIRouter:
     r = APIRouter()
     engine = host.engine()
 
-    @r.get("/accounts")
+    @r.get("/accounts", response_model=AccountListOut)
     def accounts(_p: AnyReader) -> dict[str, Any]:
         """Comptes, IBAN masqué, solde calculé, dernier CLBD et écart."""
         with engine.connect() as conn:
             return {"items": account_list.accounts(conn)}
 
-    @r.get("/kpis")
+    @r.get("/kpis", response_model=KpisOut)
     def kpis(
         _p: AnyReader, month: Annotated[str | None, Query(pattern=MONTH)] = None
     ) -> dict[str, Any]:
@@ -58,7 +70,7 @@ def build_router(host: Host) -> APIRouter:
         with engine.connect() as conn:
             return positions.kpis(conn, m, host.today(), **host.pillar3a())
 
-    @r.get("/holdings")
+    @r.get("/holdings", response_model=HoldingsOut)
     def holdings(
         _p: AnyReader, on: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None
     ) -> dict[str, Any]:
@@ -66,13 +78,13 @@ def build_router(host: Host) -> APIRouter:
         with engine.connect() as conn:
             return positions.holdings(conn, on or host.today().isoformat())
 
-    @r.get("/debts")
+    @r.get("/debts", response_model=DebtListOut)
     def debts_route(_p: AnyReader) -> dict[str, Any]:
         """Dettes et leur solde aujourd'hui : départ, paiements et intérêts depuis, fin projetée."""
         with engine.connect() as conn:
             return {"items": debts.items(conn, host.today().isoformat())}
 
-    @r.get("/breaks")
+    @r.get("/breaks", response_model=BreaksOut)
     def breaks_route(_p: AnyReader) -> dict[str, Any]:
         """Rapprochement d'aujourd'hui : les ruptures ouvertes (compte, actif, parts, valeur,
         cause, gestes), leur total et la part des placements expliquée et cotée. Une rupture
@@ -80,7 +92,7 @@ def build_router(host: Host) -> APIRouter:
         with engine.connect() as conn:
             return reconcile.summary(conn, host.today().isoformat())
 
-    @r.get("/lookthrough")
+    @r.get("/lookthrough", response_model=LookthroughOut)
     def lookthrough_route(
         _p: AnyReader,
         dimension: Annotated[str, Query(pattern=DIMENSION)] = "region",
@@ -91,7 +103,7 @@ def build_router(host: Host) -> APIRouter:
         with engine.connect() as conn:
             return lookthrough.breakdown(conn, dimension, on or host.today().isoformat())
 
-    @r.get("/transfers")
+    @r.get("/transfers", response_model=TransfersOut, response_model_exclude_unset=True)
     def transfers_route(p: AnyReader, background: BackgroundTasks) -> dict[str, Any]:
         """Virements appariés par méthode et virements sans autre côté. Une lecture n'écrit
         pas : les instantanés se rafraîchissent après la réponse, en tâche de fond."""
@@ -99,7 +111,7 @@ def build_router(host: Host) -> APIRouter:
         with engine.connect() as conn:
             return transfers.summary(conn, detailed=not aggregates_only(p))
 
-    @r.get("/networth/history")
+    @r.get("/networth/history", response_model=NetworthHistoryOut)
     def networth_history(
         _p: AnyReader,
         background: BackgroundTasks,
@@ -122,7 +134,7 @@ def build_router(host: Host) -> APIRouter:
         with engine.connect() as conn:
             return snapshots.history(conn, from_, to)
 
-    @r.get("/performance")
+    @r.get("/performance", response_model=PerformanceOut)
     def performance_route(
         _p: AnyReader,
         from_: Annotated[str | None, Query(alias="from", pattern=DATE)] = None,
@@ -143,7 +155,7 @@ def build_router(host: Host) -> APIRouter:
             return performance.empty(base_currency())
         return performance.report(eng, line, from_, to, step)
 
-    @r.get("/prices")
+    @r.get("/prices", response_model=PricesOut)
     def prices_route(
         _p: AnyReader,
         isin: Annotated[str, Query(min_length=3, max_length=40)],
