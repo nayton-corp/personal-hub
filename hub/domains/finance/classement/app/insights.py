@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.domains.finance.classement.app.totals import Line, Lines, Totals, period_report
+from hub.domains.finance.packs import CountryPack
 from hub.domains.finance.registre.app.reads import budget_accounts, in_list, last_data
 from hub.domains.finance.registre.model import institutions
 from hub.domains.finance.registre.model.amounts import (
@@ -28,13 +29,9 @@ from hub.domains.finance.registre.model.amounts import (
 from hub.kernel.money import base_currency
 
 STALE_DAYS = 45
-EPARGNE_3A = "epargne-3a"
 PENSION_DEPOSITS = institutions.like_any(
     "bank_tx_code", institutions.prefixes(pension_deposit=True)
 )
-# plafond du 3e pilier A pour un salarié affilié à une caisse de pension, en centimes ;
-# une année absente prend le dernier plafond connu, `[finance] pillar3a_cap_minor` le remplace
-PILLAR_3A_CAP = {2024: 705_600, 2025: 725_800, 2026: 725_800}
 EXPENSE_GROUPS = ("fixed", "variable")
 FLOW_GROUPS = ("fixed", "variable", "savings")
 NAMES_EXTRA = {UNCATEGORIZED: "À catégoriser", OTHERS: "Autres"}
@@ -200,26 +197,29 @@ def to_categorize(conn: Connection) -> int:
 
 
 def pillar3a_year(
-    conn: Connection, year: int, until: date, cap: int | None = None
+    conn: Connection, year: int, until: date, cap: int | None, pack: CountryPack
 ) -> dict[str, Any]:
-    """Versements 3a de l'année : ceux que VIAC a reçus (avis de versement) ou, à défaut, les
-    paiements catégorisés « épargne 3a » sur les comptes courants ; le plus grand des deux,
-    pour qu'un historique VIAC incomplet ou une catégorie manquante ne sous-estime rien."""
+    """Versements de l'épargne-retraite plafonnée (pilier 3a) de l'année : ceux que la
+    fondation a reçus (avis de versement) ou, à défaut, les paiements catégorisés dans la
+    catégorie du pack sur les comptes courants ; le plus grand des deux, pour qu'un historique
+    incomplet ou une catégorie manquante ne sous-estime rien. `cap` : `[finance]
+    pillar3a_cap_minor`, sinon le plafond du pack (une année absente prend le dernier connu)."""
     if cap is None:
-        known = [y for y in PILLAR_3A_CAP if y <= year] or [min(PILLAR_3A_CAP)]
-        cap = PILLAR_3A_CAP[max(known)]
+        cap = pack.pension_cap(year) or 0
     period = {"ccy": base_currency(), "s": f"{year}-01-01", "e": until.isoformat()}
     ids, params = in_list("a", budget_accounts(conn))
-    from_bank = -int(
-        conn.execute(
-            text(
-                "SELECT coalesce(sum(amount_minor), 0) FROM v_entry_allocation "
-                f"WHERE category_id = :c AND account_id IN {ids} AND currency = :ccy "
-                "AND booking_date >= :s AND booking_date <= :e"
-            ),
-            {**params, **period, "c": EPARGNE_3A},
-        ).scalar_one()
-    )
+    from_bank = 0
+    if pack.pension_category:
+        from_bank = -int(
+            conn.execute(
+                text(
+                    "SELECT coalesce(sum(amount_minor), 0) FROM v_entry_allocation "
+                    f"WHERE category_id = :c AND account_id IN {ids} AND currency = :ccy "
+                    "AND booking_date >= :s AND booking_date <= :e"
+                ),
+                {**params, **period, "c": pack.pension_category},
+            ).scalar_one()
+        )
     at_viac = int(
         conn.execute(
             text(

@@ -1,8 +1,8 @@
 // Entrée de l'app (L0-09) : connexion par passkey, puis la coquille (shell.js) et ses domaines. Aucun
 // script en ligne : la CSP de Caddy n'autorise que les fichiers servis par le hub.
-import { start } from "./shell.js";
-import { setBase } from "./format.js";
-import { api, setTimeZone, store, timeZone } from "./store.js";
+import { applyProfile, start } from "./shell.js";
+import { locale } from "./format.js";
+import { api, store, timeZone } from "./store.js";
 import { toast } from "./ui.js";
 import { creationOptions, credentialJSON, requestOptions } from "./webauthn.js";
 
@@ -39,7 +39,7 @@ function when(v) {
 }
 const fmt = (v) => {
   const d = when(v);
-  return d ? d.toLocaleString("fr-CH", { timeZone: timeZone(), day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+  return d ? d.toLocaleString(locale(), { timeZone: timeZone(), day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 };
 
 function row(dl, label, value, ok) {
@@ -52,13 +52,11 @@ function row(dl, label, value, ok) {
 }
 
 function renderProfile(p) {
-  const tz = setTimeZone(p.timezone);
-  const ccy = setBase(p.currency, p.currency_exponent);
-  if (tz || ccy) store.invalidate();
+  applyProfile(p);
   $("profile-name").value = p.display_name || "";
   $("profile-country").value = p.country;
   const modules = p.modules.length ? ` · modules : ${p.modules.join(", ")}` : "";
-  $("profile-info").textContent = `Fuseau ${p.timezone} (HUB_TZ) · devise ${p.currency} (HUB_CURRENCY)${modules}.`;
+  $("profile-info").textContent = `Fuseau ${p.timezone} (HUB_TZ) · devise ${p.currency} (HUB_CURRENCY) · locale ${p.locale} (HUB_LOCALE)${modules}.`;
 }
 
 async function renderSettings(session) {

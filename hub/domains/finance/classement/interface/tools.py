@@ -33,6 +33,7 @@ from hub.domains.finance.classement.interface.tool_args import (
     ReviewArgs,
     TrendArgs,
 )
+from hub.domains.finance.packs import instance as packs
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.tools import (
     AGGREGATES,
@@ -191,7 +192,8 @@ class ClassementTools(ToolBox):
                 f"AND NOT coalesce({review.CATCH_ALL}, 0)"
             )
         )
-        return {review.review_key(cp, label) for cp, label in rows}
+        pack = packs.current()
+        return {review.review_key(cp, label, pack) for cp, label in rows}
 
     def to_review(self, a: ReviewArgs, caller: ToolCaller) -> dict[str, Any]:
         with self.engine.connect() as conn:

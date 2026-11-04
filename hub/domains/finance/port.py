@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Protocol
 
+from hub.domains.finance.packs import CountryPack
 from hub.domains.finance.patrimoine.app.snapshots import Refresh
 from hub.domains.finance.registre.app.ledger import VerifyResult
 from hub.domains.finance.registre.interface.terminal import Host
@@ -19,6 +20,8 @@ class Finance(Host, Protocol):
     def today(self) -> date: ...
 
     def pillar3a(self) -> dict[str, Any]: ...
+
+    def pack(self) -> CountryPack: ...
 
     def verify_ledger(self) -> VerifyResult: ...
 

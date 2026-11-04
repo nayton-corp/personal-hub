@@ -2,9 +2,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { chf, chf2, date, decimals, initials, monthName, pct, setBase, signed, spct, toMinor, units } from "../../hub/web/format.js";
+import { chf, chf2, date, decimals, initials, locale, monthName, pct, setBase, setLocale, signed, spct, toMinor, units } from "../../hub/web/format.js";
 
-test("montants à la suisse : apostrophe des milliers, vrai signe moins", () => {
+test("le séparateur des milliers vient de la locale du profil", () => {
+  assert.equal(locale(), "fr");
+  assert.equal(chf(1234567), "1\u202f234\u202f567");
+  assert.equal(setLocale("fr-CH"), true);
+  assert.equal(setLocale("fr-CH"), false);
+  assert.equal(chf(1234567), "1'234'567"); // l'apostrophe droite, jamais la typographique
+  assert.equal(setLocale(null), false);
+});
+
+test("montants avec l'apostrophe des milliers (fr-CH), vrai signe moins", () => {
+  setLocale("fr-CH");
   assert.equal(chf(1234567.4), "1'234'567");
   assert.equal(chf(-1234.5), "−1'235");
   assert.equal(chf(-0.4), "0");

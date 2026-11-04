@@ -3,6 +3,7 @@
 // part au hub, qui le relaie à l'assistant du Mac). Hors de la conversation, la réponse sort de
 // l'orbe dans une carte de verre qui reste jusqu'à ce qu'on la ferme ; une pastille signale une
 // réponse pas encore lue. L'assistant garde la conversation ; l'app ne garde rien.
+import { locale } from "./format.js";
 import { mountOrb } from "./orb.js";
 import { ApiError, api, store } from "./store.js";
 import { announce, esc, ic, pref, setPref } from "./ui.js";
@@ -218,7 +219,7 @@ function wireOrb() {
 
 // --- rendu ------------------------------------------------------------------------------------
 
-const time = (at) => new Date(at).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
+const time = (at) => new Date(at).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 
 function bubbles() {
   const out = [];

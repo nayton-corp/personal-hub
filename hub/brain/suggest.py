@@ -25,7 +25,7 @@ STATE_FILE = "suggested.json"
 REASON_MAX = 140
 _OBJECT = re.compile(r"\{.*\}", re.S)
 
-PROMPT = """Tu catégorises une dépense ou un revenu d'un compte bancaire suisse.
+PROMPT = """Tu catégorises une dépense ou un revenu {context}.
 
 Catégories possibles (identifiant : nom, groupe ; ce qu'elle contient) :
 {categories}
@@ -45,22 +45,6 @@ Réponds uniquement par un objet JSON :
 Sinon : {{"category": null, "sure": false, "reason": "<pourquoi>"}}. Mieux vaut ne rien proposer
 qu'une catégorie probable : l'utilisateur classera lui-même."""
 
-# ce que contient une catégorie courante, pour que le modèle ne devine pas sur le seul nom
-HINTS = {
-    "alimentation": "courses, supermarché, épicerie, kiosque, boulangerie, y compris en gare",
-    "restaurants": "restaurant, café, bar, fast-food, livraison de repas",
-    "transports": "billets de train ou de bus, carburant, parking, péage, taxi, vélo",
-    "voiture-frais": "garage, entretien, pneus, assurance et impôt du véhicule",
-    "voiture-credit": "mensualité du crédit ou du leasing de la voiture",
-    "shopping": "habits, électronique, maison, grands magasins, achats en ligne",
-    "loisirs": "sport, cinéma, concerts, jeux, sorties culturelles",
-    "voyages": "hôtel, vol, location de vacances, dépenses de voyage",
-    "abonnements": "streaming, téléphone, internet, logiciels facturés chaque mois",
-    "sante": "pharmacie, médecin, dentiste, opticien",
-    "soins": "coiffeur, esthétique",
-    "retraits": "retrait d'espèces au bancomat",
-    "twint-particuliers": "argent envoyé à une personne (jamais un commerce)",
-}
 # groupes qu'une règle par commerçant ne doit pas viser : les transferts se reconnaissent par
 # appariement, pas par un nom
 EXCLUDED_GROUPS = frozenset({"transfer"})
@@ -91,19 +75,50 @@ class Memory:
         tmp.replace(self.path)
 
 
-def listing(cats: list[dict[str, Any]]) -> str:
+def listing(cats: list[dict[str, Any]], hints: dict[str, str] | None = None) -> str:
+    """Les catégories pour le modèle ; `hints` : ce que contient chacune, du pack pays (profil),
+    pour qu'il ne devine pas sur le seul nom."""
+    hints = hints or {}
     return "\n".join(
         f"- {c['id']} : {c['name']}, {c['group']}"
-        + (f" ; {HINTS[c['id']]}" if c["id"] in HINTS else "")
+        + (f" ; {hints[c['id']]}" if c["id"] in hints else "")
         for c in cats
     )
 
 
-def for_merchant(cats: list[dict[str, Any]], merchant: str) -> list[dict[str, Any]]:
-    """Un paiement TWINT à un commerce (pas de virgule « NOM, PRÉNOM ») n'est jamais de
-    l'argent envoyé à un particulier."""
-    if merchant.startswith("debit twint ") and "," not in merchant:
-        return [c for c in cats if c["id"] != "twint-particuliers"]
+def pack_of(toolbox: Toolbox) -> dict[str, Any]:
+    """Ce que le profil publie du pack pays de la Finance : consignes de l'IA."""
+    found = (toolbox.profile.get("packs") or {}).get("finance") or {}
+    return found if isinstance(found, dict) else {}
+
+
+def prompt(
+    toolbox: Toolbox, usable: list[dict[str, Any]], g: dict[str, Any], currency: str, direction: str
+) -> str:
+    """Le texte envoyé au modèle ; le contexte et le contenu des catégories viennent du pack
+    pays (profil)."""
+    pack = pack_of(toolbox)
+    return PROMPT.format(
+        context=pack.get("ai_context") or "d'un compte bancaire",
+        categories=listing(usable, pack.get("category_hints")),
+        merchant=g["counterparty"].replace("<", " ").replace(">", " "),
+        direction=direction,
+        count=g["count"],
+        total=g["total"],
+        currency=currency,
+    )
+
+
+def for_merchant(
+    cats: list[dict[str, Any]], merchant: str, person_payment: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
+    """`person_payment` (pack pays) : un paiement mobile qui commence par `prefix` est de
+    l'argent envoyé à une personne seulement si le nom porte `mark` (« NOM, PRÉNOM ») ; à un
+    commerce, la catégorie `category` est écartée."""
+    if not person_payment:
+        return cats
+    if merchant.startswith(person_payment["prefix"]) and person_payment["mark"] not in merchant:
+        return [c for c in cats if c["id"] != person_payment["category"]]
     return cats
 
 
@@ -147,6 +162,8 @@ def suggest(
     report = Report()
     toolbox.load("finance")
     review = _tool(toolbox, "finance_to_review", {"limit": 20})
+    currency = str(review.get("currency") or toolbox.profile.get("currency") or "")
+    person = pack_of(toolbox).get("person_payment")
     cats = _tool(toolbox, "finance_list_categories", {})["categories"]
     cats = [c for c in cats if c["group"] not in EXCLUDED_GROUPS]
     fresh = [
@@ -156,18 +173,12 @@ def suggest(
     ]
     for g in fresh[:groups]:
         report.merchants += 1
-        usable = for_merchant(cats, g["counterparty"])
+        usable = for_merchant(cats, g["counterparty"], person)
         allowed = {c["id"] for c in usable}
-        prompt = PROMPT.format(
-            categories=listing(usable),
-            merchant=g["counterparty"].replace("<", " ").replace(">", " "),
-            direction="dépense" if g["direction"] == "debit" else "revenu ou mixte",
-            count=g["count"],
-            total=g["total"],
-            currency=review.get("currency") or "CHF",
-        )
+        direction = "dépense" if g["direction"] == "debit" else "revenu ou mixte"
+        text = prompt(toolbox, usable, g, currency, direction)
         try:
-            reply = model.chat([{"role": "user", "content": prompt}], json_mode=True)
+            reply = model.chat([{"role": "user", "content": text}], json_mode=True)
         except LlmError as exc:
             report.stopped = str(exc)
             break
@@ -221,6 +232,8 @@ def catchup(
     report = Report()
     toolbox.load("finance")
     review = _tool(toolbox, "finance_to_review", {"limit": 100})
+    currency = str(review.get("currency") or toolbox.profile.get("currency") or "")
+    person = pack_of(toolbox).get("person_payment")
     cats = _tool(toolbox, "finance_list_categories", {})["categories"]
     cats = [c for c in cats if c["group"] not in EXCLUDED_GROUPS]
     fresh = [
@@ -233,18 +246,12 @@ def catchup(
     ]
     for g in fresh[:limit]:
         report.merchants += 1
-        usable = for_merchant(cats, g["counterparty"])
+        usable = for_merchant(cats, g["counterparty"], person)
         allowed = {c["id"] for c in usable}
-        prompt = PROMPT.format(
-            categories=listing(usable),
-            merchant=g["counterparty"].replace("<", " ").replace(">", " "),
-            direction={"debit": "dépense", "credit": "revenu"}.get(g["direction"], "mixte"),
-            count=g["count"],
-            total=g["total"],
-            currency=review.get("currency") or "CHF",
-        )
+        direction = {"debit": "dépense", "credit": "revenu"}.get(g["direction"], "mixte")
+        text = prompt(toolbox, usable, g, currency, direction)
         try:
-            reply = model.chat([{"role": "user", "content": prompt}], json_mode=True)
+            reply = model.chat([{"role": "user", "content": text}], json_mode=True)
         except LlmError as exc:
             report.stopped = str(exc)
             break
@@ -289,7 +296,7 @@ def _direct_key(g: dict[str, Any]) -> str:
 
 def _queue(toolbox: Toolbox) -> tuple[list[dict[str, Any]], str]:
     groups: list[dict[str, Any]] = []
-    currency = "CHF"
+    currency = str(toolbox.profile.get("currency") or "")
     while True:
         page = _tool(toolbox, "finance_to_review", {"limit": PAGE, "offset": len(groups)})
         currency = page.get("currency") or currency
@@ -329,6 +336,7 @@ def direct(
     report = Report()
     toolbox.load("finance")
     queue, currency = _queue(toolbox)
+    person = pack_of(toolbox).get("person_payment")
     cats = _tool(toolbox, "finance_list_categories", {})["categories"]
     cats = [c for c in cats if c["group"] not in EXCLUDED_GROUPS]
     fresh = [
@@ -344,17 +352,10 @@ def direct(
     chosen: dict[str, list[dict[str, Any]]] = {}
     for g in fresh[:limit]:
         report.merchants += 1
-        usable = for_merchant(cats, g["counterparty"])
-        prompt = PROMPT.format(
-            categories=listing(usable),
-            merchant=g["counterparty"].replace("<", " ").replace(">", " "),
-            direction="dépense",
-            count=g["count"],
-            total=g["total"],
-            currency=currency,
-        )
+        usable = for_merchant(cats, g["counterparty"], person)
+        text = prompt(toolbox, usable, g, currency, "dépense")
         try:
-            reply = model.chat([{"role": "user", "content": prompt}], json_mode=True)
+            reply = model.chat([{"role": "user", "content": text}], json_mode=True)
         except LlmError as exc:
             report.stopped = str(exc)
             break

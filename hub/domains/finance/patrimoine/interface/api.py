@@ -8,6 +8,7 @@ from typing import Annotated, Any, Protocol
 from fastapi import APIRouter, BackgroundTasks, Query
 
 from hub.core.errors import Problem
+from hub.domains.finance.packs import CountryPack
 from hub.domains.finance.patrimoine.app import (
     account_list,
     debts,
@@ -47,6 +48,8 @@ DIMENSION = r"^(region|sector|currency|holding)$"
 
 class Host(http.Host, Protocol):
     def pillar3a(self) -> dict[str, Any]: ...
+
+    def pack(self) -> CountryPack: ...
 
     def refresh_snapshots(self) -> object: ...
 
@@ -101,7 +104,9 @@ def build_router(host: Host) -> APIRouter:
         """Positions ventilées par région, secteur, devise, ou les dix plus grosses lignes
         sous-jacentes (transparence des fonds)."""
         with engine.connect() as conn:
-            return lookthrough.breakdown(conn, dimension, on or host.today().isoformat())
+            return lookthrough.breakdown(
+                conn, dimension, on or host.today().isoformat(), host.pack()
+            )
 
     @r.get("/transfers", response_model=TransfersOut, response_model_exclude_unset=True)
     def transfers_route(p: AnyReader, background: BackgroundTasks) -> dict[str, Any]:

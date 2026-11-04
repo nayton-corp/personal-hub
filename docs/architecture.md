@@ -121,6 +121,16 @@ Chaque sous-contexte est en couches `interface` → `app` → `infra` → `model
 dans [hub/domains/finance/README.md](../hub/domains/finance/README.md) et
 [D-019](decisions.md).
 
+**Pack pays.** Ce qu'une instance sait de son pays ne vit que dans
+`hub/domains/finance/packs/<pays>` (`ch`) : devise, fuseau et locale proposés par `hub init`,
+modules et plafonds de l'épargne-retraite, formats des libellés de carte et localités de la
+banque, consignes de l'IA, régions de la transparence des fonds, commerçants et établissements
+pour les pictogrammes de l'app. `packs/base.py` est pur (le modèle du registre l'importe),
+`packs/instance.py` donne le pack du profil (`current()`, `of(settings)`). Le cœur reçoit les
+packs par le point d'entrée `hub.country_packs` et les publie sur `/profile` (`locale`,
+`packs`) ; le front et le brain lisent là. `tests/test_core_is_generic.py` interdit aux modules
+génériques (cœur, finance hors packs et sources, brain, front) de nommer un pays.
+
 ## L'app
 
 `hub/web/` est la coquille d'une PWA sans framework ni script en ligne (CSP stricte) :

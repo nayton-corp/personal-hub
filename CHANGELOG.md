@@ -104,6 +104,35 @@
   performance, ruptures, budget, dettes) se fige avant une mise à jour et se vérifie après, au
   centime ; le fichier ne contient que des chiffres et des identifiants.
 
+### Pack pays
+
+- Tout ce qu'une instance sait de son pays tient dans un pack (audit M17, m13),
+  `hub/domains/finance/packs/<pays>` (`ch` : la Suisse) : devise, fuseau et locale proposés à
+  l'installation, modules du pays (pilier 3a) et plafonds de l'épargne-retraite, formats des
+  libellés de carte et localités de la banque, consignes de l'IA pour le classement (contexte,
+  contenu des catégories, règle du paiement mobile), régions domestique et Europe de la
+  transparence des fonds, commerçants, établissements et catégories du pays pour les
+  pictogrammes de l'app. Le code générique du hub, de la finance, du brain et du front ne nomme
+  plus la Suisse, la BCF ni TWINT ; `tests/test_core_is_generic.py` le vérifie sur le cœur,
+  les modules génériques de la finance et le front (commentaires et docstrings exclus).
+- Le cœur reçoit les packs par le point d'entrée `hub.country_packs` (qui remplace
+  `hub.country_modules`) : `/profile` publie `locale` et `packs` (domaine → ce que son pack
+  publie, lu par le brain pour ses consignes) ; le catalogue des connecteurs publie
+  `refresh_hint` (ce que demande une actualisation, la validation sur le téléphone pour la
+  BCF). Sans `HUB_COUNTRY`, le pays d'une instance sans profil est le premier qu'un domaine
+  connaît.
+- `hub init` : `--country`, `--tz`, `--currency` et `--locale` n'ont plus de défaut suisse ; le
+  pays propose les trois autres, un pays sans pack les demande. `HUB_LOCALE` (compose,
+  `fr-CH` par défaut) règle la mise en forme des nombres et des dates dans l'app et le
+  navigateur des collecteurs ; l'image n'a plus de fuseau à elle (`TZ=UTC`, compose le pose).
+  Le franc suivi dans une autre base est un réglage (`market.currencies`), plus une exception du
+  collecteur. `hub finance accounts add` demande `--institution`.
+- `/finance/lookthrough` donne à chaque région son code (`home`, `europe`, `north_america`…) ;
+  l'app choisit l'icône par le code, les étiquettes gardées en base ne changent pas (« Suisse »,
+  « Europe (hors Suisse) »). L'unité « Performance en devise de base » du patrimoine s'enregistre
+  sous `money` (l'ancien `chf` est relu). Le nom du module `pillar3a` et les défauts du noyau
+  (`DEFAULT_TZ`, `DEFAULT_BASE`, quand compose ne pose rien) restent.
+
 ## [0.13.19] · 2026-11-03
 
 ### Finance

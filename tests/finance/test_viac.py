@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.packs import ch
 from hub.domains.finance.patrimoine.app import account_list, holdings
 from hub.domains.finance.registre.app import catalog, opening
 from hub.domains.finance.sources.app import history, outcomes
@@ -426,7 +427,7 @@ def test_pillar3a_counts_viac_deposits(viac: FinanceDomain) -> None:
     open_portfolio(viac)
     send(viac, f.deposit(D1, "3000.00"), f.deposit(D2, "500.00", withdrawal=True))
     with viac.engine().connect() as conn:
-        p = insights.pillar3a_year(conn, 2026, date(2026, 10, 27))
+        p = insights.pillar3a_year(conn, 2026, date(2026, 10, 27), None, ch.PACK)
     assert (p["paid"]["minor"], p["source"]) == (300000, "viac")
     assert p["margin"]["minor"] == 725800 - 300000
 

@@ -14,6 +14,8 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
+from hub.domains.finance.packs import CountryPack
+from hub.domains.finance.packs import instance as packs
 from hub.domains.finance.registre.app import ledger
 from hub.domains.finance.registre.model import merchant
 from hub.domains.finance.registre.model.amounts import (
@@ -153,7 +155,7 @@ _ENTRY_COLS = (
 )
 
 
-def _entry(r: Any) -> dict[str, Any]:
+def _entry(r: Any, pack: CountryPack) -> dict[str, Any]:
     return {
         "id": r[1],
         "account_id": r[2],
@@ -163,7 +165,7 @@ def _entry(r: Any) -> dict[str, Any]:
         "amount": money(r[6], r[7]),
         "counterparty": ledger.party(r[8]),
         # commerçant lu dans le libellé (carte, TWINT) : motif de « Toujours », titre dans l'app
-        "merchant": merchant.key(r[10]),
+        "merchant": merchant.key(r[10], pack),
         "counterparty_iban": mask_iban(r[9]),
         "label": r[10],
         "remittance": r[11],
@@ -259,7 +261,8 @@ def entries(
         next_cursor = (
             f"{abs(int(last[6]))}~{last[0]}" if by_amount else encode_cursor(last[4], last[0])
         )
-    return [_entry(r) for r in page], next_cursor
+    pack = packs.current()
+    return [_entry(r, pack) for r in page], next_cursor
 
 
 def entry_detail(conn: Connection, entry_id: str) -> dict[str, Any] | None:
@@ -273,7 +276,7 @@ def entry_detail(conn: Connection, entry_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
     seq = row[0]
-    out = _entry(row)
+    out = _entry(row, packs.current())
     out["categorizations"] = [
         {"category_id": c[0], "source": c[1], "rule_id": c[2], "at": c[3]}
         for c in conn.execute(
@@ -327,7 +330,8 @@ def search(conn: Connection, q: str, limit: int = SEARCH_LIMIT) -> list[dict[str
         ),
         {"q": query, "n": limit},
     ).fetchall()
-    return [_entry(r) for r in rows]
+    pack = packs.current()
+    return [_entry(r, pack) for r in rows]
 
 
 def import_detail(conn: Connection, import_id: str) -> dict[str, Any] | None:

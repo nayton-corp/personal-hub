@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { currentMonth, monthSpan, shiftMonth } from "../../hub/web/store.js";
+import { currentMonth, monthSpan, setTimeZone, shiftMonth } from "../../hub/web/store.js";
 
 test("décaler un mois franchit les années", () => {
   assert.equal(shiftMonth("2026-01", -1), "2025-12");
@@ -12,6 +12,7 @@ test("décaler un mois franchit les années", () => {
 });
 
 test("mois budgétaire selon le jour de début, dans le fuseau de l'instance", () => {
+  assert.equal(setTimeZone("Europe/Zurich"), true); // le fuseau vient du profil
   const at = new Date("2026-10-24T22:30:00Z"); // 25 octobre à Zurich
   assert.equal(currentMonth(at, 1), "2026-10");
   assert.equal(currentMonth(at, 25), "2026-11");

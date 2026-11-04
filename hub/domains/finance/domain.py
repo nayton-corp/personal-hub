@@ -24,6 +24,7 @@ from hub.domains.finance.api import build_router
 from hub.domains.finance.classement.app import packs, recurring, sentinels
 from hub.domains.finance.cli import build_cli
 from hub.domains.finance.handlers import build_kinds
+from hub.domains.finance.packs import CountryPack, instance
 from hub.domains.finance.patrimoine.app import checks, crypto_pairing, snapshots, transfers
 from hub.domains.finance.registre.app import ledger, reads
 from hub.domains.finance.registre.model import period
@@ -89,12 +90,18 @@ class FinanceDomain:
         self.pillar3a_cap: int | None = int(cap) if cap is not None else None
         self.proposal_kinds: Mapping[str, ProposalKind] = build_kinds(self)
 
+    def pack(self) -> CountryPack:
+        """Le pack du pays du profil : ce que l'instance sait de son pays."""
+        return instance.of(self.settings)
+
     def pillar3a(self) -> dict[str, Any]:
-        """Options du pilier 3a pour les chiffres clés et les sentinelles : le module s'ouvre
-        selon le pays du profil (Suisse)."""
+        """Options de l'épargne-retraite plafonnée pour les chiffres clés et les sentinelles :
+        le module `pillar3a` s'ouvre selon le pays du profil, le plafond et la catégorie
+        viennent du pack."""
         return {
             "pillar3a": profile.load(self.settings).has("pillar3a"),
             "pillar3a_cap": self.pillar3a_cap,
+            "pack": self.pack(),
         }
 
     def process_inbox(self) -> dict[str, int]:

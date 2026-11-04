@@ -19,7 +19,8 @@ import * as accueil from "./accueil.js";
 import * as approvals from "./approvals.js";
 import * as assistant from "./assistant.js";
 import * as sources from "./sources.js";
-import { api, store } from "./store.js";
+import { setBase, setLocale } from "./format.js";
+import { api, setPacks, setTimeZone, store } from "./store.js";
 import {
   SH, announce, applyTheme, closeSheet, esc, fill, ic, initSheetSwipe, initToast, pref, renderSheet, setPref, sheetEntryOpen, sheetPop,
 } from "./ui.js";
@@ -293,8 +294,18 @@ async function deeplink() {
   go("accueil", { top: true });
 }
 
+// Le profil de l'instance (fuseau, devise, locale) : lu avant le premier rendu, puis à chaque
+// passage par les réglages ; un changement relit les chiffres.
+/** @param {{timezone: string, currency: string, currency_exponent: number, locale: string}} p */
+export function applyProfile(p) {
+  const changed = [setTimeZone(p.timezone), setBase(p.currency, p.currency_exponent), setLocale(p.locale), setPacks(p.packs)];
+  if (changed.some(Boolean)) store.invalidate();
+  return changed.some(Boolean);
+}
+
 export async function start() {
   await mount();
+  await api("/profile").then(applyProfile).catch(() => {}); // sans session : les défauts
   if (!VIEWS[P.tab]) P.tab = "accueil";
   applyTheme(pref("theme", "system"));
   document.addEventListener("click", (e) => {

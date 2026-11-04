@@ -124,6 +124,7 @@ export interface BucketAssetOut {
 
 export interface BucketOut {
   bucket: string;
+  code: string | null;
   value: MoneyOut;
   weight: string;
   assets: BucketAssetOut[];
@@ -391,6 +392,7 @@ export interface ConnectorOut {
   required_settings: string[];
   runner: "api" | "browser";
   single?: boolean;
+  refresh_hint?: string | null;
 }
 
 export interface CoreHealthOut {
@@ -944,9 +946,11 @@ export interface ProfileOut {
   display_name: string | null;
   country: string;
   timezone: string;
+  locale: string;
   currency: string;
   currency_exponent: number;
   modules: string[];
+  packs: Record<string, Record<string, any>>;
 }
 
 export interface ProposalCreateIn {

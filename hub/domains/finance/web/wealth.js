@@ -147,7 +147,7 @@ function allocRows(sel, all) {
   const e = store.use(`/finance/lookthrough?dimension=${S.by}`);
   if (e.status === "error") return { error: e.error.message };
   if (!e.data) return { loading: true };
-  const items = e.data.items.map((x) => ({ k: x.bucket, v: units(x.value) }));
+  const items = e.data.items.map((x) => ({ k: x.bucket, v: units(x.value), code: x.code }));
   if (S.by === "currency") {
     for (const l of all) {
       if (!l.asset.startsWith("ccy:") || l.kind === "debt" || l.value <= 0) continue;
@@ -178,7 +178,7 @@ function allocSection(sel, all) {
   const rows = a.rows.filter((r) => r.v > 0), owed = a.rows.filter((r) => r.v < 0).reduce((t, r) => t + r.v, 0);
   const total = rows.reduce((t, r) => t + r.v, 0);
   if (!rows.length || total <= 0) return `<section class="section" aria-labelledby="t-alloc">${head}<div class="empty">${a.fund ? "Aucune composition de fonds connue pour l'instant." : "Rien à répartir avec ces filtres."}</div></section>`;
-  const mark = (r) => (a.fund ? lookMark(S.by, r.k, r.c) : S.by === "asset" ? assetMark((lines() || []).find((l) => l.asset === r.k) || { name: r.name, cat: "funds" }, "sm") : S.by === "acc" ? facetMark("inst", ((lines() || []).find((l) => l.acc === r.k) || {}).inst || r.name) : facetMark(S.by, r.k));
+  const mark = (r) => (a.fund ? lookMark(S.by, r.k, r.c, "sm", r.code) : S.by === "asset" ? assetMark((lines() || []).find((l) => l.asset === r.k) || { name: r.name, cat: "funds" }, "sm") : S.by === "acc" ? facetMark("inst", ((lines() || []).find((l) => l.acc === r.k) || {}).inst || r.name) : facetMark(S.by, r.k));
   const act = (r) => (a.fund ? `data-a="w-bucket" data-v="${esc(r.k)}"` : `data-a="w-alloc" data-v="${esc(r.k)}"`);
   const on = (r) => !a.fund && S.filters[S.by].has(r.k);
   const tm = layout(rows, 0, 0, 340, 170).map(({ r, x, y, w, h }) => {

@@ -33,6 +33,7 @@ app.add_typer(connections_app, name="connections")
 
 CLI_ACTOR = "system:cli"
 SERVICE_TOKEN_DAYS = 365  # jeton d'un service collecteur : make deploy en recrée un
+ORIGIN = "https://hub.votre-tailnet.ts.net"  # adresse du hub tant qu'on ne la connaît pas
 
 
 def _ctx() -> HubContext:
@@ -171,7 +172,7 @@ def _settings_option(raw: str | None) -> dict[str, Any] | None:
 
 @connections_app.command("add")
 def connections_add(
-    connection_id: Annotated[str, typer.Argument(help="identifiant, ex. bcf ou n26")],
+    connection_id: Annotated[str, typer.Argument(help="identifiant, ex. revolut ou n26")],
     connector: Annotated[str, typer.Argument(help="entrée du catalogue, ex. enable_banking")],
     label: Annotated[str | None, typer.Option(help="nom affiché")] = None,
     schedule: Annotated[str | None, typer.Option(help="cron ; par défaut, le catalogue")] = None,
@@ -335,17 +336,16 @@ def init(
     home: Annotated[Path, typer.Option(help="Boîte d'entrée et sauvegardes locales.")],
     env_file: Annotated[Path, typer.Option("--env", help="Fichier écrit.")] = Path("deploy/.env"),
     template: Annotated[Path, typer.Option(help="Modèle.")] = Path("deploy/.env.example"),
-    origin: Annotated[
-        str, typer.Option(help="Adresse Tailscale du hub, connue après le 1er démarrage.")
-    ] = "https://hub.votre-tailnet.ts.net",
-    tz: Annotated[str, typer.Option(help="Fuseau (IANA).")] = "Europe/Zurich",
-    currency: Annotated[str, typer.Option(help="Devise de base, fixée ensuite.")] = "CHF",
-    country: Annotated[str, typer.Option(help="Pays (ISO, deux lettres).")] = "CH",
+    origin: Annotated[str, typer.Option(help="Adresse Tailscale du hub.")] = ORIGIN,
+    country: Annotated[str | None, typer.Option(help="Pays (ISO, deux lettres).")] = None,
+    tz: Annotated[str | None, typer.Option(help="Fuseau (IANA) ; sinon celui du pays.")] = None,
+    currency: Annotated[str | None, typer.Option(help="Devise ; sinon celle du pays.")] = None,
+    locale: Annotated[str | None, typer.Option(help="Locale BCP 47 ; sinon celle du pays.")] = None,
 ) -> None:
-    """Première installation : clé age, secrets, dossiers, deploy/.env ; ne remplace rien."""
+    """Première installation, sans rien remplacer ; le pays propose fuseau, devise, locale."""
     from hub.core import install
 
-    choices = install.Choices(config, home, origin, tz, currency, country)
+    choices = install.Choices(config, home, origin, tz, currency, country, locale)
     try:
         report = install.run(choices, env_file, template)
     except (install.InitError, secrets.SecretsError) as exc:

@@ -1,15 +1,42 @@
 // @ts-check
-// Mise en forme suisse : 12'345 CHF, 12,3 %. Les montants arrivent en {minor, currency, display}.
+// Mise en forme des nombres : 12'345 CHF, 12,3 %. Le séparateur des milliers vient de la locale
+// du profil (fr-CH : apostrophe) ; la décimale reste le point pour les montants et la virgule
+// pour les pourcentages. Les montants arrivent en {minor, currency, display}.
 /** @typedef {import("./api").MoneyOut} MoneyOut */
 /** @typedef {import("./api").FreshnessListOut} FreshnessListOut */
 
 // Devise de base de l'instance et son exposant (centimes : 2), donnés par le profil
-// (HUB_CURRENCY) ; CHF et 2 jusqu'à sa réponse. Le front ne divise jamais par 100 lui-même
-// (audit m9) : `units` et `toMinor` passent par l'exposant.
-let baseCcy = "CHF";
+// (HUB_CURRENCY), lu avant le premier rendu ; 2 décimales sans lui. Le front ne divise jamais
+// par 100 lui-même (audit m9) : `units` et `toMinor` passent par l'exposant.
+let baseCcy = "";
 let baseExp = 2;
 export const base = () => baseCcy;
 export const decimals = () => baseExp;
+
+// Locale de l'instance (profil, HUB_LOCALE) : séparateur des milliers, heures et dates longues.
+// L'apostrophe typographique de fr-CH (U+2019) devient l'apostrophe droite, lisible partout.
+let loc = "fr";
+let sep = "\u202f";
+export const locale = () => loc;
+/** @param {string} l */
+function groupSeparator(l) {
+  try {
+    const part = new Intl.NumberFormat(l).formatToParts(1234567).find((x) => x.type === "group");
+    return part ? part.value.replace("\u2019", "'") : "'";
+  } catch {
+    return "'";
+  }
+}
+/** @param {string | null | undefined} l */
+export function setLocale(l) {
+  const changed = Boolean(l) && l !== loc;
+  if (l && changed) {
+    loc = l;
+    sep = groupSeparator(l);
+  }
+  return changed;
+}
+sep = groupSeparator(loc);
 /** @param {string | null | undefined} code @param {number} [exponent] */
 export function setBase(code, exponent = baseExp) {
   const changed = (Boolean(code) && code !== baseCcy) || (Number.isInteger(exponent) && exponent !== baseExp);
@@ -19,7 +46,7 @@ export function setBase(code, exponent = baseExp) {
 }
 
 /** @param {string} s */
-const group = (s) => s.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+const group = (s) => s.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
 
 // un montant {minor, currency} en unités (12345 → 123.45) ; null reste null
 /** @param {MoneyOut | null | undefined} m @returns {number | null} */
@@ -109,7 +136,7 @@ export function ago(ms, now = Date.now()) {
   if (min < 60) return `il y a ${min} min`;
   if (min < 12 * 60) return `il y a ${Math.round(min / 60)} h`;
   const d = new Date(ms);
-  const hm = d.toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
+  const hm = d.toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit" });
   const days = Math.floor((new Date(now).setHours(0, 0, 0, 0) - new Date(ms).setHours(0, 0, 0, 0)) / 86_400_000);
   if (days <= 0) return `aujourd'hui à ${hm}`;
   if (days === 1) return `hier à ${hm}`;

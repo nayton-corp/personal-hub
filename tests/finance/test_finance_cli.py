@@ -39,16 +39,59 @@ def run(app: typer.Typer, *args: str) -> tuple[int, str]:
 
 
 def test_accounts_and_categories(app: typer.Typer) -> None:
-    code, out = run(app, "accounts", "add", "Compte privé", "--iban", IBAN, "--budget")
+    code, out = run(
+        app, "accounts", "add", "Compte privé", "--institution", "BCF", "--iban", IBAN, "--budget"
+    )
     assert code == 0, out
     account_id = json.loads(out.splitlines()[0])["id"]
     assert json.loads(out.splitlines()[0])["iban"] == "CH93…957"
-    assert run(app, "accounts", "add", "Encore", "--iban", IBAN)[0] == 1  # déjà connu
-    assert run(app, "accounts", "add", "Sans clé")[0] == 1
-    assert run(app, "accounts", "add", "X", "--iban", "pas un iban")[0] == 1
-    assert run(app, "accounts", "add", "X", "--external-ref", "viac-1", "--kind", "bad")[0] == 1
-    assert run(app, "accounts", "add", "X", "--external-ref", "v", "--currency", "XXX")[0] == 1
-    code, out = run(app, "accounts", "add", "VIAC", "--external-ref", "viac-1", "--kind", "pension")
+    assert (
+        run(app, "accounts", "add", "Encore", "--institution", "BCF", "--iban", IBAN)[0] == 1
+    )  # déjà connu
+    assert run(app, "accounts", "add", "Sans clé", "--institution", "BCF")[0] == 1
+    assert run(app, "accounts", "add", "X", "--institution", "BCF", "--iban", "pas un iban")[0] == 1
+    assert (
+        run(
+            app,
+            "accounts",
+            "add",
+            "X",
+            "--institution",
+            "VIAC",
+            "--external-ref",
+            "viac-1",
+            "--kind",
+            "bad",
+        )[0]
+        == 1
+    )
+    assert (
+        run(
+            app,
+            "accounts",
+            "add",
+            "X",
+            "--institution",
+            "VIAC",
+            "--external-ref",
+            "v",
+            "--currency",
+            "XXX",
+        )[0]
+        == 1
+    )
+    code, out = run(
+        app,
+        "accounts",
+        "add",
+        "VIAC",
+        "--institution",
+        "VIAC",
+        "--external-ref",
+        "viac-1",
+        "--kind",
+        "pension",
+    )
     assert code == 0
     code, out = run(app, "accounts", "list")
     assert "CH93…957" in out
@@ -78,7 +121,7 @@ def test_watch_inbox_once_and_imports(app: typer.Typer, finance: FinanceDomain) 
     assert json.loads(out)["needs_review"] == 1  # compte inconnu
     assert "needs_review" in run(app, "imports", "list")[1]
     # ajouter le compte (proposition create_account) rejoue l'import ; il manque l'ouverture
-    code, out = run(app, "accounts", "add", "Privé", "--iban", IBAN)
+    code, out = run(app, "accounts", "add", "Privé", "--institution", "BCF", "--iban", IBAN)
     assert code == 0
     created = json.loads(out)
     assert created["proposal"]
@@ -96,7 +139,7 @@ def test_watch_inbox_once_and_imports(app: typer.Typer, finance: FinanceDomain) 
 
 
 def test_import_history_command(app: typer.Typer, tmp_path: Path) -> None:
-    run(app, "accounts", "add", "Privé", "--iban", IBAN)
+    run(app, "accounts", "add", "Privé", "--institution", "BCF", "--iban", IBAN)
     months = _months(date(2016, 1, 1), 3)
     folder = _folder(tmp_path, [months[0], months[2]])
     code, out = run(app, "import-history", str(folder))

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Connection, text
 
 from hub.core.domain import Preview
+from hub.domains.finance.packs import instance as packs
 from hub.domains.finance.registre.app import ledger
 from hub.domains.finance.registre.app.kinds import (
     SAMPLE,
@@ -231,12 +232,15 @@ class CategorizeEntriesHandler(RefreshAfter):
         n = len(rows)
         totals = totals_by_currency([(int(r.amount_minor), r.currency) for r in rows])
         shown = " + ".join(f"{t['display']} {t['currency']}" for t in totals)
+        pack = packs.current()
         return Preview(
             summary=f"{n} écriture{'s' if n > 1 else ''} → {name} ({shown})",
             details={
                 "count": n,
                 "totals": totals,
-                "entries": [{**entry_brief(r), "merchant": merchant.key(r.label)} for r in rows],
+                "entries": [
+                    {**entry_brief(r), "merchant": merchant.key(r.label, pack)} for r in rows
+                ],
                 "to_category": params.category_id,
             },
             fingerprint=fp(

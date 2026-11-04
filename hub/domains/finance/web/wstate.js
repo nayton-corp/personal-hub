@@ -38,9 +38,9 @@ export const S = {
   period: PRESETS.some((p) => p.k === saved.period) ? saved.period : "1A",
   custom: null, // [du, au] en AAAA-MM-JJ
   pinned: okPins(saved.pinned) ? saved.pinned : PINNED,
-  // Valeur ou Performance ; l'ancienne mesure « gain » devient Performance en francs
+  // Valeur ou Performance ; l'ancienne mesure « gain » devient Performance en devise de base
   mode: ["gain", "rend", "perf"].includes(saved.mode) ? "perf" : "val",
-  unit: saved.unit === "pct" || saved.mode === "rend" || saved.mode === "perf" ? "pct" : "chf",
+  unit: saved.unit === "pct" || saved.mode === "rend" || saved.mode === "perf" ? "pct" : "money",
   cmp: typeof saved.cmp === "string" ? saved.cmp : null, // ISIN du repère
   hidden: new Set(Array.isArray(saved.hidden) ? saved.hidden : HIDDEN),
   tab: TABS.some(([k]) => k === saved.tab) ? saved.tab : "rend",

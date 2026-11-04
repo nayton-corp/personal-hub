@@ -19,6 +19,7 @@ from hub.core.context import HubContext
 from hub.core.registry import Registry
 from hub.domains.finance.classement.app import insights, recurring, rules
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.packs import ch
 from hub.domains.finance.patrimoine.app import holdings, lookthrough, transfers, valuation
 from hub.domains.finance.patrimoine.infra import composition
 from hub.domains.finance.registre.app import catalog, ledger
@@ -456,7 +457,7 @@ def test_issuer_holdings_list(finance: FinanceDomain) -> None:
     region = {w.bucket: w.weight for w in comp.weights if w.dimension == "region"}
     assert region == {
         composition.NORTH_AMERICA: Decimal("0.5"),
-        composition.SWITZERLAND: Decimal("0.1"),
+        ch.PACK.regions.home: Decimal("0.1"),
         composition.JAPAN: Decimal("0.4"),
     }
     sector = {w.bucket for w in comp.weights if w.dimension == "sector"}
@@ -496,14 +497,14 @@ def test_generic_composition_and_breakdown(finance: FinanceDomain) -> None:
         ]
     )
     with finance.engine().connect() as conn:
-        out = lookthrough.breakdown(conn, "region", "2026-10-27")
-        cur = lookthrough.breakdown(conn, "currency", "2026-10-27")
-        top = lookthrough.breakdown(conn, "holding", "2026-10-27")
+        out = lookthrough.breakdown(conn, "region", "2026-10-27", ch.PACK)
+        cur = lookthrough.breakdown(conn, "currency", "2026-10-27", ch.PACK)
+        top = lookthrough.breakdown(conn, "holding", "2026-10-27", ch.PACK)
     items = {i["bucket"]: i["value"]["minor"] for i in out["items"]}
     # fonds : 1000 → 700 / 200 / 100 non ventilé ; Apple 400 non ventilé ; ETH 4500 crypto
     assert items == {
         composition.NORTH_AMERICA: 70_000,
-        composition.EUROPE: 20_000,
+        ch.PACK.regions.europe: 20_000,
         composition.CRYPTO: 450_000,
         composition.UNKNOWN: 50_000,
     }

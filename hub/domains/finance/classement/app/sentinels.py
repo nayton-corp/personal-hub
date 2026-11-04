@@ -22,6 +22,8 @@ from sqlalchemy import Connection, text
 
 from hub.domains.finance.classement.app import insights
 from hub.domains.finance.classement.model import pace
+from hub.domains.finance.packs import CountryPack
+from hub.domains.finance.packs import instance as packs
 from hub.domains.finance.registre.app import ledger
 from hub.domains.finance.registre.model import amounts, period
 from hub.domains.finance.registre.model.amounts import money
@@ -194,10 +196,10 @@ def _recurring(conn: Connection) -> list[Alert]:
     return out
 
 
-def _pillar3a(conn: Connection, today: date, cap: int | None) -> list[Alert]:
+def _pillar3a(conn: Connection, today: date, cap: int | None, pack: CountryPack) -> list[Alert]:
     if today.month not in PILLAR3A_MONTHS:
         return []
-    p = insights.pillar3a_year(conn, today.year, today, cap)
+    p = insights.pillar3a_year(conn, today.year, today, cap, pack)
     if int(p["margin"]["minor"]) <= 0:
         return []
     return [
@@ -218,19 +220,30 @@ def alert_id(key: str) -> str:
 
 
 def evaluate(
-    conn: Connection, today: date, *, pillar3a: bool = True, pillar3a_cap: int | None = None
+    conn: Connection,
+    today: date,
+    *,
+    pack: CountryPack | None = None,
+    pillar3a: bool = True,
+    pillar3a_cap: int | None = None,
 ) -> list[Alert]:
-    p3 = _pillar3a(conn, today, pillar3a_cap) if pillar3a else []
+    pack = pack or packs.current()
+    p3 = _pillar3a(conn, today, pillar3a_cap, pack) if pillar3a else []
     return _budget(conn, today) + _recurring(conn) + p3
 
 
 def run(
-    conn: Connection, today: date, *, pillar3a: bool = True, pillar3a_cap: int | None = None
+    conn: Connection,
+    today: date,
+    *,
+    pack: CountryPack | None = None,
+    pillar3a: bool = True,
+    pillar3a_cap: int | None = None,
 ) -> list[Alert]:
     """Lève les alertes nouvelles (dans la transaction de l'appelant) et demande leur
     notification ; une occasion déjà levée ne l'est plus."""
     raised = []
-    for a in evaluate(conn, today, pillar3a=pillar3a, pillar3a_cap=pillar3a_cap):
+    for a in evaluate(conn, today, pack=pack, pillar3a=pillar3a, pillar3a_cap=pillar3a_cap):
         exists = conn.execute(text("SELECT 1 FROM alerts WHERE key = :k"), {"k": a.key}).first()
         if exists:
             continue

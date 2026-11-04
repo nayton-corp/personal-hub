@@ -19,7 +19,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import pyrage
 import yaml
 
-from hub.core.profile import ProfileError, clean_country
+from hub.core.profile import (
+    DEFAULT_LOCALE,
+    ProfileError,
+    clean_country,
+    country_defaults,
+    default_country,
+)
 from hub.kernel.money import CurrencyError, exponent
 from hub.platform import secrets
 
@@ -33,39 +39,53 @@ class InitError(ValueError):
 
 @dataclass(frozen=True)
 class Choices:
+    """Le pays (sinon `HUB_COUNTRY`, sinon le premier que les domaines connaissent) propose le
+    fuseau, la devise et la locale de son pack ; un pays sans pack les demande."""
+
     config: Path  # clé age et secrets, hors de tout dossier synchronisé
     home: Path  # boîte d'entrée et sauvegardes locales
     origin: str = "https://hub.votre-tailnet.ts.net"
-    timezone: str = "Europe/Zurich"
-    currency: str = "CHF"
-    country: str = "CH"
+    timezone: str | None = None
+    currency: str | None = None
+    country: str | None = None
+    locale: str | None = None
 
     def checked(self) -> Choices:
         try:
-            ZoneInfo(self.timezone)
+            country = clean_country(self.country) if self.country else default_country()
+        except ProfileError as exc:
+            raise InitError(str(exc)) from None
+        proposed = country_defaults(country)
+        timezone = self.timezone or proposed["timezone"]
+        if not timezone:
+            raise InitError(f"fuseau à donner (--tz) : aucun pack ne le propose pour {country}")
+        try:
+            ZoneInfo(timezone)
         except (ZoneInfoNotFoundError, ValueError):
-            raise InitError(f"fuseau inconnu : {self.timezone!r} (ex. Europe/Paris)") from None
-        currency = self.currency.strip().upper()
+            raise InitError(f"fuseau inconnu : {timezone!r} (ex. Europe/Paris)") from None
+        currency = (self.currency or proposed["currency"] or "").strip().upper()
+        if not currency:
+            raise InitError(
+                f"devise à donner (--currency) : aucun pack ne la propose pour {country}"
+            )
         try:
             exponent(currency)
         except CurrencyError as exc:
             raise InitError(str(exc)) from None
-        try:
-            country = clean_country(self.country)
-        except ProfileError as exc:
-            raise InitError(str(exc)) from None
+        locale = self.locale or proposed["locale"] or DEFAULT_LOCALE
         if not _ORIGIN.match(self.origin):
             raise InitError("origine : https://<nom>.<tailnet>.ts.net, sans chemin")
         if not (self.config.is_absolute() and self.home.is_absolute()):
             raise InitError("les dossiers doivent être des chemins absolus")
-        return Choices(self.config, self.home, self.origin, self.timezone, currency, country)
+        return Choices(self.config, self.home, self.origin, timezone, currency, country, locale)
 
     def env(self) -> dict[str, str]:
         return {
             "HUB_PUBLIC_ORIGIN": self.origin,
-            "HUB_TZ": self.timezone,
-            "HUB_CURRENCY": self.currency,
-            "HUB_COUNTRY": self.country,
+            "HUB_TZ": self.timezone or "",
+            "HUB_CURRENCY": self.currency or "",
+            "HUB_COUNTRY": self.country or "",
+            "HUB_LOCALE": self.locale or "",
             "HUB_INBOX": str(self.home / "inbox"),
             "HUB_REPLICA": str(self.home / "backup" / "litestream"),
             "HUB_RESTIC_LOCAL": str(self.home / "backup" / "restic"),

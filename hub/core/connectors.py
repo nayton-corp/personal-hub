@@ -45,6 +45,7 @@ class Connector:
     required: tuple[str, ...] = ()  # réglages qu'une nouvelle connexion doit donner
     single: bool = False  # une seule connexion possible (ses réglages portent tout)
     clean: Clean | None = None  # contrôle propre au connecteur, après celui des réglages connus
+    refresh_hint: str | None = None  # ce que l'utilisateur doit faire après « Actualiser »
     domain: str = ""  # domaine qui l'a déclaré (nom du point d'entrée), posé par `catalog()`
 
     @property
@@ -71,6 +72,7 @@ class Connector:
             "required_settings": list(self.required),
             "runner": self.runner,
             "single": self.single,
+            "refresh_hint": self.refresh_hint,
         }
 
 

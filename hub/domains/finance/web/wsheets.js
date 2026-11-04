@@ -96,7 +96,7 @@ SHEETS.cmp = () => {
     body: `<p class="hint">La courbe en % se compare au cours d'un fonds, ramené à 0 au début de la période. Un fonds indiciel (MSCI World, SPI) sert d'indice.</p>
       <div class="list">${opt("", "Aucun repère", "la performance seule", `<span class="ibox tint sm" data-css="--c:var(--muted)" aria-hidden="true">${ic("close")}</span>`)}
       ${[...funds.values()].map((l) => opt(l.isin, l.name, l.isin, assetMark(l, "sm"))).join("")}</div>
-      <p class="hint">L'inflation suisse viendra avec une source de prix à la consommation (OFS) : elle n'est pas encore lue par le hub.</p>`,
+      <p class="hint">L'inflation viendra avec une source de prix à la consommation : elle n'est pas encore lue par le hub.</p>`,
   };
 };
 

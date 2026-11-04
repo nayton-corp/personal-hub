@@ -111,7 +111,9 @@ jamais une écriture que tu as catégorisée toi-même.
 `hub/domains/finance/classement/app/packs/` : `base` (mots génériques et services internationaux) et le pack
 du pays du profil (`ch` pour la Suisse : commerces, transports, caisses maladie, opérateurs,
 prestataires 3a). Une base créée avant les packs garde ses règles `seed-` et n'en reçoit
-aucun sans qu'on le demande.
+aucun sans qu'on le demande. Le reste de ce que la finance sait du pays (libellés de carte
+de la banque, localités, plafonds 3a, consignes de l'IA, régions des fonds, pictogrammes des
+commerçants) est dans le pack pays `hub/domains/finance/packs/ch.py`.
 
 ```
 fin rules packs list                       # packs livrés et version installée

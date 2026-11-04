@@ -1087,6 +1087,17 @@
             "title": "Name",
             "type": "string"
           },
+          "refresh_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Hint"
+          },
           "required_settings": {
             "items": {
               "type": "string"
@@ -1863,12 +1874,24 @@
             ],
             "title": "Display Name"
           },
+          "locale": {
+            "title": "Locale",
+            "type": "string"
+          },
           "modules": {
             "items": {
               "type": "string"
             },
             "title": "Modules",
             "type": "array"
+          },
+          "packs": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Packs",
+            "type": "object"
           },
           "timezone": {
             "title": "Timezone",
@@ -1879,9 +1902,11 @@
           "display_name",
           "country",
           "timezone",
+          "locale",
           "currency",
           "currency_exponent",
-          "modules"
+          "modules",
+          "packs"
         ],
         "title": "ProfileOut",
         "type": "object"

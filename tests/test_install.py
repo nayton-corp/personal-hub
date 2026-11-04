@@ -56,6 +56,7 @@ def test_init_prepares_a_machine(tmp_path: Path) -> None:
     assert env["HUB_TZ"] == "Europe/Paris"
     assert env["HUB_CURRENCY"] == "EUR"
     assert env["HUB_COUNTRY"] == "FR"
+    assert env["HUB_LOCALE"] == "fr"  # un pays sans pack : la locale générique
     assert env["HUB_AGE_KEY"] == str(key)
     assert env["HUB_INBOX"] == str(tmp_path / "home" / "inbox")
     assert env["COMPOSE_PROFILES"] == "collectors"
@@ -94,6 +95,22 @@ def test_init_refuses_bad_choices(tmp_path: Path, field: str, value: str, messag
     assert not (tmp_path / "config").exists()
 
 
+def test_init_takes_the_country_pack_defaults(tmp_path: Path) -> None:
+    """Sans choix, le pays est celui que les domaines connaissent (CH) et son pack propose le
+    fuseau, la devise et la locale ; un pays sans pack doit les donner."""
+    c = choices(tmp_path).checked()
+    assert (c.country, c.timezone, c.currency, c.locale) == (
+        "CH",
+        "Europe/Zurich",
+        "CHF",
+        "fr-CH",
+    )
+    with pytest.raises(install.InitError, match="fuseau à donner"):
+        choices(tmp_path, country="BE").checked()
+    with pytest.raises(install.InitError, match="devise à donner"):
+        choices(tmp_path, country="BE", timezone="Europe/Brussels").checked()
+
+
 def test_init_refuses_relative_folders(tmp_path: Path) -> None:
     c = install.Choices(Path("config"), tmp_path / "home")
     with pytest.raises(install.InitError, match="absolus"):
@@ -110,15 +127,21 @@ def test_cli_init(tmp_path: Path) -> None:
     args = ["init", "--config", str(tmp_path / "c"), "--home", str(tmp_path / "h")]
     args += ["--env", str(env_file), "--template", str(TEMPLATE), "--country", "BE"]
     result = runner.invoke(cli.app, args)
+    assert result.exit_code == 2  # la Belgique n'a pas de pack : fuseau et devise à donner
+    assert "fuseau à donner" in result.output
+    args += ["--tz", "Europe/Brussels", "--currency", "EUR"]
+    result = runner.invoke(cli.app, args)
     assert result.exit_code == 0, result.output
     assert "clé publique age : age1" in result.stdout
     assert "AGE-SECRET-KEY" not in result.stdout
     assert parse_env(env_file)["HUB_COUNTRY"] == "BE"
+    assert parse_env(env_file)["HUB_LOCALE"] == "fr"
     result = runner.invoke(cli.app, [*args[:4], "--tz", "Nowhere/Here"])
     assert result.exit_code == 2
 
 
 def test_country_of_an_instance_without_profile(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert profile.default().country == "CH"
+    """Sans `HUB_COUNTRY`, le premier pays qu'un domaine connaît (le cœur n'en nomme aucun)."""
+    assert profile.default().country == profile.known_countries()[0] == "CH"
     monkeypatch.setenv("HUB_COUNTRY", "fr")
     assert profile.default().country == "FR"

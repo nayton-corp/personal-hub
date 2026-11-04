@@ -371,7 +371,7 @@ class RegistreTools(ToolBox):
             ),
             tool(
                 "finance_propose_note",
-                "Propose une note libre sur une écriture (un TWINT entre particuliers…) ; rien "
+                "Propose une note libre sur une écriture (un paiement entre particuliers…) ; rien "
                 "n'est appliqué.",
                 _obj(
                     {"entry_id": ENTRY_PROP, "note": {"type": "string", "maxLength": 500}},

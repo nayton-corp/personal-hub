@@ -30,6 +30,7 @@ from hub.brain.toolbox import CAPABILITIES, LOAD, Toolbox
 from hub.core import proposals
 from hub.core.context import HubContext
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.packs import ch
 from tests.finance.test_app_reads import (  # noqa: F401 - fixtures
     client,
     ctx,
@@ -216,15 +217,21 @@ def test_parse_choice() -> None:
 
 
 def test_prompt_guides_the_model() -> None:
+    """Le contenu des catégories et la règle du paiement mobile viennent du pack pays (profil) ;
+    sans pack, le modèle n'a que les noms."""
     cats = [
         {"id": "transports", "name": "Transports", "group": "variable"},
         {"id": "twint-particuliers", "name": "TWINT entre particuliers", "group": "variable"},
     ]
-    assert "pas les commerces" not in listing(cats)
-    assert "carburant" in listing(cats)
-    shop = [c["id"] for c in for_merchant(cats, "debit twint zorglub shop")]
+    assert "carburant" not in listing(cats)
+    hints = ch.PACK.category_hints
+    assert "pas les commerces" not in listing(cats, hints)
+    assert "carburant" in listing(cats, hints)
+    person = ch.PACK.contribution()["public"]["person_payment"]
+    shop = [c["id"] for c in for_merchant(cats, "debit twint zorglub shop", person)]
     assert shop == ["transports"]
-    assert len(for_merchant(cats, "debit twint dupont, jean")) == 2
+    assert len(for_merchant(cats, "debit twint dupont, jean", person)) == 2
+    assert len(for_merchant(cats, "debit twint zorglub shop")) == 2  # sans pack
 
 
 def merchant(prompt: str) -> str:

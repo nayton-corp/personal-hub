@@ -10,6 +10,7 @@ from typing import Annotated, Any, Protocol
 from pydantic import Field
 
 from hub.core.domain import McpTool, ToolCaller
+from hub.domains.finance.packs.base import CountryPack
 from hub.domains.finance.patrimoine.app import (
     account_list,
     debts,
@@ -65,6 +66,8 @@ class PricesArgs(RangeArgs):
 
 class Host(http.Host, Protocol):
     def pillar3a(self) -> dict[str, Any]: ...
+
+    def pack(self) -> CountryPack: ...
 
 
 class PatrimoineTools(ToolBox):
@@ -143,7 +146,9 @@ class PatrimoineTools(ToolBox):
 
     def lookthrough_report(self, a: LookthroughArgs, caller: ToolCaller) -> dict[str, Any]:
         with self.engine.connect() as conn:
-            out = lookthrough.breakdown(conn, a.dimension, self.host.today().isoformat())
+            out = lookthrough.breakdown(
+                conn, a.dimension, self.host.today().isoformat(), self.host.pack()
+            )
             return self._wrap(conn, text_out(out))
 
     def transfers_report(self, _a: NoArgs, caller: ToolCaller) -> dict[str, Any]:

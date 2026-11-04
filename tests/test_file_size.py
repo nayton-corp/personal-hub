@@ -21,7 +21,7 @@ TOO_LONG: dict[str, int] = {
     "hub/domains/finance/web/journal.js": 662,
     "hub/domains/finance/web/connections.js": 730,
     "hub/core/proposals.py": 636,
-    "hub/collectors/market/flow.py": 593,
+    "hub/collectors/market/flow.py": 592,
 }
 
 

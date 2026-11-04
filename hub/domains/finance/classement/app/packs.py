@@ -2,8 +2,8 @@
 
 Un pack est un fichier YAML versionné : les catégories qu'il utilise et des groupes de règles
 (une catégorie, un sens, une priorité, des mots-clés). `base` porte les mots génériques et les
-services internationaux, `ch` les commerces et prestataires suisses. Une base neuve reçoit
-`base` et le pack de son pays ; une base existante garde ses règles et n'en reçoit qu'à la
+services internationaux, `<pays>` (`ch`) les commerces et prestataires du pays. Une base neuve
+reçoit `base` et le pack de son pays ; une base existante garde ses règles et n'en reçoit qu'à la
 demande (`hub finance rules packs install`).
 
 Installer un pack ajoute les règles qui manquent (une règle de même forme déjà présente, quelle

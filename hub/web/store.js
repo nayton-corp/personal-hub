@@ -24,12 +24,22 @@ export async function api(path, body, method) {
   return data;
 }
 
-// Fuseau de l'instance, donné par le profil (HUB_TZ) ; Zurich jusqu'à sa réponse.
-let zone = "Europe/Zurich";
+// Fuseau de l'instance, donné par le profil (HUB_TZ), lu avant le premier rendu ; UTC sans lui.
+let zone = "UTC";
 export const timeZone = () => zone;
 export function setTimeZone(tz) {
   const changed = Boolean(tz) && tz !== zone;
   if (changed) zone = tz;
+  return changed;
+}
+
+// Ce que les packs pays des domaines publient pour l'app (profil, `packs`) : domaine → données
+// (commerçants et établissements du pays, pour la finance).
+let packData = {};
+export const packs = () => packData;
+export function setPacks(p) {
+  const changed = JSON.stringify(p || {}) !== JSON.stringify(packData);
+  if (changed) packData = p || {};
   return changed;
 }
 

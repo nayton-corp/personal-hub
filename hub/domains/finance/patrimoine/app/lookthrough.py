@@ -12,7 +12,8 @@ deux formes :
 
 Une composition plus récente remplace l'ancienne, dimension par dimension. Une position sans
 composition garde ce que l'on sait d'elle : sa devise de cotation, une crypto en « Crypto »,
-un fonds VIAC rangé par sa sous-catégorie (« Actions Suisse » → Suisse), sinon « Non ventilé ».
+un fonds VIAC rangé par sa sous-catégorie (« Actions Suisse » → la région domestique du pack
+pays), sinon « Non ventilé ». Les étiquettes des régions viennent du pack pays (`regions`).
 """
 
 from __future__ import annotations
@@ -23,54 +24,25 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
+from hub.domains.finance.packs.base import CountryPack
 from hub.domains.finance.patrimoine.app import valuation
 from hub.domains.finance.patrimoine.infra.composition import (
     ASSETS_PER_BUCKET,
-    COUNTRIES,
     CRYPTO,
     EMERGING,
-    EUROPE,
     JAPAN,
     NORTH_AMERICA,
     PACIFIC,
-    SWITZERLAND,
     TOP,
     UNKNOWN,
     Composition,
     LookthroughFile,
     _norm,
+    region_code,
 )
 from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.patrimoine.model.instruments import Result
 from hub.kernel.money import DECIMAL_CONTEXT, Money, base_currency
-
-for _region, _names in {
-    NORTH_AMERICA: "united states|etats-unis|usa|us|vereinigte staaten|canada|kanada",
-    SWITZERLAND: "switzerland|suisse|schweiz|ch",
-    EUROPE: (
-        "united kingdom|royaume-uni|grossbritannien|uk|france|frankreich|germany|allemagne|"
-        "deutschland|netherlands|pays-bas|niederlande|sweden|suede|schweden|denmark|danemark|"
-        "danemark|daenemark|spain|espagne|spanien|italy|italie|italien|finland|finlande|"
-        "finnland|norway|norvege|norwegen|belgium|belgique|belgien|ireland|irlande|irland|"
-        "austria|autriche|oesterreich|osterreich|portugal|luxembourg|luxemburg|jersey|guernsey|"
-        "isle of man|faroe islands|liechtenstein|monaco"
-    ),
-    JAPAN: "japan|japon",
-    PACIFIC: (
-        "australia|australie|australien|hong kong|singapore|singapour|singapur|new zealand|"
-        "nouvelle-zelande|neuseeland|israel|macau|macao"
-    ),
-    EMERGING: (
-        "china|chine|taiwan|india|inde|indien|korea (south)|korea|south korea|coree du sud|"
-        "sudkorea|brazil|bresil|brasilien|saudi arabia|arabie saoudite|south africa|"
-        "afrique du sud|mexico|mexique|mexiko|indonesia|indonesie|thailand|thailande|malaysia|"
-        "malaisie|united arab emirates|emirats arabes unis|qatar|poland|pologne|polen|turkey|"
-        "turquie|turkei|chile|chili|philippines|greece|grece|kuwait|koweit|peru|perou|hungary|"
-        "hongrie|czech republic|republique tcheque|colombia|colombie|egypt|egypte"
-    ),
-}.items():
-    for _n in _names.split("|"):
-        COUNTRIES[_n] = _region
 
 
 def apply_composition(conn: Connection, import_id: str, c: Composition) -> Result:
@@ -133,7 +105,9 @@ def apply(
 # --- répartition --------------------------------------------------------------------------
 
 
-def _fallback(dimension: str, meta: tuple[str, str | None, str | None, str | None, str]) -> str:
+def _fallback(
+    dimension: str, meta: tuple[str, str | None, str | None, str | None, str], pack: CountryPack
+) -> str:
     """Rangement d'une position sans composition publiée."""
     name, asset_class, sub_class, currency, kind = meta
     if dimension == "holding":
@@ -151,22 +125,24 @@ def _fallback(dimension: str, meta: tuple[str, str | None, str | None, str | Non
         if "liquidit" in hint or "monetaire" in hint:
             return "Liquidités et dérivés"
         return UNKNOWN
+    if pack.regions.home and set(hint.split()) & set(pack.regions.home_words):
+        return pack.regions.home
     for needle, region in (
-        ("suisse", SWITZERLAND),
         ("emerg", EMERGING),
         ("amerique", NORTH_AMERICA),
         ("usa", NORTH_AMERICA),
         ("japon", JAPAN),
         ("pacifique", PACIFIC),
-        ("europe", EUROPE),
+        ("europe", pack.regions.europe),
     ):
         if needle in hint:
             return region
     return UNKNOWN
 
 
-def breakdown(conn: Connection, dimension: str, on_date: str) -> dict[str, Any]:
-    """Valeur des positions à la date, ventilée selon `dimension` (CHF, centimes)."""
+def breakdown(conn: Connection, dimension: str, on_date: str, pack: CountryPack) -> dict[str, Any]:
+    """Valeur des positions à la date, ventilée selon `dimension` (devise de base, mineures) ;
+    chaque case de la région porte son code (`home`, `europe`…) pour le front."""
     positions = valuation.Positions(conn)
     meta = {
         r[0]: (r[1], r[2], r[3], r[4], r[5])
@@ -209,7 +185,7 @@ def breakdown(conn: Connection, dimension: str, on_date: str) -> dict[str, Any]:
                         put("Autres lignes", line.isin, line.value * (1 - assigned))
                 else:
                     info = meta.get(line.isin, (line.isin, None, None, line.currency, "other"))
-                    put(_fallback(dimension, info), line.isin, Decimal(line.value))
+                    put(_fallback(dimension, info, pack), line.isin, Decimal(line.value))
     found: list[tuple[str, int]] = []
     for bucket, value in sums.items():
         minor = int(value.to_integral_value())
@@ -229,6 +205,7 @@ def breakdown(conn: Connection, dimension: str, on_date: str) -> dict[str, Any]:
         out.append(
             {
                 "bucket": bucket,
+                "code": region_code(bucket, pack) if dimension == "region" else None,
                 "value": Money(minor, base_currency()).to_api(),
                 "weight": weight,
                 "assets": [

@@ -2,7 +2,7 @@
 // période, montant) et tri, écritures par jour, détail d'une écriture et classement avec Face ID ;
 // « À classer » groupe par contrepartie avec ses libellés, comptes, dates et montants, un choix
 // par groupe, une validation pour tout le lot.
-import { MOIS, dayName, date, toMinor, units } from "../../format.js";
+import { MOIS, base, dayName, date, toMinor, units } from "../../format.js";
 import { GROUP_LABEL, catIc, catMark, txMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { api, monthSpan, shiftMonth, store } from "../../store.js";
@@ -188,7 +188,7 @@ function renderTrades(a) {
     const q = Number(t.quantity), amt = t.amount ? u(t.amount) : null;
     return `<div class="row tx-row">${ibox(ic(q > 0 ? "arrowin" : "swap"), q > 0 ? "var(--pos)" : "var(--s3)", "sm")}
       <span class="row-main"><span class="row-title">${q > 0 ? "Achat" : "Vente"} de <span class="money">${qty(String(t.quantity).replace("-", ""))}</span></span><span class="row-sub">${esc(shortY(t.trade_date))} · ${esc(accName[t.account_id] || t.account_id)}</span></span>
-      <span class="row-num"><span class="row-val num">${amt == null ? "—" : `${amt > 0 ? "+" : "−"}${amount2(Math.abs(amt))}`}</span>${t.amount && t.amount.currency !== "CHF" ? `<span class="row-sub">${esc(t.amount.currency)}</span>` : ""}</span></div>`;
+      <span class="row-num"><span class="row-val num">${amt == null ? "—" : `${amt > 0 ? "+" : "−"}${amount2(Math.abs(amt))}`}</span>${t.amount && t.amount.currency !== base() ? `<span class="row-sub">${esc(t.amount.currency)}</span>` : ""}</span></div>`;
   }).join("")}</div>`;
   if (a.account) h += `<button class="link-row" type="button" data-a="jlink-acc" data-v="${esc(a.account)}">Voir les écritures du compte${ic("chev")}</button>`;
   fill($("jBody"), h + '<div class="endspace"></div>');
@@ -227,7 +227,7 @@ function txRow(e, cats, accName, dated = false) {
   return `<button class="row tx-row" type="button" data-a="tx" data-v="${esc(e.id)}" aria-label="${esc(title(e))}, ${amt > 0 ? "plus" : "moins"} ${n2(amt)} ${esc(ccy)}, ${e.category ? esc(c ? c.name : e.category.id) : "à classer"}">
     ${txMark(title(e), e.category ? e.category.id : null, c?.group)}
     <span class="row-main"><span class="row-title">${esc(title(e))}</span><span class="row-sub">${dated ? `${esc(shortY(e.booking_date))} · ` : ""}${[what, esc(accName[e.account_id] || "")].filter(Boolean).join(" · ")}</span></span>
-    <span class="row-num"><span class="row-val num ${internal(e) ? "amt-int" : amt > 0 ? "amt-in" : ""}">${amt > 0 ? "+" : "−"}${amount2(Math.abs(amt))}</span>${ccy !== "CHF" ? `<span class="row-sub">${esc(ccy)}</span>` : ""}</span></button>`;
+    <span class="row-num"><span class="row-val num ${internal(e) ? "amt-int" : amt > 0 ? "amt-in" : ""}">${amt > 0 ? "+" : "−"}${amount2(Math.abs(amt))}</span>${ccy !== base() ? `<span class="row-sub">${esc(ccy)}</span>` : ""}</span></button>`;
 }
 
 // --- à classer --------------------------------------------------------------------------------

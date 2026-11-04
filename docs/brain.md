@@ -27,7 +27,9 @@ passerelle MCP) reste une bibliothèque du hub ; l'assistant l'installe à côt�
   modèle résident (un seul modèle chargé) : pour un commerçant qui n'a encore aucune
   écriture catégorisée, le modèle choisit une catégorie de la liste et donne sa raison en une
   ligne. Chaque écriture devient une carte « À valider » dans l'app, avec la raison. Une écriture
-  n'est suggérée qu'une fois : une carte refusée ne revient pas.
+  n'est suggérée qu'une fois : une carte refusée ne revient pas. Le contexte (« d'un compte
+  bancaire suisse »), ce que contient chaque catégorie et la règle du paiement mobile viennent
+  du pack pays, publié par `/profile` (`packs.finance`).
 - **Sentinelles** (dans le hub, pas dans le brain, sans modèle) : chaque nuit, budget dépassé ou
   qui va l'être, abonnement en hausse, marge 3a pas encore versée en novembre et décembre. Elles
   apparaissent dans « À traiter » et arrivent par ntfy avec un texte générique (ni montant, ni nom

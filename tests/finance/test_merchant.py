@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from hub.domains.finance.packs import ch
 from hub.domains.finance.registre.model.merchant import key
 from hub.kernel.text import normalize
 
@@ -34,7 +35,8 @@ from hub.kernel.text import normalize
     ],
 )
 def test_merchant_key(label: str, expected: str | None) -> None:
-    found = key(label)
+    """Les formats de libellés sont ceux du pack pays (la BCF, pour la Suisse)."""
+    found = key(label, ch.PACK)
     assert found == expected
     # motif d'une règle : toujours un morceau du texte de l'écriture
     if found:

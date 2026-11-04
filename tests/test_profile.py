@@ -61,14 +61,22 @@ def test_api_read_by_app_and_tokens_write_by_app_only(
 ) -> None:  # type: ignore[no-untyped-def]
     assert client.get("/api/profile").status_code == 401
     reader = bearer(make_token("demo:read"))
-    assert client.get("/api/profile", headers=reader).json() == {
+    got = client.get("/api/profile", headers=reader).json()
+    assert got == {
         "display_name": None,
         "country": "CH",
         "timezone": "Europe/Zurich",
+        "locale": "fr-CH",
         "currency": "CHF",
         "currency_exponent": 2,
         "modules": ["pillar3a"],
+        "packs": {"finance": got["packs"]["finance"]},
     }
+    # ce que le pack pays de la finance publie pour les clients de l'API (le brain)
+    pack = got["packs"]["finance"]
+    assert pack["ai_context"] == "d'un compte bancaire suisse"
+    assert "alimentation" in pack["category_hints"]
+    assert pack["person_payment"]["category"] == "twint-particuliers"
     assert client.post("/api/profile", json={"country": "FR"}, headers=reader).status_code == 403
     app_session(hub, client)
     r = client.post("/api/profile", json={"display_name": "Camille", "country": "fr"})

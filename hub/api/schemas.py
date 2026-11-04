@@ -213,6 +213,7 @@ class ConnectorOut(BaseModel):
     required_settings: list[str]
     runner: Literal["api", "browser"]
     single: bool = False
+    refresh_hint: str | None = None  # ce que l'utilisateur doit faire après « Actualiser »
 
 
 class ConnectorListOut(BaseModel):
@@ -344,9 +345,11 @@ class ProfileOut(BaseModel):
     display_name: str | None
     country: str
     timezone: str
+    locale: str  # mise en forme des dates et des nombres (fr-CH)
     currency: str  # devise de base, HUB_CURRENCY
     currency_exponent: int  # ses décimales (2 : centimes) ; le front ne divise jamais par 100
     modules: list[str]
+    packs: dict[str, dict[str, Any]]  # domaine → ce que son pack du pays publie (consignes IA)
 
 
 class ProfileIn(BaseModel):

@@ -57,7 +57,7 @@ ENV PATH=/srv/hub/venv/bin:$PATH \
     HUB_SETTINGS=/srv/hub/app/deploy/settings.toml \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    TZ=Europe/Zurich
+    TZ=UTC
 WORKDIR /srv/hub/app
 USER 10001:10001
 CMD ["hub", "serve", "--workers", "1"]
@@ -108,6 +108,6 @@ ENV PATH=/srv/hub/venv/bin:$PATH \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    TZ=Europe/Zurich
+    TZ=UTC
 USER 10001:10001
 CMD ["hub-collector", "--help"]

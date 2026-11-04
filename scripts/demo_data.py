@@ -31,8 +31,8 @@ CURRENT = iban("00762011623852957")  # le compte des fabriques de test
 SAVINGS = iban("00762011623859999")
 # options de `hub finance accounts add` : le courant suit le budget, les deux sont des liquidités
 ACCOUNTS = [
-    (CURRENT, "Compte courant fictif", "--budget --liquid"),
-    (SAVINGS, "Épargne fictive", "--liquid"),
+    (CURRENT, "Compte courant fictif", "--institution Banque --budget --liquid"),
+    (SAVINGS, "Épargne fictive", "--institution Banque --liquid"),
 ]
 
 

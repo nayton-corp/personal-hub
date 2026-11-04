@@ -226,6 +226,7 @@ class BucketAssetOut(Out):
 
 class BucketOut(Out):
     bucket: str
+    code: str | None  # home, europe, north_america, japan, pacific, emerging, crypto, unknown…
     value: MoneyOut
     weight: str
     assets: list[BucketAssetOut]

@@ -65,8 +65,7 @@ def fx_rates(
 ) -> list[dict[str, str]]:
     m = env.cfg.market
     base = base_currency()
-    # le franc reste suivi dans une autre base : un compte suisse (VIAC) est tenu en CHF
-    symbols = ",".join(dict.fromkeys(c for c in [*m.currencies, "CHF"] if c != base))
+    symbols = ",".join(dict.fromkeys(c for c in m.currencies if c != base))
     period = "latest" if latest else f"{since.isoformat()}..{until.isoformat() if until else ''}"
     query = urllib.parse.urlencode({"base": base, "symbols": symbols})
     doc = http.json(f"{m.fx_url}/{period}?{query}", "fx.rates")

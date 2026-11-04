@@ -121,7 +121,7 @@ export function toolbarHTML(m, r, land) {
     if (m.sel.some((l) => l.isin)) h += seg("Courbe", "w-amode", [["pos", "Ma position", S.amode === "pos"], ["price", "Cours", S.amode === "price"]]);
   } else if (!m.onlyDebt) {
     h += seg("Mesure", "w-mode", [["val", "Valeur", S.mode === "val"], ["perf", "Performance", S.mode === "perf"]]);
-    if (S.mode === "perf") h += seg("Unité", "w-unit", [["chf", base(), S.unit === "chf"], ["pct", "%", S.unit === "pct"]]);
+    if (S.mode === "perf") h += seg("Unité", "w-unit", [["money", base(), S.unit === "money"], ["pct", "%", S.unit === "pct"]]);
   }
   h += '<span class="grow"></span>';
   if (land && kindFor(r) === "pct") h += cmpBtn(m);

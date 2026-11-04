@@ -4,7 +4,7 @@
 import { accountsList } from "./accounts.js";
 import { accountsCard, connectionsCard } from "./connections.js";
 import { debtsList } from "./debts.js";
-import { STALE_DAYS, daysSince } from "../../format.js";
+import { STALE_DAYS, daysSince, locale } from "../../format.js";
 import { TAX_RATES, taxRate } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { monthStartDay, store } from "../../store.js";
@@ -19,8 +19,8 @@ function example(s) {
   if (!s) return "";
   const [a, b] = [s.current_period.start, s.current_period.end].map((x) => new Date(`${x}T00:00:00Z`));
   b.setUTCDate(b.getUTCDate() - 1);
-  const f = (d) => d.toLocaleDateString("fr-CH", { day: "numeric", month: "long", timeZone: "UTC" });
-  const name = new Date(`${s.current_month}-01T00:00:00Z`).toLocaleDateString("fr-CH", { month: "long", timeZone: "UTC" });
+  const f = (d) => d.toLocaleDateString(locale(), { day: "numeric", month: "long", timeZone: "UTC" });
+  const name = new Date(`${s.current_month}-01T00:00:00Z`).toLocaleDateString(locale(), { month: "long", timeZone: "UTC" });
   return `Le mois en cours, ${name}, va du ${f(a)} au ${f(b)}.`;
 }
 
