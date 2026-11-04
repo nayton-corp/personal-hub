@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import itertools
 import json
-
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
