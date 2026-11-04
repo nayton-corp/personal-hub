@@ -11,6 +11,9 @@ stale_price_days = 14          # cours plus vieux : ancien
 stale_crypto_price_days = 3
 stale_fx_days = 7              # change plus vieux : ancien (audit M6)
 quantity_epsilon = "1e-9"      # reste d'arrondi d'une quantité tenu pour zéro
+event_floor_minor = 150000     # événement de la courbe : flux d'au moins 1 500 (mineures)…
+event_share_pct = 4            # … ou 4 % de la valeur de la veille, le plus grand des deux
+event_income_floor_minor = 1000  # revenu (dividende, coupon) montré à partir de 10
 ```
 """
 
@@ -33,6 +36,9 @@ class Thresholds:
     stale_crypto_price_days: int = 3
     stale_fx_days: int = 7
     quantity_epsilon: Decimal = Decimal("1e-9")
+    event_floor_minor: int = 150_000
+    event_share_pct: int = 4
+    event_income_floor_minor: int = 1_000
 
     def price_stale_days(self, kind: str) -> int:
         return self.stale_crypto_price_days if kind == "crypto" else self.stale_price_days
@@ -47,6 +53,9 @@ class Thresholds:
             stale_crypto_price_days=int(section.get("stale_crypto_price_days", 3)),
             stale_fx_days=int(section.get("stale_fx_days", 7)),
             quantity_epsilon=Decimal(str(section.get("quantity_epsilon", "1e-9"))),
+            event_floor_minor=int(section.get("event_floor_minor", 1500 * unit)),
+            event_share_pct=int(section.get("event_share_pct", 4)),
+            event_income_floor_minor=int(section.get("event_income_floor_minor", 10 * unit)),
         )
 
 

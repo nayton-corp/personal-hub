@@ -41,7 +41,7 @@ from hub.domains.finance.sources.infra import operations
 from hub.domains.finance.sources.infra.market_file import Balance, MarketFile, Transaction
 from hub.kernel.clock import now_iso
 from hub.kernel.ids import urn
-from hub.kernel.money import DECIMAL_CONTEXT, base_currency
+from hub.kernel.money import DECIMAL_CONTEXT, base_currency, quantize
 
 
 def _apply_gaps(conn: Connection, doc: MarketFile) -> None:
@@ -194,6 +194,18 @@ class _Chain:
             self.opened.add(account.id)
             exchange.open_empty(self.conn, account, first)
 
+    def _parts(self, t: Transaction) -> tuple[str, Decimal, int]:
+        """(clé de la transaction, parts déjà écrites, lignes). Une seule forme de clé,
+        `txid|symbole` (audit m11) ; un bitcoin écrit avant sous `txid` seul garde sa clé, pour
+        que ses lignes ne soient pas réécrites."""
+        part = f"{t.txid}|{t.symbol}"
+        written, n = self._traded(t.account, part)
+        if not n and t.symbol == "BTC":
+            written, n = self._traded(t.account, t.txid)
+            if n:
+                part = t.txid
+        return part, written, n
+
     def _traded(self, ref: str, part: str) -> tuple[Decimal, int]:
         """Parts déjà écrites pour cette transaction, et le nombre de lignes (la première, puis
         ses corrections)."""
@@ -239,12 +251,13 @@ class _Chain:
             if amount:
                 seq = self.writer.entry(
                     account,
-                    f"{t.txid}|{leg}" if t.symbol == "BTC" else f"{t.txid}|{t.symbol}|{leg}",
+                    f"{t.txid}|{t.symbol}|{leg}",
                     t.on_date,
                     int(amount),
                     code,
                     label,
                     remittance=f"{instruments.qty_text(qty)} {t.symbol}",
+                    legacy=(f"{t.txid}|{leg}",) if t.symbol == "BTC" else (),
                 )
                 if seq is None:
                     continue
@@ -262,12 +275,13 @@ class _Chain:
                     )
         # une transaction Ethereum porte l'ETH (le gaz) et un jeton : une clé par crypto. Une
         # transaction relue avec une autre quantité nette (lecture corrigée) reçoit un mouvement
-        # de correction pour la différence : le registre ne réécrit jamais une ligne
-        part = t.txid if t.symbol == "BTC" else f"{t.txid}|{t.symbol}"
-        written, n = self._traded(t.account, part)
+        # de correction pour la différence (sa part du coût, à l'arrondi bancaire) : le registre
+        # ne réécrit jamais une ligne
+        part, written, n = self._parts(t)
         with localcontext(DECIMAL_CONTEXT):
             quantity = t.quantity - written
-            amount = cost if not n else int(cost * quantity / t.quantity) if t.quantity else 0
+            share = cost * quantity / t.quantity if t.quantity else Decimal(0)
+            amount = cost if not n else int(quantize(share, 0))
         if quantity:
             suffix = "trade" if not n else f"trade|fix-{n}"
             assets.upsert_instrument(

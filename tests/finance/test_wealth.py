@@ -519,10 +519,21 @@ def test_generic_composition_and_breakdown(finance: FinanceDomain) -> None:
     assert out["covered"] == "0.1695"
     assert {i["bucket"] for i in cur["items"]} == {"USD", "CHF"}
     assert top["items"][0]["bucket"] == "Ethereum"
-    # une composition plus ancienne ne remplace pas la plus récente
+    # une composition plus ancienne ne remplace pas la plus récente : elle s'ajoute à
+    # l'historique (m16), et sert aux dates d'avant la plus récente
     older = generic.replace(b"2026-09-30", b"2026-01-31").replace(b",70,", b",60,")
     finance.importer.process([Incoming("vieille.csv", older)])
     assert rows(finance, "SELECT max(on_date) FROM compositions") == [("2026-09-30",)]
+    assert rows(finance, "SELECT count(DISTINCT on_date) FROM compositions") == [(2,)]
+    with finance.engine().connect() as conn:
+        comps, dates = lookthrough.compositions_at(conn, "region", "2026-06-30")
+        latest, _d = lookthrough.compositions_at(conn, "region", "2026-10-27")
+        first, _d = lookthrough.compositions_at(conn, "region", "2025-12-31")
+    assert dates[WORLD] == "2026-01-31"
+    assert dict(comps[WORLD])[composition.NORTH_AMERICA] == Decimal("0.6")
+    assert dict(latest[WORLD])[composition.NORTH_AMERICA] == Decimal("0.7")
+    assert dict(first[WORLD])[composition.NORTH_AMERICA] == Decimal("0.6")  # la première
+    finance.importer.process([Incoming("encore.csv", older)])  # relue : doublon
 
 
 # --- virements appariés et abonnements ---------------------------------------------------------

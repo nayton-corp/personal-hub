@@ -74,6 +74,7 @@ def trade(conn: Connection, account: catalog.Account, on: str, qty: str, amount:
 
 def price(conn: Connection, on: str, value: str) -> None:
     assets.upsert_instrument(conn, FUND, "Fonds test", kind="fund", currency="CHF")
+    assets.upsert_instrument(conn, FUND, None, kind="stock")  # m13 : un type connu reste
     assets.add_price(conn, FUND, on, Decimal(value), "CHF", "test", None)
 
 

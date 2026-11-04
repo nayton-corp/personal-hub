@@ -7,9 +7,11 @@ import csv
 import io
 import re
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, localcontext
+from types import MappingProxyType
 
 from hub.domains.finance.packs import instance as packs
 from hub.domains.finance.packs.base import CountryPack
@@ -46,7 +48,7 @@ CODES = {
 }
 # pays (anglais, français, allemand), normalisés → région ; la région domestique du pack pays
 # (« Suisse ») est reconnue avant, par ses mots
-COUNTRIES: dict[str, str] = {}
+_countries: dict[str, str] = {}
 for _region, _names in {
     NORTH_AMERICA: "united states|etats-unis|usa|us|vereinigte staaten|canada|kanada",
     EUROPE: (
@@ -73,7 +75,8 @@ for _region, _names in {
     ),
 }.items():
     for _n in _names.split("|"):
-        COUNTRIES[_n] = _region
+        _countries[_n] = _region
+COUNTRIES: Mapping[str, str] = MappingProxyType(_countries)  # gelé (audit m16)
 # colonnes d'une liste de lignes d'émetteur, en minuscules sans accents
 WEIGHT_COLS = (
     "weight (%)",

@@ -22,6 +22,7 @@ from hub.domains.finance.patrimoine.app import (
     valuation,
 )
 from hub.domains.finance.patrimoine.model import instruments
+from hub.domains.finance.patrimoine.model.instruments import Result
 from hub.domains.finance.sources.infra import market_file
 from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform.db import begin_immediate
@@ -352,6 +353,73 @@ def test_a_transaction_read_again_with_another_net_gets_a_correction(
     assert sorted((Decimal(q), a) for q, a in rows) == [
         (Decimal("0.001"), 4_000),
         (Decimal("0.01"), 40_000),
+    ]
+
+
+def test_a_correction_is_rounded_bankers_style(finance: FinanceDomain) -> None:
+    """m11 : la part du coût d'une correction s'arrondit au centime le plus proche, plus par
+    troncature."""
+    add_ref(finance, "crypto:ledger", "crypto", "Ledger")
+    row = {"account": "crypto:ledger", "instrument": "ETH", "on_date": "2026-09-01"}
+    eth = {**btc("2026-09-01", "30001"), "instrument": "ETH"}
+    for q in ("0.003", "0.007"):
+        tx = {**row, "txid": "e1", "quantity": q, "fee": "0"}
+        finance.importer.process([doc(prices=[eth], transactions=[tx])])
+    with finance.engine().connect() as conn:
+        rows = conn.execute(text("SELECT quantity, amount_minor FROM trades")).all()
+    # 0.007 × 30 001 = 210.007 → 21 001 centimes ; la correction en porte 0.004 / 0.007 :
+    # 12 000.57 → 12 001 (12 000 par troncature)
+    assert sorted((Decimal(q), a) for q, a in rows) == [
+        (Decimal("0.003"), 9_000),
+        (Decimal("0.004"), 12_001),
+    ]
+
+
+def test_a_bitcoin_written_under_its_old_key_is_not_written_again(
+    finance: FinanceDomain,
+) -> None:
+    """m11 : une seule forme de clé (`txid|symbole|jambe`) ; les bitcoins écrits avant sous
+    `txid|jambe` restent des doublons, et leur correction suit l'ancienne clé."""
+    from hub.domains.finance.registre.app import catalog, ledger
+    from hub.domains.finance.sources.app import ibkr_writer
+
+    add_ref(finance, "crypto:ledger", "crypto", "Ledger")
+    row = {"account": "crypto:ledger", "instrument": "BTC", "on_date": "2026-09-01"}
+    first = {**row, "txid": "t0", "quantity": "0.001", "fee": "0"}
+    finance.importer.process([doc(prices=[btc("2026-09-01", "40000")], transactions=[first])])
+    with begin_immediate(finance.engine()) as conn:  # t9 écrit à l'ancienne, à la main
+        account = catalog.account_by_ref(conn, "crypto:ledger")
+        assert account is not None
+        imp = conn.execute(text("SELECT id FROM imports LIMIT 1")).scalar_one()
+        w = ibkr_writer.Writer(conn, imp, "chain", Result(), namespace="chain")
+        assert w.entry(account, "t9|receive", "2026-09-02", 40_000, "CRYPTO/RECEIVE", "x")
+        ledger.append(
+            conn,
+            "trades",
+            {
+                "account_id": account.id,
+                "trade_date": "2026-09-02",
+                "isin": instruments.crypto_key("BTC"),
+                "quantity": "0.01",
+                "amount_minor": 40_000,
+                "currency": "CHF",
+                "dedup_key": ledger.dedup_hash("chain|crypto:ledger|t9|trade"),
+                "import_id": imp,
+                "created_at": "2026-09-02T00:00:00Z",
+            },
+        )
+    t9 = {**row, "on_date": "2026-09-02", "txid": "t9", "fee": "0"}
+    finance.importer.process([doc(transactions=[{**t9, "quantity": "0.01"}])])
+    finance.importer.process([doc(transactions=[{**t9, "quantity": "0.012"}])])
+    with finance.engine().connect() as conn:
+        n = conn.execute(text("SELECT count(*) FROM entries WHERE bank_ref = 't9'")).scalar_one()
+        rows = conn.execute(
+            text("SELECT quantity, dedup_key FROM trades WHERE trade_date = '2026-09-02'")
+        ).all()
+    assert n == 1
+    assert sorted((Decimal(q), k) for q, k in rows) == [
+        (Decimal("0.002"), ledger.dedup_hash("chain|crypto:ledger|t9|trade|fix-1")),
+        (Decimal("0.01"), ledger.dedup_hash("chain|crypto:ledger|t9|trade")),
     ]
 
 

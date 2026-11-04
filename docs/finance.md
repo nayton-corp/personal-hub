@@ -73,7 +73,11 @@ par module (`make web`).
   `tolerance_minor` (rupture du rapprochement ignorée en dessous ; 1 unité de la devise de base
   sans réglage), `stale_account_days` (45 : compte à rafraîchir), `stale_price_days` (14) et
   `stale_crypto_price_days` (3 : cours ancien), `stale_fx_days` (7 : change ancien),
-  `quantity_epsilon` (`1e-9` : reste d'arrondi d'une quantité tenu pour zéro).
+  `quantity_epsilon` (`1e-9` : reste d'arrondi d'une quantité tenu pour zéro),
+  `event_floor_minor`, `event_share_pct` et `event_income_floor_minor` (1 500, 4 % de la
+  veille, 10 : seuils des événements de la courbe de performance, audit m16).
+- **Compositions versionnées.** Chaque composition de fonds importée est gardée avec sa date
+  (audit m16) ; la transparence à une date lit la dernière composition connue à cette date.
 
 ## Reprendre l'historique (L1-11)
 

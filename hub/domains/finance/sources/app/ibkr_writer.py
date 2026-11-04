@@ -83,14 +83,19 @@ class Writer:
         counterparty: str | None = None,
         remittance: str = "",
         fx_json: str | None = None,
+        legacy: tuple[str, ...] = (),
     ) -> int | None:
-        """Le seq de l'écriture ajoutée ; None si elle existait ou attend."""
+        """Le seq de l'écriture ajoutée ; None si elle existait (sous sa clé, ou sous une
+        ancienne forme `legacy` de la clé) ou attend."""
         dedup_key = ledger.dedup_hash(f"{self.namespace}|{self.account}|{key}")
-        if self.conn.execute(
-            text("SELECT 1 FROM entries WHERE dedup_key = :k"), {"k": dedup_key}
-        ).first():
-            self.result.duplicates += 1
-            return None
+        for k in (key, *legacy):
+            found = self.conn.execute(
+                text("SELECT 1 FROM entries WHERE dedup_key = :k"),
+                {"k": ledger.dedup_hash(f"{self.namespace}|{self.account}|{k}")},
+            ).first()
+            if found:
+                self.result.duplicates += 1
+                return None
         opened = self.opened(target.id)
         if opened is None or on <= opened:
             self.result.review("before_opening" if opened else "no_opening")

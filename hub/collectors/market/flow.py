@@ -191,6 +191,18 @@ def binance_prices(
 # --- titres cotés ------------------------------------------------------------------------------
 
 
+QUOTE_KINDS = {"ETF": "fund", "MUTUALFUND": "fund", "EQUITY": "stock"}
+
+
+def quote_kind(instrument_type: object, instrument: str) -> str:
+    """Le type que la source donne (`instrumentType` de Yahoo) ; à défaut, le préfixe de l'ISIN
+    (IE, LU : un fonds), faute de mieux (audit m13)."""
+    found = QUOTE_KINDS.get(str(instrument_type or "").upper())
+    if found is not None:
+        return found
+    return "fund" if instrument.upper().startswith(("IE", "LU")) else "stock"
+
+
 def quotes(env: Env, http: Http, since: date) -> list[dict[str, str]]:
     m = env.cfg.market
     rng = "1y" if (env.today - since).days > 31 else "1mo"
@@ -209,7 +221,7 @@ def quotes(env: Env, http: Http, since: date) -> list[dict[str, str]]:
         scale = Decimal(1)
         if currency in ("GBp", "GBX"):  # cotation en pence
             currency, scale = "GBP", Decimal(100)
-        kind = "fund" if instrument.upper().startswith(("IE", "LU")) else "stock"
+        kind = quote_kind(result["meta"].get("instrumentType"), instrument)
         series: dict[str, Decimal] = {}
         for ts, close in zip(stamps, closes, strict=False):
             value = dec(close)

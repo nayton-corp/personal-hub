@@ -16,6 +16,12 @@ def test_defaults_follow_the_base_currency() -> None:
     )
     assert chf.price_stale_days("cash") == 14
     assert Thresholds.from_section({}, "JPY").tolerance_minor == 1  # un yen, pas cent
+    assert (chf.event_floor_minor, chf.event_share_pct, chf.event_income_floor_minor) == (
+        150_000,
+        4,
+        1_000,
+    )
+    assert Thresholds.from_section({}, "JPY").event_floor_minor == 1_500
 
 
 def test_settings_override_each_threshold() -> None:
@@ -27,8 +33,16 @@ def test_settings_override_each_threshold() -> None:
             "stale_crypto_price_days": 1,
             "stale_fx_days": 3,
             "quantity_epsilon": "1e-6",
+            "event_floor_minor": 50_000,
+            "event_share_pct": 2,
+            "event_income_floor_minor": 500,
         },
         "CHF",
+    )
+    assert (th.event_floor_minor, th.event_share_pct, th.event_income_floor_minor) == (
+        50_000,
+        2,
+        500,
     )
     assert (th.tolerance_minor, th.stale_account_days, th.stale_fx_days) == (250, 10, 3)
     assert (th.price_stale_days("cash"), th.price_stale_days("crypto")) == (2, 1)

@@ -7,6 +7,8 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
+from hub.domains.finance.patrimoine.app import assets
+
 MAX_POINTS = 400
 
 
@@ -19,8 +21,9 @@ def history(conn: Connection, isin: str, date_from: str | None, date_to: str) ->
     by_day: dict[str, tuple[str, str]] = {}
     for on, price, ccy in conn.execute(
         text(
-            "SELECT on_date, price, currency FROM prices WHERE isin = :i "
-            "AND (:f IS NULL OR on_date >= :f) AND on_date <= :t ORDER BY on_date, source"
+            "SELECT on_date, price, currency FROM prices WHERE isin = :i "  # noqa: S608
+            "AND (:f IS NULL OR on_date >= :f) AND on_date <= :t "
+            f"ORDER BY on_date, {assets.price_rank()} DESC, source"  # rang : constante
         ),
         {"i": isin, "f": date_from, "t": date_to},
     ):

@@ -185,6 +185,14 @@ def test_market_check_reads_latest_rates(make_env: Any) -> None:
     ]
 
 
+def test_quote_kind_comes_from_the_source_then_from_the_isin() -> None:
+    """m13 : Yahoo dit le type ; sans lui, le préfixe de l'ISIN, faute de mieux."""
+    assert market.quote_kind("ETF", "US00TEST") == "fund"
+    assert market.quote_kind("EQUITY", "IE00TEST") == "stock"
+    assert market.quote_kind(None, "IE00TEST") == "fund"
+    assert market.quote_kind("", "GB00TEST") == "stock"
+
+
 def test_market_run_drops_a_file_the_finance_domain_reads(make_env: Any) -> None:
     cfg = {
         "quotes": {"GB00TEST0001": "TEST.L"},

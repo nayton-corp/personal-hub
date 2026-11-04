@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy import Connection, text
 
+from hub.domains.finance.patrimoine.app import assets
 from hub.domains.finance.patrimoine.model import positions
 from hub.domains.finance.registre.app.fx import FxTable as FxTable
 from hub.domains.finance.registre.model import fx
@@ -39,10 +40,14 @@ class Positions(positions.Positions):
                 str(ccy),
             )
         reports = {a: sorted(by_date.items()) for a, by_date in snaps.items()}
-        # cours : à date égale, la source triée en dernier l'emporte (rapport VIAC sur l'avis)
+        # cours : à date égale, la source la plus sûre (`assets.PRICE_SOURCES`) vient en dernier
+        # et l'emporte
         prices: dict[str, list[positions.Price]] = {}
         for isin, on, price, ccy in conn.execute(
-            text("SELECT isin, on_date, price, currency FROM prices ORDER BY on_date, source")
+            text(
+                "SELECT isin, on_date, price, currency FROM prices "  # noqa: S608 - constante
+                f"ORDER BY on_date, {assets.price_rank()} DESC, source"
+            )
         ):
             prices.setdefault(isin, []).append((on, Decimal(price), str(ccy)))
         super().__init__(table or FxTable(conn), trades, reports, prices)
