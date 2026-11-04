@@ -404,7 +404,7 @@ cours : ajoute-la à `crypto` dans `[collectors.market]` (symbole → id CoinGec
 | Plateforme | Ce qui est lu | Clé à créer |
 |---|---|---|
 | Binance | Spot, Funding, Simple Earn flexible et bloqué, et l'historique (ci-dessous) | Gestion des API → clé générée par le système, « Enable Reading » seul coché |
-| KuCoin | tous les comptes (principal, trading…), Earn, et un an d'historique | API Management → permission « General » seule, une passphrase à toi |
+| KuCoin | tous les comptes (principal, trading…), Earn, et l'historique depuis le premier dépôt | API Management → permission « General » seule, une passphrase à toi |
 | Coinbase | tous les portefeuilles, ETH en staking compris (`ETH2` compté comme ETH), et l'historique | portail CDP → clé API secrète, permission « View » seule |
 
 | Plateforme | Secrets |
@@ -479,9 +479,12 @@ clôtures Binance et change BCE déposés avec, mouvements reliés par txId), co
   (`native_amount`) l'emporte sur le cours du jour. Les mouvements vers Coinbase Pro/Advanced
   ou entre portefeuilles Coinbase sont internes.
 - **KuCoin** : le grand livre (`/api/v1/accounts/ledgers`), lu par tranches de 24 heures :
-  dépôts, retraits, ordres (les deux côtés regroupés), conversions, récompenses. KuCoin ne garde
-  qu'**un an** : ce qui est plus ancien ne peut pas être repris. Les transferts entre comptes
-  KuCoin sont internes.
+  dépôts, retraits, ordres (les deux côtés regroupés), conversions, récompenses. Le premier
+  passage part du plus ancien dépôt ou retrait (`/api/v1/deposits` et `/api/v1/withdrawals`
+  sans date rendent tout), et au moins d'un an en arrière : un compte immobile depuis plus d'un
+  an garde son historique (dépôts de 2024 relus en 2026). Les transferts entre comptes KuCoin
+  sont internes. Un lecteur qui lit plus loin qu'avant relève sa version d'historique
+  (mémoire `history_version`) : le passage suivant relit tout une fois, sans action.
 
 Un type d'opération inconnu est compté dans le détail (`partial type.<nom>:skipped=n`) sans
 bloquer le reste.

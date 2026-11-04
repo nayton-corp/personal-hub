@@ -8,7 +8,7 @@ import hashlib
 import hmac
 import json
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -909,7 +909,9 @@ def test_binance_first_history_is_all_or_nothing(make_env: Any) -> None:
 
 
 def kucoin_api(
-    code: str = "200000", ledger: Callable[[dict[str, str]], list[Any]] = lambda _q: []
+    code: str = "200000",
+    ledger: Callable[[dict[str, str]], list[Any]] = lambda _q: [],
+    deposits: list[Any] | None = None,
 ) -> Fake:
     def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
         if "kucoin" not in url:
@@ -937,6 +939,9 @@ def kucoin_api(
             }
         if path.startswith("/api/v1/accounts/ledgers"):
             return 200, {"code": "200000", "data": {"items": ledger(query(url)), "totalPage": 1}}
+        if path.startswith(("/api/v1/deposits", "/api/v1/withdrawals")):
+            moves = (deposits or []) if "deposits" in path else []
+            return 200, {"code": "200000", "data": {"items": moves, "totalPage": 1}}
         page = query(url)["currentPage"]
         items = [{"currency": "USDT", "holdAmount": "100" if page == "1" else "5"}]
         return 200, {"code": "200000", "data": {"items": items, "totalPage": 2}}
@@ -1252,6 +1257,34 @@ def test_kucoin_history_reads_the_ledger_day_by_day(make_env: Any) -> None:
     assert (
         len([u for _m, u, _h in later.calls if "ledgers" in u]) == 4
     )  # trois jours de recouvrement
+
+
+def test_kucoin_first_read_goes_back_to_the_oldest_deposit(make_env: Any) -> None:
+    """Un compte immobile depuis plus d'un an : le grand livre est relu depuis le premier
+    dépôt, pas seulement sur un an (KuCoin, dépôts de 2024 lus en 2026)."""
+    env = make_env("kucoin")
+    first = env.today - timedelta(days=600)
+    stamp = int(datetime(first.year, first.month, first.day, 12, tzinfo=UTC).timestamp()) * 1000
+    fake = kucoin_api(deposits=[{"createdAt": stamp, "currency": "USDC", "amount": "10"}])
+    kucoin.run(env, "run", Http(fake))
+    days = [u for _m, u, _h in fake.calls if "ledgers" in u]
+    assert len(days) == 601  # du jour du dépôt à aujourd'hui, par tranches de 24 heures
+    assert env.memory.get("history_since") == env.today.isoformat()
+
+
+def test_kucoin_reads_everything_again_once_after_the_wider_reach(make_env: Any) -> None:
+    """Un compte déjà lu sur un an seulement (version 1) est relu en entier une fois."""
+    env = make_env("kucoin")
+    env.memory.put("history_since", env.today.isoformat())
+    first = env.today - timedelta(days=600)
+    stamp = int(datetime(first.year, first.month, first.day, 12, tzinfo=UTC).timestamp()) * 1000
+    fake = kucoin_api(deposits=[{"createdAt": stamp, "currency": "USDC", "amount": "10"}])
+    kucoin.run(env, "run", Http(fake))
+    assert len([u for _m, u, _h in fake.calls if "ledgers" in u]) == 601
+    assert env.memory.get("history_version") == kucoin.HISTORY_VERSION
+    again = kucoin_api(deposits=[{"createdAt": stamp, "currency": "USDC", "amount": "10"}])
+    kucoin.run(env, "run", Http(again))
+    assert len([u for _m, u, _h in again.calls if "ledgers" in u]) == 4  # recouvrement
 
 
 def test_mempool_rate_limit_is_paced_and_retried(make_env: Any, pauses: list[int]) -> None:
