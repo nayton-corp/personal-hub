@@ -18,6 +18,8 @@ from hub.domains.finance.classement.app.insights import (
     to_categorize,
 )
 from hub.domains.finance.classement.app.totals import Totals
+from hub.domains.finance.packs import CountryPack
+from hub.domains.finance.packs import instance as packs
 from hub.domains.finance.patrimoine.app import crypto_cost, transfers, valuation
 from hub.domains.finance.registre.model.amounts import (
     as_of,
@@ -206,7 +208,9 @@ def kpis(
     *,
     pillar3a: bool = True,
     pillar3a_cap: int | None = None,
+    pack: CountryPack | None = None,
 ) -> dict[str, Any]:
+    pack = pack or packs.current()
     at = as_of(month, today)
     start = date.fromisoformat(month_bounds(month)[0])
     now = valuation.value_at(conn, at.isoformat())
@@ -244,7 +248,7 @@ def kpis(
         "stale_accounts": stale_accounts(conn, today),
         "to_categorize": to_categorize(conn),
         "unmatched_transfers": transfers.summary(conn, detailed=False)["unmatched"],
-        "pillar3a": pillar3a_year(conn, at.year, at, pillar3a_cap) if pillar3a else None,
+        "pillar3a": pillar3a_year(conn, at.year, at, pillar3a_cap, pack) if pillar3a else None,
         "last_statement": max(clbds) if clbds else None,
         "missing_fx": now.missing_fx,
         "missing_prices": now.missing_prices,

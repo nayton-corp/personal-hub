@@ -2,11 +2,13 @@
 // docs/finance-politique.md). Une ligne sous le grand chiffre, comme « Fin de courbe estimée »,
 // ouvre la liste chiffrée : compte, actif, montant et cause. Un écart qu'aucun import ne comblera
 // se règle d'un geste : « J'ai payé X », « Garder tel quel » (au cours du jour où le hub l'a vu) ou,
-// pour un envoi, « Parti hors de mes comptes ». Ta décision est gardée. Rien n'est compté en silence.
-// Tout vient de /finance/breaks, en centimes.
+// pour un envoi, « Parti hors de mes comptes ». Ta décision est une proposition (`decide_break`,
+// Double Sas : un Face ID, annulable). Rien n'est compté en silence. Tout vient de /finance/breaks,
+// en centimes.
 import { SHEETS, amount, closeSheet, esc, failure, ic, openSheet, toast } from "../../ui.js";
-import { api, store } from "../../store.js";
-import { base, date } from "../../format.js";
+import { outcome, proposeAndApprove } from "./proposals.js";
+import { store } from "../../store.js";
+import { base, date, toMinor } from "../../format.js";
 import { go } from "../../shell.js";
 import { units } from "./perf.js";
 
@@ -19,6 +21,7 @@ const NAME = {
   arrived_outside: (s) => `${s} arrivés d'un portefeuille non suivi`,
   no_price: (s) => `${s} sans cours`,
   stale_price: (s) => `Cours ancien : ${s}`,
+  stale_fx: (s) => `Change ancien : ${s}`,
 };
 const CAUSE = {
   no_history: "aucun achat ni arrivée connus (souvent un historique que le hub n'a pas pu lire)",
@@ -26,6 +29,7 @@ const CAUSE = {
   untracked_wallet: "l'autre côté est un portefeuille que le hub ne suit pas",
   no_price: "aucun cours connu, hors du patrimoine",
   stale: "dernier cours trop ancien",
+  stale_fx: "dernier taux de change trop ancien : les valeurs dans cette devise sont converties avec",
 };
 const key = (b) => (b.kind === "unexplained" ? `unexplained${Number(b.quantity) >= 0 ? "+" : "-"}` : b.kind);
 const worth = (b) => (b.value ? Math.abs(units(b.value)) : 0);
@@ -78,7 +82,9 @@ SHEETS.brk1 = (id) => {
 
 async function decide(id, decision, cost) {
   try {
-    await api(`${breaksPath}/decide`, { id, decision, ...(cost != null ? { cost_minor: cost } : {}) });
+    const params = { break_id: id, decision, ...(cost != null ? { cost_minor: cost } : {}) };
+    const [text, bad] = outcome(await proposeAndApprove([["decide_break", params]]));
+    if (bad) return toast(text, { error: true });
     closeSheet();
     store.invalidate();
     toast("Écart réglé");
@@ -95,7 +101,7 @@ export const actions = {
     const raw = (document.getElementById("brk-cost") || {}).value || "";
     const n = Number(raw.replace(/['’\s]/g, "").replace(",", "."));
     if (!raw || !Number.isFinite(n) || n < 0) return toast("Montant invalide", { error: true });
-    decide(v, "cost", Math.round(n * 100));
+    decide(v, "cost", toMinor(n));
   },
   "w-brk-conn": () => { closeSheet(true); go("sources", { rubric: "conn" }); },
 };

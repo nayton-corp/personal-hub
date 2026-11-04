@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from hub.collectors import runtime
 from hub.collectors.market import flow as market
+from hub.collectors.market import history
 from hub.core.connectors import catalog
 
 
@@ -20,4 +21,4 @@ def test_every_crypto_connector_reads_its_history() -> None:
 
 def test_every_wallet_asset_reads_its_history() -> None:
     # BTC : xpub et adresses relues sur mempool.space (`btc_moves`)
-    assert set(market.WALLETS) == {"BTC", *market.HISTORIES}
+    assert set(market.WALLETS) == {"BTC", *history.HISTORIES}

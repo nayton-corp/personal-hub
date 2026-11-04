@@ -20,195 +20,49 @@ la veille de sa première opération, une opération plus ancienne arrivée apr�
 pas. Les transferts entre portefeuilles d'un même compte Binance (Spot, Funding, Earn) ne sont
 pas des opérations : le compte `crypto:binance` les réunit déjà.
 
+Une fenêtre refusée (400 : trop ancienne pour ce flux) ou une paire que `myTrades` ne sert
+plus n'est jamais tenue pour lue (audit M15) : le flux garde son curseur (`stream_since`) au
+début de la fenêtre refusée et la redemande au passage suivant, et le trou part dans le
+fichier (`gaps`), où le hub le montre en rupture « historique non lu » tant que l'export
+Binance n'est pas importé.
+
 Hors API : P2P, Binance Pay, contrats à terme et marge. Une paire jamais détenue des deux
 côtés (un actif acheté puis revendu en entier, jamais déposé) n'est pas lue : la lister dans
-le champ `assets` des secrets.
+le champ `assets` des secrets ; une paire retirée de la cote (BUSD) se déclare dans `pairs`
+(`BTC/BUSD`) et son historique s'importe depuis l'export « Trade History » de Binance.
 """
 
 from __future__ import annotations
 
-import time
 from collections import defaultdict
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 
 from hub.collectors.base import Failure
+from hub.collectors.exchanges.binance_api import (
+    DAY_MS,
+    DEPOSIT_DONE,
+    EARN_DAYS,
+    FIAT,
+    MAX_PAGES,
+    OVERLAP_DAYS,
+    STABLE,
+    WITHDRAW_DONE,
+    Api,
+    Op,
+    _data,
+    _day,
+    _list,
+    _ms,
+    _qty,
+    _rows,
+)
 from hub.collectors.http import Http
 from hub.collectors.market.flow import binance_prices, fx_rates
 from hub.collectors.runtime import Env
-
-DAY_MS = 86_400_000
-OVERLAP_DAYS = 3
-FIAT = frozenset({"CHF", "EUR", "USD", "GBP", "TRY", "BRL", "AUD", "PLN", "RON", "UAH", "ZAR"})
-STABLE = frozenset({"USDT", "USDC", "BUSD", "FDUSD", "TUSD", "USDP", "DAI"})
-DEPOSIT_DONE = frozenset({1, 6})  # crédité (6 : crédité, pas encore retirable)
-WITHDRAW_DONE = 6
-MAX_PAGES = 50
-EARN_DAYS = 29  # rewardsRecord : 30 jours au plus par appel (sinon -6021)
-
-
-def _pause(ms: int) -> None:
-    time.sleep(ms / 1000)
-
-
-sleep: Callable[[int], None] = _pause  # en millisecondes ; remplacé dans les tests
-
-
-def _ms(day: date) -> int:
-    return int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()) * 1000
-
-
-def _day(ms: Any) -> str:
-    return datetime.fromtimestamp(int(ms) // 1000, UTC).date().isoformat()
-
-
-def _qty(value: Any) -> Decimal:
-    try:
-        d = Decimal(str(value))
-    except InvalidOperation:
-        raise Failure("invalid_file", "binance.history") from None
-    if not d.is_finite():
-        raise Failure("invalid_file", "binance.history")
-    return d
-
-
-def _text(d: Decimal) -> str:
-    out = format(d.normalize(), "f")
-    return "0" if out in ("-0", "") else out
-
-
-@dataclass
-class Op:
-    id: str
-    kind: str
-    on_date: str
-    legs: list[tuple[str, Decimal, str]] = field(default_factory=list)  # actif, quantité, rôle
-    txid: str = ""
-    address: str = ""
-    network: str = ""
-    # contre-valeur donnée par la plateforme (Coinbase : `native_amount`), par jambe
-    values: dict[int, tuple[Decimal, str]] = field(default_factory=dict)
-
-    def leg(
-        self, asset: Any, quantity: Decimal, role: str, value: tuple[Decimal, str] | None = None
-    ) -> Op:
-        if quantity:
-            if value is not None:
-                self.values[len(self.legs)] = value
-            self.legs.append((str(asset).upper(), quantity, role))
-        return self
-
-    def doc(self, account: str) -> dict[str, Any]:
-        legs = []
-        for i, (a, q, r) in enumerate(self.legs):
-            leg: dict[str, str] = {"instrument": a, "quantity": _text(q), "role": r}
-            if i in self.values:
-                leg["value"], leg["value_currency"] = _text(self.values[i][0]), self.values[i][1]
-            legs.append(leg)
-        out: dict[str, Any] = {
-            "account": account,
-            "id": self.id,
-            "kind": self.kind,
-            "on_date": self.on_date,
-            "legs": legs,
-        }
-        for k in ("txid", "address", "network"):
-            if getattr(self, k):
-                out[k] = getattr(self, k)[:128]
-        return out
-
-
-class Api:
-    """Appels signés de l'historique : pause entre deux appels, une reprise après un 429, et
-    les fenêtres refusées (400 : trop anciennes pour ce flux) comptées plutôt que fatales."""
-
-    def __init__(self, env: Env, http: Http, call: Callable[..., Any]) -> None:
-        self.env = env
-        self.http = http
-        self.call = call
-        self.skipped: dict[str, int] = defaultdict(int)
-
-    def get(self, path: str, step: str, params: dict[str, Any], pause: int = 0) -> Any:
-        pause = pause or self.env.cfg.exchanges.history_pause_ms
-        for attempt in (0, 1):
-            if pause:
-                sleep(pause)
-            try:
-                return self.call(self.env, self.http, path, step, params)
-            except Failure as f:
-                if f.detail.endswith(":http_429") and not attempt:
-                    sleep(60_000)
-                    continue
-                if f.detail.endswith(":http_400"):
-                    self.skipped[step] += 1
-                    return None
-                raise
-        return None  # pragma: no cover - la boucle rend toujours
-
-    def windows(
-        self,
-        path: str,
-        step: str,
-        start: int,
-        end: int,
-        span_days: int,
-        rows_of: Callable[[Any], list[Any] | None],
-        *,
-        limit: int,
-        params: dict[str, Any] | None = None,
-        pause: int = 0,
-        keys: tuple[str, str] = ("startTime", "endTime"),
-    ) -> Iterator[Any]:
-        """Lignes de toutes les fenêtres [start, end] ; une fenêtre pleine est coupée en deux."""
-        cursor = start
-        while cursor < end:
-            stop = min(cursor + span_days * DAY_MS, end)
-            yield from self._window(path, step, cursor, stop, rows_of, limit, params, pause, keys)
-            cursor = stop + 1
-
-    def _window(
-        self,
-        path: str,
-        step: str,
-        start: int,
-        end: int,
-        rows_of: Callable[[Any], list[Any] | None],
-        limit: int,
-        params: dict[str, Any] | None,
-        pause: int,
-        keys: tuple[str, str],
-    ) -> Iterator[Any]:
-        doc = self.get(path, step, {**(params or {}), keys[0]: start, keys[1]: end}, pause)
-        if doc is None:
-            return
-        rows = rows_of(doc)
-        if rows is None:
-            raise Failure("invalid_file", step)
-        if len(rows) >= limit and end - start > 60_000:
-            middle = (start + end) // 2
-            args = (rows_of, limit, params, pause, keys)
-            yield from self._window(path, step, start, middle, *args)
-            yield from self._window(path, step, middle + 1, end, *args)
-            return
-        yield from rows
-
-
-def _list(doc: Any) -> list[Any] | None:
-    return doc if isinstance(doc, list) else None
-
-
-def _rows(doc: Any) -> list[Any] | None:
-    rows = doc.get("rows") if isinstance(doc, dict) else None
-    return rows if isinstance(rows, list) else ([] if isinstance(doc, dict) else None)
-
-
-def _data(doc: Any) -> list[Any] | None:
-    rows = doc.get("data") if isinstance(doc, dict) else None
-    return rows if isinstance(rows, list) else ([] if isinstance(doc, dict) else None)
-
 
 # --- flux ------------------------------------------------------------------------------------
 
@@ -255,6 +109,7 @@ def _paged(api: Api, path: str, step: str, params: dict[str, Any]) -> Iterator[A
     for page in range(1, MAX_PAGES + 1):
         doc = api.get(path, step, {**params, "page": page, "rows": 500})
         if doc is None:
+            api.gaps[step].append((int(params.get("beginTime", 0)), int(params.get("endTime", 0))))
             return
         rows = _data(doc)
         if rows is None:
@@ -391,6 +246,7 @@ def dust(api: Api, start: int) -> list[Op]:
     """Petits soldes convertis en BNB (les 100 dernières conversions, que l'API garde)."""
     doc = api.get("/sapi/v1/asset/dribblet", "binance.dust", {})
     if doc is None:
+        api.gaps["binance.dust"].append((start, 0))
         return []
     groups = doc.get("userAssetDribblets") if isinstance(doc, dict) else None
     if not isinstance(groups, list):
@@ -408,10 +264,28 @@ def dust(api: Api, start: int) -> list[Op]:
     return out
 
 
-def trades(api: Api, assets: set[str], memory: dict[str, int]) -> tuple[list[Op], dict[str, int]]:
-    """Ordres exécutés des paires dont les deux actifs sont connus du compte ; les exécutions
-    d'un même ordre (dans un même passage) sont une seule opération. `memory` : prochain
-    identifiant d'exécution à lire, par paire."""
+def declared_pairs(creds: dict[str, Any]) -> dict[str, tuple[str, str]]:
+    """Paires déclarées dans les secrets (`pairs: ["BTC/BUSD"]`) : celles que l'exchangeInfo du
+    jour ne liste plus (retirées de la cote) ; sans la barre, la paire est ignorée."""
+    out = {}
+    raw = creds.get("pairs") or []
+    for item in raw if isinstance(raw, list) else []:
+        base, sep, quote = str(item).upper().partition("/")
+        if sep and base.isalnum() and quote.isalnum():
+            out[base + quote] = (base, quote)
+    return out
+
+
+def trades(
+    api: Api,
+    assets: set[str],
+    memory: dict[str, int],
+    declared: dict[str, tuple[str, str]] | None = None,
+) -> tuple[list[Op], dict[str, int]]:
+    """Ordres exécutés des paires dont les deux actifs sont connus du compte, plus les paires
+    déclarées ; les exécutions d'un même ordre (dans un même passage) sont une seule opération.
+    `memory` : prochain identifiant d'exécution à lire, par paire. Une paire que `myTrades`
+    refuse (retirée) est un trou (`trades:<paire>`), jamais tenue pour lue."""
     url = f"{api.env.cfg.exchanges.binance_url}/api/v3/exchangeInfo"
     info = api.http.json(url, "binance.symbols")
     symbols = info.get("symbols") if isinstance(info, dict) else None
@@ -422,6 +296,7 @@ def trades(api: Api, assets: set[str], memory: dict[str, int]) -> tuple[list[Op]
         for s in symbols
         if isinstance(s, dict) and s.get("baseAsset") in assets and s.get("quoteAsset") in assets
     }
+    pairs.update(declared or {})
     out, cursor = [], dict(memory)
     for symbol, (base, quote) in sorted(pairs.items()):
         fills: list[dict[str, Any]] = []
@@ -429,6 +304,7 @@ def trades(api: Api, assets: set[str], memory: dict[str, int]) -> tuple[list[Op]
             params = {"symbol": symbol, "fromId": cursor.get(symbol, 0), "limit": 1000}
             rows = api.get("/api/v3/myTrades", "binance.trades", params)
             if rows is None:
+                api.gaps[f"binance.trades:{symbol}"].append((0, 0))
                 break
             if not isinstance(rows, list):
                 raise Failure("invalid_file", "binance.trades")
@@ -465,6 +341,33 @@ class History:
     fx: list[dict[str, str]]
     failed: list[str]
     commit: Callable[[], None]
+    gaps: list[dict[str, str]] = field(default_factory=list)
+
+
+STREAMS = ("deposits", "fiat", "withdrawals", "convert", "rewards", "dividends", "dust", "trades")
+
+
+def _gap_rows(api: Api, account: str, first: date, today: date) -> list[dict[str, str]]:
+    """Les trous du passage, pour le fichier : un par flux et fenêtre refusée."""
+    out = []
+    for step, windows in sorted(api.gaps.items()):
+        name = step.removeprefix("binance.")
+        reason = "delisted" if name.startswith("trades:") else "refused"
+        for start, end in sorted(windows):
+            from_day = first.isoformat() if start <= 0 else _day(start)
+            to_day = today.isoformat() if end <= 0 else _day(end)
+            out.append(
+                {"account": account, "step": name, "from": from_day, "to": to_day, "reason": reason}
+            )
+    return out
+
+
+def _stream_of(step: str) -> str:
+    """Le flux (de `STREAMS`) auquel appartient un pas de l'API."""
+    name = step.removeprefix("binance.").split(":", 1)[0]
+    if name.startswith("rewards"):
+        return "rewards"
+    return "fiat" if name == "payments" else name
 
 
 def _price_rows(env: Env, http: Http, ops: list[Op], failed: list[str]) -> list[dict[str, str]]:
@@ -501,8 +404,16 @@ def collect(
     first = date.fromisoformat(str(env.creds.get("since") or env.cfg.exchanges.binance_since))
     start_day = first if full else date.fromisoformat(since) - timedelta(days=OVERLAP_DAYS)
     start, end = _ms(start_day), _ms(env.today + timedelta(days=1)) - 1
+    # un flux dont une fenêtre a été refusée garde son curseur à son début : il la redemande
+    cursors: dict[str, str] = dict(memory.get("stream_since") or {})
     failed: list[str] = []
     ops: list[Op] = []
+
+    def from_(name: str) -> int:
+        own = cursors.get(name)
+        if own is None:
+            return start
+        return min(start, _ms(date.fromisoformat(own) - timedelta(days=OVERLAP_DAYS)))
 
     def stream(name: str, fn: Callable[[], list[Op]]) -> None:
         try:
@@ -514,22 +425,22 @@ def collect(
         except (KeyError, TypeError, ValueError):
             failed.append(f"{name}:invalid_file")
 
-    stream("deposits", lambda: deposits(api, start, end))
-    stream("fiat", lambda: fiat(api, start, end))
+    stream("deposits", lambda: deposits(api, from_("deposits"), end))
+    stream("fiat", lambda: fiat(api, from_("fiat"), end))
     if full and ops:  # rien ne sort ni ne s'échange avant le premier apport
         start = _ms(date.fromisoformat(min(op.on_date for op in ops)))
-    stream("withdrawals", lambda: withdrawals(api, start, end))
-    stream("convert", lambda: converts(api, start, end))
+    stream("withdrawals", lambda: withdrawals(api, from_("withdrawals"), end))
+    stream("convert", lambda: converts(api, from_("convert"), end))
     # récompenses : relues depuis le début tant qu'un passage ne les a pas toutes lues
     # (fenêtres trop larges jusqu'à la v0.9.9)
     earn_full = memory.get("rewards_since") is None
     first_day = memory.get("first_day")
-    earn_start = start
+    earn_start = from_("rewards")
     if earn_full and not full:
         earn_start = _ms(date.fromisoformat(first_day) if first_day else first)
     stream("rewards", lambda: rewards(api, earn_start, end, env.today))
-    stream("dividends", lambda: dividends(api, start, end))
-    stream("dust", lambda: dust(api, start))
+    stream("dividends", lambda: dividends(api, from_("dividends"), end))
+    stream("dust", lambda: dust(api, from_("dust")))
     extra = env.creds.get("assets") or []
     assets = (
         held
@@ -539,7 +450,7 @@ def collect(
     )
     cursor: dict[str, int] = dict(memory.get("trade_ids", {}))
     try:
-        found, cursor = trades(api, assets, cursor)
+        found, cursor = trades(api, assets, cursor, declared_pairs(env.creds))
         ops += found
     except Failure as f:
         if f.outcome == "auth_error":
@@ -566,6 +477,13 @@ def collect(
         # premier passage incomplet : rien au registre, tout est relu la prochaine fois
         ops, prices, fx = [], [], []
     ops.sort(key=lambda op: (op.on_date, op.id))
+    gaps = _gap_rows(api, account, first, env.today)
+    # le premier jour refusé par flux : le curseur du flux s'y arrête
+    refused: dict[str, str] = {}
+    for step, windows in api.gaps.items():
+        name = _stream_of(step)
+        day = min(first.isoformat() if a <= 0 else _day(a) for a, _b in windows)
+        refused[name] = min(refused.get(name, day), day)
 
     earn_ok = not [f for f in failed if f.startswith("rewards")]
 
@@ -578,6 +496,12 @@ def collect(
         if not (full and broken):
             memory.put("trade_ids", cursor)
         if not broken:
-            memory.put("history_since", env.today.isoformat())
+            today = env.today.isoformat()
+            for name in STREAMS:
+                if any(f.startswith(f"{name}:") for f in broken):
+                    continue
+                cursors[name] = refused.get(name, today)
+            memory.put("stream_since", cursors)
+            memory.put("history_since", today)
 
-    return History([op.doc(account) for op in ops], prices, fx, failed, commit)
+    return History([op.doc(account) for op in ops], prices, fx, failed, commit, gaps)

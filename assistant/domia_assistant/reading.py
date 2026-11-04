@@ -96,7 +96,9 @@ def _match(wanted: str | None, *names: Any) -> bool:
     return any(n is not None and (str(n).lower() == w or w in str(n).lower()) for n in names)
 
 
-def house_view(house: dict, compact: dict, room: str | None = None, kind: str | None = None) -> dict:
+def house_view(
+    house: dict[str, Any], compact: dict[str, Any], room: str | None = None, kind: str | None = None
+) -> dict[str, Any]:
     """La maison en court (`compact`), réduite à une pièce (id ou nom) et à une sorte d'objets."""
     rooms = [r for r in compact["rooms"] if _match(room, r["id"], r.get("name"))]
     out: dict[str, Any] = {"situation": compact["situation"]}
@@ -116,11 +118,11 @@ def house_view(house: dict, compact: dict, room: str | None = None, kind: str | 
 class Settings:
     """Les réglages lus dans `GET /api/config` : un index court, puis la fiche d'un objet."""
 
-    def __init__(self, document: dict):
+    def __init__(self, document: dict[str, Any]):
         self.revision = document.get("config_revision")
         self.config = document.get("config") or {}
 
-    def index(self) -> dict:
+    def index(self) -> dict[str, Any]:
         rooms = []
         for r in self.config.get("rooms") or []:
             room: dict[str, Any] = {"id": r["id"], "name": r.get("name")}
@@ -140,7 +142,7 @@ class Settings:
             "aussi": "notifications, situation_changes",
         }
 
-    def entry(self, kind: str, id: str | None) -> dict:
+    def entry(self, kind: str, id: str | None) -> dict[str, Any]:
         if kind in SINGLE:
             return {"kind": kind, "settings": self.config.get(kind)}
         if kind in LISTED:
@@ -205,7 +207,7 @@ def _local(at: str, tz: ZoneInfo) -> str:
     return f"{DAYS_FR[when.weekday()]} {when:%d.%m %H:%M}"
 
 
-def situations(lines: list[dict], tz: ZoneInfo) -> list[str]:
+def situations(lines: list[dict[str, Any]], tz: ZoneInfo) -> list[str]:
     out = []
     for line in lines:
         if line.get("kind") != "situation":
@@ -217,8 +219,8 @@ def situations(lines: list[dict], tz: ZoneInfo) -> list[str]:
 
 
 def activity(
-    lines: list[dict], tz: ZoneInfo, entities: dict[str, str], wanted: set[str] | None = None, limit: int = 12
-) -> dict:
+    lines: list[dict[str, Any]], tz: ZoneInfo, entities: dict[str, str], wanted: set[str] | None = None, limit: int = 12
+) -> dict[str, Any]:
     """Le journal en agrégats : les gestes (qui, quoi, quand) et, par entité, combien de changements, le dernier état
     et son heure. Les points de reprise et les tops d'horloge sont ignorés. `entities` : entité HA → id Domia ;
     `wanted` : les ids d'objets et entités à garder (None : tout)."""
@@ -270,7 +272,7 @@ def activity(
     }
 
 
-def health_view(health: dict, summary: dict | None) -> dict:
+def health_view(health: dict[str, Any], summary: dict[str, Any] | None) -> dict[str, Any]:
     out = {
         k: health.get(k)
         for k in ("status", "ha", "ha_link", "started_at", "loop_last_cycle_at")
@@ -290,7 +292,7 @@ def health_view(health: dict, summary: dict | None) -> dict:
     return out
 
 
-def notification_view(entries: list[dict], tz: ZoneInfo, days: int) -> list[dict]:
+def notification_view(entries: list[dict[str, Any]], tz: ZoneInfo, days: int) -> list[dict[str, Any]]:
     since = datetime.now(UTC) - timedelta(days=days)
     out = []
     for n in entries:
@@ -313,7 +315,7 @@ def notification_view(entries: list[dict], tz: ZoneInfo, days: int) -> list[dict
     return out
 
 
-def ha_view(entities: list[dict], used: set[str], domain: str | None, unused: bool) -> list[dict]:
+def ha_view(entities: list[dict[str, Any]], used: set[str], domain: str | None, unused: bool) -> list[dict[str, Any]]:
     out = []
     for e in entities:
         if domain and e.get("domain") != domain:
@@ -328,7 +330,7 @@ def ha_view(entities: list[dict], used: set[str], domain: str | None, unused: bo
     return out
 
 
-def recipients_for(config: dict, to: str | None, person: str | None) -> list[dict] | str:
+def recipients_for(config: dict[str, Any], to: str | None, person: str | None) -> list[dict[str, Any]] | str:
     """Les destinataires de Réglages › Notifications que vise « à moi », « à Kim », « l'iPad de Robin » : Home
     Assistant liste souvent plusieurs services pour un même téléphone, le modèle n'a pas à deviner le bon. Sans `to`,
     la personne qui parle. Rend la liste visée, ou une phrase qui dit pourquoi personne."""

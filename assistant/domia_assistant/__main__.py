@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from . import server
 from .agenda import Agenda, AgendaUnavailable
@@ -33,7 +33,7 @@ from .library import INBOX, LibraryUnavailable
 from .llm import Fallback, ModelError, OpenAICompatible
 from .memory import Memory
 from .observer import Observer
-from .tools import Speaker, build
+from .tools import Speaker, Toolbox, build
 from .voice import Voice
 
 HERE = Path(__file__).resolve().parent.parent
@@ -87,18 +87,18 @@ class Parts:
             self._hub_retry = time.monotonic() + HUB_RETRY_S
         return self._hub
 
-    def classify(self, mode: str = "suggest", dry_run: bool = False) -> dict:
+    def classify(self, mode: str = "suggest", dry_run: bool = False) -> dict[str, Any]:
         s = self.settings
         if s.hub is None:
             raise SystemExit("classify : pas de section hub dans config.yaml")
         return classify(s.hub, s.model_url, s.model, mode, dry_run)
 
-    def daily(self) -> dict:
+    def daily(self) -> dict[str, Any]:
         """Les tâches du matin : le classement du hub, à `hub.classify_at`."""
         cfg = self.settings.hub
         return {cfg.classify_at: self.classify} if cfg is not None and cfg.classify_at else {}
 
-    def toolbox(self):
+    def toolbox(self) -> Toolbox:
         vision = self.settings.vision_model
         look = (lambda image, mime, question: self.model.look(image, mime, question, vision)) if vision else None
         return build(
@@ -115,8 +115,8 @@ class Parts:
             self.hub(),
         )
 
-    def status(self) -> dict:
-        out: dict = {}
+    def status(self) -> dict[str, Any]:
+        out: dict[str, Any] = {}
         try:
             house = self.domia.house()
             out["domia"] = {"ok": True, "situation": (house.get("situation") or {}).get("value")}
@@ -132,6 +132,7 @@ class Parts:
         except AgendaUnavailable as e:
             out["reminders"] = {"ok": False, "error": f"Rappels non autorisés ou injoignables : {e}"}
         out["model"] = self.settings.model
+        out["callers"] = sorted(c.name for c in self.settings.callers.values())
         if isinstance(self.model, Fallback):
             out["cloud"] = {"model": self.settings.cloud_model, "last": self.model.last}
         if self.settings.hub is not None:
@@ -157,7 +158,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "serve":
         s = parts.settings
-        httpd = server.serve(parts.assistant, s.listen_host, s.listen_port, s.allow_from, parts.status, parts.voice)
+        httpd = server.serve(
+            parts.assistant, s.listen_host, s.listen_port, s.allow_from, parts.status, parts.voice, s.callers
+        )
         stop = threading.Event()
         signal.signal(signal.SIGTERM, lambda *_: stop.set())
         logging.getLogger("assistant").info("listening host=%s port=%d model=%s", s.listen_host, s.listen_port, s.model)

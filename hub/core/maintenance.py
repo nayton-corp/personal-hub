@@ -13,7 +13,17 @@ from typing import Any
 
 from sqlalchemy import Engine
 
-from hub.core import collectors, links, passkeys, proposals, ratelimit, sessions, tokens
+from hub.core import (
+    collectors,
+    links,
+    passkeys,
+    proposal_events,
+    proposal_reconcile,
+    proposals,
+    ratelimit,
+    sessions,
+    tokens,
+)
 from hub.core.context import HubContext
 from hub.core.manifest import unguarded
 from hub.core.notify import Message
@@ -54,10 +64,10 @@ def nightly(hub: HubContext) -> dict[str, Any]:
         )
         ending = tokens.expiring(conn)
     warned = sum(warn_token(hub, t) for t in ending)
-    report = proposals.reconcile(hub)
+    report = proposal_reconcile.reconcile(hub)
     for d in hub.registry:
         d.nightly()
-    synced = proposals.sync_events(hub)
+    synced = proposal_events.sync_events(hub)
     result = {
         "expired": expired,
         "requested": synced["requested"],
@@ -209,6 +219,6 @@ def restore(hub: HubContext, stamp: str, source: Path | None = None) -> list[str
         restored.append(name)
     if not restored:
         raise FileNotFoundError(f"aucune copie « {stamp} » dans {source}")
-    report = proposals.reconcile(hub)
+    report = proposal_reconcile.reconcile(hub)
     log.info("restore.done", databases=restored, reconciled=report.marked_applied)
     return restored

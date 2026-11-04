@@ -142,7 +142,7 @@ def plan_statement(conn: Connection, st: ParsedStatement) -> Plan:
         ledger_balance = conn.execute(
             text(
                 "SELECT coalesce(sum(amount_minor), 0) FROM entries WHERE account_id = :a "
-                "AND booking_date <= :d AND kind != 'correction'"
+                "AND booking_date <= :d"
             ),
             {"a": account.id, "d": st.closing.on_date},
         ).scalar_one()

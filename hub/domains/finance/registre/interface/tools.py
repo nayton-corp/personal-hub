@@ -1,6 +1,7 @@
 """Outils de l'assistant (lot 7) : ce que les outils de la finance partagent (arguments,
 schémas, forme des montants, `ToolBox`), et ceux du registre : fraîcheur, catégories,
-recherche, note sur une écriture, état d'une proposition.
+recherche, écritures et leur détail, ordres d'un actif, réglages du mois, note sur une
+écriture, état d'une proposition.
 
 Règles communes (plan, « IA locale ») :
 - `category` est une liste fermée dans le schéma : le modèle ne peut pas inventer de catégorie ;
@@ -23,7 +24,7 @@ from sqlalchemy import Connection, text
 
 from hub.core.domain import McpTool, ToolCaller
 from hub.core.errors import Problem
-from hub.domains.finance.registre.app import reads
+from hub.domains.finance.registre.app import period_kinds, reads
 from hub.domains.finance.registre.interface.http import Host
 from hub.domains.finance.registre.model import amounts, period
 from hub.kernel.money import Money, base_currency
@@ -53,6 +54,22 @@ def amount(m: dict[str, Any]) -> str:
     return shown if m["currency"] == base_currency() else f"{shown} {m['currency']}"
 
 
+MONEY_KEYS = frozenset({"minor", "currency", "display"})
+HIDDEN = frozenset({"iban", "counterparty_iban"})
+
+
+def text_out(value: Any) -> Any:
+    """Une réponse de route telle qu'un modèle la lit : chaque montant `{minor, currency,
+    display}` devient un texte (`amount`), les IBAN disparaissent."""
+    if isinstance(value, dict):
+        if value.keys() >= MONEY_KEYS:
+            return amount(value)
+        return {k: text_out(v) for k, v in value.items() if k not in HIDDEN}
+    if isinstance(value, list):
+        return [text_out(x) for x in value]
+    return value
+
+
 class _Args(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -79,6 +96,23 @@ class ProposeNoteArgs(_Args):
     note: str = Field(min_length=1, max_length=500)
 
 
+class EntriesArgs(_Args):
+    account: str | None = Field(default=None, max_length=40)
+    month: Month = None
+    category: str | None = Field(default=None, max_length=40)
+    uncategorized: bool = False
+    limit: int = Field(default=20, ge=1, le=SEARCH_LIMIT)
+
+
+class EntryArgs(_Args):
+    entry_id: EntryId
+
+
+class TradesArgs(_Args):
+    isin: str = Field(min_length=3, max_length=40)
+    account: str | None = Field(default=None, max_length=40)
+
+
 # --- schémas JSON (petits, écrits à la main : 3 ou 4 paramètres simples) ----------------------
 
 
@@ -96,6 +130,7 @@ MONTH_PROP = {
 }
 REASON_PROP = {"type": "string", "maxLength": 200, "description": "Raison, en une ligne."}
 ENTRY_PROP = {"type": "string", "description": "Identifiant d'écriture (e…), tel que renvoyé."}
+ACCOUNT_PROP = {"type": "string", "description": "Identifiant de compte (finance_list_accounts)."}
 
 
 def tool(
@@ -210,6 +245,48 @@ class RegistreTools(ToolBox):
                 },
             )
 
+    def entries(self, a: EntriesArgs, caller: ToolCaller) -> dict[str, Any]:
+        month = self._month(a.month) if a.month else None
+        start, end = amounts.month_bounds(month) if month else (None, None)
+        f = reads.EntryFilter(a.account, start, end, a.category, a.uncategorized)
+        with self.engine.connect() as conn:
+            items, cursor = reads.entries(conn, f, None, a.limit)
+            return self._wrap(
+                conn,
+                {
+                    "items": text_out(items),
+                    "truncated": cursor is not None,
+                    "external_text": EXTERNAL_NOTICE,
+                },
+            )
+
+    def entry(self, a: EntryArgs, caller: ToolCaller) -> dict[str, Any]:
+        with self.engine.connect() as conn:
+            found = reads.entry_detail(conn, a.entry_id)
+            if found is None:
+                raise Problem("not_found", "écriture inconnue")
+            return self._wrap(conn, {**text_out(found), "external_text": EXTERNAL_NOTICE})
+
+    def trades(self, a: TradesArgs, caller: ToolCaller) -> dict[str, Any]:
+        with self.engine.connect() as conn:
+            return self._wrap(conn, {"items": text_out(reads.trades(conn, a.isin, a.account))})
+
+    def settings(self, _a: NoArgs, caller: ToolCaller) -> dict[str, Any]:
+        today = self.host.today()
+        month = period.month_of(today)
+        start, end = period.bounds(month)
+        with self.engine.connect() as conn:
+            rules = period_kinds.rules_read(conn)
+            return self._wrap(
+                conn,
+                {
+                    "month_start_day": period.start_day(month),
+                    "current_month": month,
+                    "current_period": {"start": start.isoformat(), "end": end.isoformat()},
+                    "rules": [{"valid_from": v, "start_day": d} for v, d in dict(rules).items()],
+                },
+            )
+
     def propose_note(self, a: ProposeNoteArgs, caller: ToolCaller) -> dict[str, Any]:
         return caller.propose("add_note", {"entry_id": a.entry_id, "text": a.note}, None)
 
@@ -251,8 +328,50 @@ class RegistreTools(ToolBox):
                 self.search,
             ),
             tool(
+                "finance_entries",
+                "Écritures d'un compte, d'un mois ou d'une catégorie (au plus 50, les plus "
+                "récentes), ou celles sans catégorie.",
+                _obj(
+                    {
+                        "account": ACCOUNT_PROP,
+                        "month": MONTH_PROP,
+                        "category": {"type": "string"},
+                        "uncategorized": {"type": "boolean"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": SEARCH_LIMIT},
+                    }
+                ),
+                READ,
+                EntriesArgs,
+                self.entries,
+            ),
+            tool(
+                "finance_entry",
+                "Une écriture en détail : catégorisations, notes, corrections.",
+                _obj({"entry_id": ENTRY_PROP}, ["entry_id"]),
+                READ,
+                EntryArgs,
+                self.entry,
+            ),
+            tool(
+                "finance_trades",
+                "Achats et ventes d'un actif (ISIN ou symbole), par compte si demandé.",
+                _obj({"isin": {"type": "string"}, "account": ACCOUNT_PROP}, ["isin"]),
+                READ,
+                TradesArgs,
+                self.trades,
+            ),
+            tool(
+                "finance_settings",
+                "Le mois budgétaire : jour où il commence, mois en cours et ses dates, règles "
+                "datées.",
+                NONE,
+                AGGREGATES,
+                NoArgs,
+                self.settings,
+            ),
+            tool(
                 "finance_propose_note",
-                "Propose une note libre sur une écriture (un TWINT entre particuliers…) ; rien "
+                "Propose une note libre sur une écriture (un paiement entre particuliers…) ; rien "
                 "n'est appliqué.",
                 _obj(
                     {"entry_id": ENTRY_PROP, "note": {"type": "string", "maxLength": 500}},

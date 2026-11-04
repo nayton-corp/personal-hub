@@ -74,6 +74,7 @@ def trade(conn: Connection, account: catalog.Account, on: str, qty: str, amount:
 
 def price(conn: Connection, on: str, value: str) -> None:
     assets.upsert_instrument(conn, FUND, "Fonds test", kind="fund", currency="CHF")
+    assets.upsert_instrument(conn, FUND, None, kind="stock")  # m13 : un type connu reste
     assets.add_price(conn, FUND, on, Decimal(value), "CHF", "test", None)
 
 
@@ -195,15 +196,51 @@ def test_period_inside_history(fin: FinanceDomain, fund: catalog.Account) -> Non
 
 
 def test_values_match_the_valuation(fin: FinanceDomain, banks: Any, fund: catalog.Account) -> None:
+    """Un seul calcul (audit C2) : chaque jour, la somme des lignes est le patrimoine, et la
+    valeur à une date est celle de la série."""
+    eur = ref(fin, "test:eur", "cash", currency="EUR")
+    open_account(fin, eur, "2026-02-01", 100_000)
+    with begin_immediate(fin.engine()) as conn:
+        assets.add_fx(conn, "2026-02-10", "EUR", "CHF", Decimal("0.95"), "test")
     with fin.engine().connect() as conn:
         eng = perf_lines.build(conn, "2026-03-31")
         assert eng is not None
-        for on in ("2026-01-15", "2026-01-31", "2026-03-05", "2026-03-31"):
-            k = eng.index(on)
+        for k, on in enumerate(eng.days):
+            nofx = eng.missing_fx.get(k, ())
             total = sum(
-                ln.value[k] for ln in eng.lines.values() if ln.value[k] != perf_lines.ABSENT
+                ln.value[k]
+                for ln in eng.lines.values()
+                if ln.value[k] != perf_lines.ABSENT and ln.account_id not in nofx
             )
-            assert total == valuation.value_at(conn, on).net_worth
+            v = valuation.value_at(conn, on)
+            assert total == v.net_worth == sum(v.by_account.values())
+            assert (eur.id in v.missing_fx) == (
+                "2026-02-01" <= on < "2026-02-10"
+            )  # rien à convertir avant
+        assert [x.net_worth for x in valuation.series(conn, list(eng.days))] == [
+            valuation.value_at(conn, on).net_worth for on in eng.days
+        ]
+
+
+def test_the_series_is_frozen_and_kept_until_something_changes(
+    fin: FinanceDomain, banks: Any
+) -> None:
+    """Des lecteurs en même temps, aucun ne change la série (audit m4) ; elle est gardée tant
+    que rien n'a bougé, et une série plus longue sert une date antérieure."""
+    with fin.engine().connect() as conn:
+        eng = perf_lines.engine_for(conn, "2026-03-31")
+        assert eng is not None
+        ln = next(iter(eng.lines.values()))
+        with pytest.raises(TypeError):
+            ln.value[0] = 1  # type: ignore[index]
+        with pytest.raises(TypeError):
+            ln.missing[0] = 1  # type: ignore[index]
+        assert perf_lines.engine_for(conn, "2026-02-01") is eng
+        assert perf_lines.engine_for(conn, "2026-04-30") is not eng
+    with begin_immediate(fin.engine()) as conn:
+        entry(conn, banks[0], "2026-04-01", 1_000)
+    with fin.engine().connect() as conn:
+        assert perf_lines.engine_for(conn, "2026-03-31") is not eng
 
 
 # --- change, cours manquants ---------------------------------------------------------------------
@@ -237,6 +274,19 @@ def test_first_price_is_a_flow_and_marked(fin: FinanceDomain) -> None:
     assert chf(s["end"]) == 50_000
     assert s["complete"] is False
     assert out["missing"] == [f"{acc.id}|cash"]
+
+
+def test_income_without_exchange_rate_is_marked_not_zeroed(fin: FinanceDomain) -> None:
+    """Un dividende en devise sans change ce jour-là ne vaut pas 0 : la ligne se dit incomplète
+    (audit M6)."""
+    acc = ref(fin, "test:usd-titres", "securities", currency="USD")
+    with begin_immediate(fin.engine()) as conn:
+        trade(conn, acc, "2026-04-01", "5", 50_000)
+        price(conn, "2026-04-01", "100")
+        entry(conn, acc, "2026-04-03", 1_000, code="VIAC/INCOME/DIVIDEND")  # 10 USD, sans change
+    out = run(fin, "2026-04-05")
+    assert out["summary"]["complete"] is False
+    assert f"{acc.id}|cash" in out["missing"]
 
 
 # --- dette ----------------------------------------------------------------------------------------

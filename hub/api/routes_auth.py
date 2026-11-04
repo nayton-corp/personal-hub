@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, Response
+from typing import Annotated
 
-from hub.api.schemas import (
+from fastapi import APIRouter, Path, Request, Response
+
+from hub.api.schemas_auth import (
     ChallengeOut,
+    ConfirmIn,
     LoginFinishIn,
     PasskeyOut,
     PasskeysOut,
@@ -69,11 +72,22 @@ def register_begin(body: RegisterBeginIn, hub_ctx: Ctx, request: Request) -> Cha
     )
     current = _session_from_cookie(hub_ctx, request)
     with hub_ctx.core.engine.begin() as conn:
-        if current is None and not (
-            body.bootstrap_code and sessions.check_bootstrap_code(conn, body.bootstrap_code)
-        ):
+        if current is not None:  # une session seule n'enrôle rien : une passkey en place signe
+            if body.confirm is None:
+                raise Problem("auth.confirm_required")
+            passkeys.confirm(
+                conn, hub_ctx.settings, body.confirm.challenge_id, body.confirm.credential
+            )
+        elif not (body.bootstrap_code and sessions.check_bootstrap_code(conn, body.bootstrap_code)):
             raise Problem("auth.bootstrap_invalid")
         return ChallengeOut(**passkeys.registration_options(conn, hub_ctx.settings))
+
+
+@router.post("/passkey/confirm/begin", response_model=ChallengeOut)
+def confirm_begin(hub_ctx: Ctx, _principal: AppSession) -> ChallengeOut:
+    """Défi qu'une passkey en place signe avant d'en ajouter ou d'en retirer une."""
+    with hub_ctx.core.engine.begin() as conn:
+        return ChallengeOut(**passkeys.confirm_options(conn, hub_ctx.settings))
 
 
 @router.post("/passkey/register/finish", response_model=SessionOut)
@@ -147,3 +161,17 @@ def logout(hub_ctx: Ctx, request: Request, response: Response) -> None:
 def list_passkeys(hub_ctx: Ctx, _principal: AppSession) -> PasskeysOut:
     with hub_ctx.core.engine.connect() as conn:
         return PasskeysOut(items=[PasskeyOut(**p) for p in passkeys.list_all(conn)])
+
+
+@router.delete("/passkeys/{credential_id}", status_code=204)
+def revoke_passkey(
+    credential_id: Annotated[str, Path(max_length=200)],
+    body: ConfirmIn,
+    hub_ctx: Ctx,
+    principal: AppSession,
+) -> None:
+    """Retire une passkey (jamais la dernière) sous Face ID d'une passkey en place ; ses
+    sessions sont fermées, la sienne comprise."""
+    with hub_ctx.core.engine.begin() as conn:
+        passkeys.confirm(conn, hub_ctx.settings, body.challenge_id, body.credential)
+        passkeys.revoke(conn, credential_id, principal.actor)

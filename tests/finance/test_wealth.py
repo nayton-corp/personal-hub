@@ -19,6 +19,7 @@ from hub.core.context import HubContext
 from hub.core.registry import Registry
 from hub.domains.finance.classement.app import insights, recurring, rules
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.packs import ch
 from hub.domains.finance.patrimoine.app import holdings, lookthrough, transfers, valuation
 from hub.domains.finance.patrimoine.infra import composition
 from hub.domains.finance.registre.app import catalog, ledger
@@ -242,6 +243,25 @@ def test_foreign_cash_account_uses_fx(finance: FinanceDomain) -> None:
     assert (v.net_worth, v.deposits, v.missing_fx) == (9_000, 9_000, [])
 
 
+def test_deposits_are_converted_at_their_own_date(finance: FinanceDomain) -> None:
+    """Audit M1 : un versement en devise vaut ce qu'il valait le jour où il est entré, pas au
+    change du jour de la valorisation ; un versement d'un jour sans change attend le premier."""
+    eur = add_ref(finance, "revolut:EUR", "cash", "Revolut EUR", "EUR")
+    open_account(finance, eur, "2026-09-20", 10_000)  # avant tout cours de change
+    fx = [
+        {"on_date": "2026-10-01", "base": "EUR", "quote": "CHF", "rate": "0.9", "source": "ecb"},
+        {"on_date": "2026-10-20", "base": "EUR", "quote": "CHF", "rate": "1.1", "source": "ecb"},
+    ]
+    finance.importer.process([Incoming("fx.json", market_doc(fx=fx))])
+    with finance.engine().connect() as conn:
+        before = valuation.value_at(conn, "2026-09-25")
+        first = valuation.value_at(conn, "2026-10-05")
+        later = valuation.value_at(conn, "2026-10-27")
+    assert (before.net_worth, before.deposits, before.missing_fx) == (0, 0, [eur.id])
+    assert (first.net_worth, first.deposits) == (9_000, 9_000)  # entré au premier change connu
+    assert (later.net_worth, later.deposits) == (11_000, 9_000)  # la hausse est un effet marché
+
+
 # --- positions saisies à la main ---------------------------------------------------------------
 
 POSITIONS = (
@@ -320,6 +340,31 @@ def test_deposits_ignore_off_ledger_purchases(finance: FinanceDomain) -> None:
     with finance.engine().connect() as conn:
         v = valuation.value_at(conn, "2026-10-27")
     assert (v.net_worth, v.deposits) == (400_000, 500_000)
+
+
+def test_deposits_skip_both_sides_of_a_matched_transfer(finance: FinanceDomain) -> None:
+    """Audit M2 : un virement apparié entre mes comptes n'est pas un versement, même si une règle
+    « tout le reste » a classé un de ses côtés en dépense."""
+    without_seed_rules(finance)
+    bcf = add_account(finance)
+    savings = add_account(finance, iban="CH5604835012345678009")
+    open_account(finance, bcf, "2026-09-30", 500_000)
+    open_account(finance, savings, "2026-09-30", 100_000)
+    with begin_immediate(finance.engine()) as conn:
+        a = _entry(conn, bcf, "2026-10-02", -50_000, iban="CH5604835012345678009")
+        _entry(conn, savings, "2026-10-03", 50_000, iban=IBAN)
+        rules.categorize(  # classé à tort en dépense : le lien l'emporte
+            conn,
+            a,
+            rules.Rule("system-viac-trade", "search_text", "x", "any", "alimentation", 99, True),
+            proposal_id=None,
+            created_at="2026-10-02T00:00:00.000Z",
+        )
+    finance.refresh_derived()
+    assert rows(finance, "SELECT count(*) FROM transfer_links") == [(1,)]
+    with finance.engine().connect() as conn:
+        v = valuation.value_at(conn, "2026-10-27")
+    assert (v.net_worth, v.deposits) == (600_000, 600_000)
 
 
 def test_crypto_performance_from_bank_payments_and_arrivals(finance: FinanceDomain) -> None:
@@ -412,7 +457,7 @@ def test_issuer_holdings_list(finance: FinanceDomain) -> None:
     region = {w.bucket: w.weight for w in comp.weights if w.dimension == "region"}
     assert region == {
         composition.NORTH_AMERICA: Decimal("0.5"),
-        composition.SWITZERLAND: Decimal("0.1"),
+        ch.PACK.regions.home: Decimal("0.1"),
         composition.JAPAN: Decimal("0.4"),
     }
     sector = {w.bucket for w in comp.weights if w.dimension == "sector"}
@@ -452,14 +497,14 @@ def test_generic_composition_and_breakdown(finance: FinanceDomain) -> None:
         ]
     )
     with finance.engine().connect() as conn:
-        out = lookthrough.breakdown(conn, "region", "2026-10-27")
-        cur = lookthrough.breakdown(conn, "currency", "2026-10-27")
-        top = lookthrough.breakdown(conn, "holding", "2026-10-27")
+        out = lookthrough.breakdown(conn, "region", "2026-10-27", ch.PACK)
+        cur = lookthrough.breakdown(conn, "currency", "2026-10-27", ch.PACK)
+        top = lookthrough.breakdown(conn, "holding", "2026-10-27", ch.PACK)
     items = {i["bucket"]: i["value"]["minor"] for i in out["items"]}
     # fonds : 1000 → 700 / 200 / 100 non ventilé ; Apple 400 non ventilé ; ETH 4500 crypto
     assert items == {
         composition.NORTH_AMERICA: 70_000,
-        composition.EUROPE: 20_000,
+        ch.PACK.regions.europe: 20_000,
         composition.CRYPTO: 450_000,
         composition.UNKNOWN: 50_000,
     }
@@ -474,10 +519,21 @@ def test_generic_composition_and_breakdown(finance: FinanceDomain) -> None:
     assert out["covered"] == "0.1695"
     assert {i["bucket"] for i in cur["items"]} == {"USD", "CHF"}
     assert top["items"][0]["bucket"] == "Ethereum"
-    # une composition plus ancienne ne remplace pas la plus récente
+    # une composition plus ancienne ne remplace pas la plus récente : elle s'ajoute à
+    # l'historique (m16), et sert aux dates d'avant la plus récente
     older = generic.replace(b"2026-09-30", b"2026-01-31").replace(b",70,", b",60,")
     finance.importer.process([Incoming("vieille.csv", older)])
     assert rows(finance, "SELECT max(on_date) FROM compositions") == [("2026-09-30",)]
+    assert rows(finance, "SELECT count(DISTINCT on_date) FROM compositions") == [(2,)]
+    with finance.engine().connect() as conn:
+        comps, dates = lookthrough.compositions_at(conn, "region", "2026-06-30")
+        latest, _d = lookthrough.compositions_at(conn, "region", "2026-10-27")
+        first, _d = lookthrough.compositions_at(conn, "region", "2025-12-31")
+    assert dates[WORLD] == "2026-01-31"
+    assert dict(comps[WORLD])[composition.NORTH_AMERICA] == Decimal("0.6")
+    assert dict(latest[WORLD])[composition.NORTH_AMERICA] == Decimal("0.7")
+    assert dict(first[WORLD])[composition.NORTH_AMERICA] == Decimal("0.6")  # la première
+    finance.importer.process([Incoming("encore.csv", older)])  # relue : doublon
 
 
 # --- virements appariés et abonnements ---------------------------------------------------------

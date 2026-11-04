@@ -27,7 +27,9 @@ passerelle MCP) reste une bibliothèque du hub ; l'assistant l'installe à côt�
   modèle résident (un seul modèle chargé) : pour un commerçant qui n'a encore aucune
   écriture catégorisée, le modèle choisit une catégorie de la liste et donne sa raison en une
   ligne. Chaque écriture devient une carte « À valider » dans l'app, avec la raison. Une écriture
-  n'est suggérée qu'une fois : une carte refusée ne revient pas.
+  n'est suggérée qu'une fois : une carte refusée ne revient pas. Le contexte (« d'un compte
+  bancaire suisse »), ce que contient chaque catégorie et la règle du paiement mobile viennent
+  du pack pays, publié par `/profile` (`packs.finance`).
 - **Sentinelles** (dans le hub, pas dans le brain, sans modèle) : chaque nuit, budget dépassé ou
   qui va l'être, abonnement en hausse, marge 3a pas encore versée en novembre et décembre. Elles
   apparaissent dans « À traiter » et arrivent par ntfy avec un texte générique (ni montant, ni nom
@@ -38,8 +40,18 @@ passerelle MCP) reste une bibliothèque du hub ; l'assistant l'installe à côt�
 
 | Jeton | Portées | Pour | Voit |
 |---|---|---|---|
-| `brain` | `finance:read finance:propose` | le classement du matin (modèle local) | les 16 outils : totaux, écritures, recherche, propositions |
-| `aggregates` | `*:aggregates` | la conversation de l'assistant, un client MCP | 7 outils de totaux, jamais une écriture |
+| `brain` | `finance:read finance:propose` | le classement du matin (modèle local) | les 47 outils : totaux, écritures, recherche, une proposition par type du Double Sas |
+| `aggregates` | `*:aggregates` | la conversation de l'assistant, un client MCP | 20 outils de totaux (budget, flux, patrimoine, performance, ruptures, dettes), jamais une écriture |
+
+Les outils sont à parité avec l'app (audit M11) : chaque route de lecture de la Finance a son
+outil (`ROUTE_TOOLS` dans `hub/domains/finance/tools.py` ; seuls l'export CSV et le détail d'un
+import restent à l'app), et chaque type de proposition ouvert à l'assistant (tous sauf
+`apply_import`) a le sien : écrit à la main quand ses arguments méritent d'être plus simples
+(`finance_propose_category`, `_categories`, `_rule`, `_budget`, `_note`), sinon engendré de son
+modèle de paramètres (`finance_propose_<type>`, avec `reason`). Un test tient cette parité ; la
+liste complète est dans [docs/reference/outils.md](reference/outils.md). Une seule boucle
+d'agent (audit M12) : celle de l'assistant ; `hub-brain check` ne fait qu'un tour de
+conversation et vérifie que le modèle demande le bon outil.
 
 Avec le jeton `aggregates`, une catégorie ou un mois qui compte moins de 3 écritures est fondu
 dans « autres » ou masqué : un total ne révèle pas une transaction. Aucun outil ne renvoie

@@ -51,6 +51,7 @@ class SaveDebt(Params):
     currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")  # à la création
     original_minor: Amount | None = None  # montant emprunté ; 0 efface
     rate_pct: RatePct | None = None  # taux annuel en % ; "0" : sans intérêt
+    day_count: Literal["act/365", "act/360", "30/360"] | None = None  # décompte des intérêts
     payment_minor: Amount | None = None  # mensualité ; 0 efface
     ends_on: Clearable | None = None
     category_id: Annotated[str, Field(pattern=r"^([a-z0-9][a-z0-9-]{1,40})?$")] | None = None
@@ -87,6 +88,7 @@ class SaveDebtHandler:
         "currency",
         "original_minor",
         "rate",
+        "day_count",
         "payment_minor",
         "ends_on",
         "category_id",
@@ -133,6 +135,8 @@ class SaveDebtHandler:
         if p.rate_pct is not None:
             rate = Decimal(p.rate_pct) / 100
             out["rate"] = str(rate.normalize()) if rate else None
+        if p.day_count is not None:
+            out["day_count"] = p.day_count
         for col in ("ends_on", "closed_on"):
             v = getattr(p, col)
             if v is not None:
@@ -168,6 +172,7 @@ class SaveDebtHandler:
         wanted = self._wanted(conn, p)
         if p.debt_id is None:
             wanted["currency"] = wanted.get("currency") or base_currency()
+            wanted.setdefault("day_count", debts.DEFAULT_DAY_COUNT)
             on, amount, _entry = self.opening(conn, p, wanted["currency"])
             if amount <= 0:
                 raise bad("solde de départ nul")
@@ -255,10 +260,7 @@ class RecordDebtBalanceHandler:
         return row
 
     def _before(self, conn: Connection, p: RecordDebtBalance) -> int | None:
-        return conn.execute(
-            text("SELECT amount_minor FROM debt_balances WHERE debt_id = :i AND on_date = :d"),
-            {"i": p.debt_id, "d": p.on_date},
-        ).scalar_one_or_none()
+        return debts.stated_on(conn, p.debt_id, p.on_date)
 
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, RecordDebtBalance)  # noqa: S101

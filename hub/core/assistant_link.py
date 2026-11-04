@@ -2,7 +2,9 @@
 
 L'app ne joint jamais l'assistant elle-même : elle passe par le hub, qui garde la session et
 le seul chemin réseau (`host.docker.internal`). Le hub relaie la phrase, l'historique et le son,
-sans rien garder. Transport remplaçable pour les tests.
+sans rien garder. Il se présente à l'assistant avec son jeton (`secrets.enc.yaml`, section
+`assistant`, clé `token`) : l'assistant en déduit pour qui le hub parle, le hub ne nomme jamais
+la personne. Transport remplaçable pour les tests.
 """
 
 from __future__ import annotations
@@ -14,8 +16,11 @@ import urllib.request
 from collections.abc import Callable
 from typing import Any
 
-# (méthode, url, corps, type du corps, délai en secondes) -> (statut, corps)
-Transport = Callable[[str, str, bytes | None, str, int], tuple[int, bytes]]
+from hub.platform import secrets
+from hub.platform.settings import Settings
+
+# (méthode, url, corps, en-têtes, délai en secondes) -> (statut, corps)
+Transport = Callable[[str, str, bytes | None, dict[str, str], int], tuple[int, bytes]]
 TALK_SECONDS = 120  # un modèle local peut réfléchir longtemps
 READ_SECONDS = 10
 
@@ -27,10 +32,10 @@ class AssistantError(RuntimeError):
 
 
 def urllib_transport(
-    method: str, url: str, data: bytes | None, mime: str, timeout: int
+    method: str, url: str, data: bytes | None, headers: dict[str, str], timeout: int
 ) -> tuple[int, bytes]:  # pragma: no cover - réseau
     request = urllib.request.Request(  # noqa: S310 - adresse des réglages
-        url, data=data, method=method, headers={"Content-Type": mime}
+        url, data=data, method=method, headers=headers
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
@@ -39,10 +44,24 @@ def urllib_transport(
         return exc.code, exc.read()
 
 
+def token(settings: Settings) -> str | None:
+    """Le jeton que le hub présente à l'assistant ; None sans secrets ou sans la clé."""
+    try:
+        value = secrets.section(
+            settings.secrets.file, settings.secrets.age_key_file, "assistant"
+        ).get("token")
+    except secrets.SecretsError:
+        return None
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
 class AssistantLink:
-    def __init__(self, base_url: str | None, transport: Transport | None = None) -> None:
+    def __init__(
+        self, base_url: str | None, transport: Transport | None = None, token: str | None = None
+    ) -> None:
         self.base = base_url.rstrip("/") if base_url else None
         self.transport = transport or urllib_transport
+        self._token = token
 
     @property
     def configured(self) -> bool:
@@ -58,8 +77,11 @@ class AssistantLink:
     ) -> dict[str, Any]:
         if not self.base:
             raise AssistantError("unconfigured", "aucun assistant configuré")
+        headers = {"Content-Type": mime}
+        if self._token:
+            headers["Authorization"] = f"Bearer {self._token}"
         try:
-            status, raw = self.transport(method, self.base + path, data, mime, timeout)
+            status, raw = self.transport(method, self.base + path, data, headers, timeout)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise AssistantError("unreachable", type(exc).__name__) from None
         try:
@@ -74,17 +96,16 @@ class AssistantLink:
     def health(self) -> dict[str, Any]:
         return self._call("GET", "/health")
 
-    def history(self, person: str | None, days: int, limit: int) -> dict[str, Any]:
+    def history(self, days: int, limit: int) -> dict[str, Any]:
         query = {"days": str(days), "limit": str(limit)}
-        if person:
-            query["person"] = person
         return self._call("GET", "/history?" + urllib.parse.urlencode(query))
 
-    def talk(self, text: str, person: str | None) -> dict[str, Any]:
-        body = {"text": text, "person": person, "client": "hub"}
+    def talk(self, text: str, confirm: str | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {"text": text, "client": "hub"}
+        if confirm:
+            body["confirm"] = confirm  # un oui ne joue que la question qui porte ce jeton
         return self._call("POST", "/talk", json.dumps(body).encode(), timeout=TALK_SECONDS)
 
-    def voice(self, audio: bytes, mime: str, person: str | None) -> dict[str, Any]:
-        query = {"client": "hub", **({"person": person} if person else {})}
-        path = "/voice?" + urllib.parse.urlencode(query)
+    def voice(self, audio: bytes, mime: str) -> dict[str, Any]:
+        path = "/voice?" + urllib.parse.urlencode({"client": "hub"})
         return self._call("POST", path, audio, mime, TALK_SECONDS)

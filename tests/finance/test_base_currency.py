@@ -97,9 +97,9 @@ def test_a_euro_hub_values_in_euros(euro: FinanceDomain) -> None:
 
 def test_a_budget_is_in_the_base_currency(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HUB_CURRENCY", "EUR")
-    assert budget_kinds.SetBudget(category_id="loisirs", monthly_minor=1).currency == "EUR"
+    assert budget_kinds.SetBudget(category_id="loisirs", amount_minor=1).currency == "EUR"
     with pytest.raises(ValidationError):
-        budget_kinds.SetBudget(category_id="loisirs", monthly_minor=1, currency="CHF")
+        budget_kinds.SetBudget(category_id="loisirs", amount_minor=1, currency="CHF")
 
 
 def test_rows_of_a_euro_hub(euro: FinanceDomain) -> None:

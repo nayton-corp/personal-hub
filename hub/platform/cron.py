@@ -1,7 +1,9 @@
 """Planificateur minimal : crontab à cinq champs, exécutée dans le conteneur `scheduler`.
 
 Même fichier sur le Mac et sur le Pi ; aucune dépendance à launchd ni à systemd. On n'a pas
-repris supercronic pour ne pas embarquer un binaire de plus dans l'image.
+repris supercronic pour ne pas embarquer un binaire de plus dans l'image. Les jobs d'un même
+tour se suivent. La dernière minute servie est notée dans un fichier d'état : au redémarrage,
+chaque job manqué pendant l'arrêt (au plus un jour en arrière) est rejoué une fois (audit m18).
 """
 
 from __future__ import annotations
@@ -92,6 +94,19 @@ def parse(text: str) -> list[Job]:
 
 
 Runner = Callable[[tuple[str, ...]], int]
+CATCH_UP = timedelta(days=1)  # un arrêt plus long ne rejoue pas plus loin
+
+
+def missed(jobs: list[Job], since: datetime, until: datetime) -> list[Job]:
+    """Les jobs dus entre `since` (exclue) et `until` (exclue), chacun une fois, dans l'ordre de
+    la crontab ; au plus `CATCH_UP` en arrière."""
+    start = max(since, until - CATCH_UP).replace(second=0, microsecond=0)
+    found: list[Job] = []
+    at = start + timedelta(minutes=1)
+    while at < until:
+        found += [j for j in jobs if j not in found and j.due(at)]
+        at += timedelta(minutes=1)
+    return found
 
 
 def _run(command: tuple[str, ...]) -> int:
@@ -108,12 +123,33 @@ def tick(jobs: list[Job], at: datetime, runner: Runner = _run) -> list[tuple[str
     return results
 
 
-def run_forever(crontab: Path, tz: str | None = None) -> None:  # pragma: no cover - boucle
+def _last_served(state: Path | None) -> datetime | None:
+    try:
+        return datetime.fromisoformat(state.read_text().strip()) if state else None
+    except (OSError, ValueError):
+        return None
+
+
+def run_forever(
+    crontab: Path, tz: str | None = None, state: Path | None = None
+) -> None:  # pragma: no cover - boucle
+    """`state` : fichier de la dernière minute servie (rattrapage au redémarrage)."""
     jobs = parse(crontab.read_text())
     zone = ZoneInfo(tz) if tz else local_tz()
-    log.info("scheduler.start", jobs=len(jobs))
+    last = _last_served(state)
+    log.info("scheduler.start", jobs=len(jobs), last_served=last.isoformat() if last else None)
     while True:
         now = datetime.now(zone)
         nxt = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
         time.sleep(max(timedelta(0), nxt - now).total_seconds())
+        if last is not None:
+            for job in missed(jobs, last, nxt):
+                code = _run(job.command)
+                log.info("scheduler.catch_up", command=job.command[0:3], exit_code=code)
         tick(jobs, nxt)
+        last = nxt
+        if state is not None:
+            try:
+                state.write_text(nxt.isoformat())
+            except OSError as exc:
+                log.warning("scheduler.state_unwritable", error=type(exc).__name__)

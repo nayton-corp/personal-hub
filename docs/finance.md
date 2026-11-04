@@ -28,7 +28,11 @@ alias fin='hubc run --rm --no-deps importer hub finance'
 ## L'app (lot 2)
 
 L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes de
-`/api/finance` ; chaque chiffre est calculé côté serveur, en centimes.
+`/api/finance` ; chaque chiffre est calculé côté serveur, en centimes. Chaque route déclare la
+forme de sa réponse (`<sous-contexte>/interface/schemas.py`, dans l'OpenAPI) ; un champ rendu
+sans être déclaré passe, et `tests/finance/test_api_contracts.py` le signale. L'app lit ces
+formes dans `hub/web/api.d.ts` (généré par `make openapi`), que `// @ts-check` vérifie module
+par module (`make web`).
 
 | Route | Ce qu'elle donne |
 |---|---|
@@ -41,16 +45,15 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
 | `entries?account=&category=&from=&to=&direction=in\|out&min_minor=&max_minor=&q=&sort=date\|amount` | le journal filtré : compte, catégorie, dates, sens, montant absolu en centimes, texte (3 lettres au moins) ; tri par date ou par plus gros montant |
 | `review` | écritures sans catégorie groupées par contrepartie : nombre, total, sens, comptes, première et dernière date, plus petit et plus gros montant, libellés, communications, codes bancaires et les 10 dernières écritures |
 | `budget` (suite) | une catégorie suivie à l'année (`set_budget` avec `cadence: year`) porte `yearly` : cible annuelle, cumul depuis janvier ; elle sort de `budget`, `budgeted_expenses` et `rest_to_live` |
-| `settings` | `month_start_day` (1 à 28), mois budgétaire en cours et ses dates ; `POST` (session passkey) change le jour |
-| `budget?month=&period=m\|q` | réel et cible par catégorie de dépense, dépassements, reste à vivre |
+| `settings` | `month_start_day` (1 à 28) du mois en cours, mois budgétaire en cours et ses dates, règles datées (`rules`) ; le jour se change par la proposition `set_month_start` |
+| `budget?month=&period=m\|q` | réel et cible par catégorie de dépense, dépassements, reste à vivre ; par ligne `state` (`untracked`, `over`, `likely_over`, `paid`, `ok`), `projected` (fin de période, en cours seulement) et `rest` ; sur la période `current`, `pace` (part écoulée), `expected` (part du budget attendue à ce jour), `projection`, `state` (`no_budget`, `closed_ok`, `closed_over`, `over`, `likely_over`, `on_pace`, avec `over_by`) : la règle de `classement/model/pace.py`, la même que les sentinelles, le front n'en calcule aucun ; `missing_fx` liste les écritures en devise sans change ce jour-là, laissées de côté |
 | `budget/totals?month=&period=m\|q` | revenus, dépenses fixes et variables, épargne, placements, taux |
 | `budget/months?month=&months=6` | les mêmes totaux, mois par mois (graphique Tendance) |
-| `breaks` | soldes non expliqués d'aujourd'hui (rapprochement) : compte, actif, parts, valeur, cause, et leur total ; règle dans [finance-politique.md](finance-politique.md) |
-| `breaks/decide` | `POST` (session passkey) : classe une rupture (`cost` avec `cost_minor`, `accept`, `gone`) |
+| `breaks` | soldes non expliqués d'aujourd'hui (rapprochement) : compte, actif, parts, valeur, cause, et leur total ; une fenêtre d'historique non lue (`source_gap`) donne `since` et `until` ; règle dans [finance-politique.md](finance-politique.md) |
 | `export.csv?from=&to=` | journal complet en CSV (session passkey seulement) |
 
 - **Mois.** Le mois affiché est toujours un paramètre ; l'app part du mois budgétaire en cours dans le fuseau de l'instance (`HUB_TZ`, Zurich par défaut).
-  Le mois budgétaire commence le jour choisi dans les réglages (1 par défaut, table `budget_period`). Après le 15, il porte le nom du mois où il finit : début le 25, « novembre » va du 25 octobre au 24 novembre. Budget, flux, tendance, sentinelles et outils suivent tous ce découpage.
+  Le mois budgétaire commence le jour choisi dans les réglages (1 par défaut) : une règle datée (table `budget_period_rules`, proposition `set_month_start`) vaut pour les mois à partir de son mois, les mois d'avant gardent leur découpage. Après le 15, il porte le nom du mois où il finit : début le 25, « novembre » va du 25 octobre au 24 novembre. Budget, flux, tendance, sentinelles et outils suivent tous ce découpage.
   `period=q` couvre les trois mois complets avant le mois choisi. Un mois futur est refusé.
 - **Virements.** Deux écritures de même montant entre deux de mes comptes sont appariées (IBAN, code de virement, ou même établissement à un jour d'écart pour le compte Revolut et ses poches). Un côté apparié sans catégorie, ou classé seulement par une règle « tout le reste », compte comme « Virement entre mes comptes » (vue `v_entry_shown`).
 - **Règle d'un compte.** `create_rule` avec `account_id` limite la règle à ce compte ; son motif peut être vide (« tout débit de la poche Vacances → Vacances »).
@@ -66,6 +69,15 @@ L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes 
   les titres VIAC, valorisés par leurs positions (lot 4).
 - **3e pilier.** Plafond 2026 : 7'258 CHF. Une autre valeur se règle dans `settings.toml`,
   section `[finance]`, clé `pillar3a_cap_minor` (en centimes).
+- **Seuils.** Dans la même section (audit m2), en devise de base ou en jours :
+  `tolerance_minor` (rupture du rapprochement ignorée en dessous ; 1 unité de la devise de base
+  sans réglage), `stale_account_days` (45 : compte à rafraîchir), `stale_price_days` (14) et
+  `stale_crypto_price_days` (3 : cours ancien), `stale_fx_days` (7 : change ancien),
+  `quantity_epsilon` (`1e-9` : reste d'arrondi d'une quantité tenu pour zéro),
+  `event_floor_minor`, `event_share_pct` et `event_income_floor_minor` (1 500, 4 % de la
+  veille, 10 : seuils des événements de la courbe de performance, audit m16).
+- **Compositions versionnées.** Chaque composition de fonds importée est gardée avec sa date
+  (audit m16) ; la transparence à une date lit la dernière composition connue à cette date.
 
 ## Reprendre l'historique (L1-11)
 
@@ -108,7 +120,9 @@ jamais une écriture que tu as catégorisée toi-même.
 `hub/domains/finance/classement/app/packs/` : `base` (mots génériques et services internationaux) et le pack
 du pays du profil (`ch` pour la Suisse : commerces, transports, caisses maladie, opérateurs,
 prestataires 3a). Une base créée avant les packs garde ses règles `seed-` et n'en reçoit
-aucun sans qu'on le demande.
+aucun sans qu'on le demande. Le reste de ce que la finance sait du pays (libellés de carte
+de la banque, localités, plafonds 3a, consignes de l'IA, régions des fonds, pictogrammes des
+commerçants) est dans le pack pays `hub/domains/finance/packs/ch.py`.
 
 ```
 fin rules packs list                       # packs livrés et version installée
@@ -123,19 +137,10 @@ as désactivée le reste ; une nouvelle version d'un pack désactive les règles
 export contient tes mots-clés : il reste hors du dépôt.
 
 **Reprise de l'ancien script.** Sur une base d'avant les packs, les règles de
-`bcf_aggregate.py` sont déjà en base (préfixe `seed-`) ; reprends en plus ton fichier de
-règles, une fois :
-
-```
-mkdir -p ~/PersonalHub/inbox/rules
-cp ~/Downloads/viac_out/bcf_rules.json ~/PersonalHub/inbox/rules/
-fin rules import-legacy /srv/hub/inbox/rules/bcf_rules.json
-rm -r ~/PersonalHub/inbox/rules
-```
-
-La sortie ne donne que des compteurs (règles ajoutées, gardées, désactivées, catégories
-créées, écritures catégorisées). Une règle `seed-` ou `legacy-` absente du fichier est
-désactivée ; tes IBAN propres sont ignorés (les virements internes ont leurs règles
+`bcf_aggregate.py` sont déjà en base (préfixe `seed-`) ; le fichier de règles personnel se
+reprend, une fois, par un script hors du hub (`scripts/legacy_rules.py <fichier.json>`, dans
+le conteneur), qui n'affiche que des compteurs. Une règle `seed-` ou `legacy-` absente du
+fichier est désactivée ; les IBAN propres sont ignorés (les virements internes ont leurs règles
 système). `fin rules list [--all]` montre les règles, `fin rules run` les rejoue.
 
 **Double Sas.** Rien ne change au registre sans une proposition validée. L'app montre
@@ -149,13 +154,21 @@ règle qui sert aussi aux prochains imports.
 | Proposition | Effet | Inverse |
 |---|---|---|
 | `recategorize` | catégorie d'une écriture (ou ventilation en lignes) | oui |
+| `correct_entry` | montant, date ou compte d'une écriture (`reason` obligatoire) : une annulation (`kind` `correction`, le montant opposé, `corrects_seq`) puis une remplaçante, la catégorie suivant ; l'original reste et porte ses corrections ; refusée pour une ouverture, une annulation ou une écriture déjà corrigée | oui (corrige la remplaçante avec les valeurs d'origine) |
 | `create_rule` · `disable_rule` | règle, appliquée tout de suite à ce qu'elle peut toucher | — |
-| `set_budget` | cible mensuelle d'une catégorie de dépense, dès le 1er du mois | oui |
+| `set_budget` | cible d'une catégorie de dépense, `amount_minor` tel que saisi avec sa `cadence` (`month` ou `year`, l'annuel n'est plus divisé par douze), dès le 1er du mois | oui |
 | `add_note` | note sur une écriture | — |
 | `apply_import` | applique un relevé en attente dont les motifs se forcent | — |
 | `set_account_goal` | objectif d'un compte (filtre « Objectif » du patrimoine) | — |
 | `edit_account` | réglages d'un compte dans l'app : nom, objectif, disponibilité, catégorie (`auto` rend la déduction par type), masqué | — |
 | `create_account` · `create_category` | comptes et catégories (le CLI passe par là) | — |
+| `set_month_start` | jour où commence le mois budgétaire, pour les mois dès `valid_from` (le mois en cours par défaut) | oui |
+| `decide_break` | règle une rupture du rapprochement : `cost` (avec `cost_minor`), `accept`, `gone` ; l'assistant peut la proposer | oui (`withdraw_break_decision` : une ligne de retrait, la rupture se rouvre) |
+| `link_crypto_moves` | relie deux mouvements crypto : `transfer` (une arrivée et l'envoi d'un autre de mes comptes) ou `stake` (un envoi et le claim qui l'a rendu) ; le hub la demande quand une fenêtre de quelques jours ou un claim dans les 60 jours le laisse deviner, l'assistant peut la proposer | oui (`unlink_crypto_moves` : une ligne de retrait, le mouvement redevient hors de mes comptes) |
+| `save_debt` · `record_debt_balance` | une dette (taux annuel et convention de décompte des intérêts : `act/365` par défaut, `act/360`, `30/360`) et ses soldes constatés (en ajout seul : le dernier relevé d'un jour fait foi) | — |
+
+Aucune route d'un domaine n'écrit hors de ces propositions (`tests/test_double_sas_everywhere.py`) ;
+une lecture n'écrit pas non plus : le rafraîchissement des instantanés part après la réponse.
 
 Un relevé en attente pour un motif qui se force (`ledger_check_failed`, `near_duplicate`…)
 devient une carte `apply_import` à valider ; il est rejoué avant d'appliquer. Depuis le Mac,
@@ -187,8 +200,10 @@ l'import est appliqué et signale `holdings_mismatch` (parts), `ledger_check_fai
 
 **Valeur et effet marché.** Les titres valent leurs parts (dernier rapport, plus les achats et
 ventes des avis postérieurs) fois le dernier cours connu. Les versements nets sont toutes les
-écritures sauf le rendement et les frais : l'effet marché (valeur moins versements) comprend
-donc la hausse des cours, les dividendes, les intérêts et les commissions. La marge 3a compte
+écritures sauf le rendement et les frais, chacune convertie au change de son jour : l'effet
+marché (valeur moins versements) comprend donc la hausse des cours, les dividendes, les
+intérêts, les commissions et le change. Valeur, performance, résultat des cryptos et
+rapprochement lisent une seule série ([politique de calcul](finance-politique.md#valeur)). La marge 3a compte
 les versements reçus par VIAC (ou, s'ils sont plus élevés, les paiements « Épargne 3a » des
 comptes BCF). `GET /api/finance/holdings?on=` donne les positions (valeur, prix de revient au
 coût moyen, plus-value, poids) ; l'onglet Patrimoine les affiche. `GET /api/finance/trades?isin=`
@@ -297,8 +312,10 @@ collecteur qui dépose les transactions.
 section « Depuis l'achat » du Patrimoine quand la sélection ne contient que des comptes crypto).
 La performance du patrimoine mesure une période : une crypto y entre au cours du jour où le hub
 la voit. Ici chaque crypto a un prix de revient (coût moyen) commun à tous les comptes crypto,
-tiré des écritures (`fx_json` : quantité, crypto, `peer`) : un achat ajoute ce qu'il a coûté,
-une vente retire sa part du coût et réalise la différence, un mouvement apparié entre deux de
+tiré des mouvements (`crypto_moves` : rôle, crypto, parts, txid ; `crypto_links` : l'autre
+côté d'un mouvement, écrit une fois par la source ou par une carte validée, jamais deviné à la
+lecture) : un achat ajoute ce qu'il a coûté,
+une vente retire sa part du coût et réalise la différence, un mouvement relié entre deux de
 mes comptes déplace les parts sans toucher au coût, une récompense entre sans coût, des frais
 retirent des parts sans retirer de coût, une arrivée de l'extérieur coûte sa valeur du jour, un
 envoi vers l'extérieur retire sa part du coût sans gain ni perte. Les parts tenues sans
@@ -328,6 +345,14 @@ chaque jour où un solde bouge devient un relevé complet des positions (cryptos
 attente en `SYM:CHF`), avec le cours du jour tiré du fichier (contre-valeur USD ÷ quantité) et
 le change USD/CHF de ses mouvements en francs. Achat, dépôt, rendement et remise de frais
 créditent le net ; vente, retrait et frais périodiques débitent.
+
+**Binance, paires retirées.** Ce que l'API ne rend plus (une paire retirée comme BTC/BUSD) se
+reprend par l'export « Trade History » de Binance (Commandes → Historique des échanges →
+Exporter, `.csv` avec `Date(UTC),Pair,Side,Price,Executed,Amount,Fee`), déposé tel quel : chaque
+exécution devient un échange du compte `crypto:binance` avec ses frais, une seule fois quelle que
+soit la relecture, valorisé par son prix (en dollar pour un stablecoin). Un frais en BNB attend
+le cours du jour comme les autres opérations. Le collecteur relit d'abord ce qu'il peut : une
+paire déclarée dans `pairs` des secrets est demandée à chaque passage.
 
 Chaque ligne est aussi une opération au registre du compte, en CHF (contre-valeur USD au change
 du jour, le franc tel quel), la quantité en communication, et un mouvement de parts (`trades`)
@@ -372,8 +397,9 @@ la composent et leur part (touche une case de la carte de répartition).
 **Virements appariés.** Un débit et un crédit de mes comptes à 5 jours au plus s'apparient, par
 ordre de confiance : IBAN de contrepartie, référence commune, puis montant seul quand il est
 unique dans la fenêtre. Le côté sans catégorie d'une paire compte comme `transfer-own` dans le
-budget ; un virement entre mes comptes sans autre côté apparaît dans « À traiter ». Route :
-`GET /api/finance/transfers` (compteurs seuls pour la portée `aggregates`).
+budget ; un virement entre mes comptes sans autre côté apparaît dans « À traiter ». Les deux
+côtés d'une paire ne comptent pas comme versements du patrimoine, quelle que soit leur
+catégorie. Route : `GET /api/finance/transfers` (compteurs seuls pour la portée `aggregates`).
 
 **Abonnements.** Les paiements au même commerçant, au même rythme (semaine, mois, trimestre,
 année) et à montant proche deviennent des abonnements, avec leur prochaine échéance et le total
@@ -392,10 +418,11 @@ fichier dans la boîte d'entrée.
 |---|---|
 | `fin accounts add|list|open` | comptes (`add` passe par une proposition `create_account`) ; `open` crée un solde d'ouverture à la main |
 | `fin categories add|list` | catégories, créées par une proposition `create_category` |
-| `fin rules list [--all]` · `fin rules run` · `fin rules import-legacy FICHIER` · `fin rules packs list\|install` · `fin rules export FICHIER` | règles de catégorisation |
+| `fin rules list [--all]` · `fin rules run` · `fin rules packs list\|install` · `fin rules export FICHIER` | règles de catégorisation |
 | `fin imports list [--status …]` · `fin imports retry [ID…]` | suivi et rejeu des imports |
 | `fin watch-inbox --once` | un passage de la boîte d'entrée |
 | `fin verify-ledger` | chaîne et empreintes, code 1 au moindre écart |
 | `fin rebuild-fts` | index de recherche, après une restauration |
 | `fin viac add-portfolio N° --name …` · `fin viac import-history DOSSIER` | comptes et reprise VIAC |
 | `fin rebuild --out DOSSIER` · `fin compare BASE` | reconstruction par rejeu et comparaison |
+| `fin golden save [--as-of JOUR] [--out FICHIER]` · `fin golden check [FICHIER]` | étalon des agrégats (patrimoine, positions, performance, ruptures, budget, dettes) figé avant une mise à jour, vérifié après : code 1 au moindre écart, chaque écart nommé (section, clé, avant, après) ; rien que des chiffres et des identifiants dans le fichier |

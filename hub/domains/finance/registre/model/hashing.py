@@ -47,7 +47,18 @@ FIELDS: dict[str, dict[int, tuple[str, ...]]] = {
     "notes": {1: ("entry_seq", "text", "proposal_id", "created_at")},
     "checkpoints": {1: ("account_id", "on_date", "kind", "amount_minor", "import_id")},
     "budgets": {
-        1: ("category_id", "monthly_minor", "currency", "valid_from", "proposal_id", "created_at")
+        1: ("category_id", "monthly_minor", "currency", "valid_from", "proposal_id", "created_at"),
+        # audit M4 : le montant saisi et sa cadence (le mensuel n'est plus qu'une lecture)
+        2: (
+            "category_id",
+            "monthly_minor",
+            "amount_minor",
+            "cadence",
+            "currency",
+            "valid_from",
+            "proposal_id",
+            "created_at",
+        ),
     },
     "tags": {1: ("id", "name", "kind", "created_at")},
     "taggings": {1: ("entry_seq", "tag_id", "active", "proposal_id", "created_at")},

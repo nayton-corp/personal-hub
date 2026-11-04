@@ -1,12 +1,13 @@
 """Dettes : crédit, hypothèque, leasing, prêt étudiant, carte de crédit (migration 0016).
 
 Une dette n'a pas de relevé. Son solde à une date part du dernier solde constaté
-(`debt_balances` : l'ouverture, puis un relevé du prêteur), gagne les intérêts courus jour par
-jour au taux annuel de la dette (sur 365 jours, sans capitalisation entre deux paiements), puis
-baisse de chaque paiement : les écritures de la catégorie de la dette, depuis son compte de
-paiement s'il est donné, dans la devise de la dette. Un remboursement reçu dans cette catégorie
-(montant positif) la remonte. Le solde ne descend pas sous zéro ; une dette close vaut zéro dès
-sa date de clôture.
+(`debt_balance_records`, en ajout seul : l'ouverture, puis les relevés du prêteur ; le dernier
+relevé d'un même jour fait foi), gagne les intérêts courus jour par
+jour au taux annuel de la dette (selon sa convention de décompte, sans capitalisation entre deux
+paiements), puis baisse de chaque paiement : les écritures de la catégorie de la dette, depuis
+son compte de paiement s'il est donné, dans la devise de la dette. Un remboursement reçu dans
+cette catégorie (montant positif) la remonte. Le solde ne descend pas sous zéro ; une dette
+close vaut zéro dès sa date de clôture.
 
 Le patrimoine retranche le solde, converti dans la devise de base (enveloppe « dettes ») ; il
 compte aussi comme versement, de sorte qu'un remboursement ne passe pas pour un effet marché :
@@ -25,6 +26,7 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.kernel.clock import now_iso
+from hub.kernel.ids import new_id
 from hub.kernel.money import DECIMAL_CONTEXT, Money
 
 KINDS = ("loan", "mortgage", "leasing", "student", "credit", "other")
@@ -38,6 +40,10 @@ KIND_LABEL = {
 }
 KEY_PREFIX = "debt:"  # clé d'une dette dans by_account
 MAX_PROJECTION_MONTHS = 600
+# convention de décompte des intérêts : jours réels sur 365 ou 360, ou mois de trente jours sur
+# une année de 360 (30E/360, l'usage des hypothèques suisses)
+DAY_COUNTS = ("act/365", "act/360", "30/360")
+DEFAULT_DAY_COUNT = "act/365"
 
 
 def key(debt_id: str) -> str:
@@ -58,6 +64,7 @@ class Debt:
     category_id: str | None
     account_id: str | None
     closed_on: str | None
+    day_count: str = DEFAULT_DAY_COUNT
 
 
 @dataclass
@@ -81,7 +88,7 @@ def load(conn: Connection) -> list[Debt]:
     rows = conn.execute(
         text(
             "SELECT id, name, lender, kind, currency, original_minor, rate, payment_minor, "
-            "ends_on, category_id, account_id, closed_on FROM debts ORDER BY name, id"
+            "ends_on, category_id, account_id, closed_on, day_count FROM debts ORDER BY name, id"
         )
     ).fetchall()
     return [
@@ -98,13 +105,28 @@ def load(conn: Connection) -> list[Debt]:
             r[9],
             r[10],
             r[11],
+            r[12],
         )
         for r in rows
     ]
 
 
-def _days(a: str, b: str) -> int:
-    return (date.fromisoformat(b) - date.fromisoformat(a)).days
+def year_fraction(a: str, b: str, day_count: str = DEFAULT_DAY_COUNT) -> Decimal:
+    """La part d'année entre deux dates selon la convention ; 0 au plus (b avant a)."""
+    d1, d2 = date.fromisoformat(a), date.fromisoformat(b)
+    if d2 <= d1:
+        return Decimal(0)
+    if day_count == "30/360":
+        days = (
+            360 * (d2.year - d1.year)
+            + 30 * (d2.month - d1.month)
+            + min(d2.day, 30)
+            - min(d1.day, 30)
+        )
+        return Decimal(days) / 360
+    if day_count == "act/360":
+        return Decimal((d2 - d1).days) / 360
+    return Decimal((d2 - d1).days) / 365
 
 
 def _minor(x: Decimal) -> int:
@@ -122,10 +144,8 @@ class Book:
     @classmethod
     def read(cls, conn: Connection) -> Book:
         book = cls(load(conn))
-        for debt_id, on, amount in conn.execute(
-            text("SELECT debt_id, on_date, amount_minor FROM debt_balances ORDER BY on_date")
-        ):
-            book.stated.setdefault(debt_id, []).append((on, int(amount)))
+        for debt_id, on, amount in stated_balances(conn):
+            book.stated.setdefault(debt_id, []).append((on, amount))
         for d in book.debts:
             if d.category_id is None:
                 continue
@@ -164,7 +184,7 @@ class Book:
                     continue
                 if on > on_date:
                     break
-                accrued = bal * debt.rate * _days(last, on) / 365
+                accrued = bal * debt.rate * year_fraction(last, on, debt.day_count)
                 bal += accrued
                 interest += accrued
                 bal = max(Decimal(0), bal - amount)
@@ -172,7 +192,7 @@ class Book:
                 out.payments += 1
                 out.last_payment = on
                 last = on
-            accrued = bal * debt.rate * _days(last, on_date) / 365
+            accrued = bal * debt.rate * year_fraction(last, on_date, debt.day_count)
             bal += accrued
             interest += accrued
         out.balance = _minor(bal)
@@ -184,6 +204,31 @@ class Book:
         return s.balance if s else None
 
 
+def stated_balances(conn: Connection) -> list[tuple[str, str, int]]:
+    """(dette, jour, solde) : le dernier relevé posé pour un même jour fait foi, par jour."""
+    last: dict[tuple[str, str], int] = {}
+    for debt_id, on, amount in conn.execute(
+        text(
+            "SELECT debt_id, on_date, amount_minor FROM debt_balance_records "
+            "ORDER BY created_at, id"
+        )
+    ):
+        last[(str(debt_id), str(on))] = int(amount)
+    return sorted((d, on, a) for (d, on), a in last.items())
+
+
+def stated_on(conn: Connection, debt_id: str, on_date: str) -> int | None:
+    """Le solde constaté qui fait foi ce jour-là, s'il y en a un."""
+    row = conn.execute(
+        text(
+            "SELECT amount_minor FROM debt_balance_records WHERE debt_id = :d AND on_date = :on "
+            "ORDER BY created_at DESC, id DESC LIMIT 1"
+        ),
+        {"d": debt_id, "on": on_date},
+    ).first()
+    return None if row is None else int(row[0])
+
+
 def record_balance(
     conn: Connection,
     debt_id: str,
@@ -193,16 +238,14 @@ def record_balance(
     proposal_id: str | None,
     entry_id: str | None = None,
 ) -> None:
-    """Un solde constaté ; un second à la même date remplace le premier."""
+    """Un solde constaté, ajouté ; un second à la même date s'ajoute et fait foi."""
     conn.execute(
         text(
-            "INSERT INTO debt_balances (debt_id, on_date, amount_minor, source, entry_id, "
-            "proposal_id, created_at) VALUES (:d, :on, :a, :s, :e, :p, :at) "
-            "ON CONFLICT (debt_id, on_date) DO UPDATE SET amount_minor = excluded.amount_minor, "
-            "source = excluded.source, entry_id = excluded.entry_id, "
-            "proposal_id = excluded.proposal_id, created_at = excluded.created_at"
+            "INSERT INTO debt_balance_records (id, debt_id, on_date, amount_minor, source, "
+            "entry_id, proposal_id, created_at) VALUES (:id, :d, :on, :a, :s, :e, :p, :at)"
         ),
         {
+            "id": new_id(),
             "d": debt_id,
             "on": on_date,
             "a": amount_minor,
@@ -294,6 +337,7 @@ def items(conn: Connection, today: str) -> list[dict[str, Any]]:
                 "original": _money(d.original_minor, d.currency),
                 # taux annuel en %, texte décimal ('2.5') ; None sans intérêt
                 "rate_pct": format((d.rate * 100).normalize(), "f") if d.rate else None,
+                "day_count": d.day_count,
                 "payment": _money(d.payment_minor, d.currency),
                 "ends_on": d.ends_on,
                 "category_id": d.category_id,

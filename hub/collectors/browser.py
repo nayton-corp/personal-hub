@@ -9,6 +9,7 @@ frames, comme le demandent les écrans de la BCF.
 
 from __future__ import annotations
 
+import os
 import re
 import time
 import tomllib
@@ -270,7 +271,7 @@ def open_browser(
             user_data_dir=str(profile),
             headless=headless,
             viewport={"width": 1366, "height": 900},
-            locale="fr-CH",
+            locale=os.environ.get("HUB_LOCALE") or "fr",
             timezone_id=local_tz().key,
             accept_downloads=True,
             args=["--disable-dev-shm-usage"],

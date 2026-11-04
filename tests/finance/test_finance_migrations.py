@@ -1,5 +1,6 @@
 """Section 9 pour finance.db : base vide → head, déclencheurs, ajout seul, empreintes."""
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -45,6 +46,9 @@ def test_upgrade_head_on_empty_base(finance: FinanceDomain) -> None:
         "compositions",
         "transfer_links",
         "recurring",
+        "crypto_moves",
+        "crypto_links",
+        "crypto_link_withdrawals",
         "entries_fts",
         "notes_fts",
         *PROTECTED,
@@ -149,6 +153,8 @@ def seed_every_table(finance: FinanceDomain) -> None:
             {
                 "category_id": "divers",
                 "monthly_minor": 100,
+                "amount_minor": 100,
+                "cadence": "month",
                 "currency": "CHF",
                 "valid_from": "2026-10-01",
                 "proposal_id": None,
@@ -259,6 +265,89 @@ def test_upgrade_on_reference_base_keeps_ledger_valid(tmp_path: Path) -> None:
     domain.engine().dispose()
 
 
+def test_double_sas_migration_keeps_the_month_start_and_the_debt_balances(
+    tmp_path: Path,
+) -> None:
+    """0021 : le jour de début de mois devient une règle depuis toujours, les soldes constatés
+    passent en ajout seul ; rien n'est effacé des anciennes tables."""
+    from hub.domains.finance.domain import MIGRATIONS
+    from hub.domains.finance.registre.model import period
+    from hub.platform import migrations as runner
+    from tests.finance.conftest import finance_settings
+
+    settings = finance_settings(tmp_path)
+    domain = FinanceDomain(settings)
+    runner.upgrade(MIGRATIONS, domain.path, "0020_reconcile_decisions")
+    engine = make_engine(domain.path)
+    with begin_immediate(engine) as conn:
+        conn.execute(
+            text(
+                "INSERT INTO budget_period (id, start_day, updated_at, actor) "
+                "VALUES (1, 25, '2026-10-01T00:00:00.000Z', 'passkey:x')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO debts (id, name, lender, kind, currency, rate, created_at, "
+                "updated_at) VALUES ('d1', 'Prêt', 'X', 'loan', 'CHF', '0', "
+                "'2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO debt_balances (debt_id, on_date, amount_minor, source, created_at) "
+                "VALUES ('d1', '2026-10-01', 500000, 'opening', '2026-10-01T00:00:00.000Z')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO accounts (id, institution, name, kind, currency, created_at) "
+                "VALUES ('a1', 'Phantom', 'Phantom', 'crypto', 'CHF', '2026-10-01T00:00:00.000Z')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO reconcile_decisions (id, account_id, asset, break_kind, decision, "
+                "on_date, quantity, currency, created_at, actor) VALUES ('r1', 'a1', "
+                "'CRYPTO:BONK', 'no_price', 'accept', '2026-10-20', '1', 'CHF', "
+                "'2026-10-20T00:00:00.000Z', 'x')"
+            )
+        )
+    engine.dispose()
+    runner.upgrade(MIGRATIONS, domain.path)
+    with domain.engine().connect() as conn:
+        # la table des décisions est rebâtie à l'identique, et accepte « change ancien »
+        assert rows_of(
+            conn, "SELECT id, break_kind, quantity, proposal_id FROM reconcile_decisions"
+        ) == [("r1", "no_price", "1", None)]
+    with begin_immediate(domain.engine()) as conn:
+        conn.execute(
+            text(
+                "INSERT INTO reconcile_decisions (id, account_id, asset, break_kind, decision, "
+                "on_date, currency, created_at, actor) VALUES ('r2', 'a1', 'USD', 'stale_fx', "
+                "'accept', '2026-10-27', 'CHF', '2026-10-27T00:00:00.000Z', 'x')"
+            )
+        )
+    with domain.engine().connect() as conn:
+        assert rows_of(conn, "SELECT valid_from, start_day FROM budget_period_rules") == [
+            ("1900-01", 25)
+        ]
+        assert rows_of(conn, "SELECT start_day FROM budget_period") == [(25,)]
+        assert rows_of(
+            conn, "SELECT id, debt_id, on_date, amount_minor FROM debt_balance_records"
+        ) == [("legacy|d1|2026-10-01", "d1", "2026-10-01", 500000)]
+        assert rows_of(conn, "SELECT count(*) FROM debt_balances") == [(1,)]
+        assert period.start_day("2026-11") == 25
+    domain.engine().dispose()
+
+
+def rows_of(conn: object, sql: str) -> list[tuple[object, ...]]:
+    from sqlalchemy import Connection
+
+    assert isinstance(conn, Connection)
+    return [tuple(r) for r in conn.execute(text(sql)).fetchall()]
+
+
 def test_journal_cannot_be_rewritten_through_a_copy_without_detection(
     finance: FinanceDomain, tmp_path: Path
 ) -> None:
@@ -279,3 +368,257 @@ def test_journal_cannot_be_rewritten_through_a_copy_without_detection(
     assert any("altérée" in e for e in result.errors)
     with begin_immediate(finance.engine()) as conn:
         assert ledger.verify(conn).ok
+
+
+def test_crypto_moves_migration_takes_the_legs_and_links_them_once(tmp_path: Path) -> None:
+    """0022 : les jambes crypto quittent le détail `fx_json` pour `crypto_moves` ; l'autre côté
+    relevé à l'import (`peer`), la marque de staking (`stake`) et les anciennes règles de lecture
+    (fenêtre de quelques jours, claim dans les 60 jours) deviennent des liens écrits une fois,
+    signés par la migration. Après elle, rien ne reste à proposer."""
+    from hub.domains.finance.domain import MIGRATIONS
+    from hub.domains.finance.patrimoine.app import crypto_moves, crypto_pairing
+    from hub.platform import migrations as runner
+    from tests.finance.conftest import finance_settings
+
+    settings = finance_settings(tmp_path)
+    domain = FinanceDomain(settings)
+    runner.upgrade(MIGRATIONS, domain.path, "0021_double_sas")
+    engine = make_engine(domain.path)
+    at = "2026-10-01T00:00:00.000Z"
+    entries = [
+        # seq, compte, jour, code, montant, détail
+        (
+            "b",
+            "2026-03-02",
+            "EXCHANGE/TRADE/BUY",
+            -100_000,
+            {"currency": "BTC", "quantity": "0.02"},
+        ),
+        ("b", "2026-03-02", "EXCHANGE/DEPOSIT", 100_000, {"currency": "CHF", "quantity": "1000"}),
+        (
+            "b",
+            "2026-04-01",
+            "EXCHANGE/WITHDRAWAL",
+            -50_000,
+            {"currency": "BTC", "quantity": "-0.01", "txid": "t1"},
+        ),
+        (
+            "l",
+            "2026-04-01",
+            "CRYPTO/RECEIVE",
+            50_000,
+            {"currency": "BTC", "quantity": "0.01", "txid": "t1", "peer": 3},
+        ),
+        ("l", "2026-08-01", "CRYPTO/SEND", -25_000, {"currency": "BTC", "quantity": "-0.005"}),
+        (
+            "l",
+            "2026-09-01",
+            "CRYPTO/RECEIVE",
+            27_500,
+            {"currency": "BTC", "quantity": "0.0055", "stake": True},
+        ),
+        (
+            "b",
+            "2026-10-01",
+            "EXCHANGE/WITHDRAWAL",
+            -20_000,
+            {"currency": "BTC", "quantity": "-0.004"},
+        ),
+        ("l", "2026-10-02", "CRYPTO/RECEIVE", 19_500, {"currency": "BTC", "quantity": "0.0039"}),
+        ("l", "2026-10-03", "CRYPTO/RECEIVE", 1_000, None),  # sans détail : pas une jambe
+    ]
+    with begin_immediate(engine) as conn:
+        for acc, name in (("b", "Binance"), ("l", "Ledger")):
+            conn.execute(
+                text(
+                    "INSERT INTO accounts (id, institution, name, kind, currency, created_at) "
+                    "VALUES (:id, :n, :n, 'crypto', 'CHF', :at)"
+                ),
+                {"id": acc, "n": name, "at": at},
+            )
+        for i, (acc, on, code, amount, detail) in enumerate(entries, start=1):
+            conn.execute(
+                text(
+                    "INSERT INTO entries (seq, id, account_id, kind, booking_date, amount_minor, "
+                    "currency, bank_tx_code, fx_json, search_text, dedup_key, created_at, hash_v, "
+                    "row_hash) VALUES (:seq, :id, :acc, 'movement', :on, :amount, 'CHF', :code, "
+                    ":fx, '', :id, :at, 1, 'x')"
+                ),
+                {
+                    "seq": i,
+                    "id": f"e{i}",
+                    "acc": acc,
+                    "on": on,
+                    "amount": amount,
+                    "code": code,
+                    "fx": None if detail is None else json.dumps(detail),
+                    "at": at,
+                },
+            )
+    engine.dispose()
+    runner.upgrade(MIGRATIONS, domain.path)
+    with domain.engine().connect() as conn:
+        assert rows_of(
+            conn, "SELECT entry_seq, role, asset, quantity, txid FROM crypto_moves ORDER BY 1"
+        ) == [
+            (1, "trade", "BTC", "0.02", None),
+            (2, "in", "CHF", "1000", None),
+            (3, "out", "BTC", "-0.01", "t1"),
+            (4, "in", "BTC", "0.01", "t1"),
+            (5, "out", "BTC", "-0.005", None),
+            (6, "in", "BTC", "0.0055", None),
+            (7, "out", "BTC", "-0.004", None),
+            (8, "in", "BTC", "0.0039", None),
+        ]
+        assert rows_of(
+            conn,
+            "SELECT id, entry_seq, kind, peer_seq, method, actor FROM crypto_links ORDER BY id",
+        ) == [
+            ("legacy|claim|5", 5, "stake", 6, "claim", "migration:0022"),
+            ("legacy|stake|6", 6, "stake", None, "source", "migration:0022"),
+            ("legacy|transfer|4", 4, "transfer", 3, "quantity", "migration:0022"),
+            ("legacy|window|8", 8, "transfer", 7, "window", "migration:0022"),
+        ]
+        found = crypto_moves.moves(conn, "2026-10-27")
+        assert [(m.seq, m.role, m.internal) for m in found] == [
+            (1, "trade", False),
+            (3, "out", True),
+            (4, "in", True),
+            (5, "stake", True),
+            (6, "stake", True),
+            (7, "out", True),
+            (8, "in", True),
+        ]
+        assert crypto_pairing.candidates(found) == []
+        assert rows_of(conn, "SELECT count(*) FROM entries WHERE fx_json IS NOT NULL") == [(8,)]
+    with (
+        pytest.raises(DatabaseError, match=r"ledger\.append_only"),
+        begin_immediate(domain.engine()) as conn,
+    ):
+        conn.execute(text("UPDATE crypto_links SET peer_seq = 1 WHERE id = 'legacy|window|8'"))
+    domain.engine().dispose()
+
+
+def test_budget_cadence_migration_keeps_old_targets_readable(tmp_path: Path) -> None:
+    """0023 : une ancienne cible annuelle (un douzième arrondi, réglage `budget_cadence`) se
+    relit telle quelle ; une nouvelle garde le montant saisi, exact."""
+    from hub.domains.finance.classement.app import insights
+    from hub.domains.finance.domain import MIGRATIONS
+    from hub.platform import migrations as runner
+    from tests.finance.conftest import finance_settings
+
+    settings = finance_settings(tmp_path)
+    domain = FinanceDomain(settings)
+    runner.upgrade(MIGRATIONS, domain.path, "0022_crypto_moves")
+    engine = make_engine(domain.path)
+    at = "2026-10-01T00:00:00.000Z"
+    with begin_immediate(engine) as conn:
+        conn.execute(
+            text(
+                "INSERT INTO budgets (category_id, monthly_minor, currency, valid_from, "
+                "created_at, hash_v) VALUES ('voyages', 8333, 'CHF', '2026-01-01', :at, 1)"
+            ),
+            {"at": at},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO budget_cadence (category_id, cadence, updated_at, actor) "
+                "VALUES ('voyages', 'year', :at, 'x')"
+            ),
+            {"at": at},
+        )
+    engine.dispose()
+    runner.upgrade(MIGRATIONS, domain.path)
+    with domain.engine().connect() as conn:
+        old = insights.targets(conn, "2026-10")["voyages"]
+        assert (old.amount, old.cadence, old.annual, old.monthly) == (99_996, "year", 99_996, 8333)
+        assert insights.yearly(conn) == {"voyages"}
+    with begin_immediate(domain.engine()) as conn:
+        ledger.append(
+            conn,
+            "budgets",
+            {
+                "category_id": "voyages",
+                "monthly_minor": 8333,
+                "amount_minor": 100_000,
+                "cadence": "year",
+                "currency": "CHF",
+                "valid_from": "2026-01-01",
+                "proposal_id": None,
+                "created_at": at,
+            },
+        )
+    with domain.engine().connect() as conn:
+        new = insights.targets(conn, "2026-10")["voyages"]
+        assert (new.amount, new.cadence, new.annual, new.monthly) == (
+            100_000,
+            "year",
+            100_000,
+            8333,
+        )
+        assert rows_of(conn, "SELECT hash_v FROM budgets ORDER BY seq") == [(1,), (2,)]
+    domain.engine().dispose()
+
+
+def test_source_gaps_migration_keeps_decisions_and_withdrawals(tmp_path: Path) -> None:
+    """0024 : `source_gaps` apparaît et `reconcile_decisions` accepte `source_gap` ; les
+    décisions et leurs retraits traversent la migration tels quels (recopiés ligne pour ligne)."""
+    from hub.domains.finance.domain import MIGRATIONS
+    from hub.domains.finance.patrimoine.app import decisions
+    from hub.platform import migrations as runner
+    from tests.finance.conftest import finance_settings
+
+    settings = finance_settings(tmp_path)
+    domain = FinanceDomain(settings)
+    runner.upgrade(MIGRATIONS, domain.path, "0023_budget_cadence")
+    engine = make_engine(domain.path)
+    at = "2026-10-01T00:00:00.000Z"
+    with begin_immediate(engine) as conn:
+        conn.execute(
+            text(
+                "INSERT INTO accounts (id, institution, name, kind, currency, external_ref, "
+                "created_at) VALUES ('acc1', 'Binance', 'Binance', 'crypto', 'CHF', "
+                "'crypto:binance', :at)"
+            ),
+            {"at": at},
+        )
+        for i, kind in enumerate(("no_price", "stale_fx")):
+            conn.execute(
+                text(
+                    "INSERT INTO reconcile_decisions (id, account_id, asset, break_kind, "
+                    "decision, on_date, currency, created_at, actor) VALUES (:i, 'acc1', 'X', "
+                    ":k, 'accept', '2026-09-01', 'CHF', :at, 'test')"
+                ),
+                {"i": f"d{i}", "k": kind, "at": at},
+            )
+        conn.execute(
+            text(
+                "INSERT INTO reconcile_withdrawals (decision_id, created_at, actor) "
+                "VALUES ('d1', :at, 'test')"
+            ),
+            {"at": at},
+        )
+    engine.dispose()
+    runner.upgrade(MIGRATIONS, domain.path)
+    with domain.engine().connect() as conn:
+        live = [(d.id, d.break_kind) for d in decisions.read(conn)]
+        assert live == [("d0", "no_price")]  # d1 reste retirée
+        withdrawn = conn.execute(text("SELECT decision_id FROM reconcile_withdrawals")).scalars()
+        assert list(withdrawn) == ["d1"]
+        assert conn.execute(text("SELECT count(*) FROM source_gaps")).scalar_one() == 0
+    with begin_immediate(domain.engine()) as conn:
+        decisions.add(
+            conn,
+            account_id="acc1",
+            asset="fiat",
+            break_kind="source_gap",
+            decision="accept",
+            on_date="2026-10-27",
+            quantity=None,
+            cost_minor=None,
+            currency="CHF",
+            note=None,
+            actor="test",
+        )
+    with domain.engine().connect() as conn:
+        assert [d.break_kind for d in decisions.read(conn)] == ["no_price", "source_gap"]

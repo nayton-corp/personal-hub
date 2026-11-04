@@ -4,14 +4,13 @@ installer un pack, exporter ses règles, et les faire tourner sur ce qui n'a pas
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from hub.domains.finance.classement.app import legacy, packs, rules
+from hub.domains.finance.classement.app import packs, rules
 from hub.domains.finance.registre.interface import terminal
 from hub.domains.finance.registre.interface.terminal import out as _out
 from hub.platform.db import begin_immediate
@@ -39,22 +38,6 @@ def register(
                     f"{r.priority:>5}  {r.id:<24} {r.field:<17} {r.direction:<6} "
                     f"{r.category_id:<20} « {r.pattern} »{state}"
                 )
-
-    @rules_app.command("import-legacy")
-    def rules_import_legacy(
-        path: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="bcf_rules.json")],
-        run: Annotated[bool, typer.Option(help="catégoriser ensuite le registre")] = True,
-    ) -> None:
-        """Reprend le fichier de règles de `bcf_aggregate.py` (sur le Mac) ; compteurs seuls."""
-        ready()
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            with begin_immediate(engine) as conn:
-                report = legacy.import_rules(conn, data, run=run)
-        except (json.JSONDecodeError, legacy.LegacyError, rules.RuleError) as exc:
-            typer.echo(f"fichier refusé : {exc}", err=True)
-            raise typer.Exit(1) from exc
-        _out(report.public())
 
     @packs_app.command("list")
     def packs_list() -> None:

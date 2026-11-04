@@ -1,8 +1,8 @@
 // Entrée de l'app (L0-09) : connexion par passkey, puis la coquille (shell.js) et ses domaines. Aucun
 // script en ligne : la CSP de Caddy n'autorise que les fichiers servis par le hub.
-import { start } from "./shell.js";
-import { setBase } from "./format.js";
-import { api, setTimeZone, store, timeZone } from "./store.js";
+import { applyProfile, start } from "./shell.js";
+import { locale } from "./format.js";
+import { api, store, timeZone } from "./store.js";
 import { toast } from "./ui.js";
 import { creationOptions, credentialJSON, requestOptions } from "./webauthn.js";
 
@@ -39,7 +39,7 @@ function when(v) {
 }
 const fmt = (v) => {
   const d = when(v);
-  return d ? d.toLocaleString("fr-CH", { timeZone: timeZone(), day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+  return d ? d.toLocaleString(locale(), { timeZone: timeZone(), day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 };
 
 function row(dl, label, value, ok) {
@@ -52,13 +52,11 @@ function row(dl, label, value, ok) {
 }
 
 function renderProfile(p) {
-  const tz = setTimeZone(p.timezone);
-  const ccy = setBase(p.currency);
-  if (tz || ccy) store.invalidate();
+  applyProfile(p);
   $("profile-name").value = p.display_name || "";
   $("profile-country").value = p.country;
   const modules = p.modules.length ? ` · modules : ${p.modules.join(", ")}` : "";
-  $("profile-info").textContent = `Fuseau ${p.timezone} (HUB_TZ) · devise ${p.currency} (HUB_CURRENCY)${modules}.`;
+  $("profile-info").textContent = `Fuseau ${p.timezone} (HUB_TZ) · devise ${p.currency} (HUB_CURRENCY) · locale ${p.locale} (HUB_LOCALE)${modules}.`;
 }
 
 async function renderSettings(session) {
@@ -81,6 +79,21 @@ async function renderSettings(session) {
     const when = document.createElement("small");
     when.textContent = `ajoutée le ${fmt(k.created_at)}`;
     li.append(name, when);
+    if (keys.items.length > 1) {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn secondary";
+      remove.textContent = "Retirer";
+      remove.addEventListener(
+        "click",
+        guard(async () => {
+          await api(`/auth/passkeys/${encodeURIComponent(k.id)}`, await confirmWithPasskey(), "DELETE");
+          store.invalidate();
+          say("Passkey retirée ; ses sessions sont fermées.");
+        }),
+      );
+      li.append(remove);
+    }
     ul.append(li);
   }
   const badge = $("badge");
@@ -111,8 +124,16 @@ async function refresh() {
   }
 }
 
+// une passkey en place signe tout geste sur les passkeys (Face ID) ; au premier pas, le code
+async function confirmWithPasskey() {
+  const begin = await api("/auth/passkey/confirm/begin", {});
+  const cred = await navigator.credentials.get({ publicKey: requestOptions(begin.options) });
+  return { challenge_id: begin.challenge_id, credential: credentialJSON(cred) };
+}
+
 async function register(code, deviceName) {
-  const begin = await api("/auth/passkey/register/begin", { bootstrap_code: code || null });
+  const confirm = code ? null : await confirmWithPasskey();
+  const begin = await api("/auth/passkey/register/begin", { bootstrap_code: code || null, confirm });
   const cred = await navigator.credentials.create({ publicKey: creationOptions(begin.options) });
   await api("/auth/passkey/register/finish", {
     challenge_id: begin.challenge_id,

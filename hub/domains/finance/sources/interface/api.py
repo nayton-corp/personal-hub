@@ -7,23 +7,29 @@ import re
 from typing import Annotated, Any, Protocol
 
 from fastapi import APIRouter, Query, Request
+from starlette.concurrency import run_in_threadpool
 
-from hub.core import proposals
+from hub.core import proposal_events, proposals
 from hub.core.auth import AppSession, Ctx
+from hub.core.body import read_body
 from hub.core.errors import Problem
-from hub.domains.finance.registre.app import catalog, reads
+from hub.domains.finance.registre.app import reads
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.http import (
     Reader,
 )
 from hub.domains.finance.registre.model.errors import ImportRefused
-from hub.domains.finance.sources.app import revolut_accounts
 from hub.domains.finance.sources.app.importer import ImportService
 from hub.domains.finance.sources.app.statements import APPLY_IMPORT
+from hub.domains.finance.sources.interface.schemas import (
+    ImportDetailOut,
+    PendingAccountsOut,
+    UploadOut,
+)
+from hub.domains.finance.sources.interface.tools import pending_accounts
 
 MAX_UPLOAD = 50 * 1024 * 1024
 _NAME = re.compile(r"^[A-Za-z0-9._ -]{1,120}\.(xml|zip|pdf|json|csv|xlsx)$", re.I)
-_REVOLUT_REF = re.compile(r"revolut:([A-Z]{3})(:[a-z0-9-]+)?")
 
 
 class Host(http.Host, Protocol):
@@ -34,33 +40,13 @@ def build_router(host: Host) -> APIRouter:
     r = APIRouter()
     engine = host.engine()
 
-    @r.get("/accounts/pending")
-    def pending_accounts(_p: Reader) -> dict[str, Any]:
+    @r.get("/accounts/pending", response_model=PendingAccountsOut)
+    def pending_accounts_route(_p: Reader) -> dict[str, Any]:
         """Comptes vus dans des relevés en attente (Enable Banking, CSV Revolut) mais pas encore
         créés : clé, devise, nombre d'écritures et période. Aucun montant."""
-        out = []
-        for ref, items in sorted(revolut_accounts.revolut_pending(host.importer).items()):
-            with engine.connect() as conn:
-                if catalog.account_by_ref(conn, ref) is not None:
-                    continue
-            dates = [e.booking_date for _, st in items for e in st.entries]
-            m = _REVOLUT_REF.fullmatch(ref)
-            out.append(
-                {
-                    "ref": ref,
-                    "institution": "Revolut",
-                    "kind": "cash",
-                    "currency": m.group(1) if m else None,
-                    "imports": len({i for i, _ in items}),
-                    "entries": sum(len(st.entries) for _, st in items),
-                    "from": min(dates, default=None),
-                    "to": max(dates, default=None),
-                    "can_open": any(st.derived_opening for _, st in items),
-                }
-            )
-        return {"items": out}
+        return {"items": pending_accounts(host)}
 
-    @r.post("/imports", status_code=202)
+    @r.post("/imports", status_code=202, response_model=UploadOut)
     async def upload(
         request: Request,
         _session: AppSession,
@@ -72,11 +58,11 @@ def build_router(host: Host) -> APIRouter:
             raise Problem(
                 "validation.params", "nom de fichier .xml, .zip, .pdf, .json, .csv ou .xlsx"
             )
-        body = await request.body()
-        if not body or len(body) > MAX_UPLOAD:
+        body = await read_body(request, MAX_UPLOAD)  # en flux : rien gardé au-delà
+        if not body:
             raise Problem("validation.params", "fichier vide ou trop volumineux")
-        try:
-            report = host.importer.receive(name, body)
+        try:  # l'import bloque (lecture, application, instantanés) : hors de la boucle
+            report = await run_in_threadpool(host.importer.receive, name, body)
         except ImportRefused as exc:
             headers = {"Retry-After": "60"} if exc.code == "busy.retry" else None
             raise Problem(exc.code, exc.detail, headers=headers) from None
@@ -92,13 +78,13 @@ def build_router(host: Host) -> APIRouter:
             ]
         return {"items": items, "counters": report.counters()}
 
-    @r.get("/imports/{import_id}")
+    @r.get("/imports/{import_id}", response_model=ImportDetailOut)
     def import_detail(_session: AppSession, hub_ctx: Ctx, import_id: str) -> dict[str, Any]:
         with engine.connect() as conn:
             found = reads.import_detail(conn, import_id)
         if found is None:
             raise Problem("not_found")
-        proposals.sync_events(hub_ctx)
+        proposal_events.sync_events(hub_ctx)
         card = proposals.find(hub_ctx, "finance", APPLY_IMPORT, {"import_id": import_id})
         return {**found, "proposal_id": card.id if card else None}
 

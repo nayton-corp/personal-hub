@@ -10,6 +10,7 @@ import urllib.request
 from datetime import UTC, datetime, timedelta
 
 from domia_assistant.assistant import Assistant
+from domia_assistant.callers import Caller, digest
 from domia_assistant.domia import Noting
 from domia_assistant.engagements import Engagements
 from domia_assistant.llm import ScriptedModel
@@ -96,14 +97,19 @@ def start(voice=None):
     assistant = Assistant(
         domia, ScriptedModel([]), memory, lambda: build(domia, None, memory, None), engagements=engagements
     )
-    server = serve(assistant, "127.0.0.1", 0, ("127.0.0.1",), lambda: {}, voice)
+    # Domia parle pour robin ; une pièce sans personne reste possible
+    callers = {digest("domia-token"): Caller("domia", speaks_for=frozenset({"robin"}))}
+    server = serve(assistant, "127.0.0.1", 0, ("127.0.0.1",), lambda: {}, voice, callers)
     return domia, memory, server, f"http://127.0.0.1:{server.server_address[1]}"
 
 
 def call(url, data=None, content_type="application/json"):
     body = data if isinstance(data, bytes) or data is None else json.dumps(data).encode()
     request = urllib.request.Request(
-        url, data=body, method="GET" if data is None else "POST", headers={"Content-Type": content_type}
+        url,
+        data=body,
+        method="GET" if data is None else "POST",
+        headers={"Content-Type": content_type, "Authorization": "Bearer domia-token"},
     )
     try:
         with urllib.request.urlopen(request) as r:

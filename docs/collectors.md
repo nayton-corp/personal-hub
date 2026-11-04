@@ -409,7 +409,7 @@ cours : ajoute-la à `crypto` dans `[collectors.market]` (symbole → id CoinGec
 
 | Plateforme | Secrets |
 |---|---|
-| Binance | `api_key`, `api_secret` ; facultatifs : `since` (AAAA-MM-JJ), `assets` (liste) |
+| Binance | `api_key`, `api_secret` ; facultatifs : `since` (AAAA-MM-JJ), `assets` (liste), `pairs` (liste, `BTC/BUSD` : paires à demander même si l'API ne les liste plus) |
 | KuCoin | `api_key`, `api_secret`, `passphrase` |
 | Coinbase | `key_name` (`organizations/…/apiKeys/…`), `private_key` (clé EC en PEM, ou Ed25519 en base64 ; par `--file -` pour garder les retours à la ligne) |
 
@@ -440,10 +440,15 @@ Premier passage : tout depuis le premier apport (`since` dans les secrets, sinon
 actifs aux jours de leurs opérations et le change BCE depuis la première. Il prend quelques
 minutes : l'historique des retraits est limité à dix appels par minute
 (`withdraw_pause_ms`). S'il manque un flux, aucune opération n'est déposée et tout est relu au
-passage suivant (le compte s'ouvre la veille de sa première opération). Ensuite, trois jours
-de recouvrement et les exécutions suivantes de chaque paire (mémoire `history_since`,
-`trade_ids`). Une fenêtre refusée (400) est comptée dans le détail (`partial dust:skipped=1`)
-sans bloquer le reste.
+passage suivant (le compte s'ouvre la veille de sa première opération). Ensuite, chaque flux
+(dépôts, retraits, achats en monnaie, échanges, conversions, poussière, Earn) repart de son
+propre curseur (mémoire `stream_since`) moins trois jours de recouvrement, et les exécutions
+suivantes de chaque paire (`trade_ids`). Une fenêtre refusée (400) est comptée dans le détail
+(`partial fiat:skipped=2`) sans bloquer le reste, mais elle n'est jamais tenue pour lue : le
+curseur du flux reste au premier jour refusé, la fenêtre est redemandée au passage suivant et
+déposée dans le fichier (`gaps` : compte, flux, du, au, raison), où le rapprochement en fait
+une rupture « historique non lu » jusqu'à ce qu'un passage la lise, qu'un export la comble ou
+que tu la gardes telle quelle.
 
 Valeur : une monnaie au change du jour, une crypto à son cours du jour, un stablecoin en dollar
 faute de cours ; les deux côtés d'un échange prennent la valeur du côté le plus sûr (monnaie,
@@ -457,7 +462,10 @@ entre mes comptes, apparié avant tout le reste.
 
 Hors API, donc absents : P2P, Binance Pay, contrats à terme et marge. Les paires lues sont celles
 dont les deux actifs sont connus du compte (soldes, opérations) ; un actif acheté puis revendu
-en entier sans jamais être déposé se liste dans le champ `assets` des secrets.
+en entier sans jamais être déposé se liste dans le champ `assets` des secrets, une paire que
+l'API ne liste plus (BTC/BUSD) dans `pairs`. Une paire refusée (retirée) est déposée comme
+fenêtre non lue (`delisted`) ; son historique se reprend par l'export CSV « Trade History »
+([finance.md](finance.md)).
 
 ### Historique KuCoin et Coinbase
 

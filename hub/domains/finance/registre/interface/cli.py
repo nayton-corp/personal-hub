@@ -31,10 +31,10 @@ def register(
 
     @accounts.command("add")
     def accounts_add(
-        name: Annotated[str, typer.Argument(help="ex. « BCF compte privé »")],
+        name: Annotated[str, typer.Argument(help="ex. « Compte privé »")],
+        institution: Annotated[str, typer.Option(help="établissement, ex. « Banque X »")],
         iban: Annotated[str | None, typer.Option(help="IBAN (comptes bancaires)")] = None,
         external_ref: Annotated[str | None, typer.Option(help="clé d'un compte sans IBAN")] = None,
-        institution: Annotated[str, typer.Option()] = "BCF",
         kind: Annotated[str, typer.Option(help="cash, securities, pension, crypto")] = "cash",
         currency: Annotated[str | None, typer.Option(help="devise de base par défaut")] = None,
         liquid: Annotated[bool, typer.Option(help="compte dans les liquidités")] = False,

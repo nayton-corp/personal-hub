@@ -113,49 +113,6 @@ class LinksOut(BaseModel):
     incoming: list[LinkOut]
 
 
-class RegisterBeginIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    bootstrap_code: str | None = Field(default=None, max_length=40)
-
-
-class ChallengeOut(BaseModel):
-    challenge_id: str
-    options: dict[str, Any]
-
-
-class RegisterFinishIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    challenge_id: str
-    credential: dict[str, Any]
-    device_name: str | None = Field(default=None, max_length=60)
-    bootstrap_code: str | None = Field(default=None, max_length=40)
-
-
-class LoginFinishIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    challenge_id: str
-    credential: dict[str, Any]
-
-
-class SessionOut(BaseModel):
-    authenticated: bool
-    actor: str | None = None
-    expires_at: str | None = None
-    passkeys: int
-    needs_bootstrap: bool
-
-
-class PasskeyOut(BaseModel):
-    id: str
-    device_name: str | None
-    created_at: str
-    last_used_at: str | None
-
-
-class PasskeysOut(BaseModel):
-    items: list[PasskeyOut]
-
-
 class ApprovalChallengeIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     proposal_ids: list[str] = Field(min_length=1, max_length=50)
@@ -256,6 +213,7 @@ class ConnectorOut(BaseModel):
     required_settings: list[str]
     runner: Literal["api", "browser"]
     single: bool = False
+    refresh_hint: str | None = None  # ce que l'utilisateur doit faire après « Actualiser »
 
 
 class ConnectorListOut(BaseModel):
@@ -387,8 +345,11 @@ class ProfileOut(BaseModel):
     display_name: str | None
     country: str
     timezone: str
+    locale: str  # mise en forme des dates et des nombres (fr-CH)
     currency: str  # devise de base, HUB_CURRENCY
+    currency_exponent: int  # ses décimales (2 : centimes) ; le front ne divise jamais par 100
     modules: list[str]
+    packs: dict[str, dict[str, Any]]  # domaine → ce que son pack du pays publie (consignes IA)
 
 
 class ProfileIn(BaseModel):

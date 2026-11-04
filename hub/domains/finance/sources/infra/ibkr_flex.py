@@ -312,6 +312,7 @@ def _statement(index: int, st: _Element) -> Statement:
         )
 
     cash_txs = []
+    synthetic: dict[str, int] = {}
     for c in st.iterfind("CashTransactions/CashTransaction"):
         if not _level(c, "DETAIL"):
             continue
@@ -320,7 +321,12 @@ def _statement(index: int, st: _Element) -> Statement:
         on = _date_of(c, "settleDate", "dateTime", "reportDate")
         amount = _need(c, "amount")
         if not tx_id:
+            # sans identifiant : la date, le type, le montant et le libellé ; deux opérations
+            # identiques le même jour se suivent d'un numéro (audit m12)
             tx_id = f"{on}|{kind}|{amount}|{(c.get('description') or '')[:40]}"
+            n = synthetic[tx_id] = synthetic.get(tx_id, 0) + 1
+            if n > 1:
+                tx_id = f"{tx_id}|{n}"
         cash_txs.append(
             CashTx(
                 tx_id=tx_id,

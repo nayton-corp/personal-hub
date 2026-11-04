@@ -14,7 +14,6 @@ from urllib.parse import urlsplit
 import pytest
 from fastapi.testclient import TestClient
 
-from hub.brain import agent
 from hub.brain.hubapi import HubApi, HubError
 from hub.brain.llm import LlmError, OpenAICompatible, Reply, ToolCall, clean
 from hub.brain.mcp import McpServer
@@ -31,6 +30,7 @@ from hub.brain.toolbox import CAPABILITIES, LOAD, Toolbox
 from hub.core import proposals
 from hub.core.context import HubContext
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.packs import ch
 from tests.finance.test_app_reads import (  # noqa: F401 - fixtures
     client,
     ctx,
@@ -96,9 +96,9 @@ def test_single_domain_is_loaded_at_start(
     box = box_for(client, ctx, "brain=finance")
     names = [t["name"] for t in box.definitions()]
     assert names[:2] == [CAPABILITIES, LOAD]
-    assert len(names) == 18  # 2 outils de routage + 16 outils Finance
+    assert len(names) == 49  # 2 outils de routage + 47 outils Finance (M11)
     agg = box_for(client, ctx, "aggregates")
-    assert len(agg.definitions()) == 2 + 7
+    assert len(agg.definitions()) == 2 + 20  # routage + outils de totaux (M11)
 
 
 def test_tools_load_on_demand(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
@@ -195,64 +195,6 @@ def test_mcp_over_stdio(client: TestClient, ctx: HubContext, year: FinanceDomain
     assert '"80.00"' in text
 
 
-# --- assistant ----------------------------------------------------------------------------------
-
-
-def test_restaurants_this_month(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
-    """La question de sortie du lot 7, avec un modèle qui suit les outils."""
-
-    def answer(messages: list[dict[str, Any]]) -> Reply:
-        summary = last_tool(messages)
-        resto = next(c for c in summary["by_category"] if c["category"] == "restaurants")
-        return Reply(f"Ce mois, {resto['amount']} CHF en restaurants.")
-
-    model = Scripted(
-        calls(("finance_list_categories", {})),
-        calls(("finance_month_summary", {})),
-        answer,
-    )
-    out = agent.ask(
-        "Combien en restaurants ce mois ?", box_for(client, ctx, "brain=finance"), model, TODAY
-    )
-    assert out.text == "Ce mois, 80.00 CHF en restaurants."
-    assert out.tools == ["finance_list_categories", "finance_month_summary"]
-    system = model.seen[0][0]["content"]
-    assert "2026-10-27" in system
-    assert "écrits par des tiers" in system
-    assert "finance_propose_category" in model.tools[0]
-
-
-def test_accepted_suggestion_goes_through_a_card(
-    client: TestClient, ctx: HubContext, year: FinanceDomain
-) -> None:
-    def propose(messages: list[dict[str, Any]]) -> Reply:
-        entry = last_tool(messages)["items"][0]["entry_id"]
-        return calls(("finance_propose_category", {"entry_id": entry, "category": "loisirs"}))(
-            messages
-        )
-
-    model = Scripted(
-        calls(("finance_search", {"query": "kiosque"})),
-        propose,
-        lambda _m: Reply("<think>simple</think>Carte créée, à valider dans l'app."),
-    )
-    out = agent.ask(
-        "Le kiosque, c'est des loisirs", box_for(client, ctx, "brain=finance"), model, TODAY
-    )
-    assert out.text == "<think>simple</think>Carte créée, à valider dans l'app."  # pas de clean ici
-    (pid,) = out.proposals
-    with ctx.core.engine.connect() as conn:
-        p = proposals.get(conn, pid)
-    assert (p.status, p.tier, p.kind) == ("pending", "human", "recategorize")
-
-
-def test_agent_gives_up(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
-    model = Scripted(*[calls((CAPABILITIES, {}))] * 3)
-    out = agent.ask("?", box_for(client, ctx, "brain=finance"), model, TODAY, max_steps=3)
-    assert out.complete is False
-    assert out.tools == [CAPABILITIES] * 3
-
-
 # --- suggestions ------------------------------------------------------------------------------
 
 
@@ -275,15 +217,21 @@ def test_parse_choice() -> None:
 
 
 def test_prompt_guides_the_model() -> None:
+    """Le contenu des catégories et la règle du paiement mobile viennent du pack pays (profil) ;
+    sans pack, le modèle n'a que les noms."""
     cats = [
         {"id": "transports", "name": "Transports", "group": "variable"},
         {"id": "twint-particuliers", "name": "TWINT entre particuliers", "group": "variable"},
     ]
-    assert "pas les commerces" not in listing(cats)
-    assert "carburant" in listing(cats)
-    shop = [c["id"] for c in for_merchant(cats, "debit twint zorglub shop")]
+    assert "carburant" not in listing(cats)
+    hints = ch.PACK.category_hints
+    assert "pas les commerces" not in listing(cats, hints)
+    assert "carburant" in listing(cats, hints)
+    person = ch.PACK.contribution()["public"]["person_payment"]
+    shop = [c["id"] for c in for_merchant(cats, "debit twint zorglub shop", person)]
     assert shop == ["transports"]
-    assert len(for_merchant(cats, "debit twint dupont, jean")) == 2
+    assert len(for_merchant(cats, "debit twint dupont, jean", person)) == 2
+    assert len(for_merchant(cats, "debit twint zorglub shop")) == 2  # sans pack
 
 
 def merchant(prompt: str) -> str:

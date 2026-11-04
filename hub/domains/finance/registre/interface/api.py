@@ -1,5 +1,5 @@
 """Routes du registre : écritures, recherche, catégories, fraîcheur des comptes, export CSV et
-réglage du mois budgétaire."""
+lecture du mois budgétaire (son jour de début se change par la proposition `set_month_start`)."""
 
 from __future__ import annotations
 
@@ -7,26 +7,27 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import text
 
 from hub.core.auth import AppSession
 from hub.core.errors import Problem
-from hub.domains.finance.registre.app import export, reads
+from hub.domains.finance import thresholds
+from hub.domains.finance.registre.app import export, period_kinds, reads
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.http import (
     DATE,
     AnyReader,
     Reader,
 )
+from hub.domains.finance.registre.interface.schemas import (
+    CategoryListOut,
+    EntryDetailOut,
+    EntryListOut,
+    EntrySearchOut,
+    FreshnessListOut,
+    SettingsOut,
+    TradeListOut,
+)
 from hub.domains.finance.registre.model import period
-from hub.kernel.clock import now_iso
-from hub.platform.db import begin_immediate
-
-
-class FinanceSettingsIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    month_start_day: int = Field(ge=1, le=period.MAX_DAY)
 
 
 def build_router(host: http.Host) -> APIRouter:
@@ -34,18 +35,20 @@ def build_router(host: http.Host) -> APIRouter:
     engine = host.engine()
 
     def _settings() -> dict[str, Any]:
-        with engine.connect():  # relit le réglage (FinanceDomain)
-            pass
+        with engine.connect() as conn:  # relit les règles (FinanceDomain)
+            rules = period_kinds.rules_read(conn)
         today = host.today()
         month = period.month_of(today)
         start, end = period.bounds(month)
         return {
-            "month_start_day": period.start_day(),
+            "month_start_day": period.start_day(month),
             "current_month": month,
             "current_period": {"start": start.isoformat(), "end": end.isoformat()},
+            "rules": [{"valid_from": v, "start_day": d} for v, d in dict(rules).items()],
+            "stale_days": thresholds.current().stale_account_days,
         }
 
-    @r.get("/entries")
+    @r.get("/entries", response_model=EntryListOut)
     def entries(
         _p: Reader,
         account: str | None = None,
@@ -72,7 +75,7 @@ def build_router(host: http.Host) -> APIRouter:
             raise Problem("validation.params", "curseur invalide") from None
         return {"items": items, "next_cursor": next_cursor}
 
-    @r.get("/trades")
+    @r.get("/trades", response_model=TradeListOut)
     def trades_route(
         _p: Reader, isin: Annotated[str, Query(max_length=40)], account: str | None = None
     ) -> dict[str, Any]:
@@ -80,7 +83,7 @@ def build_router(host: http.Host) -> APIRouter:
         with engine.connect() as conn:
             return {"items": reads.trades(conn, isin, account)}
 
-    @r.get("/entries/{entry_id}")
+    @r.get("/entries/{entry_id}", response_model=EntryDetailOut)
     def entry(_p: Reader, entry_id: str) -> dict[str, Any]:
         with engine.connect() as conn:
             found = reads.entry_detail(conn, entry_id)
@@ -88,7 +91,7 @@ def build_router(host: http.Host) -> APIRouter:
             raise Problem("not_found")
         return found
 
-    @r.get("/search")
+    @r.get("/search", response_model=EntrySearchOut)
     def search(
         _p: Reader, q: Annotated[str, Query(min_length=3, max_length=100)]
     ) -> dict[str, Any]:
@@ -97,12 +100,12 @@ def build_router(host: http.Host) -> APIRouter:
         with engine.connect() as conn:
             return {"items": reads.search(conn, q)}
 
-    @r.get("/categories")
+    @r.get("/categories", response_model=CategoryListOut)
     def categories(_p: AnyReader) -> dict[str, Any]:
         with engine.connect() as conn:
             return {"items": reads.categories(conn)}
 
-    @r.get("/freshness")
+    @r.get("/freshness", response_model=FreshnessListOut)
     def freshness(_p: AnyReader) -> dict[str, Any]:
         with engine.connect() as conn:
             return {"items": reads.freshness(conn)}
@@ -126,24 +129,10 @@ def build_router(host: http.Host) -> APIRouter:
             headers={"Content-Disposition": f'attachment; filename="{name}"'},
         )
 
-    @r.get("/settings")
+    @r.get("/settings", response_model=SettingsOut)
     def get_settings(_p: AnyReader) -> dict[str, Any]:
-        """Réglages du budget : jour où commence le mois, mois en cours et ses dates."""
-        return _settings()
-
-    @r.post("/settings")
-    def update_settings(body: FinanceSettingsIn, session: AppSession) -> dict[str, Any]:
-        with begin_immediate(engine) as conn:
-            conn.execute(
-                text(
-                    "INSERT INTO budget_period (id, start_day, updated_at, actor) "
-                    "VALUES (1, :d, :t, :a) ON CONFLICT (id) DO UPDATE SET "
-                    "start_day = excluded.start_day, updated_at = excluded.updated_at, "
-                    "actor = excluded.actor"
-                ),
-                {"d": body.month_start_day, "t": now_iso(), "a": session.actor},
-            )
-        period.set_start_day(body.month_start_day)
+        """Réglages du budget : jour où commence le mois en cours, mois en cours et ses dates,
+        règles datées (`set_month_start` en pose une nouvelle)."""
         return _settings()
 
     return r

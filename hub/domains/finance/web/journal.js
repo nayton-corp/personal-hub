@@ -2,7 +2,7 @@
 // période, montant) et tri, écritures par jour, détail d'une écriture et classement avec Face ID ;
 // « À classer » groupe par contrepartie avec ses libellés, comptes, dates et montants, un choix
 // par groupe, une validation pour tout le lot.
-import { MOIS, dayName, date } from "../../format.js";
+import { MOIS, base, dayName, date, toMinor, units } from "../../format.js";
 import { GROUP_LABEL, catIc, catMark, txMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { api, monthSpan, shiftMonth, store } from "../../store.js";
@@ -28,7 +28,7 @@ let busy = false;
 const ALWAYS_PRIORITY = 4;
 
 const internal = (e) => Boolean(e.category && e.category.id.startsWith("transfer"));
-const u = (m) => m.minor / 100;
+const u = (m) => units(m);
 
 const F = () => P.jf || {};
 // lien suivi depuis le Patrimoine : { token, label, jf d'avant, asset } ; un actif montre ses ordres
@@ -51,8 +51,8 @@ function query(more) {
     qs.set("from", monthSpan(P.txcat.from)[0]);
     qs.set("to", monthSpan(P.txcat.to)[1]);
   }
-  if (f.min != null && f.min !== "") qs.set("min_minor", String(Math.round(Number(f.min) * 100)));
-  if (f.max != null && f.max !== "") qs.set("max_minor", String(Math.round(Number(f.max) * 100)));
+  if (f.min != null && f.min !== "") qs.set("min_minor", String(toMinor(f.min)));
+  if (f.max != null && f.max !== "") qs.set("max_minor", String(toMinor(f.max)));
   if (f.sort === "amount") qs.set("sort", "amount");
   if (more && tx.cursor) qs.set("cursor", tx.cursor);
   return qs;
@@ -188,7 +188,7 @@ function renderTrades(a) {
     const q = Number(t.quantity), amt = t.amount ? u(t.amount) : null;
     return `<div class="row tx-row">${ibox(ic(q > 0 ? "arrowin" : "swap"), q > 0 ? "var(--pos)" : "var(--s3)", "sm")}
       <span class="row-main"><span class="row-title">${q > 0 ? "Achat" : "Vente"} de <span class="money">${qty(String(t.quantity).replace("-", ""))}</span></span><span class="row-sub">${esc(shortY(t.trade_date))} · ${esc(accName[t.account_id] || t.account_id)}</span></span>
-      <span class="row-num"><span class="row-val num">${amt == null ? "—" : `${amt > 0 ? "+" : "−"}${amount2(Math.abs(amt))}`}</span>${t.amount && t.amount.currency !== "CHF" ? `<span class="row-sub">${esc(t.amount.currency)}</span>` : ""}</span></div>`;
+      <span class="row-num"><span class="row-val num">${amt == null ? "—" : `${amt > 0 ? "+" : "−"}${amount2(Math.abs(amt))}`}</span>${t.amount && t.amount.currency !== base() ? `<span class="row-sub">${esc(t.amount.currency)}</span>` : ""}</span></div>`;
   }).join("")}</div>`;
   if (a.account) h += `<button class="link-row" type="button" data-a="jlink-acc" data-v="${esc(a.account)}">Voir les écritures du compte${ic("chev")}</button>`;
   fill($("jBody"), h + '<div class="endspace"></div>');
@@ -227,7 +227,7 @@ function txRow(e, cats, accName, dated = false) {
   return `<button class="row tx-row" type="button" data-a="tx" data-v="${esc(e.id)}" aria-label="${esc(title(e))}, ${amt > 0 ? "plus" : "moins"} ${n2(amt)} ${esc(ccy)}, ${e.category ? esc(c ? c.name : e.category.id) : "à classer"}">
     ${txMark(title(e), e.category ? e.category.id : null, c?.group)}
     <span class="row-main"><span class="row-title">${esc(title(e))}</span><span class="row-sub">${dated ? `${esc(shortY(e.booking_date))} · ` : ""}${[what, esc(accName[e.account_id] || "")].filter(Boolean).join(" · ")}</span></span>
-    <span class="row-num"><span class="row-val num ${internal(e) ? "amt-int" : amt > 0 ? "amt-in" : ""}">${amt > 0 ? "+" : "−"}${amount2(Math.abs(amt))}</span>${ccy !== "CHF" ? `<span class="row-sub">${esc(ccy)}</span>` : ""}</span></button>`;
+    <span class="row-num"><span class="row-val num ${internal(e) ? "amt-int" : amt > 0 ? "amt-in" : ""}">${amt > 0 ? "+" : "−"}${amount2(Math.abs(amt))}</span>${ccy !== base() ? `<span class="row-sub">${esc(ccy)}</span>` : ""}</span></button>`;
 }
 
 // --- à classer --------------------------------------------------------------------------------
@@ -354,13 +354,13 @@ SHEETS.tx = (id, sh) => {
     body: `<div class="sheet-big num ${amt > 0 && !internal(e) ? "amt-in" : ""}">${amt > 0 ? "+" : "−"}${amount2(Math.abs(amt))} <small>${esc(e.amount.currency)}</small></div>
       <dl class="dl"><dt>Date</dt><dd>${dayName(e.booking_date)} ${e.booking_date.slice(0, 4)}</dd><dt>Compte</dt><dd>${esc(a ? `${a.institution} · ${a.name}` : "")}</dd>${e.counterparty_iban ? `<dt>IBAN</dt><dd class="mono">${esc(e.counterparty_iban)}</dd>` : ""}${raw ? `<dt>Libellé bancaire</dt><dd class="mono">${esc(raw)}</dd>` : ""}${e.notes && e.notes.length ? `<dt>Note</dt><dd>${esc(e.notes.map((n) => n.text).join(" · "))}</dd>` : ""}</dl>
       ${e.category ? `<dl class="dl"><dt>Classé par</dt><dd>${esc(classedBy(e))}</dd></dl>` : ""}
-      ${internal(e) ? `<div class="status">${ic("info")}<span>Virement entre tes comptes : exclu des revenus et des dépenses.</span></div>` : ""}
+      ${internal(e) ? `<div class="status">${ic("info")}<span>Virement entre tes comptes : exclu des revenus et des dépenses.</span></div>` : ""}${e.corrections && e.corrections.length ? `<div class="status warn">${ic("alert")}<span>Écriture corrigée : ${e.corrections.map((c) => `${amount2(u(c.amount))} le ${date(c.booking_date)}`).join(", ")}.</span></div>` : ""}
       ${ruleKey(e) && ruleKey(e).length >= 3 ? `<button class="link-row" type="button" data-a="tx-same" data-v="${esc(ruleKey(e))}">Voir les autres écritures de « ${esc(capital(ruleKey(e)))} »${ic("chev")}</button>` : ""}
       ${e.kind === "movement" ? `<h3>Catégorie</h3>${grid(cats, direction, sh.tmp, "txcat")}
       ${ruleKey(e) ? `<label class="check"><input type="checkbox" id="tx-always" ${sh.always ? "checked" : ""}>Toujours classer « ${esc(ruleKey(e))} » ainsi</label>` : ""}
       ${ruleKey(e) && sh.always ? `<label class="check check-in"><input type="checkbox" id="tx-only" ${sh.only ? "checked" : ""}>Seulement depuis ${esc(a ? a.name : "ce compte")}</label>` : ""}
       ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}` : ""}
-      ${e.kind === "movement" && amt > 0 && !internal(e) ? `<button class="link-row" type="button" data-a="debt-from" data-v="${esc([e.id, e.booking_date, amt, (e.counterparty || "").replace(/\|/g, " ")].join("|"))}">Créer une dette depuis ce versement${ic("chev")}</button>` : ""}`,
+      ${e.kind !== "opening" && !(e.corrections && e.corrections.length) ? `<button class="link-row" type="button" data-a="tx-correct" data-v="${esc(e.id)}">Corriger le montant, la date ou le compte${ic("chev")}</button>` : ""}${e.kind === "movement" && amt > 0 && !internal(e) ? `<button class="link-row" type="button" data-a="debt-from" data-v="${esc([e.id, e.booking_date, amt, (e.counterparty || "").replace(/\|/g, " ")].join("|"))}">Créer une dette depuis ce versement${ic("chev")}</button>` : ""}`,
     foot: e.kind === "movement" ? `<button class="primary" type="button" data-a="tx-ok" ${changed && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer avec Face ID"}</button>` : "",
   };
 };

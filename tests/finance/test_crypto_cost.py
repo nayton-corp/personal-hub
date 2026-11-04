@@ -14,12 +14,15 @@ from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.patrimoine.app import (
     assets,
     crypto_cost,
+    crypto_moves,
+    crypto_pairing,
     holdings,
     perf_lines,
     performance,
     valuation,
 )
 from hub.domains.finance.patrimoine.model import instruments
+from hub.domains.finance.patrimoine.model.instruments import Result
 from hub.domains.finance.sources.infra import market_file
 from hub.domains.finance.sources.infra.files import Incoming
 from hub.platform.db import begin_immediate
@@ -49,6 +52,17 @@ def usd(on: str, rate: str) -> dict[str, str]:
 
 def minor(x: dict[str, Any] | None) -> int | None:
     return None if x is None else int(x["minor"])
+
+
+def validate_links(finance: FinanceDomain, on: str = "2026-10-27") -> list[str]:
+    """Ce que les cartes `link_crypto_moves` demandées par le hub écrivent une fois validées
+    (le vrai chemin, par le Double Sas, est testé dans test_double_sas.py)."""
+    with begin_immediate(finance.engine()) as conn:
+        found = crypto_pairing.candidates(crypto_moves.moves(conn, on))
+        for c in found:
+            method = "claim" if c.kind == "stake" else "window"
+            crypto_moves.link(conn, c.entry_seq, c.kind, c.peer_seq, method, actor="test")
+    return [c.kind for c in found]
 
 
 def setup(finance: FinanceDomain) -> None:
@@ -137,12 +151,12 @@ def test_coins_without_history_have_no_cost(finance: FinanceDomain) -> None:
 
 
 def test_roles_from_codes() -> None:
-    assert crypto_cost.role("EXCHANGE/TRADE/BUY") == "trade"
-    assert crypto_cost.role("SWISSBORG/INCOME/YIELD") == "income"
-    assert crypto_cost.role("CRYPTO/FEE") == "fee"
-    assert crypto_cost.role("CRYPTO/RECEIVE") == "in"
-    assert crypto_cost.role("SWISSBORG/WITHDRAWAL") == "out"
-    assert crypto_cost.role("OPENING") is None
+    assert crypto_moves.role("EXCHANGE/TRADE/BUY") == "trade"
+    assert crypto_moves.role("SWISSBORG/INCOME/YIELD") == "income"
+    assert crypto_moves.role("CRYPTO/FEE") == "fee"
+    assert crypto_moves.role("CRYPTO/RECEIVE") == "in"
+    assert crypto_moves.role("SWISSBORG/WITHDRAWAL") == "out"
+    assert crypto_moves.role("OPENING") is None
 
 
 def test_nothing_held_and_history_below_zero(finance: FinanceDomain) -> None:
@@ -300,6 +314,14 @@ def test_a_staking_exit_keeps_the_cost_and_the_reward_is_a_gain(finance: Finance
     finance.importer.process([doc(transactions=[tx("t2", "2026-08-01", "-0.01")])])
     claim = tx("t3", "2026-09-01", "0.011", kind="stake")
     finance.importer.process([doc(transactions=[claim])])
+    # tant que la carte attend, l'envoi est sorti de mes comptes : rien n'est deviné à la lecture
+    with finance.engine().connect() as conn:
+        pending = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
+        waiting = reconcile.report(conn, "2026-10-27")
+    assert pending is not None
+    assert (minor(pending["cost"]), minor(pending["sent_outside_cost"])) == (50_000, 50_000)
+    assert [b.kind for b in waiting.breaks if b.kind == "sent_outside"] == ["sent_outside"]
+    assert validate_links(finance) == ["stake"]
     with finance.engine().connect() as conn:
         r = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
         found = reconcile.report(conn, "2026-10-27")
@@ -334,6 +356,73 @@ def test_a_transaction_read_again_with_another_net_gets_a_correction(
     ]
 
 
+def test_a_correction_is_rounded_bankers_style(finance: FinanceDomain) -> None:
+    """m11 : la part du coût d'une correction s'arrondit au centime le plus proche, plus par
+    troncature."""
+    add_ref(finance, "crypto:ledger", "crypto", "Ledger")
+    row = {"account": "crypto:ledger", "instrument": "ETH", "on_date": "2026-09-01"}
+    eth = {**btc("2026-09-01", "30001"), "instrument": "ETH"}
+    for q in ("0.003", "0.007"):
+        tx = {**row, "txid": "e1", "quantity": q, "fee": "0"}
+        finance.importer.process([doc(prices=[eth], transactions=[tx])])
+    with finance.engine().connect() as conn:
+        rows = conn.execute(text("SELECT quantity, amount_minor FROM trades")).all()
+    # 0.007 × 30 001 = 210.007 → 21 001 centimes ; la correction en porte 0.004 / 0.007 :
+    # 12 000.57 → 12 001 (12 000 par troncature)
+    assert sorted((Decimal(q), a) for q, a in rows) == [
+        (Decimal("0.003"), 9_000),
+        (Decimal("0.004"), 12_001),
+    ]
+
+
+def test_a_bitcoin_written_under_its_old_key_is_not_written_again(
+    finance: FinanceDomain,
+) -> None:
+    """m11 : une seule forme de clé (`txid|symbole|jambe`) ; les bitcoins écrits avant sous
+    `txid|jambe` restent des doublons, et leur correction suit l'ancienne clé."""
+    from hub.domains.finance.registre.app import catalog, ledger
+    from hub.domains.finance.sources.app import ibkr_writer
+
+    add_ref(finance, "crypto:ledger", "crypto", "Ledger")
+    row = {"account": "crypto:ledger", "instrument": "BTC", "on_date": "2026-09-01"}
+    first = {**row, "txid": "t0", "quantity": "0.001", "fee": "0"}
+    finance.importer.process([doc(prices=[btc("2026-09-01", "40000")], transactions=[first])])
+    with begin_immediate(finance.engine()) as conn:  # t9 écrit à l'ancienne, à la main
+        account = catalog.account_by_ref(conn, "crypto:ledger")
+        assert account is not None
+        imp = conn.execute(text("SELECT id FROM imports LIMIT 1")).scalar_one()
+        w = ibkr_writer.Writer(conn, imp, "chain", Result(), namespace="chain")
+        assert w.entry(account, "t9|receive", "2026-09-02", 40_000, "CRYPTO/RECEIVE", "x")
+        ledger.append(
+            conn,
+            "trades",
+            {
+                "account_id": account.id,
+                "trade_date": "2026-09-02",
+                "isin": instruments.crypto_key("BTC"),
+                "quantity": "0.01",
+                "amount_minor": 40_000,
+                "currency": "CHF",
+                "dedup_key": ledger.dedup_hash("chain|crypto:ledger|t9|trade"),
+                "import_id": imp,
+                "created_at": "2026-09-02T00:00:00Z",
+            },
+        )
+    t9 = {**row, "on_date": "2026-09-02", "txid": "t9", "fee": "0"}
+    finance.importer.process([doc(transactions=[{**t9, "quantity": "0.01"}])])
+    finance.importer.process([doc(transactions=[{**t9, "quantity": "0.012"}])])
+    with finance.engine().connect() as conn:
+        n = conn.execute(text("SELECT count(*) FROM entries WHERE bank_ref = 't9'")).scalar_one()
+        rows = conn.execute(
+            text("SELECT quantity, dedup_key FROM trades WHERE trade_date = '2026-09-02'")
+        ).all()
+    assert n == 1
+    assert sorted((Decimal(q), k) for q, k in rows) == [
+        (Decimal("0.002"), ledger.dedup_hash("chain|crypto:ledger|t9|trade|fix-1")),
+        (Decimal("0.01"), ledger.dedup_hash("chain|crypto:ledger|t9|trade")),
+    ]
+
+
 def test_a_transfer_with_withdrawal_fees_stays_between_my_accounts(
     finance: FinanceDomain,
 ) -> None:
@@ -363,6 +452,13 @@ def test_a_transfer_with_withdrawal_fees_stays_between_my_accounts(
     )
     row = {"account": "crypto:ledger", "instrument": "BTC", "on_date": "2026-04-02"}
     finance.importer.process([doc(transactions=[{**row, "txid": "t1", "quantity": "0.0098"}])])
+    # sans lien, l'envoi sort à son coût et l'arrivée entre au cours du jour
+    with finance.engine().connect() as conn:
+        pending = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
+    assert pending is not None
+    assert minor(pending["sent_outside_cost"]) == 50_000
+    assert minor(pending["arrived_from_outside"]) == 49_000  # 0.0098 à 50 000
+    assert validate_links(finance) == ["transfer"]
     with finance.engine().connect() as conn:
         r = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
         found = reconcile.report(conn, "2026-10-27")

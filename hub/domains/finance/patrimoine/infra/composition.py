@@ -7,10 +7,14 @@ import csv
 import io
 import re
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, localcontext
+from types import MappingProxyType
 
+from hub.domains.finance.packs import instance as packs
+from hub.domains.finance.packs.base import CountryPack
 from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.patrimoine.model.instruments import AssetError, DocumentError
 from hub.kernel.money import DECIMAL_CONTEXT
@@ -26,14 +30,53 @@ UNKNOWN = "Non ventilé"
 CRYPTO = "Crypto"
 _ISIN_IN_NAME = re.compile(r"([A-Z]{2}[A-Z0-9]{9}\d)")
 NORTH_AMERICA = "Amérique du Nord"
-EUROPE = "Europe (hors Suisse)"
-SWITZERLAND = "Suisse"
+EUROPE = "Europe"  # étiquette générique ; le pack pays la remplace (« Europe (hors Suisse) »)
 JAPAN = "Japon"
 PACIFIC = "Pacifique (hors Japon)"
 EMERGING = "Marchés émergents"
 OTHER = "Autres"
-# pays (anglais, français, allemand), normalisés → région
-COUNTRIES: dict[str, str] = {}
+# codes de région publiés par l'API (le front choisit l'icône) ; `home` : la région domestique
+CODES = {
+    NORTH_AMERICA: "north_america",
+    EUROPE: "europe",
+    JAPAN: "japan",
+    PACIFIC: "pacific",
+    EMERGING: "emerging",
+    OTHER: "other",
+    UNKNOWN: "unknown",
+    CRYPTO: "crypto",
+}
+# pays (anglais, français, allemand), normalisés → région ; la région domestique du pack pays
+# (« Suisse ») est reconnue avant, par ses mots
+_countries: dict[str, str] = {}
+for _region, _names in {
+    NORTH_AMERICA: "united states|etats-unis|usa|us|vereinigte staaten|canada|kanada",
+    EUROPE: (
+        "switzerland|suisse|schweiz|ch|"
+        "united kingdom|royaume-uni|grossbritannien|uk|france|frankreich|germany|allemagne|"
+        "deutschland|netherlands|pays-bas|niederlande|sweden|suede|schweden|denmark|danemark|"
+        "danemark|daenemark|spain|espagne|spanien|italy|italie|italien|finland|finlande|"
+        "finnland|norway|norvege|norwegen|belgium|belgique|belgien|ireland|irlande|irland|"
+        "austria|autriche|oesterreich|osterreich|portugal|luxembourg|luxemburg|jersey|guernsey|"
+        "isle of man|faroe islands|liechtenstein|monaco"
+    ),
+    JAPAN: "japan|japon",
+    PACIFIC: (
+        "australia|australie|australien|hong kong|singapore|singapour|singapur|new zealand|"
+        "nouvelle-zelande|neuseeland|israel|macau|macao"
+    ),
+    EMERGING: (
+        "china|chine|taiwan|india|inde|indien|korea (south)|korea|south korea|coree du sud|"
+        "sudkorea|brazil|bresil|brasilien|saudi arabia|arabie saoudite|south africa|"
+        "afrique du sud|mexico|mexique|mexiko|indonesia|indonesie|thailand|thailande|malaysia|"
+        "malaisie|united arab emirates|emirats arabes unis|qatar|poland|pologne|polen|turkey|"
+        "turquie|turkei|chile|chili|philippines|greece|grece|kuwait|koweit|peru|perou|hungary|"
+        "hongrie|czech republic|republique tcheque|colombia|colombie|egypt|egypte"
+    ),
+}.items():
+    for _n in _names.split("|"):
+        _countries[_n] = _region
+COUNTRIES: Mapping[str, str] = MappingProxyType(_countries)  # gelé (audit m16)
 # colonnes d'une liste de lignes d'émetteur, en minuscules sans accents
 WEIGHT_COLS = (
     "weight (%)",
@@ -182,8 +225,25 @@ def _date(value: str) -> str | None:
     return None
 
 
-def region_of(country: str) -> str:
-    return COUNTRIES.get(_norm(country), OTHER) if country.strip() else UNKNOWN
+def region_of(country: str, pack: CountryPack) -> str:
+    """La région d'un pays : la région domestique du pack si le pays en est, sinon la région
+    générique, l'Europe sous l'étiquette du pack."""
+    if not country.strip():
+        return UNKNOWN
+    word = _norm(country)
+    if pack.regions.home and word in pack.regions.home_words:
+        return pack.regions.home
+    region = COUNTRIES.get(word, OTHER)
+    return pack.regions.europe if region == EUROPE else region
+
+
+def region_code(bucket: str, pack: CountryPack) -> str | None:
+    """Le code d'une case de la répartition par région (None : une étiquette libre)."""
+    if pack.regions.home and bucket == pack.regions.home:
+        return "home"
+    if bucket == pack.regions.europe:
+        return CODES[EUROPE]
+    return CODES.get(bucket)
 
 
 def _parse_generic(data: bytes) -> LookthroughFile:
@@ -219,7 +279,7 @@ def _col(header: list[str], names: tuple[str, ...]) -> int | None:
     return None
 
 
-def _parse_list(isin: str, data: bytes) -> LookthroughFile:
+def _parse_list(isin: str, data: bytes, pack: CountryPack) -> LookthroughFile:
     lines = _text(data).splitlines()
     found = _sniff(lines)
     if found is None:
@@ -259,7 +319,7 @@ def _parse_list(isin: str, data: bytes) -> LookthroughFile:
             if klass in ("cash", "money market", "futures", "fx", "cash collateral and margins"):
                 sector = "Cash"
             sums["sector"][SECTORS.get(_norm(sector), sector or UNKNOWN)] += pct
-            sums["region"][region_of(cell(c_col))] += pct
+            sums["region"][region_of(cell(c_col), pack)] += pct
             sums["currency"][(cell(ccy_col) or UNKNOWN).upper()[:12]] += pct
             sums["holding"][cell(n_col)[:80] or UNKNOWN] += pct
         if total <= 0:
@@ -272,7 +332,8 @@ def _parse_list(isin: str, data: bytes) -> LookthroughFile:
     return LookthroughFile([Composition(isin, on_date, weights)])
 
 
-def parse(source: str, data: bytes) -> LookthroughFile:
+def parse(source: str, data: bytes, pack: CountryPack | None = None) -> LookthroughFile:
+    """`pack` : le pack pays qui nomme les régions (celui de l'instance par défaut)."""
     if len(data) > MAX_BYTES:
         raise LookthroughError("fichier trop volumineux")
     if source == SOURCE:
@@ -280,4 +341,4 @@ def parse(source: str, data: bytes) -> LookthroughFile:
     isin = source.split(":", 1)[1] if ":" in source else ""
     if not instruments.ISIN.match(isin):
         raise LookthroughError("ISIN du fonds absent du nom de fichier")
-    return _parse_list(isin, data)
+    return _parse_list(isin, data, pack or packs.current())

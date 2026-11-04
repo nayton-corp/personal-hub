@@ -20,6 +20,19 @@ from . import grammar
 from .domia import Domia, DomiaError
 from .llm import Model, ModelError
 from .memory import Memory
+from .phrasing import (
+    SETTLED,
+    SETTLERS,
+    SITUATIONS,
+    _act,
+    _arguments,
+    _label,
+    _names,
+    _told,
+    inventory,
+    reply,
+    router,
+)
 from .settings import PROPOSAL_TTL
 from .tools import FAMILIES, Speaker, Toolbox
 
@@ -63,7 +76,7 @@ RESULT_CHARS = 3000
 @dataclass
 class Pending:
     token: str
-    calls: list[tuple[str, dict]]  # (outil, arguments) ; "_gesture" pour un geste de la voie rapide
+    calls: list[tuple[str, dict[str, Any]]]  # (outil, arguments) ; "_gesture" pour un geste de la voie rapide
     answer: str
     expires: float
 
@@ -93,16 +106,20 @@ class Assistant:
         self.engagements = engagements
         self.route = route
 
-    def talk(self, text: str, who: Speaker, voice: bool = False) -> dict:
+    def talk(self, text: str, who: Speaker, voice: bool = False, confirm: str | None = None) -> dict[str, Any]:
+        """`confirm` : le jeton rendu avec la question posée ; s'il est donné, un « oui » ne joue que
+        la proposition qui le porte (audit m18)."""
         text = text.strip()
-        answer = self._talk(text, who)
+        answer = self._talk(text, who, confirm)
         self.memory.log(who.person, who.room, text, answer.get("answer", ""), voice=voice, done=answer.get("done"))
         return answer
 
-    def _talk(self, text: str, who: Speaker) -> dict:
+    def _talk(self, text: str, who: Speaker, confirm: str | None = None) -> dict[str, Any]:
         key = who.client or who.person or who.room or "_"
         with self.lock:
             pending = self.pending.pop(key, None)
+        if pending and confirm is not None and confirm != pending.token and grammar.is_yes(text):
+            return reply("Ce oui ne répond plus à ma dernière question : redis-moi ce que tu veux.")
         if pending and grammar.is_no(text):
             # un « non » clôt la proposition, même après le délai : un oui plus tard ne la rejouera pas
             for name, args in pending.calls:
@@ -133,7 +150,7 @@ class Assistant:
             return self._play(Pending("", calls, plan.answer, 0), who)
         return self._model(text, who, house, key)
 
-    def _answer_plan(self, text: str, who: Speaker) -> dict | None:
+    def _answer_plan(self, text: str, who: Speaker) -> dict[str, Any] | None:
         """« Oui » ou « non » juste après le plan du soir : la première phrase de la personne depuis les propositions.
         Après un autre échange, un « oui » peut répondre à autre chose : le modèle décide (`accept_planned`)."""
         if self.engagements is None or not (grammar.is_yes(text) or grammar.is_no(text)):
@@ -154,7 +171,7 @@ class Assistant:
             [f"prévu : {e['kind']}" for e in accepted],
         )
 
-    def _learn(self, text: str, lex: grammar.Lexicon, who: Speaker) -> dict | None:
+    def _learn(self, text: str, lex: grammar.Lexicon, who: Speaker) -> dict[str, Any] | None:
         """« La baie, c'est le volet du salon » : un synonyme pour la voie rapide, seulement s'il nomme un seul objet."""
         m = SYNONYM.match(text)
         if not m:
@@ -168,7 +185,7 @@ class Assistant:
         self.memory.learn(phrase, target.kind, target.id, who.person)
         return reply(f"Noté : {m.group('phrase').strip()}, c'est {target.name}.")
 
-    def _ask(self, key: str, calls: list[tuple[str, dict]], question: str, answer: str) -> dict:
+    def _ask(self, key: str, calls: list[tuple[str, dict[str, Any]]], question: str, answer: str) -> dict[str, Any]:
         token = secrets.token_hex(4)
         # un réglage se relit et se pèse : son oui attend autant que la proposition (15 min), un geste une minute
         ttl = PROPOSAL_TTL.total_seconds() if any(n == "apply_settings" for n, _ in calls) else CONFIRM_TTL_SEC
@@ -176,7 +193,7 @@ class Assistant:
             self.pending[key] = Pending(token, calls, answer, self.clock() + ttl)
         return {"answer": question, "done": [], "proposals": [], "confirm": token}
 
-    def _play(self, pending: Pending, who: Speaker) -> dict:
+    def _play(self, pending: Pending, who: Speaker) -> dict[str, Any]:
         done, errors = [], []
         tools = None
         for name, args in pending.calls:
@@ -199,7 +216,7 @@ class Assistant:
             return reply(pending.answer + " Sauf : " + "; ".join(errors), done)
         return reply(pending.answer, done)
 
-    def _context(self, house: dict, who: Speaker) -> str:
+    def _context(self, house: dict[str, Any], who: Speaker) -> str:
         now = datetime.now(self.zone)
         people = {p.get("id"): p for p in house.get("people", []) or []}
         speaker = people.get(who.person, {}).get("name") if who.person else None
@@ -258,7 +275,7 @@ class Assistant:
                 self.model.chat([system, ok], box.schemas(frozenset({family}), who))
 
     @staticmethod
-    def _system(house: dict, tools: Toolbox, who: Speaker | None = None) -> dict:
+    def _system(house: dict[str, Any], tools: Toolbox, who: Speaker | None = None) -> dict[str, Any]:
         prompt = SYSTEM.format(write=WRITE if "propose_settings" in tools.tools else READ_ONLY)
         notes = tools.system_notes(who)
         hub = f"\n\nLe hub (des totaux, jamais une écriture ; une proposition attend une validation dans l'app) :\n{notes}"
@@ -267,10 +284,10 @@ class Assistant:
             "content": prompt + (hub if notes else "") + "\n\nLa maison :\n" + "\n".join(inventory(house)),
         }
 
-    def _model(self, text: str, who: Speaker, house: dict, key: str) -> dict:
+    def _model(self, text: str, who: Speaker, house: dict[str, Any], key: str) -> dict[str, Any]:
         tools = self.toolbox()
         families = self._families(text, who.person, tools.families(who)) if self.route else None
-        messages: list[dict] = [
+        messages: list[dict[str, Any]] = [
             # Le système et les outils restent les mêmes d'une phrase à l'autre : le serveur de modèle garde leur calcul
             # (le préfixe), seul le moment (heure, qui parle, derniers échanges) est relu, avec la demande. Les outils du
             # hub et leurs consignes ne sont là que pour son propriétaire (un second préfixe).
@@ -347,119 +364,3 @@ class Assistant:
             return reply("Je n'y arrive pas en peu d'étapes ; tu peux reformuler ?", done)
         except ModelError as e:
             return reply(f"Je ne peux pas réfléchir pour l'instant ({e}).", done)
-
-
-def router(catalog: dict[str, str]) -> dict:
-    return {
-        "role": "system",
-        "content": "Tu ranges une demande faite à l'assistant d'une maison dans un ou deux types. "
-        "Réponds seulement par leurs noms, séparés par une virgule, sans rien d'autre.\n"
-        + "\n".join(f"{name} : {what}" for name, what in catalog.items()),
-    }
-
-
-ROUTER = router(FAMILIES)
-
-# proposer ou annuler un réglage finit la phrase sur la question ; le oui suivant l'applique (spec de l'assistant complet §5)
-SETTLERS = ("propose_settings", "undo_settings")
-SETTLED = "C'est réglé. Dis « annule » si ça ne te va pas."
-SITUATIONS = {"DAY": "Jour", "NIGHT": "Nuit", "AWAY": "Absent"}
-KINDS = (("lights", "lampes"), ("appliances", "appareils"), ("covers", "volets/stores"), ("emitters", "chauffage/clim"))
-
-
-def inventory(house: dict) -> list[str]:
-    """Une ligne par pièce : ses objets, nom [id], par sorte ; puis les robots. Sans état : il vit dans `house`."""
-    lines = []
-    for room in house.get("rooms", []):
-        kinds = []
-        for key, label in KINDS:
-            objects = room.get(key, []) or []
-            if objects:
-                kinds.append(f"{label} " + ", ".join(f"{o.get('name') or o['id']} [{o['id']}]" for o in objects))
-        lines.append(
-            f"- {room.get('name') or room['id']} [{room['id']}] : " + ("; ".join(kinds) or "rien de pilotable")
-        )
-    for m in house.get("machines", []) or []:
-        lines.append(f"- robot {m.get('name') or m['id']} [{m['id']}]")
-    return lines
-
-
-# ce que fait chaque geste du catalogue, dit à la personne : le vocabulaire de Domia, pas des phrases à reconnaître
-DID = {
-    "TurnOn": "allumé",
-    "TurnOff": "éteint",
-    "TurnOnRoom": "allumée",
-    "TurnOffRoom": "éteinte",
-    "SetBrightness": "à {brightness_pct} %",
-    "SetColor": "en {color}",
-    "SetPosition": "à {position} %",
-    "Open": "ouvert",
-    "Close": "fermé",
-    "Stop": "arrêté",
-    "Release": "rendu à l'automatique",
-    "SetSetpoint": "à {setpoint_c} °C",
-    "SetMode": "en {mode}",
-    "StartCleaning": "parti nettoyer",
-    "Pause": "en pause",
-    "Resume": "reparti",
-    "ReturnToBase": "rentre à sa base",
-    "Locate": "se signale",
-    "StartProgram": "lancé",
-}
-
-
-def _names(house: dict) -> dict[str, str]:
-    names = {}
-    for room in house.get("rooms", []):
-        names[room["id"]] = room.get("name") or room["id"]
-        for key, _ in KINDS:
-            for o in room.get(key, []) or []:
-                names[o["id"]] = f"{names[room['id']]} › {o.get('name') or o['id']}"
-    names.update({m["id"]: m.get("name") or m["id"] for m in house.get("machines", []) or []})
-    return names
-
-
-def _act(args: dict, names: dict[str, str]) -> str:
-    """Un geste dit d'après ce qui a été joué : l'objet, puis ce que le geste fait (« Couloir › Plafonnier éteint »)."""
-    if "value" in args and "action" not in args:
-        return f"maison en {SITUATIONS.get(args['value'], args['value'])}"
-    action = args.get("action") or ""
-    try:
-        did = DID.get(action, action).format(**args)
-    except (KeyError, IndexError):
-        did = DID.get(action, action)
-    return " ".join(p for p in (names.get(str(args.get("id") or ""), args.get("id")), did) if p)
-
-
-def _told(acts: list[str], missed: list[str], said: str) -> str:
-    """La réponse dit d'abord les gestes d'après leurs résultats, jamais d'après le texte du modèle (un geste joué ou
-    raté se dit comme il s'est passé), puis ce que le modèle ajoute : une lecture demandée, une question."""
-    parts = []
-    if acts:
-        parts.append("Fait : " + " ; ".join(acts) + ".")
-    if missed:
-        parts.append("Pas fait : " + " ; ".join(missed) + ".")
-    if said:
-        parts.append(said)
-    return " ".join(parts) or "Je ne sais pas."
-
-
-def reply(answer: str, done: list[str] | None = None) -> dict:
-    return {"answer": answer, "done": list(done or []), "proposals": [], "confirm": None}
-
-
-def _arguments(raw: Any) -> dict:
-    if isinstance(raw, dict):
-        return raw
-    try:
-        value = json.loads(raw or "{}")
-        return value if isinstance(value, dict) else {}
-    except ValueError:
-        return {}
-
-
-def _label(name: str, args: dict) -> str:
-    if name == "apply_settings":
-        return "réglage"
-    parts = [args.get("action") or name, args.get("id"), args.get("value")]
-    return " ".join(str(p) for p in parts if p)

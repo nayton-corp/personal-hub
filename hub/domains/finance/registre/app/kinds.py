@@ -3,7 +3,7 @@ forme d'une écriture ou d'un total dans un aperçu."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, text
@@ -20,6 +20,24 @@ if TYPE_CHECKING:
 SAMPLE = 10  # écritures montrées dans un aperçu ; les totaux portent sur toutes
 Slug = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{1,40}$")]
 EntryId = Annotated[str, Field(min_length=2, max_length=40, pattern=r"^e[0-9a-f]+$")]
+
+
+class Host(Protocol):
+    """Ce que les handlers attendent du domaine (`FinanceDomain` le remplit)."""
+
+    def refresh_snapshots(self) -> object: ...
+
+
+class RefreshAfter:
+    """Un handler dont l'effet change le patrimoine (classement, dette, rupture) recalcule les
+    instantanés hors transaction, une fois l'effet validé : la lecture suivante est juste sans
+    qu'une lecture n'écrive jamais (audit m5)."""
+
+    def __init__(self, domain: Host) -> None:
+        self.domain = domain
+
+    def after_commit(self, params: BaseModel, result: dict[str, Any]) -> None:
+        self.domain.refresh_snapshots()
 
 
 class Params(BaseModel):

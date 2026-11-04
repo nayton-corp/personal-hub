@@ -10,11 +10,13 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Connection, text
 
 from hub.core.domain import Preview
+from hub.domains.finance.packs import instance as packs
 from hub.domains.finance.registre.app import ledger
 from hub.domains.finance.registre.app.kinds import (
     SAMPLE,
     EntryId,
     Params,
+    RefreshAfter,
     Slug,
     bad,
     category_row,
@@ -43,7 +45,7 @@ class Recategorize(Params):
     suggested: bool = False  # proposée par un modèle et acceptée telle quelle
 
 
-class RecategorizeHandler:
+class RecategorizeHandler(RefreshAfter):
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, Recategorize)  # noqa: S101
         e = entry_row(conn, params.entry_id)
@@ -140,7 +142,7 @@ def _rest(conn: Connection, params: CategorizeRest) -> list[Any]:
     )
 
 
-class CategorizeRestHandler:
+class CategorizeRestHandler(RefreshAfter):
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, CategorizeRest)  # noqa: S101
         name, _grp = category_row(conn, params.category_id)
@@ -222,7 +224,7 @@ def _entries(conn: Connection, ids: list[str]) -> list[Any]:
     return list(rows)
 
 
-class CategorizeEntriesHandler:
+class CategorizeEntriesHandler(RefreshAfter):
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, CategorizeEntries)  # noqa: S101
         name, _grp = category_row(conn, params.category_id)
@@ -230,12 +232,15 @@ class CategorizeEntriesHandler:
         n = len(rows)
         totals = totals_by_currency([(int(r.amount_minor), r.currency) for r in rows])
         shown = " + ".join(f"{t['display']} {t['currency']}" for t in totals)
+        pack = packs.current()
         return Preview(
             summary=f"{n} écriture{'s' if n > 1 else ''} → {name} ({shown})",
             details={
                 "count": n,
                 "totals": totals,
-                "entries": [{**entry_brief(r), "merchant": merchant.key(r.label)} for r in rows],
+                "entries": [
+                    {**entry_brief(r), "merchant": merchant.key(r.label, pack)} for r in rows
+                ],
                 "to_category": params.category_id,
             },
             fingerprint=fp(

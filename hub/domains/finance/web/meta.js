@@ -1,6 +1,25 @@
 // Libellés, pictogrammes et teintes des catégories, des facettes du patrimoine et des actifs.
+// Ce qui est propre au pays (commerçants, établissements, catégories de son pack de règles)
+// vient du pack pays, publié par le profil ; le front ne nomme que les marques internationales.
 import { BRANDS } from "./brands.js";
+import { packs } from "../../store.js";
 import { cv, esc, ibox, ic, monogram, pref } from "../../ui.js";
+
+// le pack pays de la finance, compilé une fois par profil lu
+let packSrc = null;
+let packLook = { merchants: [], institutions: {}, categories: {} };
+function countryLook() {
+  const src = packs().finance || {};
+  if (src !== packSrc) {
+    packSrc = src;
+    packLook = {
+      merchants: (src.merchant_icons || []).map(([p, icon]) => [new RegExp(p, "i"), icon]),
+      institutions: src.institution_marks || {},
+      categories: src.category_icons || {},
+    };
+  }
+  return packLook;
+}
 
 // catégories du registre (base, packs) : pictogramme et teinte ; les autres prennent ceux de
 // leur groupe
@@ -8,7 +27,7 @@ const CAT_LOOK = {
   logement: ["home", 0], assurances: ["shield", 1], impots: ["landmark", 5], telecom: ["wifi", 3],
   abonnements: ["repeat", 4], transports: ["train", 6], "voiture-credit": ["car", 5], "voiture-frais": ["car", 6], alimentation: ["cart", 1], restaurants: ["utensils", 2],
   sante: ["heart", 4], loisirs: ["ticket", 3], shopping: ["bag", 4], voyages: ["plane", 6], divers: ["dots", 5],
-  retraits: ["banknote", 5], "twint-particuliers": ["swap", 6], salaire: ["briefcase", 1], remboursements: ["arrowin", 6],
+  retraits: ["banknote", 5], salaire: ["briefcase", 1], remboursements: ["arrowin", 6],
   "autres-revenus": ["arrowin", 1], rendement: ["trend", 1], "epargne-3a": ["piggy", 0], investissements: ["trend", 0],
   crypto: ["coin", 2], "transfer-own": ["swap", -1], "transfer-titres": ["swap", -1], "frais-placement": ["landmark", 5],
   "a-categoriser": ["help", -2], "a-qualifier": ["help", -2], autres: ["dots", -1],
@@ -33,8 +52,9 @@ const GROUP_LOOK = { income: ["arrowin", 1], fixed: ["home", 5], variable: ["car
 export const GROUP_LABEL = { income: "Revenus", fixed: "Fixes", variable: "Variables", savings: "Épargne", transfer: "Transferts", mixed: "Autres" };
 
 function look(id, groupName) {
-  let [icon, c] = CAT_LOOK[id] || GROUP_LOOK[groupName] || ["dots", 5];
-  if (!CAT_LOOK[id] && id) icon = wordIcon(id) || icon;
+  const known = CAT_LOOK[id] || countryLook().categories[id];
+  let [icon, c] = known || GROUP_LOOK[groupName] || ["dots", 5];
+  if (!known && id) icon = wordIcon(id) || icon;
   return { icon, color: c === -1 ? "var(--faint)" : c === -2 ? "var(--accent)" : cv(c) };
 }
 export const catLook = look;
@@ -76,40 +96,41 @@ export const merchantBrand = (name) => {
 };
 
 // commerçants connus : un pictogramme plus parlant que celui de la catégorie (la teinte reste
-// celle de la catégorie)
+// celle de la catégorie) ; les commerçants du pays viennent du pack pays, avant ceux-ci
 const MERCHANT_WORDS = [
-  [/\b(migros|coop(?! ?bau)|denner|lidl|aldi|spar|volg|aligro|landi|carrefour|leclerc|auchan|intermarch|edeka|rewe)/, "cart"],
-  [/uber ?eats|just ?eat|smood|eat\.ch|deliveroo|mcdonald|burger|pizz|kebab|sushi|restaurant|ristorante|trattoria|brasserie|bistro|takeaway|subway|kfc/, "utensils"],
+  [/\b(lidl|aldi|carrefour|leclerc|auchan|intermarch|edeka|rewe)/, "cart"],
+  [/uber ?eats|just ?eat|deliveroo|mcdonald|burger|pizz|kebab|sushi|restaurant|ristorante|trattoria|brasserie|bistro|takeaway|subway|kfc/, "utensils"],
   [/starbucks|caf[eé]\b|coffee|boulanger|bakery|confiserie|tea ?room|bäckerei/, "coffee"],
-  [/\b(sbb|cff|ffs|tpg|tpf|bls|postauto|car postal|ratp|sncf|trenitalia|db bahn|flixbus|mobility|publibike|tl lausanne)/, "train"],
-  [/\b(shell|avia|tamoil|socar|agrola|esso|migrol|eni|total ?energies|bp)\b/, "fuel"],
-  [/parking|parkhaus|onepark|parkingpay|easypark/, "parking"],
-  [/\buber\b|\btaxi|\bbolt\b|garage|amag|emil frey|carrosserie|pneu/, "car"],
-  [/easyjet|swiss intl|swiss int|ryanair|lufthansa|edelweiss|air france|klm|wizz|airbnb|booking\.com|hotel|expedia|hostel/, "plane"],
-  [/netflix|disney|youtube|prime video|blue tv|teleclub|dazn|twitch|canal\+|paramount|max\.com|hbo/, "play"],
+  [/\b(ratp|sncf|trenitalia|db bahn|flixbus)/, "train"],
+  [/\b(shell|esso|eni|total ?energies|bp)\b/, "fuel"],
+  [/parking|parkhaus|onepark|easypark/, "parking"],
+  [/\buber\b|\btaxi|\bbolt\b|garage|carrosserie|pneu/, "car"],
+  [/easyjet|ryanair|lufthansa|air france|klm|wizz|airbnb|booking\.com|hotel|expedia|hostel/, "plane"],
+  [/netflix|disney|youtube|prime video|dazn|twitch|canal\+|paramount|max\.com|hbo/, "play"],
   [/spotify|apple music|deezer|tidal|soundcloud/, "music"],
-  [/swisscom|sunrise|init7|quickline|upc|green\.ch/, "wifi"], [/\bsalt\b|wingo|yallo|lebara|m-budget mobile|digital republic/, "phone"],
-  [/amazon|galaxus|digitec|zalando|aliexpress|temu|shein|ricardo|la poste|post ch|\bdhl|\bups\b|brack/, "box"],
-  [/h&m|zara|uniqlo|c&a|manor|globus|primark|bershka|mango|nike|adidas|ochsner|vögele|bucherer/, "bag"],
-  [/pharma|apotheke|amavita|sun ?store|benu|drogerie|dropa|topPharm/i, "cross"],
-  [/h[oô]pital|clinique|m[eé]decin|dentist|cabinet m|labor|physio|hirslanden/, "heart"],
-  [/fitness|\bgym|basic-fit|update fitness|activ fitness|decathlon|sport|piscine|t[eé]l[eé]ski|remont[eé]es/, "dumbbell"],
+  [/amazon|zalando|aliexpress|temu|shein|\bdhl|\bups\b/, "box"],
+  [/h&m|zara|uniqlo|c&a|primark|bershka|mango|nike|adidas/, "bag"],
+  [/pharma|apotheke/, "cross"],
+  [/h[oô]pital|clinique|m[eé]decin|dentist|cabinet m|labor|physio/, "heart"],
+  [/fitness|\bgym|decathlon|sport|piscine|t[eé]l[eé]ski|remont[eé]es/, "dumbbell"],
   [/apple\.com|itunes|icloud|google|microsoft|openai|anthropic|claude\.ai|github|adobe|steam|playstation|nintendo|xbox|dropbox|notion/, "cpu"],
-  [/cin[eé]ma|path[eé]|ticketcorner|fnac|concert|mus[eé]e|starticket|eventfrog/, "ticket"],
-  [/bancomat|postomat|\batm\b|retrait/, "banknote"], [/twint/, "swap"],
-  [/imp[oô]t|administration fiscale|steuer|service des contributions|\bafc\b/, "landmark"],
-  [/assurance|\baxa|helvetia|mobili[eè]re|zurich ins|allianz|generali|baloise|\bcss\b|helsana|groupe mutuel|swica|sanitas|visana|assura|concordia|sympany|\bkpt|atupri|vaudoise/, "shield"],
-  [/loyer|r[eé]gie|g[eé]rance|immobili|ikea|hornbach|jumbo|\bobi\b|coop bau|do it/, "home"],
-  [/groupe e\b|romande energie|\bsig\b|\bewz\b|\bbkw\b|energie|[eé]lectricit/, "bolt"],
-  [/serafe|billag/, "receipt"], [/coiff|barber|salon de|beaut[eé]|\bspa\b|massage|onglerie|esth[eé]ti/, "sparkle"],
-  [/payot|orell|thalia|librairie|udemy|coursera|[eé]cole|universit|epfl|unil|unige|hes-so/, "book"],
-  [/fressnapf|qualipet|v[eé]t[eé]rinaire|zooplus/, "paw"], [/smartbox|cadeau|gift/, "gift"],
-  [/viac|frankly|finpension/, "piggy"], [/interactive brokers|ibkr|degiro|swissquote|saxo|trade republic/, "trend"],
-  [/binance|coinbase|kraken|kucoin|swissborg|bitpanda|ledger|bitstamp/, "coin"],
+  [/cin[eé]ma|fnac|concert|mus[eé]e/, "ticket"],
+  [/\batm\b|retrait/, "banknote"],
+  [/imp[oô]t|steuer/, "landmark"],
+  [/assurance|\baxa|allianz|generali/, "shield"],
+  [/loyer|immobili|ikea/, "home"],
+  [/energie|[eé]lectricit/, "bolt"],
+  [/coiff|barber|salon de|beaut[eé]|\bspa\b|massage|onglerie|esth[eé]ti/, "sparkle"],
+  [/librairie|udemy|coursera|[eé]cole|universit/, "book"],
+  [/v[eé]t[eé]rinaire|zooplus/, "paw"], [/smartbox|cadeau|gift/, "gift"],
+  [/interactive brokers|ibkr|degiro|saxo|trade republic/, "trend"],
+  [/binance|coinbase|kraken|kucoin|bitpanda|ledger|bitstamp/, "coin"],
 ];
 export const merchantIcon = (name) => {
   const s = (name || "").toLowerCase();
-  return s ? (MERCHANT_WORDS.find(([re]) => re.test(s)) || [])[1] : undefined;
+  if (!s) return undefined;
+  const found = countryLook().merchants.find(([re]) => re.test(s)) || MERCHANT_WORDS.find(([re]) => re.test(s));
+  return found ? found[1] : undefined;
 };
 // pictogramme d'une écriture : celui du commerçant s'il est connu, sinon celui de la catégorie
 export function txMark(name, id, groupName, size = "sm") {
@@ -139,22 +160,22 @@ export function setInstitutions(names) {
   f.values = [...new Set(names)].sort((a, b) => a.localeCompare(b, "fr"));
   f.names = Object.fromEntries(f.values.map((v) => [v, v]));
 }
-// institutions : sigle court et teinte reconnaissables (sinon initiales et teinte de rang)
+// institutions : sigle court et teinte reconnaissables (sinon initiales et teinte de rang) ;
+// les établissements du pays viennent du pack pays (sigle, jeton de teinte)
 const INST_LOOK = {
-  bcf: ["BCF", "var(--s2)"], viac: ["VIAC", "var(--s1)"], revolut: ["R", "var(--ink)"], ibkr: ["IB", "var(--neg)"], "interactive brokers": ["IB", "var(--neg)"],
-  binance: ["B", "var(--s3)"], coinbase: ["C", "var(--s1)"], kucoin: ["K", "var(--s2)"], swissborg: ["SB", "var(--s2)"], kraken: ["K", "var(--s4)"],
-  ledger: ["L", "var(--ink)"], metamask: ["M", "var(--s3)"], "trust wallet": ["T", "var(--s7)"], trust: ["T", "var(--s7)"], phantom: ["P", "var(--s4)"],
-  postfinance: ["PF", "var(--s3)"], ubs: ["UBS", "var(--neg)"], raiffeisen: ["R", "var(--neg)"], yuh: ["yuh", "var(--s4)"], neon: ["N", "var(--s2)"],
-  frankly: ["F", "var(--s1)"], finpension: ["fp", "var(--s5)"], swissquote: ["SQ", "var(--s3)"], degiro: ["DG", "var(--s7)"], wise: ["W", "var(--s2)"],
-  bitpanda: ["BP", "var(--s2)"], "trade republic": ["TR", "var(--ink)"], saxo: ["S", "var(--s1)"], bcv: ["BCV", "var(--s2)"], bcge: ["BCGE", "var(--neg)"],
+  revolut: ["R", "ink"], ibkr: ["IB", "neg"], "interactive brokers": ["IB", "neg"],
+  binance: ["B", "s3"], coinbase: ["C", "s1"], kucoin: ["K", "s2"], kraken: ["K", "s4"],
+  ledger: ["L", "ink"], metamask: ["M", "s3"], "trust wallet": ["T", "s7"], trust: ["T", "s7"], phantom: ["P", "s4"],
+  degiro: ["DG", "s7"], wise: ["W", "s2"], bitpanda: ["BP", "s2"], "trade republic": ["TR", "ink"], saxo: ["S", "s1"],
 };
 const instKey = (v) => (v || "").toLowerCase().replace(/^crypto:/, "").replace(/[-_]/g, " ").trim();
 const INST_BRAND = { revolut: "revolut", binance: "binance", coinbase: "coinbase", kucoin: "kucoin", wise: "wise", neon: "neon" };
 export function instLook(v) {
   const k = instKey(v);
-  const l = INST_LOOK[k] || INST_LOOK[k.split(" ")[0]];
+  const inst = { ...INST_LOOK, ...countryLook().institutions };
+  const l = inst[k] || inst[k.split(" ")[0]];
   const brand = INST_BRAND[k] || INST_BRAND[k.split(" ")[0]];
-  return l ? { t: l[0], c: brand ? BRANDS[brand][1] : l[1], brand } : null;
+  return l ? { t: l[0], c: brand ? BRANDS[brand][1] : `var(--${l[1]})`, brand } : null;
 }
 export function instMark(v, size = "sm") {
   const l = instLook(v);
@@ -209,19 +230,20 @@ export function ccyMark(code, size = "sm") {
   const g = GLYPH[code] || code.slice(0, 3);
   return ibox(`<span class="${g.length === 1 ? "glyph" : ""}">${esc(g)}</span>`, CCY_TINT[code] || CRYPTO_TINT[code] || "var(--s6)", size);
 }
+// par code de région (`/finance/lookthrough`) : `home` est la région domestique du pack pays
 const REGION_LOOK = {
-  Suisse: [ic("cross"), "var(--neg)"], "Europe (hors Suisse)": ["EU", "var(--s1)"], "Amérique du Nord": ["US", "var(--s2)"], Japon: ["JP", "var(--s5)"],
-  "Pacifique (hors Japon)": ["AP", "var(--s7)"], "Marchés émergents": ["ÉM", "var(--s3)"], Crypto: [ic("coin"), "var(--s3)"],
+  home: [ic("home"), "var(--neg)"], europe: ["EU", "var(--s1)"], north_america: ["US", "var(--s2)"], japan: ["JP", "var(--s5)"],
+  pacific: ["AP", "var(--s7)"], emerging: ["ÉM", "var(--s3)"], crypto: [ic("coin"), "var(--s3)"],
 };
 const SECTOR_LOOK = {
   Technologie: "cpu", Finance: "landmark", "Santé": "heart", "Consommation discrétionnaire": "bag", "Consommation de base": "cart", Industrie: "factory",
   Communication: "radio", "Énergie": "bolt", "Matériaux": "cube", "Services publics": "drop", Immobilier: "home", Obligations: "doc",
   "Liquidités et dérivés": "banknote", Crypto: "coin",
 };
-export function lookMark(dim, bucket, color, size = "sm") {
+export function lookMark(dim, bucket, color, size = "sm", code = null) {
   if (dim === "currency") return ccyMark(bucket, size);
   if (dim === "region") {
-    const r = REGION_LOOK[bucket];
+    const r = REGION_LOOK[code];
     if (r) return ibox(r[0].startsWith("<svg") ? r[0] : `<span>${esc(r[0])}</span>`, r[1], size);
     return ibox(ic("globe"), color, size);
   }

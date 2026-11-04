@@ -1,7 +1,7 @@
 // Réglages d'un compte : nom, objectif et montant visé, disponibilité, catégorie, masquage et catégorie de toutes
 // ses dépenses (une poche Vacances), enregistrés par un seul Face ID. Le panneau s'ouvre depuis le patrimoine (détail d'un
 // compte) ou depuis la carte « Comptes » des réglages, qui montre aussi la fraîcheur.
-import { date, daysSince } from "../../format.js";
+import { date, daysSince, staleDays, units } from "../../format.js";
 import { FACET, GROUP_LABEL, facetMark, facetName, setInstitutions } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { store } from "../../store.js";
@@ -10,7 +10,6 @@ import { SHEETS, SH, closeSheet, esc, failure, fill, ibox, ic, openSheet, render
 const $ = (id) => document.getElementById(id);
 const ACCOUNTS = "/finance/accounts", FRESH = "/finance/freshness", CATS = "/finance/categories";
 const SPEND_PRIORITY = 5; // avant les règles par mot : tout débit du compte va dans la catégorie
-export const STALE_DAYS = 45;
 const KIND = { cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" };
 
 const find = (id) => {
@@ -21,7 +20,7 @@ export const hiddenIds = () => new Set(((store.data(ACCOUNTS) || {}).items || []
 
 // état saisi : ce que le compte vaut aujourd'hui, modifié par les choix du panneau
 function initial(a) {
-  return { name: a.name, goal: a.goal, target: a.target ? String(Math.round(a.target.minor / 100)) : "", availability: a.availability_set ? a.availability : "auto", category: a.category || "auto", hidden: a.hidden, spend: a.spend_rule ? a.spend_rule.category_id : "" };
+  return { name: a.name, goal: a.goal, target: a.target ? String(Math.round(units(a.target))) : "", availability: a.availability_set ? a.availability : "auto", category: a.category || "auto", hidden: a.hidden, spend: a.spend_rule ? a.spend_rule.category_id : "" };
 }
 function changes(a, t) {
   const now = initial(a), out = {};
@@ -93,7 +92,7 @@ export function accountsList() {
   fill($("fresh-list"), items.map((f) => {
     const a = byId[f.account_id];
     const age = daysSince(f.last_data);
-    const stale = age == null || age > STALE_DAYS;
+    const stale = age == null || age > staleDays();
     const sub = f.last_data
       ? `données au ${date(f.last_data)}${f.last_import ? ` · importé le ${date(f.last_import.slice(0, 10))}` : ""}`
       : "aucune donnée importée";

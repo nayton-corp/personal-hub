@@ -1,5 +1,9 @@
 """Totaux par catégorie (ticket L1-10) : le résumé d'un mois et la tendance d'une catégorie.
 
+Une écriture dans une autre devise (carte Revolut en euros) compte au change du jour de
+l'écriture (audit C3) ; sans change ce jour-là, elle est laissée de côté et signalée
+(`missing_fx`), jamais comptée pour 0 ni passée sous silence.
+
 Pour la portée `aggregates`, une catégorie qui compte moins de 3 écritures sur la période est
 regroupée dans « Autres » : un total ne doit pas révéler une transaction."""
 
@@ -11,6 +15,7 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
+from hub.domains.finance.registre.app.fx import FxTable
 from hub.domains.finance.registre.app.reads import budget_accounts, in_list
 from hub.domains.finance.registre.model import period
 from hub.domains.finance.registre.model.amounts import (
@@ -41,12 +46,30 @@ def _merge_small(rows: list[dict[str, Any]], currency: str) -> list[dict[str, An
 
 @dataclass(frozen=True)
 class Line:
-    """Total d'une catégorie sur une période, montant signé du registre."""
+    """Total d'une catégorie sur une période, montant signé dans la devise de base."""
 
     category: str
     group: str
     minor: int
     count: int
+
+
+@dataclass(frozen=True)
+class MissingFx:
+    """Des écritures d'un jour dans une devise sans change : laissées de côté, à montrer."""
+
+    currency: str
+    on_date: str
+    count: int
+
+    def public(self) -> dict[str, Any]:
+        return {"currency": self.currency, "on_date": self.on_date, "count": self.count}
+
+
+@dataclass(frozen=True)
+class Lines:
+    lines: list[Line]
+    missing_fx: list[MissingFx]
 
 
 # Un compte de budget compte en entier. Un autre compte courant (l'épargne) ne compte que pour ses
@@ -64,29 +87,57 @@ def _scope(conn: Connection) -> tuple[str, dict[str, str]]:
 # l'ancien script, en dépense variable s'il est négatif et en revenu sinon (la règle de départ
 # « autres revenus » prend déjà presque tous les crédits). Il garde l'identifiant
 # « a-categoriser » pour rester visible et se valider depuis l'écran « à catégoriser ».
+# une ligne par catégorie et groupe dans la devise de base ; dans une autre devise, une ligne
+# par jour, convertie ensuite au change de ce jour
 _LINES = (
     "SELECT coalesce(v.category_id, :unc), "
     "CASE WHEN c.grp IS NOT NULL THEN c.grp WHEN v.amount_minor < 0 THEN 'variable' "
-    "ELSE 'income' END, sum(v.amount_minor), count(DISTINCT v.entry_seq) "
+    "ELSE 'income' END, sum(v.amount_minor), count(DISTINCT v.entry_seq), v.currency, "
+    "CASE WHEN v.currency = :ccy THEN '' ELSE v.booking_date END "
     "FROM v_entry_allocation v JOIN entries e ON e.seq = v.entry_seq "
     "JOIN accounts a ON a.id = v.account_id "
     "LEFT JOIN categories c ON c.id = v.category_id "
-    "WHERE {scope} AND v.currency = :ccy AND e.kind != 'opening' "
-    "AND v.booking_date >= :s AND v.booking_date < :e GROUP BY 1, 2 ORDER BY 3, 1"
+    "WHERE {scope} AND e.kind != 'opening' "
+    "AND v.booking_date >= :s AND v.booking_date < :e GROUP BY 1, 2, 5, 6 ORDER BY 3, 1"
 )
 
 
-def period_lines(conn: Connection, start: str, end: str, currency: str | None = None) -> list[Line]:
+def period_report(conn: Connection, start: str, end: str, fx: FxTable | None = None) -> Lines:
     """Totaux par catégorie des comptes de budget (et des dépenses catégorisées des autres comptes
-    courants, `_SCOPE`), entre `start` inclus et `end` exclu, dans
-    `currency` (la devise de base par défaut)."""
-    currency = currency or base_currency()
+    courants, `_SCOPE`), entre `start` inclus et `end` exclu, dans la devise de base : une
+    écriture en devise au change de son jour, sans change signalée et laissée de côté."""
+    base = base_currency()
     scope, params = _scope(conn)
     rows = conn.execute(
         text(_LINES.format(scope=scope)),
-        {**params, "unc": UNCATEGORIZED, "ccy": currency, "s": start, "e": end},
+        {**params, "unc": UNCATEGORIZED, "ccy": base, "s": start, "e": end},
     ).fetchall()
-    return [Line(r[0], r[1], int(r[2]), int(r[3])) for r in rows]
+    found: dict[tuple[str, str], list[int]] = {}
+    missing: dict[tuple[str, str], int] = {}
+    for cat, grp, total, count, ccy, day in rows:
+        minor = int(total)
+        if ccy != base:
+            if fx is None:
+                fx = FxTable(conn)
+            converted = fx.to_base(minor, str(ccy), str(day))
+            if converted is None:
+                key = (str(ccy), str(day))
+                missing[key] = missing.get(key, 0) + int(count)
+                continue
+            minor = converted
+        slot = found.setdefault((str(cat), str(grp)), [0, 0])
+        slot[0] += minor
+        slot[1] += int(count)
+    lines = [Line(cat, grp, v[0], v[1]) for (cat, grp), v in found.items()]
+    lines.sort(key=lambda x: (x.minor, x.category))
+    return Lines(lines, [MissingFx(c, d, n) for (c, d), n in sorted(missing.items())])
+
+
+def period_lines(conn: Connection, start: str, end: str, currency: str | None = None) -> list[Line]:
+    """Les lignes de `period_report`, dans la devise de base (`currency` ne peut être qu'elle)."""
+    if currency is not None and currency != base_currency():
+        raise ValueError("les totaux sont dans la devise de base de l'instance")
+    return period_report(conn, start, end).lines
 
 
 @dataclass(frozen=True)
@@ -127,7 +178,8 @@ def summary(
 ) -> dict[str, Any]:
     currency = currency or base_currency()
     start, end = month_bounds(month)
-    lines = period_lines(conn, start, end, currency)
+    report = period_report(conn, start, end)
+    lines = report.lines
     by_category = [
         {
             "category": x.category,
@@ -153,6 +205,7 @@ def summary(
         "uncategorized": money(t.uncategorized, currency),
         "by_group": {g: money(v, currency) for g, v in sorted(groups.items())},
         "by_category": by_category,
+        "missing_fx": [m.public() for m in report.missing_fx],
     }
 
 
@@ -171,20 +224,28 @@ def trend(
     )
     rows = conn.execute(
         text(
-            "SELECT v.booking_date, sum(v.amount_minor), count(*) "
+            "SELECT v.booking_date, sum(v.amount_minor), count(*), v.currency "
             "FROM v_entry_allocation v JOIN entries e ON e.seq = v.entry_seq "
             "JOIN accounts a ON a.id = v.account_id "
             "LEFT JOIN categories c ON c.id = v.category_id "
-            f"WHERE {scope} AND v.currency = :ccy AND e.kind = 'movement' "
-            f"AND v.booking_date >= :s AND v.booking_date < :e {cat_clause} GROUP BY 1"
+            f"WHERE {scope} AND e.kind = 'movement' "
+            f"AND v.booking_date >= :s AND v.booking_date < :e {cat_clause} GROUP BY 1, 4"
         ),
-        {**params, "ccy": currency, "s": start, "e": end, "cat": category},
+        {**params, "s": start, "e": end, "cat": category},
     ).fetchall()
+    fx: FxTable | None = None
     found: dict[str, tuple[int, int]] = {}
-    for day, total, count in rows:  # par jour, rangé dans son mois budgétaire
+    for day, total, count, ccy in rows:  # par jour, rangé dans son mois budgétaire
+        minor = int(total)
+        if ccy != currency:
+            fx = fx or FxTable(conn)
+            converted = fx.to_base(minor, str(ccy), str(day))
+            if converted is None:
+                continue  # sans change ce jour-là : hors de la tendance (le budget le signale)
+            minor = converted
         m = period.month_of(date.fromisoformat(day))
         t, c = found.get(m, (0, 0))
-        found[m] = (t + int(total), c + int(count))
+        found[m] = (t + minor, c + int(count))
     series = []
     for i in range(months):
         m = shift_month(first, i)

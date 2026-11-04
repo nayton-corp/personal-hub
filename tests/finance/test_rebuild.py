@@ -67,7 +67,7 @@ def history(ctx: HubContext, fin: FinanceDomain) -> None:
         create(
             ctx,
             "set_budget",
-            {"category_id": "alimentation", "monthly_minor": 60_000, "valid_from": "2026-10-01"},
+            {"category_id": "alimentation", "amount_minor": 60_000, "valid_from": "2026-10-01"},
         ),
     )
     accept(
@@ -202,4 +202,85 @@ def test_rebuild_replays_wealth_documents(
     assert diff.ok, diff.public()
     for name in ("holdings", "prices", "fx", "compositions", "trades"):
         assert diff.checks[name]["rebuilt"] > 0, name
+    target.engine().dispose()
+
+
+def test_rebuild_carries_the_crypto_links_over(
+    ctx: HubContext, fin: FinanceDomain, tmp_path: Path
+) -> None:
+    """R5 : les liens écrits par une source se rejouent avec l'import, ceux d'une carte avec la
+    proposition (par l'identifiant stable des écritures), ceux d'une migration sont recopiés ;
+    la comparaison lit les mouvements et les liens actifs par ces identifiants."""
+    from hub.domains.finance.patrimoine.app import crypto_moves
+    from tests.finance.test_crypto_cost import btc, doc
+    from tests.finance.test_exchange import op
+
+    w.add_ref(fin, "crypto:binance", "crypto", "Binance")
+    w.add_ref(fin, "crypto:ledger", "crypto", "Ledger")
+    fin.importer.process(
+        [
+            doc(
+                prices=[btc("2026-03-01", "50000")],
+                operations=[
+                    op("fiat:1", "fiat_deposit", "2026-03-01", ("CHF", "1000", "deposit")),
+                    op(
+                        "buy:1",
+                        "trade",
+                        "2026-03-02",
+                        ("CHF", "-1000", "trade"),
+                        ("BTC", "0.03", "trade"),
+                    ),
+                    op("out:1", "withdrawal", "2026-04-01", ("BTC", "-0.01", "withdrawal")),
+                    op(
+                        "out:2",
+                        "withdrawal",
+                        "2026-05-01",
+                        ("BTC", "-0.01", "withdrawal"),
+                        txid="t2",
+                    ),
+                    op("out:3", "withdrawal", "2026-06-01", ("BTC", "-0.01", "withdrawal")),
+                ],
+            )
+        ]
+    )
+    row = {"account": "crypto:ledger", "instrument": "BTC"}
+    fin.importer.process(
+        [
+            doc(
+                transactions=[
+                    {**row, "on_date": "2026-04-02", "txid": "t1", "quantity": "0.0098"},
+                    {**row, "on_date": "2026-05-01", "txid": "t2", "quantity": "0.01"},
+                    {**row, "on_date": "2026-06-02", "txid": "t3", "quantity": "0.0097"},
+                ]
+            )
+        ]
+    )
+    from hub.core import proposal_events, proposals
+
+    proposal_events.sync_events(ctx)
+    with ctx.core.engine.connect() as conn:
+        cards = [
+            p for p in proposals.list_by_status(conn, "pending") if p.kind == "link_crypto_moves"
+        ]
+    assert len(cards) == 2
+    accept(ctx, cards[0])  # un lien par carte validée
+    with begin_immediate(fin.engine()) as conn:  # un lien comme ceux de la migration 0022
+        c = cards[1].params
+        a, b = crypto_moves.brief(conn, c["entry_id"]), crypto_moves.brief(conn, c["peer_id"])
+        crypto_moves.link(
+            conn, a["entry_seq"], "transfer", b["entry_seq"], "window", actor="migration:0022"
+        )
+    before = rows(fin, "SELECT kind, method, actor FROM crypto_links ORDER BY rowid")
+    assert sorted(before) == [
+        ("transfer", "txid", "import"),
+        ("transfer", "window", "migration:0022"),
+        ("transfer", "window", "proposal"),
+    ]
+    target = target_for(fin, tmp_path)
+    report = rebuild.rebuild(fin, target, rebuild.applied_proposals(fin.engine(), ctx.core.engine))
+    assert (report.ok, report.links, report.proposals) == (True, 1, 1), report.public()
+    diff = compare.compare(fin.engine(), target.engine())
+    assert diff.ok, diff.public()
+    assert diff.checks["crypto_links"]["rebuilt"] == 3
+    assert diff.checks["crypto_moves"]["rebuilt"] == 9  # 2 jambes du trade, 1 dépôt, 6 mouvements
     target.engine().dispose()

@@ -50,6 +50,21 @@ def quarter() -> f.Flex:
     )
 
 
+def test_cash_without_id_gets_a_sequence_number() -> None:
+    """m12 : deux opérations identiques le même jour, sans transactionID, restent deux."""
+    flex = quarter()
+    flex.cash_txs = [
+        f.cash_tx("", date(2026, 2, 1), "Dividends", "7", "USD"),
+        f.cash_tx("", date(2026, 2, 1), "Dividends", "7", "USD"),
+        f.cash_tx("", date(2026, 2, 2), "Dividends", "7", "USD"),
+    ]
+    (st,) = ibkr_flex.parse(f.flex(flex)).statements
+    ids = [c.tx_id for c in st.cash_txs]
+    assert len(set(ids)) == 3
+    assert ids[1] == ids[0] + "|2"
+    assert "|" not in ids[2][len("2026-02-02|dividends|7|") :]
+
+
 def test_parse_flex() -> None:
     pf = ibkr_flex.parse(f.flex(quarter()))
     (st,) = pf.statements

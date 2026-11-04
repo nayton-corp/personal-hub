@@ -33,6 +33,7 @@ from hub.domains.finance.classement.interface.tool_args import (
     ReviewArgs,
     TrendArgs,
 )
+from hub.domains.finance.packs import instance as packs
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.tools import (
     AGGREGATES,
@@ -191,7 +192,8 @@ class ClassementTools(ToolBox):
                 f"AND NOT coalesce({review.CATCH_ALL}, 0)"
             )
         )
-        return {review.review_key(cp, label) for cp, label in rows}
+        pack = packs.current()
+        return {review.review_key(cp, label, pack) for cp, label in rows}
 
     def to_review(self, a: ReviewArgs, caller: ToolCaller) -> dict[str, Any]:
         with self.engine.connect() as conn:
@@ -258,12 +260,12 @@ class ClassementTools(ToolBox):
             cat = self._category(conn, a.category)
         if cat["group"] not in insights.EXPENSE_GROUPS:
             raise Problem("validation.params", "budget : catégorie de dépense seulement")
-        minor = Money.from_decimal(a.amount, base_currency()).minor
-        if a.cadence == "year":
-            minor = (minor + 6) // 12  # cible mensuelle stockée, arrondie au centime
+        minor = Money.from_decimal(
+            a.amount, base_currency()
+        ).minor  # tel que saisi, dans sa cadence
         return caller.propose(
             "set_budget",
-            {"category_id": a.category, "monthly_minor": minor, "cadence": a.cadence},
+            {"category_id": a.category, "amount_minor": minor, "cadence": a.cadence},
             a.reason,
         )
 

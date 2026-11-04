@@ -16,13 +16,13 @@ from hypothesis import strategies as st
 from sqlalchemy import text
 
 from hub.api.app import create_app
-from hub.core import proposals
+from hub.core import proposal_events, proposals
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
 from hub.core.registry import Registry
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.registre.app import ledger
+from hub.domains.finance.registre.app import ledger, reads
 from hub.domains.finance.sources.infra.files import Incoming
 from tests.factories.camt import IBAN, IBAN_2, Stmt, Tx, camt053
 from tests.finance.conftest import finance_settings, ready_account, rows
@@ -397,26 +397,26 @@ def test_set_budget_and_inverse(client: TestClient, ctx: HubContext, fin: Financ
     p = create(
         ctx,
         "set_budget",
-        {"category_id": "alimentation", "monthly_minor": 60_000, "valid_from": "2026-10-01"},
+        {"category_id": "alimentation", "amount_minor": 60_000, "valid_from": "2026-10-01"},
     )
     assert p.preview["summary"] == "Budget Alimentation : 600.00 CHF par mois, dès 2026-10"
     accept(ctx, p)
     q = create(
         ctx,
         "set_budget",
-        {"category_id": "alimentation", "monthly_minor": 50_000, "valid_from": "2026-10-01"},
+        {"category_id": "alimentation", "amount_minor": 50_000, "valid_from": "2026-10-01"},
     )
     assert "avant 600.00 CHF" in q.preview["summary"]
     accept(ctx, q)
     with ctx.core.engine.connect() as conn:
         q = proposals.get(conn, q.id)
     kind, params = proposals.inverse_of(ctx, q)
-    assert (kind, params["monthly_minor"]) == ("set_budget", 60_000)
+    assert (kind, params["amount_minor"]) == ("set_budget", 60_000)
     proposals.revert(ctx, APP, q, None)
-    assert rows(fin, "SELECT monthly_minor FROM budgets ORDER BY seq DESC LIMIT 1") == [(60_000,)]
+    assert rows(fin, "SELECT amount_minor FROM budgets ORDER BY seq DESC LIMIT 1") == [(60_000,)]
     with pytest.raises(Problem):
-        create(ctx, "set_budget", {"category_id": "salaire", "monthly_minor": 1})
-    default = create(ctx, "set_budget", {"category_id": "loisirs", "monthly_minor": 1})
+        create(ctx, "set_budget", {"category_id": "salaire", "amount_minor": 1})
+    default = create(ctx, "set_budget", {"category_id": "loisirs", "amount_minor": 1})
     assert default.preview["details"]["valid_from"] == fin.today().replace(day=1).isoformat()
 
 
@@ -506,7 +506,8 @@ def test_create_category_and_account_kinds(
             "items"
         ]
     }
-    # un modèle ne crée ni compte ni catégorie
+    # un modèle propose un compte (une carte à valider, rien d'appliqué : audit M11) ; jamais
+    # un import
     r = client.post(
         "/api/proposals",
         json={
@@ -514,6 +515,13 @@ def test_create_category_and_account_kinds(
             "kind": "create_account",
             "params": {"institution": "BCF", "name": "x", "iban": IBAN},
         },
+        headers=token(ctx, "brain=finance"),
+    )
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["status"] == "pending"
+    r = client.post(
+        "/api/proposals",
+        json={"domain": "finance", "kind": "apply_import", "params": {}},
         headers=token(ctx, "brain=finance"),
     )
     assert (r.status_code, r.json()["type"]) == (403, "proposal.kind_not_allowed")
@@ -535,7 +543,7 @@ def test_create_account_replays_waiting_statements(ctx: HubContext, fin: Finance
     load(fin, [Tx("10.00", True, D, counterparty="Zorglub Fictif")])
     assert rows(fin, "SELECT status FROM imports") == [("needs_review",)]
     # compte inconnu : rien qu'une validation puisse lever, donc aucune carte apply_import
-    proposals.sync_events(ctx)
+    proposal_events.sync_events(ctx)
     with ctx.core.engine.connect() as conn:
         assert proposals.list_by_status(conn, "pending") == []
     p = create(ctx, "create_account", {"institution": "BCF", "name": "Privé", "iban": IBAN})
@@ -565,6 +573,7 @@ def test_apply_import_card_validates_the_gap(
     # octobre annonce 900 d'ouverture : le registre dit 1000 -> en attente, carte demandée
     fin.importer.process([Incoming("oct.xml", octo)])
     assert rows(fin, "SELECT status FROM imports") == [("needs_review",)]
+    proposal_events.sync_events(ctx)  # la lecture n'écrit plus : la carte naît hors requête
     listed = client.get("/api/proposals").json()["items"]
     (card,) = [p for p in listed if p["kind"] == "apply_import"]
     assert card["preview"]["details"]["reasons"] == ["ledger_check_failed"]
@@ -574,7 +583,7 @@ def test_apply_import_card_validates_the_gap(
     assert client.get(f"/api/finance/imports/{import_id}").json()["proposal_id"] == card["id"]
     # la tâche de nuit redemande la carte : pas de doublon
     fin.nightly()
-    assert proposals.sync_events(ctx)["requested"] == 0
+    assert proposal_events.sync_events(ctx)["requested"] == 0
     (res,) = signed_accept(client, phone, [card["id"]])
     assert res["status"] == "applied", res
     assert res["result"]["new"] == 1
@@ -607,7 +616,7 @@ def test_apply_import_becomes_obsolete_when_the_gap_fills(
         )
     )
     fin.importer.process([Incoming("b.xml", octo)])
-    proposals.sync_events(ctx)
+    proposal_events.sync_events(ctx)
     with ctx.core.engine.connect() as conn:
         (card,) = proposals.list_by_status(conn, "pending")
     # le relevé manquant arrive : le second s'applique seul, la carte devient sans objet
@@ -616,7 +625,7 @@ def test_apply_import_becomes_obsolete_when_the_gap_fills(
         ("applied",),
         ("applied",),
     ]
-    assert proposals.sync_events(ctx)["obsoleted"] == 1
+    assert proposal_events.sync_events(ctx)["obsoleted"] == 1
     with ctx.core.engine.connect() as conn:
         assert proposals.get(conn, card.id).status == "obsolete"
     assert acc.id
@@ -690,13 +699,17 @@ def test_yearly_budget_and_account_rule(
         # en vigueur depuis janvier : le test ne dépend pas du mois où il tourne
         {
             "category_id": "voyages",
-            "monthly_minor": 5_000,
+            "amount_minor": 60_000,
             "cadence": "year",
             "valid_from": "2026-01-01",
         },
     )
     assert p.preview["summary"].startswith("Budget Vacances : 600.00 CHF par an")
     accept(ctx, p)
+    # gardé tel que saisi, avec sa cadence (audit M4) ; le mensuel n'est qu'une lecture
+    assert rows(fin, "SELECT amount_minor, cadence, monthly_minor FROM budgets") == [
+        (60_000, "year", 5_000)
+    ]
     h = token(ctx, "brain=finance")
     b = client.get("/api/finance/budget?month=2026-10", headers=h).json()
     line = {x["category"]: x for x in b["lines"]}["voyages"]
@@ -714,3 +727,177 @@ def test_yearly_budget_and_account_rule(
         p = proposals.get(conn, p.id)
     kind, params = proposals.inverse_of(ctx, p)
     assert (kind, params["cadence"]) == ("set_budget", "month")
+
+
+# --- link_crypto_moves (R5 : plus rien n'est deviné à la lecture) -----------------------------
+
+
+def test_link_crypto_moves_card_and_inverse(ctx: HubContext, fin: FinanceDomain) -> None:
+    """Un retrait Binance arrive à frais près sur la Ledger, sans txid commun : le hub demande
+    une carte ; validée, le lien est écrit et le prix de revient suit les parts ; son inverse
+    retire le lien par une ligne de retrait, et la carte est redemandée."""
+    from hub.domains.finance.patrimoine.app import crypto_cost, valuation
+    from tests.finance.test_crypto_cost import btc, doc, minor
+    from tests.finance.test_exchange import op
+    from tests.finance.test_wealth import add_ref
+
+    add_ref(fin, "crypto:binance", "crypto", "Binance")
+    add_ref(fin, "crypto:ledger", "crypto", "Ledger")
+    fin.importer.process(
+        [
+            doc(
+                prices=[btc("2026-03-01", "50000")],
+                operations=[
+                    op("fiat:1", "fiat_deposit", "2026-03-01", ("CHF", "1000", "deposit")),
+                    op(
+                        "buy:1",
+                        "trade",
+                        "2026-03-02",
+                        ("CHF", "-1000", "trade"),
+                        ("BTC", "0.02", "trade"),
+                    ),
+                    op("out:1", "withdrawal", "2026-04-01", ("BTC", "-0.01", "withdrawal")),
+                ],
+            )
+        ]
+    )
+    row = {"account": "crypto:ledger", "instrument": "BTC", "on_date": "2026-04-02"}
+    fin.importer.process([doc(transactions=[{**row, "txid": "t1", "quantity": "0.0098"}])])
+
+    def cost() -> int | None:
+        with fin.engine().connect() as conn:
+            r = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
+        assert r is not None
+        return minor(r["cost"])
+
+    assert cost() == 99_000  # l'envoi sort à son coût (500), l'arrivée entre au cours (490)
+    assert proposal_events.sync_events(ctx)["requested"] == 1
+    with ctx.core.engine.connect() as conn:
+        (p,) = [
+            x for x in proposals.list_by_status(conn, "pending") if x.kind == "link_crypto_moves"
+        ]
+    assert p.preview["summary"].startswith(
+        "Virement entre mes comptes : 0.01 BTC envoyés de Binance"
+    )
+    assert p.preview["details"]["move"]["quantity"] == "0.0098"
+    fin.nightly()  # redemandée chaque nuit : pas de doublon
+    assert proposal_events.sync_events(ctx)["requested"] == 0
+    with pytest.raises(Problem, match="même compte"):  # une sortie de staking reste chez soi
+        create(ctx, "link_crypto_moves", {**p.params, "kind": "stake"})
+    out = accept(ctx, p)
+    assert out.status == "applied", out
+    assert cost() == 100_000  # le coût suit les parts, frais compris
+    assert rows(fin, "SELECT kind, method, actor, proposal_id FROM crypto_links") == [
+        ("transfer", "window", "proposal", p.id)
+    ]
+    with pytest.raises(Problem, match="déjà relié"):  # relier deux fois est refusé
+        create(ctx, "link_crypto_moves", p.params)
+    with ctx.core.engine.connect() as conn:
+        p = proposals.get(conn, p.id)
+    kind, inverse = proposals.inverse_of(ctx, p)
+    assert (kind, inverse) == ("unlink_crypto_moves", {**p.params})
+    assert out.result["link_id"]
+    assert proposals.revert(ctx, APP, p, None).status == "applied"
+    assert rows(fin, "SELECT count(*) FROM crypto_link_withdrawals") == [(1,)]
+    assert rows(fin, "SELECT count(*) FROM crypto_links") == [(1,)]  # rien d'effacé
+    assert cost() == 99_000
+    assert proposal_events.sync_events(ctx)["requested"] == 1  # à nouveau proposée
+
+
+# --- correct_entry (audit M14) ----------------------------------------------------------------
+
+
+def original(fin: FinanceDomain, counterparty: str) -> str:
+    ((value,),) = rows(
+        fin, "SELECT id FROM entries WHERE counterparty = :c AND kind = 'movement'", c=counterparty
+    )
+    return str(value)
+
+
+def balance(fin: FinanceDomain, iban: str) -> int:
+    ((value,),) = rows(
+        fin,
+        "SELECT coalesce(sum(e.amount_minor), 0) FROM entries e JOIN accounts a "
+        "ON a.id = e.account_id WHERE a.iban = :i",
+        i=iban,
+    )
+    return int(value)
+
+
+def test_correct_entry_reverses_then_replaces_and_inverts(
+    ctx: HubContext, fin: FinanceDomain
+) -> None:
+    ready_account(fin)
+    load(fin, [Tx("12.50", True, D, counterparty="Migros", label="Courses")])
+    accept(
+        ctx,
+        create(
+            ctx,
+            "recategorize",
+            {"entry_id": original(fin, "Migros"), "category_id": "alimentation"},
+        ),
+    )
+    before = balance(fin, IBAN)
+    p = create(
+        ctx,
+        "correct_entry",
+        {"entry_id": original(fin, "Migros"), "amount_minor": -1500, "reason": "ticket relu"},
+    )
+    assert p.preview["summary"] == "Corriger Migros : -12.50 CHF → -15.00 CHF"
+    assert p.preview["details"]["changes"] == {"amount": {"from": "-12.50 CHF", "to": "-15.00 CHF"}}
+    out = accept(ctx, p)
+    assert out.status == "applied", out
+    assert balance(fin, IBAN) == before - 250
+    lines = rows(
+        fin,
+        "SELECT e.kind, e.amount_minor, e.corrects_seq IS NOT NULL, vc.category_id FROM entries e "
+        "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq WHERE e.counterparty = 'Migros' "
+        "ORDER BY e.seq",
+    )
+    assert [tuple(r) for r in lines] == [
+        ("movement", -1250, 0, "alimentation"),
+        ("correction", 1250, 1, "alimentation"),
+        ("correction", -1500, 1, "alimentation"),
+    ]
+    assert fin.verify_ledger().ok
+    # la carte vue de l'écriture : ses corrections, l'évènement, et l'instantané relancé
+    with fin.engine().connect() as conn:
+        detail = reads.entry_detail(conn, original(fin, "Migros"))
+    assert detail is not None
+    assert [c["amount"]["minor"] for c in detail["corrections"]] == [1250, -1500]
+    (event,) = rows(fin, "SELECT count(*) FROM events WHERE type = 'entry.corrected'")
+    assert event[0] == 1
+    # l'originale ne se corrige pas deux fois, l'annulation jamais
+    with pytest.raises(Problem, match="déjà corrigée"):
+        create(
+            ctx,
+            "correct_entry",
+            {"entry_id": original(fin, "Migros"), "amount_minor": -1, "reason": "x"},
+        )
+    reversal = str(out.result["reversal_id"])
+    with pytest.raises(Problem, match="annulation ne se corrige pas"):
+        create(ctx, "correct_entry", {"entry_id": reversal, "amount_minor": -1, "reason": "x"})
+    # l'inverse corrige la remplaçante avec les valeurs d'origine
+    inverse = fin.proposal_kinds["correct_entry"].inverse
+    assert inverse is not None
+    kind, params = inverse(p.params, out.result)
+    assert kind == "correct_entry"
+    assert params["amount_minor"] == -1250
+    back = accept(ctx, create(ctx, kind, params))
+    assert back.status == "applied", back
+    assert balance(fin, IBAN) == before
+
+
+def test_correct_entry_refusals(ctx: HubContext, fin: FinanceDomain) -> None:
+    ready_account(fin)
+    load(fin, [Tx("12.50", True, D, counterparty="Migros", label="Courses")])
+    eid = original(fin, "Migros")
+    with pytest.raises(Problem, match="rien à corriger"):
+        create(ctx, "correct_entry", {"entry_id": eid, "amount_minor": -1250, "reason": "x"})
+    with pytest.raises(Problem, match="de 0"):
+        create(ctx, "correct_entry", {"entry_id": eid, "amount_minor": 0, "reason": "x"})
+    with pytest.raises(Problem, match="compte inconnu"):
+        create(ctx, "correct_entry", {"entry_id": eid, "account_id": "nope", "reason": "x"})
+    ((opening,),) = rows(fin, "SELECT id FROM entries WHERE kind = 'opening'")
+    with pytest.raises(Problem, match="ouverture"):
+        create(ctx, "correct_entry", {"entry_id": str(opening), "amount_minor": 5, "reason": "x"})

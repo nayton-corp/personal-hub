@@ -24,14 +24,13 @@ from decimal import Decimal, localcontext
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.patrimoine.app import assets, links
+from hub.domains.finance.patrimoine.app import assets, crypto_moves, links
 from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.patrimoine.model.instruments import Result
 from hub.domains.finance.registre.app import catalog, ledger
 from hub.domains.finance.registre.app.opening import open_account
 from hub.domains.finance.sources.app import ibkr_writer
 from hub.domains.finance.sources.infra.operations import KINDS, STABLE, Leg, Operation
-from hub.kernel import canonical
 from hub.kernel.money import DECIMAL_CONTEXT, base_currency
 
 
@@ -120,34 +119,27 @@ class Journal:
             open_empty(self.conn, account, first)
         values = [self.value(leg, op.on_date) for leg in op.legs]
         self._trade_values(op, values)
-        details: list[dict[str, str | int]] = []
+        peers: list[tuple[int, int, str] | None] = []
         for i, leg in enumerate(op.legs):
-            detail: dict[str, str | int] = {
-                "quantity": instruments.qty_text(leg.quantity),
-                "currency": leg.symbol,
-            }
-            for k in ("txid", "address", "network"):
-                if getattr(op, k) and leg.role in ("deposit", "withdrawal"):
-                    detail[k] = getattr(op, k)
+            peer = None
             if leg.role in ("deposit", "withdrawal") and not leg.fiat:
                 peer = links.counterpart(
                     self.conn, op.account, leg.symbol, op.on_date, leg.quantity, op.txid
                 )
                 if peer:
-                    detail["peer"] = peer[0]
                     values[i] = -peer[1]
-            details.append(detail)
+            peers.append(peer)
         if any(v is None for v in values):
             return result.review("missing_price")
         self.writer.result = result
         name = KINDS[op.kind]
-        for i, (leg, amount, detail) in enumerate(zip(op.legs, values, details, strict=True)):
+        for i, (leg, amount, peer) in enumerate(zip(op.legs, values, peers, strict=True)):
             if not amount:
                 continue
             code, label = _code(leg)
             if leg.role == "income":
                 label = f"{name} {leg.symbol}"
-            self.writer.entry(
+            seq = self.writer.entry(
                 account,
                 f"{op.id}|{op.account}|{i}",
                 op.on_date,
@@ -156,8 +148,31 @@ class Journal:
                 label,
                 counterparty=account.institution or account.name,
                 remittance=f"{instruments.qty_text(leg.quantity)} {leg.symbol}",
-                fx_json=canonical.dumps(detail),
             )
+            if seq is None:
+                continue
+            on_chain = leg.role in ("deposit", "withdrawal")
+            crypto_moves.record(
+                self.conn,
+                seq,
+                code,
+                leg.symbol,
+                leg.quantity,
+                txid=op.txid if on_chain else None,
+                address=op.address if on_chain else None,
+                network=op.network if on_chain else None,
+                created_at=self.writer.created,
+            )
+            if peer:
+                crypto_moves.link(
+                    self.conn,
+                    seq,
+                    "transfer",
+                    peer[0],
+                    peer[2],
+                    actor="import",
+                    created_at=self.writer.created,
+                )
         self._trades(account, op, values)
         return result
 

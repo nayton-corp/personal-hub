@@ -40,18 +40,42 @@ from hub.domains.finance.patrimoine.app.account_kinds import (
     SetAccountGoal,
     SetAccountGoalHandler,
 )
+from hub.domains.finance.patrimoine.app.break_kinds import (
+    DecideBreak,
+    DecideBreakHandler,
+    WithdrawBreakDecision,
+    WithdrawBreakDecisionHandler,
+    decide_break_inverse,
+)
 from hub.domains.finance.patrimoine.app.debt_kinds import (
     RecordDebtBalance,
     RecordDebtBalanceHandler,
     SaveDebt,
     SaveDebtHandler,
 )
+from hub.domains.finance.patrimoine.app.link_kinds import (
+    LinkCryptoMoves,
+    LinkCryptoMovesHandler,
+    UnlinkCryptoMoves,
+    UnlinkCryptoMovesHandler,
+    link_inverse,
+)
 from hub.domains.finance.port import Finance
+from hub.domains.finance.registre.app.correct_kinds import (
+    CorrectEntry,
+    CorrectEntryHandler,
+    correct_inverse,
+)
 from hub.domains.finance.registre.app.entry_kinds import (
     AddNote,
     AddNoteHandler,
     CreateCategory,
     CreateCategoryHandler,
+)
+from hub.domains.finance.registre.app.period_kinds import (
+    SetMonthStart,
+    SetMonthStartHandler,
+    month_start_inverse,
 )
 from hub.domains.finance.sources.app.import_kinds import (
     ApplyImport,
@@ -65,13 +89,13 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
     return {
         "recategorize": ProposalKind(
             Recategorize,
-            RecategorizeHandler(),
+            RecategorizeHandler(domain),
             reversible=True,
             inverse=recategorize_inverse,
             ai_allowed=True,
         ),
-        "create_rule": ProposalKind(CreateRule, CreateRuleHandler(), ai_allowed=True),
-        "disable_rule": ProposalKind(DisableRule, DisableRuleHandler()),
+        "create_rule": ProposalKind(CreateRule, CreateRuleHandler(domain), ai_allowed=True),
+        "disable_rule": ProposalKind(DisableRule, DisableRuleHandler(), ai_allowed=True),
         "set_budget": ProposalKind(
             SetBudget,
             SetBudgetHandler(domain),
@@ -80,18 +104,58 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
             ai_allowed=True,
         ),
         "add_note": ProposalKind(AddNote, AddNoteHandler(), ai_allowed=True),
+        "correct_entry": ProposalKind(
+            CorrectEntry,
+            CorrectEntryHandler(domain),
+            reversible=True,
+            inverse=correct_inverse,
+            ai_allowed=True,
+        ),
         "apply_import": ProposalKind(
             ApplyImport, ApplyImportHandler(domain), ttl=timedelta(days=7)
         ),
-        "create_account": ProposalKind(CreateAccount, CreateAccountHandler(domain)),
-        "create_category": ProposalKind(CreateCategory, CreateCategoryHandler()),
-        "set_account_goal": ProposalKind(SetAccountGoal, SetAccountGoalHandler()),
-        "edit_account": ProposalKind(EditAccount, EditAccountHandler()),
-        "install_pack": ProposalKind(InstallPack, InstallPackHandler()),
-        "save_debt": ProposalKind(SaveDebt, SaveDebtHandler(domain)),
-        "record_debt_balance": ProposalKind(RecordDebtBalance, RecordDebtBalanceHandler(domain)),
-        "categorize_rest": ProposalKind(CategorizeRest, CategorizeRestHandler()),
+        "create_account": ProposalKind(
+            CreateAccount, CreateAccountHandler(domain), ai_allowed=True
+        ),
+        "create_category": ProposalKind(CreateCategory, CreateCategoryHandler(), ai_allowed=True),
+        "set_account_goal": ProposalKind(SetAccountGoal, SetAccountGoalHandler(), ai_allowed=True),
+        "edit_account": ProposalKind(EditAccount, EditAccountHandler(), ai_allowed=True),
+        "install_pack": ProposalKind(InstallPack, InstallPackHandler(), ai_allowed=True),
+        "save_debt": ProposalKind(SaveDebt, SaveDebtHandler(domain), ai_allowed=True),
+        "record_debt_balance": ProposalKind(
+            RecordDebtBalance, RecordDebtBalanceHandler(domain), ai_allowed=True
+        ),
+        "decide_break": ProposalKind(
+            DecideBreak,
+            DecideBreakHandler(domain),
+            reversible=True,
+            inverse=decide_break_inverse,
+            ai_allowed=True,
+        ),
+        "withdraw_break_decision": ProposalKind(
+            WithdrawBreakDecision, WithdrawBreakDecisionHandler(domain), ai_allowed=True
+        ),
+        "set_month_start": ProposalKind(
+            SetMonthStart,
+            SetMonthStartHandler(domain),
+            reversible=True,
+            inverse=month_start_inverse,
+            ai_allowed=True,
+        ),
+        "link_crypto_moves": ProposalKind(
+            LinkCryptoMoves,
+            LinkCryptoMovesHandler(domain),
+            reversible=True,
+            inverse=link_inverse,
+            ai_allowed=True,
+        ),
+        "unlink_crypto_moves": ProposalKind(
+            UnlinkCryptoMoves, UnlinkCryptoMovesHandler(domain), ai_allowed=True
+        ),
+        "categorize_rest": ProposalKind(
+            CategorizeRest, CategorizeRestHandler(domain), ai_allowed=True
+        ),
         "categorize_entries": ProposalKind(
-            CategorizeEntries, CategorizeEntriesHandler(), ai_allowed=True
+            CategorizeEntries, CategorizeEntriesHandler(domain), ai_allowed=True
         ),
     }

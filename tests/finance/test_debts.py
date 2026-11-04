@@ -47,6 +47,23 @@ def categorize(fin: FinanceDomain, counterparty: str, category: str) -> None:
             )
 
 
+def recategorize(ctx: HubContext, fin: FinanceDomain, counterparty: str, category: str) -> None:
+    """Le chemin de l'app : une proposition `recategorize` par écriture, acceptée."""
+    from tests.finance.test_double_sas import accept, create
+
+    with fin.engine().connect() as conn:
+        ids = (
+            conn.execute(
+                text("SELECT id FROM entries WHERE counterparty = :c AND amount_minor < 0"),
+                {"c": counterparty},
+            )
+            .scalars()
+            .all()
+        )
+    for entry_id in ids:
+        accept(ctx, create(ctx, "recategorize", {"entry_id": entry_id, "category_id": category}))
+
+
 @pytest.fixture
 def loan(fin: FinanceDomain, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """5000 reçus du prêteur le 1er octobre, puis deux mensualités différentes."""
@@ -147,7 +164,8 @@ def test_payment_changes_statement_and_close(
     save(ctx, {"debt_id": debt_id, "ends_on": ""})
     (d,) = listed(client, ctx)
     assert (d["payment"]["minor"], d["ends_on"]) == (35_000, None)
-    # relevé du prêteur : le calcul repart de là
+    # relevé du prêteur : le calcul repart de là ; un second relevé le même jour s'ajoute et
+    # fait foi, le premier reste dans l'historique (ajout seul)
     accept(
         ctx,
         create(
@@ -163,6 +181,17 @@ def test_payment_changes_statement_and_close(
         0,
     )
     assert len(d["balances"]) == 2
+    accept(
+        ctx,
+        create(
+            ctx,
+            "record_debt_balance",
+            {"debt_id": debt_id, "on_date": "2026-10-25", "amount_minor": 410_000},
+        ),
+    )
+    (d,) = listed(client, ctx)
+    assert (d["balance"]["minor"], len(d["balances"])) == (410_000, 2)
+    assert rows(fin, "SELECT count(*) FROM debt_balance_records") == [(3,)]
     # soldée
     p = create(ctx, "save_debt", {"debt_id": debt_id, "closed_on": "2026-10-30"})
     assert p.preview["summary"] == "Dette « Prêt » close au 2026-10-30"
@@ -171,7 +200,7 @@ def test_payment_changes_statement_and_close(
     assert d["balance"]["minor"] == 0
     with fin.engine().connect() as conn:
         assert valuation.value_at(conn, "2026-10-31").by_envelope["dettes"] == 0
-        assert valuation.value_at(conn, "2026-10-29").by_envelope["dettes"] == -400_000
+        assert valuation.value_at(conn, "2026-10-29").by_envelope["dettes"] == -410_000
         assert valuation.value_at(conn, "2026-10-09").by_envelope["dettes"] == 0
 
 
@@ -226,6 +255,35 @@ def test_interest_accrues_between_payments() -> None:
     assert debts.projected_end(d, 0, "2026-01-01", 1_000) is None
 
 
+def test_day_count_conventions() -> None:
+    yf = debts.year_fraction
+    assert yf("2025-01-01", "2026-01-01") == 1
+    assert yf("2025-01-01", "2026-01-01", "30/360") == 1
+    assert yf("2025-01-31", "2025-02-28", "30/360") == Decimal(28) / 360  # 30E/360
+    assert yf("2025-01-01", "2026-01-01", "act/360") == Decimal(365) / 360
+    assert yf("2025-07-02", "2025-07-01", "30/360") == 0
+    d = debts.Debt(
+        "d2",
+        "Hypothèque",
+        "Banque",
+        "mortgage",
+        "CHF",
+        None,
+        Decimal("0.036"),
+        None,
+        None,
+        "logement",
+        None,
+        None,
+        "30/360",
+    )
+    book = debts.Book([d], {"d2": [("2025-01-01", 1_000_000)]}, {})
+    # six mois de trente jours à 3,6 % : 18 000, quel que soit le nombre de jours réels
+    mid = book.state(d, "2025-07-01")
+    assert mid is not None
+    assert (mid.balance, mid.interest) == (1_018_000, 18_000)
+
+
 def test_recategorized_payment_reaches_the_history(
     client: TestClient, ctx: HubContext, fin: FinanceDomain, loan: dict[str, Any]
 ) -> None:
@@ -246,6 +304,7 @@ def test_recategorized_payment_reaches_the_history(
         return int(items[-1]["by_envelope"]["dettes"]["minor"])
 
     assert owed() == -445_000
-    # un paiement classé après coup compte dès la lecture suivante, sans import ni nuit
-    categorize(fin, "Kiosque Fictif", "voiture-credit")
+    # un paiement classé après coup (Double Sas) compte dès la lecture suivante, sans import ni
+    # nuit : le recalcul suit l'application, jamais la lecture
+    recategorize(ctx, fin, "Kiosque Fictif", "voiture-credit")
     assert owed() == -441_000

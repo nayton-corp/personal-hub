@@ -80,7 +80,10 @@ def _moves(conn: Connection) -> list[Move]:
             "SELECT e.seq, e.id, e.account_id, a.iban, a.institution, e.booking_date, "  # noqa: S608
             "e.amount_minor, e.currency, "
             "e.counterparty_iban, coalesce(e.bank_tx_code, ''), c.grp, "
-            "CAST(json_extract(e.fx_json, '$.peer') AS INTEGER) "
+            "(SELECT l.peer_seq FROM crypto_links l "
+            "LEFT JOIN crypto_link_withdrawals w ON w.link_id = l.id "
+            "WHERE l.entry_seq = e.seq AND l.kind = 'transfer' AND w.link_id IS NULL "
+            "ORDER BY l.created_at DESC LIMIT 1) "
             "FROM entries e JOIN accounts a ON a.id = e.account_id "
             "LEFT JOIN v_entry_category vc ON vc.entry_seq = e.seq "
             "LEFT JOIN categories c ON c.id = vc.category_id "

@@ -60,7 +60,10 @@ CHECKS: dict[str, Query] = {
     "taggings": _q(
         "SELECT e.id, t.tag_id, 1 FROM v_taggings t JOIN entries e ON e.seq = t.entry_seq"
     ),
-    "budgets": _q("SELECT category_id, valid_from, monthly_minor || ' ' || currency FROM budgets"),
+    "budgets": _q(
+        "SELECT category_id, valid_from, coalesce(amount_minor, monthly_minor) || '|' || "
+        "coalesce(cadence, '') || ' ' || currency FROM budgets"
+    ),
     "checkpoints": _q("SELECT account_id, on_date, kind, amount_minor FROM checkpoints"),
     "imports": _q("SELECT id, status FROM imports"),
     "trades": _q(
@@ -74,6 +77,15 @@ CHECKS: dict[str, Query] = {
     "fx": _q("SELECT on_date, base, quote, source, rate FROM fx_rates"),
     "compositions": _q(
         "SELECT isin, dimension, bucket, weight || '|' || on_date FROM compositions"
+    ),
+    "crypto_moves": _q(
+        "SELECT e.id, m.role || '|' || m.asset || '|' || m.quantity FROM crypto_moves m "
+        "JOIN entries e ON e.seq = m.entry_seq"
+    ),
+    "crypto_links": _q(
+        "SELECT e.id, l.kind || '|' || coalesce(p.id, ''), l.method FROM crypto_links l "
+        "JOIN entries e ON e.seq = l.entry_seq LEFT JOIN entries p ON p.seq = l.peer_seq "
+        "LEFT JOIN crypto_link_withdrawals w ON w.link_id = l.id WHERE w.link_id IS NULL"
     ),
     # tables dérivées, recalculées après le rejeu
     "transfers": _q(

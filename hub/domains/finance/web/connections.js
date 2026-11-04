@@ -191,11 +191,10 @@ export function connectionsCard() {
   linkStatus();
 }
 
-function refreshText(c) {
-  const when = "le service la lance dans la minute";
-  if (c.connector === "bcf") return `${c.label} : actualisation demandée, ${when}. Valide la connexion sur ton téléphone.`;
-  if (c.connector === "enable_banking") return `${c.label} : actualisation demandée, ${when} (synchronisations par jour limitées par la banque).`;
-  return `${c.label} : actualisation demandée, ${when}.`;
+const refreshHints = async () => Object.fromEntries((await api(paths.catalog).catch(() => ({ items: [] }))).items.filter((x) => x.refresh_hint).map((x) => [x.name, x.refresh_hint]));
+async function refreshText(c) {
+  const hint = (await refreshHints())[c.connector];
+  return `${c.label} : actualisation demandée, le service la lance dans la minute.${hint ? ` ${hint}` : ""}`;
 }
 
 // relit sans effacer : la liste reste affichée pendant la lecture
@@ -224,8 +223,9 @@ async function refreshAll() {
     const out = await api(`${paths.states}/refresh`, {});
     const asked = out.items.filter((s) => s.run_requested);
     if (!asked.length) return "Aucune connexion active à actualiser.";
-    const bcf = asked.some((s) => s.connector === "bcf");
-    return `${asked.length} connexion${asked.length > 1 ? "s" : ""} à actualiser dans les minutes qui viennent.${bcf ? " BCF : valide la connexion sur ton téléphone." : ""}`;
+    const hints = await refreshHints();
+    const todo = [...new Set(asked.map((s) => hints[s.connector]).filter(Boolean))];
+    return `${asked.length} connexion${asked.length > 1 ? "s" : ""} à actualiser dans les minutes qui viennent.${todo.length ? ` ${todo.join(" ")}` : ""}`;
   });
 }
 

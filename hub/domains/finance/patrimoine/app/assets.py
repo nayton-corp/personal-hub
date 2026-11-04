@@ -40,7 +40,8 @@ def upsert_instrument(
     sub_class: str | None = None,
 ) -> None:
     """Crée l'instrument, ou complète ce qui lui manque ; un nom déjà connu n'est pas remplacé
-    (le rapport VIAC, plus complet, reste la référence de ses fonds)."""
+    (le rapport VIAC, plus complet, reste la référence de ses fonds), ni un type connu : seul
+    « other » (inconnu) prend le type que donne une source (audit m13)."""
     if kind not in KINDS:
         kind = "other"
     if not name:
@@ -70,8 +71,7 @@ def upsert_instrument(
                 "UPDATE instruments SET currency = coalesce(currency, :c), "
                 "symbol = coalesce(symbol, :s), asset_class = coalesce(asset_class, :a), "
                 "sub_class = coalesce(sub_class, :sc), "
-                "kind = CASE WHEN kind = 'other' OR (kind = 'fund' AND :k != 'other') THEN :k "
-                "ELSE kind END WHERE isin = :i"
+                "kind = CASE WHEN kind = 'other' THEN :k ELSE kind END WHERE isin = :i"
             ),
             params,
         )
@@ -173,12 +173,35 @@ def add_fx(
     return bool(result.rowcount)
 
 
+# À date égale, la source qui fait foi (audit m13) : la valorisation du dépositaire (rapport
+# VIAC, relevé Flex IBKR, relevé SwissBorg), un relevé saisi à la main, les clôtures de marché,
+# puis le prix d'une opération (un cours de la journée, pas une clôture) ; une source inconnue
+# passe après, par ordre alphabétique inverse
+PRICE_SOURCES = (
+    "viac_report",
+    "ibkr_flex",
+    "swissborg",
+    "manual",
+    "yahoo",
+    "coingecko",
+    "viac_notice",
+    "ibkr_trade",
+    "binance",
+)
+
+
+def price_rank() -> str:
+    """Expression SQL du rang d'une source de cours : 0 pour la plus sûre."""
+    whens = " ".join(f"WHEN '{s}' THEN {i}" for i, s in enumerate(PRICE_SOURCES))
+    return f"CASE source {whens} ELSE {len(PRICE_SOURCES)} END"
+
+
 def price_at(conn: Connection, key: str, on_date: str) -> tuple[Decimal, str] | None:
     """Dernier cours connu d'un instrument à cette date : (cours, devise)."""
     row = conn.execute(
         text(
-            "SELECT price, currency FROM prices WHERE isin = :i AND on_date <= :d "
-            "ORDER BY on_date DESC, source DESC LIMIT 1"
+            "SELECT price, currency FROM prices WHERE isin = :i AND on_date <= :d "  # noqa: S608
+            f"ORDER BY on_date DESC, {price_rank()}, source DESC LIMIT 1"  # rang : constante
         ),
         {"i": key, "d": on_date},
     ).first()

@@ -16,6 +16,7 @@ import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -28,7 +29,7 @@ from domia_assistant.grammar import normalize  # noqa: E402
 from domia_assistant.tools import Speaker, Toolbox  # noqa: E402
 
 
-def matches(expected: dict, got: tuple) -> bool:
+def matches(expected: dict[str, Any], got: tuple[Any, ...]) -> bool:
     method, path, body = got
     if expected.get("method") and expected["method"] != method:
         return False
@@ -37,7 +38,7 @@ def matches(expected: dict, got: tuple) -> bool:
     return all((body or {}).get(k) == v for k, v in (expected.get("body") or {}).items())
 
 
-def missing(case: dict, house: dict) -> list[str]:
+def missing(case: dict[str, Any], house: dict[str, Any]) -> list[str]:
     """Les objets attendus par le cas qui manquent à l'essai (/api/<sorte>/<id>/commands)."""
     known = {r["id"] for r in house.get("rooms", [])} | {m["id"] for m in house.get("machines", []) or []}
     for room in house.get("rooms", []):
@@ -52,7 +53,12 @@ def missing(case: dict, house: dict) -> list[str]:
 
 
 def judge(
-    case: dict, gestures: list[tuple], tools: list[str], model_calls: int, answer: str, worked: set[str] | None = None
+    case: dict[str, Any],
+    gestures: list[tuple[Any, ...]],
+    tools: list[str],
+    model_calls: int,
+    answer: str,
+    worked: set[str] | None = None,
 ) -> tuple[bool, list[str], int]:
     """(réussi, raisons, erreurs graves). Un outil attendu ne compte que s'il a rendu un résultat sans erreur."""
     why = []
@@ -82,13 +88,13 @@ def judge(
     return not why, why, grave
 
 
-def read_only(case: dict) -> dict:
+def read_only(case: dict[str, Any]) -> dict[str, Any]:
     """Sans le droit d'écrire (`assistant.settings_write`), une demande de réglage ne change rien et dit où le
     changer."""
     return {**{k: v for k, v in case.items() if k != "tools"}, "none": True, "words": ["reglages"]}
 
 
-def expand(spec: dict, variants: dict, which: str) -> list[dict]:
+def expand(spec: dict[str, Any], variants: dict[str, Any], which: str) -> list[dict[str, Any]]:
     """Les phrases à jouer : `cases` la phrase de chaque cas, `variants` ses autres façons de le dire, `control` les
     phrases de contrôle, `dev` les deux premières, `all` toutes. Une variante garde les attentes de son cas, sauf la
     voie rapide (le modèle peut la prendre) ; son id est celui du cas suivi de .v1, .v2 ou .k1."""
@@ -141,29 +147,29 @@ def main() -> int:
     if not parts.settings.domia_url.endswith(":3001") and not args.not_the_essai:
         print("le banc tourne contre l'essai (port 3001), jamais contre la vraie maison", file=sys.stderr)
         return 2
-    gestures: list[tuple] = []
+    gestures: list[tuple[Any, ...]] = []
     tools: list[str] = []
     calls = [0]
     real_gesture = parts.domia.gesture
 
-    def gesture(method, path, body, person):
+    def gesture(method: str, path: str, body: dict[str, Any] | None, person: str | None) -> Any:
         gestures.append((method, path, body))
         return real_gesture(method, path, body, person)
 
     parts.domia.gesture = gesture  # type: ignore[method-assign]
     real_chat = parts.model.chat
 
-    def chat(messages, schemas):
+    def chat(messages: list[dict[str, Any]], schemas: list[dict[str, Any]]) -> dict[str, Any]:
         calls[0] += 1
         message = real_chat(messages, schemas)
         tools.extend(c["function"]["name"] for c in message.get("tool_calls") or [])
         return message
 
-    parts.model.chat = chat  # type: ignore[method-assign]
+    parts.model.chat = chat  # type: ignore[method-assign, assignment]
     worked: set[str] = set()
     real_run = Toolbox.run
 
-    def run(self, name, args, who):
+    def run(self: Toolbox, name: str, args: dict[str, Any], who: Speaker) -> Any:
         result = real_run(self, name, args, who)
         if not (isinstance(result, dict) and "error" in result):
             worked.add(name)

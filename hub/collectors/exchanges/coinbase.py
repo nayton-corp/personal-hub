@@ -19,7 +19,8 @@ from urllib.parse import urlsplit
 
 from hub.collectors.base import Failure
 from hub.collectors.exchanges import history
-from hub.collectors.exchanges.binance_history import History, Op, _qty
+from hub.collectors.exchanges.binance_api import Op, _qty
+from hub.collectors.exchanges.binance_history import History
 from hub.collectors.exchanges.common import runner
 from hub.collectors.http import Http
 from hub.collectors.runtime import Env

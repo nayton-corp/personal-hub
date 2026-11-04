@@ -1,6 +1,6 @@
 [project]
 name = "personal-hub"
-version = "0.13.19"
+version = "0.14.0"
 description = "Personal Hub : registre financier personnel, auto-hébergé"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -43,8 +43,8 @@ documents = "hub.domains.documents:create"
 [project.entry-points."hub.connectors"]
 finance = "hub.domains.finance.sources.app.connectors:CATALOG"
 
-[project.entry-points."hub.country_modules"]
-finance = "hub.domains.finance.sources.app.connectors:COUNTRY_MODULES"
+[project.entry-points."hub.country_packs"]
+finance = "hub.domains.finance.packs:CONTRIBUTIONS"
 
 [project.entry-points."hub.connection_imports"]
 finance = "hub.domains.finance.sources.app.legacy_connections:import_legacy"

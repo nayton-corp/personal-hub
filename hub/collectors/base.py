@@ -81,7 +81,9 @@ class MarketConfig(BaseModel):
     """Cours du marché (lot 6) : sources publiques, sans compte."""
 
     fx_url: str = "https://api.frankfurter.dev/v1"
-    currencies: list[str] = ["EUR", "USD", "GBP"]
+    # devises suivies (la base en est retirée) ; le franc reste suivi dans une autre base, un
+    # compte VIAC étant tenu en CHF
+    currencies: list[str] = ["EUR", "USD", "GBP", "CHF"]
     coingecko_url: str = "https://api.coingecko.com/api/v3"
     crypto: dict[str, str] = {  # symbole → id CoinGecko
         "BTC": "bitcoin",

@@ -21,7 +21,7 @@ from hub.domains.finance.domain import FinanceDomain
 from hub.kernel.clock import local_tz
 from hub.platform import secrets
 from hub.platform.settings import Secrets, Settings
-from tests.brain.test_brain import Scripted, box_for, calls, last_tool
+from tests.brain.test_brain import Scripted, box_for, calls
 from tests.finance.test_app_reads import (  # noqa: F401 - fixtures
     client,
     ctx,
@@ -39,18 +39,6 @@ class Models(Scripted):
 
     def models(self) -> list[str]:
         return self.names
-
-
-def answer_restaurants(amount: str | None = None) -> Any:
-    def turn(messages: list[dict[str, Any]]) -> Reply:
-        found = amount or next(
-            c["amount"]
-            for c in last_tool(messages)["by_category"]
-            if c["category"] == "restaurants"
-        )
-        return Reply(f"Tu as dépensé {found} CHF en restaurants ce mois.")
-
-    return turn
 
 
 @pytest.fixture
@@ -72,19 +60,14 @@ def wired(
     return setup
 
 
-def test_ask(wired: Any) -> None:
-    wired(Models(calls(("finance_month_summary", {})), answer_restaurants()))
-    out = runner.invoke(cli.app, ["ask", "combien en restaurants ce mois ?"])
-    assert out.exit_code == 0, out.output
-    assert "80.00 CHF" in out.output
-
-
 def test_check_passes_and_fails(wired: Any) -> None:
-    wired(Models(calls(("finance_month_summary", {})), answer_restaurants()))
+    """Un tour de conversation : le modèle demande l'outil du résumé du mois, ou pas."""
+    wired(Models(calls(("finance_month_summary", {}))))
     ok = runner.invoke(cli.app, ["check"])
     assert ok.exit_code == 0, ok.output
-    assert "contrôle : ok, la réponse contient 80.00 CHF" in ok.output
-    wired(Models(calls(("finance_month_summary", {})), answer_restaurants("95.00")))
+    assert "outil : ok (finance_month_summary, données au 2026-10-25)" in ok.output
+    assert "contrôle : ok, le modèle demande finance_month_summary" in ok.output
+    wired(Models(lambda _m: Reply("Tu as dépensé 95.00 CHF en restaurants ce mois.")))
     bad = runner.invoke(cli.app, ["check"])
     assert bad.exit_code == 1
     assert "écart" in bad.output
@@ -126,15 +109,6 @@ def test_mcp_command(wired: Any) -> None:
     assert runner.invoke(cli.app, ["mcp", "--token", "app"]).exit_code == 2
 
 
-def test_ask_when_model_is_down(wired: Any) -> None:
-    def down(_m: list[dict[str, Any]]) -> Reply:
-        raise LlmError("modèle injoignable")
-
-    wired(Models(down))
-    out = runner.invoke(cli.app, ["ask", "?"])
-    assert out.exit_code == 1
-
-
 # --- réglages ---------------------------------------------------------------------------------
 
 
@@ -164,10 +138,10 @@ def test_toolbox_errors_exit(monkeypatch: pytest.MonkeyPatch) -> None:
         raise TokenMissing("jeton « brain » absent")
 
     monkeypatch.setattr(cli, "token", no_token)
-    out = runner.invoke(cli.app, ["ask", "?"])
+    out = runner.invoke(cli.app, ["check"])
     assert out.exit_code == 2
     assert "absent" in out.output
     monkeypatch.setattr(cli, "token", lambda _s, _w: "hub_x")
-    out = runner.invoke(cli.app, ["ask", "?"])
+    out = runner.invoke(cli.app, ["check"])
     assert out.exit_code == 1
     assert "hub" in out.output

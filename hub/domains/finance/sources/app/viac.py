@@ -371,7 +371,7 @@ def apply_portfolio(conn: Connection, import_id: str, on: str, p: PortfolioRepor
         balance = conn.execute(
             text(
                 "SELECT coalesce(sum(amount_minor), 0) FROM entries WHERE account_id = :a "
-                "AND booking_date <= :d AND kind != 'correction'"
+                "AND booking_date <= :d"
             ),
             {"a": cash.id, "d": on},
         ).scalar_one()

@@ -8,6 +8,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Any, cast
 
 SHOPPING = "Courses"
 
@@ -21,7 +22,7 @@ class Agenda:
         self.base_url = base_url.rstrip("/") if base_url else None
         self.timeout = timeout
 
-    def _call(self, method: str, path: str, body: dict | None = None):
+    def _call(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         if not self.base_url:
             raise AgendaUnavailable("pas de pont Rappels/Calendrier sur cette machine")
         data = None if body is None else json.dumps(body).encode("utf-8")
@@ -40,14 +41,14 @@ class Agenda:
         except (urllib.error.URLError, TimeoutError) as e:
             raise AgendaUnavailable(f"le pont Rappels/Calendrier ne répond pas ({e})") from None
 
-    def status(self) -> dict:
-        return self._call("GET", "/health")
+    def status(self) -> dict[str, Any]:
+        return cast("dict[str, Any]", self._call("GET", "/health"))
 
-    def reminders(self, list_name: str | None = None, include_done: bool = False) -> list[dict]:
+    def reminders(self, list_name: str | None = None, include_done: bool = False) -> list[dict[str, Any]]:
         query = urllib.parse.urlencode(
             {k: v for k, v in (("list", list_name), ("done", "1" if include_done else None)) if v}
         )
-        return self._call("GET", "/reminders" + (f"?{query}" if query else ""))
+        return cast("list[dict[str, Any]]", self._call("GET", "/reminders" + (f"?{query}" if query else "")))
 
     def add_reminder(
         self,
@@ -57,7 +58,7 @@ class Agenda:
         recurrence: str | None = None,
         interval: int | None = None,
         notes: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Sans liste : la liste par défaut de Rappels ; les courses vont dans « Courses » (SHOPPING)."""
         body = {
             "title": title,
@@ -67,16 +68,22 @@ class Agenda:
             "interval": interval,
             "notes": notes,
         }
-        return self._call("POST", "/reminders", {k: v for k, v in body.items() if v is not None})
+        return cast(
+            "dict[str, Any]", self._call("POST", "/reminders", {k: v for k, v in body.items() if v is not None})
+        )
 
-    def complete_reminder(self, reminder_id: str) -> dict:
-        return self._call("POST", f"/reminders/{urllib.parse.quote(reminder_id, safe='')}/complete")
+    def complete_reminder(self, reminder_id: str) -> dict[str, Any]:
+        return cast(
+            "dict[str, Any]", self._call("POST", f"/reminders/{urllib.parse.quote(reminder_id, safe='')}/complete")
+        )
 
-    def calendar(self, start: str, end: str) -> list[dict]:
-        return self._call("GET", "/events?" + urllib.parse.urlencode({"from": start, "to": end}))
+    def calendar(self, start: str, end: str) -> list[dict[str, Any]]:
+        return cast(
+            "list[dict[str, Any]]", self._call("GET", "/events?" + urllib.parse.urlencode({"from": start, "to": end}))
+        )
 
     def add_event(
         self, title: str, start: str, end: str, calendar: str | None = None, notes: str | None = None
-    ) -> dict:
+    ) -> dict[str, Any]:
         body = {"title": title, "start": start, "end": end, "calendar": calendar, "notes": notes}
-        return self._call("POST", "/events", {k: v for k, v in body.items() if v is not None})
+        return cast("dict[str, Any]", self._call("POST", "/events", {k: v for k, v in body.items() if v is not None}))

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Response
 from sqlalchemy import text
 
 import hub
@@ -33,13 +33,15 @@ from hub.api.schemas import (
 )
 from hub.api.schemas_domains import DomainListOut
 from hub.core import links as linking
-from hub.core import passkeys, profile, proposals
+from hub.core import passkeys, profile, proposal_events, proposals
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal, require
 from hub.core.errors import Problem
 from hub.core.search import fuse
 from hub.kernel.clock import utcnow
 from hub.kernel.ids import Urn
+from hub.platform.logging import get_logger
 
+log = get_logger("hub.api.core")
 router = APIRouter()
 
 
@@ -49,14 +51,16 @@ def health(hub_ctx: Ctx) -> HealthOut:
         revision = hub_ctx.core.revision()
         core_ok = hub_ctx.core.is_current()
         core = CoreHealthOut(db="ok" if core_ok else "outdated", revision=revision, ok=core_ok)
-    except Exception:
+    except Exception as exc:  # une santé « error » dit sa cause au journal (audit m6)
+        log.warning("health.failed", part="core", error=type(exc).__name__)
         core = CoreHealthOut(db="error", revision=None, ok=False)
     domains: dict[str, DomainHealthOut] = {}
     for d in hub_ctx.registry:
         try:
             h = d.health()
             domains[d.name] = DomainHealthOut(db=h.db, schema_version=h.schema_version, ok=h.ok)
-        except Exception:
+        except Exception as exc:
+            log.warning("health.failed", part=d.name, error=type(exc).__name__)
             domains[d.name] = DomainHealthOut(db="error", schema_version=d.schema_version, ok=False)
     ok = core.ok and all(d.ok for d in domains.values())
     return HealthOut(
@@ -126,10 +130,13 @@ def update_profile(body: ProfileIn, hub_ctx: Ctx, principal: AppSession) -> Prof
 def list_proposals(
     hub_ctx: Ctx,
     principal: Reader,
+    background: BackgroundTasks,
     status: Annotated[str | None, Query(pattern="^[a-z_]+$")] = "pending",
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
 ) -> ProposalListOut:
-    proposals.sync_events(hub_ctx)  # cartes demandées par les domaines (imports en attente…)
+    # cartes demandées par les domaines (imports en attente…) : après la réponse, une lecture
+    # n'écrit pas ; l'app relit la liste régulièrement
+    background.add_task(proposal_events.sync_events, hub_ctx)
     with hub_ctx.core.engine.connect() as conn:
         items = proposals.list_by_status(conn, status, limit)
     visible = [

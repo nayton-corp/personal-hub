@@ -110,19 +110,19 @@ def make_env(tmp_path: Path, site: str, fake_hub: FakeHub):  # type: ignore[no-u
 @pytest.fixture(autouse=True)
 def pauses(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     """Les pauses du collecteur « market » (mempool.space), notées au lieu d'attendre."""
-    from hub.collectors.market import flow
+    from hub.collectors.market import net
 
     seen: list[int] = []
-    monkeypatch.setattr(flow, "sleep", seen.append)
+    monkeypatch.setattr(net, "sleep", seen.append)
     return seen
 
 
 @pytest.fixture(autouse=True)
 def binance_pauses(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     """Les pauses de l'historique Binance (millisecondes), notées au lieu d'attendre."""
-    from hub.collectors.exchanges import binance_history, history
+    from hub.collectors.exchanges import binance_api, history
 
     seen: list[int] = []
-    monkeypatch.setattr(binance_history, "sleep", seen.append)
+    monkeypatch.setattr(binance_api, "sleep", seen.append)
     monkeypatch.setattr(history, "sleep", seen.append)
     return seen

@@ -3,6 +3,7 @@
 // part au hub, qui le relaie à l'assistant du Mac). Hors de la conversation, la réponse sort de
 // l'orbe dans une carte de verre qui reste jusqu'à ce qu'on la ferme ; une pastille signale une
 // réponse pas encore lue. L'assistant garde la conversation ; l'app ne garde rien.
+import { locale } from "./format.js";
 import { mountOrb } from "./orb.js";
 import { ApiError, api, store } from "./store.js";
 import { announce, esc, ic, pref, setPref } from "./ui.js";
@@ -83,6 +84,7 @@ function reason(e) {
 function answered(question, a, voice) {
   const item = { kind: "talk", at: new Date().toISOString(), text: a.heard ?? question, answer: a.answer, voice };
   S.items = [...(S.items || []), item];
+  S.confirm = a.confirm || null; // jeton de la question posée : renvoyé avec la prochaine phrase
   if (!here()) {
     S.card = item;
     S.unread = true;
@@ -104,7 +106,7 @@ async function send(question) {
   paintOrb();
   store.notify();
   try {
-    answered(text, await api("/assistant/talk", { text }), false);
+    answered(text, await api("/assistant/talk", S.confirm ? { text, confirm: S.confirm } : { text }), false);
   } catch (e) {
     S.error = reason(e);
     if (!here()) S.card = { text, answer: S.error, failed: true };
@@ -218,7 +220,7 @@ function wireOrb() {
 
 // --- rendu ------------------------------------------------------------------------------------
 
-const time = (at) => new Date(at).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
+const time = (at) => new Date(at).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 
 function bubbles() {
   const out = [];

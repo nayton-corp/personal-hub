@@ -4,7 +4,6 @@ l'assistant. Le pilier 3a selon le pays : tests/finance/test_profile_modules.py.
 from __future__ import annotations
 
 import json
-from datetime import date
 from pathlib import Path
 
 import pytest
@@ -12,7 +11,6 @@ from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
 from hub import cli
-from hub.brain import agent
 from hub.core import profile
 from hub.core.context import HubContext
 from hub.kernel import clock
@@ -63,13 +61,22 @@ def test_api_read_by_app_and_tokens_write_by_app_only(
 ) -> None:  # type: ignore[no-untyped-def]
     assert client.get("/api/profile").status_code == 401
     reader = bearer(make_token("demo:read"))
-    assert client.get("/api/profile", headers=reader).json() == {
+    got = client.get("/api/profile", headers=reader).json()
+    assert got == {
         "display_name": None,
         "country": "CH",
         "timezone": "Europe/Zurich",
+        "locale": "fr-CH",
         "currency": "CHF",
+        "currency_exponent": 2,
         "modules": ["pillar3a"],
+        "packs": {"finance": got["packs"]["finance"]},
     }
+    # ce que le pack pays de la finance publie pour les clients de l'API (le brain)
+    pack = got["packs"]["finance"]
+    assert pack["ai_context"] == "d'un compte bancaire suisse"
+    assert "alimentation" in pack["category_hints"]
+    assert pack["person_payment"]["category"] == "twint-particuliers"
     assert client.post("/api/profile", json={"country": "FR"}, headers=reader).status_code == 403
     app_session(hub, client)
     r = client.post("/api/profile", json={"display_name": "Camille", "country": "fr"})
@@ -107,18 +114,7 @@ def test_cli_show_and_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     get_settings.cache_clear()
 
 
-def test_system_prompt_uses_the_profile() -> None:
-    today = date(2026, 10, 28)
-    named = agent.system_prompt(today, {"display_name": "Camille", "country": "CH"})
-    assert "assistant financier personnel de Camille, en Suisse." in named
-    assert "carte que Camille valide" in named
-    anonymous = agent.system_prompt(today, {"country": "XX"})
-    assert "de la personne qui utilise ce hub. Nous sommes" in anonymous
-    assert "Nathan" not in named + anonymous + agent.system_prompt(today)
-    assert "montants en CHF" in named
-    euro = agent.system_prompt(today, {"country": "FR", "currency": "EUR"})
-    assert "en France" in euro
-    assert "(ex. 412.30 EUR)" in euro
+IGNORED = {".venv", "node_modules", "__pycache__"}
 
 
 def test_no_owner_name_left_in_code() -> None:
@@ -128,6 +124,7 @@ def test_no_owner_name_left_in_code() -> None:
         for base in ("hub", "deploy", "assistant")
         for p in (root / base).rglob("*")
         if p.is_file()
+        and not IGNORED & set(p.parts)  # un venv local ou un cache n'est pas du code
         and p.suffix in {".py", ".js", ".html", ".toml", ".yaml", ".example", ""}
         and "nathan" in p.read_text(errors="ignore").lower()
     ]

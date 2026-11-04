@@ -5,12 +5,23 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Protocol
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, BackgroundTasks, Query
 
 from hub.core import profile
 from hub.domains.finance.classement.app import budget as budget_app
 from hub.domains.finance.classement.app import packs, recurring, rules, totals
 from hub.domains.finance.classement.app import review as reviewing
+from hub.domains.finance.classement.interface.schemas import (
+    BudgetMonthsOut,
+    BudgetOut,
+    BudgetTotalsOut,
+    FlowsOut,
+    RecurringOut,
+    ReviewOut,
+    RulePacksOut,
+    SummaryOut,
+    TrendOut,
+)
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.http import (
     MONTH,
@@ -31,7 +42,7 @@ def build_router(host: Host) -> APIRouter:
     r = APIRouter()
     engine = host.engine()
 
-    @r.get("/summary")
+    @r.get("/summary", response_model=SummaryOut)
     def summary(
         p: AnyReader, month: Annotated[str | None, Query(pattern=MONTH)] = None
     ) -> dict[str, Any]:
@@ -40,7 +51,7 @@ def build_router(host: Host) -> APIRouter:
                 conn, checked_month(host, month), aggregates_only=aggregates_only(p)
             )
 
-    @r.get("/budget")
+    @r.get("/budget", response_model=BudgetOut)
     def budget(
         p: AnyReader,
         month: Annotated[str | None, Query(pattern=MONTH)] = None,
@@ -54,7 +65,7 @@ def build_router(host: Host) -> APIRouter:
                 conn, m, period, host.today(), aggregates_only=aggregates_only(p)
             )
 
-    @r.get("/budget/totals")
+    @r.get("/budget/totals", response_model=BudgetTotalsOut)
     def budget_totals(
         _p: AnyReader,
         month: Annotated[str | None, Query(pattern=MONTH)] = None,
@@ -65,7 +76,7 @@ def build_router(host: Host) -> APIRouter:
         with engine.connect() as conn:
             return budget_app.budget_totals(conn, m, period)
 
-    @r.get("/budget/months")
+    @r.get("/budget/months", response_model=BudgetMonthsOut)
     def budget_months(
         _p: AnyReader,
         month: Annotated[str | None, Query(pattern=MONTH)] = None,
@@ -76,7 +87,7 @@ def build_router(host: Host) -> APIRouter:
         with engine.connect() as conn:
             return budget_app.budget_months(conn, m, months)
 
-    @r.get("/flows")
+    @r.get("/flows", response_model=FlowsOut)
     def flows(
         p: AnyReader,
         month: Annotated[str | None, Query(pattern=MONTH)] = None,
@@ -88,7 +99,7 @@ def build_router(host: Host) -> APIRouter:
         with engine.connect() as conn:
             return budget_app.flows(conn, m, aggregates_only=aggregates_only(p), period=period)
 
-    @r.get("/trend")
+    @r.get("/trend", response_model=TrendOut)
     def trend(
         _p: AnyReader,
         category: str | None = None,
@@ -99,13 +110,13 @@ def build_router(host: Host) -> APIRouter:
             series = totals.trend(conn, category, months, month or this_month(host))
         return {"category": category, "series": series}
 
-    @r.get("/review")
+    @r.get("/review", response_model=ReviewOut)
     def review(_p: Reader) -> dict[str, Any]:
         """Écritures sans catégorie, groupées par contrepartie normalisée."""
         with engine.connect() as conn:
             return {"groups": reviewing.review(conn)}
 
-    @r.get("/rules/packs")
+    @r.get("/rules/packs", response_model=RulePacksOut)
     def rule_packs(_p: Reader) -> dict[str, Any]:
         """Packs de règles livrés, version installée, ceux du pays de l'instance, et le nombre
         de règles actives hors système (parcours d'accueil)."""
@@ -134,11 +145,11 @@ def build_router(host: Host) -> APIRouter:
             "active_rules": active,
         }
 
-    @r.get("/recurring")
-    def recurring_route(p: AnyReader) -> dict[str, Any]:
+    @r.get("/recurring", response_model=RecurringOut, response_model_exclude_unset=True)
+    def recurring_route(p: AnyReader, background: BackgroundTasks) -> dict[str, Any]:
         """Abonnements et paiements réguliers, prochaines échéances, total mensuel ; pour la
         portée `aggregates`, les totaux seulement."""
-        host.refresh_snapshots()
+        background.add_task(host.refresh_snapshots)  # après la réponse, jamais dans la lecture
         with engine.connect() as conn:
             return recurring.listing(conn, host.today(), aggregates_only=aggregates_only(p))
 

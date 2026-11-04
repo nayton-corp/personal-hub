@@ -13,7 +13,7 @@ from sqlalchemy import text
 from typer.testing import CliRunner
 
 from hub import cli as hub_cli
-from hub.core import proposals
+from hub.core import proposal_reconcile, proposals
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
@@ -257,7 +257,7 @@ def test_external_effect(hub: HubContext, demo: DemoDomain) -> None:
     q = new(hub, "y", kind="notify")
     with hub.core.engine.begin() as conn:
         conn.execute(text("UPDATE proposals SET status = 'unknown' WHERE id = :i"), {"i": q.id})
-    assert proposals.reconcile(hub).marked_applied == 1
+    assert proposal_reconcile.reconcile(hub).marked_applied == 1
 
 
 def test_policy_tiers_and_digest(

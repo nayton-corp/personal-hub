@@ -24,7 +24,8 @@ from hub.domains.finance.api import build_router
 from hub.domains.finance.classement.app import packs, recurring, sentinels
 from hub.domains.finance.cli import build_cli
 from hub.domains.finance.handlers import build_kinds
-from hub.domains.finance.patrimoine.app import checks, snapshots, transfers
+from hub.domains.finance.packs import CountryPack, instance
+from hub.domains.finance.patrimoine.app import checks, crypto_pairing, snapshots, transfers
 from hub.domains.finance.registre.app import ledger, reads
 from hub.domains.finance.registre.model import period
 from hub.domains.finance.sources.app import statements
@@ -40,20 +41,24 @@ from hub.platform.logging import get_logger
 from hub.platform.settings import Settings
 
 MIGRATIONS = Path(__file__).parent / "migrations"
-SCHEMA_VERSION = 20  # 0020_reconcile_decisions
+SCHEMA_VERSION = 24  # 0024_source_gaps
 log = get_logger("hub.finance")
 LEGACY_ARCHIVE = re.compile(r"\d{4}|duplicates")
 SEVERITY: dict[str, Severity] = {"budget_over": "alert", "budget_likely": "warning"}
 
 
 def _read_period(dbapi_conn: sqlite3.Connection, _record: Any, _proxy: Any) -> None:
-    """Chaque connexion relit le début du mois budgétaire : un réglage changé par l'app vaut
-    aussitôt pour le planificateur et le CLI, qui tournent dans d'autres processus."""
+    """Chaque connexion relit les règles du mois budgétaire : un réglage posé par une
+    proposition vaut aussitôt pour le planificateur et le CLI, qui tournent dans d'autres
+    processus."""
     try:
-        row = dbapi_conn.execute("SELECT start_day FROM budget_period").fetchone()
-    except sqlite3.OperationalError:  # base pas encore migrée
-        row = None
-    period.set_start_day(int(row[0]) if row else 1)
+        rows = dbapi_conn.execute(
+            "SELECT valid_from, start_day FROM budget_period_rules ORDER BY created_at, id"
+        ).fetchall()
+    except sqlite3.OperationalError as exc:  # base pas encore migrée : dit, jamais tu (audit m6)
+        log.warning("period.rules_unavailable", error=type(exc).__name__)
+        rows = []
+    period.set_rules([(str(r[0]), int(r[1])) for r in rows])
 
 
 class CurrencyMismatch(RuntimeError):
@@ -85,12 +90,18 @@ class FinanceDomain:
         self.pillar3a_cap: int | None = int(cap) if cap is not None else None
         self.proposal_kinds: Mapping[str, ProposalKind] = build_kinds(self)
 
+    def pack(self) -> CountryPack:
+        """Le pack du pays du profil : ce que l'instance sait de son pays."""
+        return instance.of(self.settings)
+
     def pillar3a(self) -> dict[str, Any]:
-        """Options du pilier 3a pour les chiffres clés et les sentinelles : le module s'ouvre
-        selon le pays du profil (Suisse)."""
+        """Options de l'épargne-retraite plafonnée pour les chiffres clés et les sentinelles :
+        le module `pillar3a` s'ouvre selon le pays du profil, le plafond et la catégorie
+        viennent du pack."""
         return {
             "pillar3a": profile.load(self.settings).has("pillar3a"),
             "pillar3a_cap": self.pillar3a_cap,
+            "pack": self.pack(),
         }
 
     def process_inbox(self) -> dict[str, int]:
@@ -240,12 +251,14 @@ class FinanceDomain:
         return refreshed
 
     def refresh_derived(self) -> dict[str, int]:
-        """Virements appariés, puis abonnements (qui laissent les virements de côté)."""
+        """Virements appariés, abonnements (qui laissent les virements de côté), et les liens
+        crypto que les mouvements non reliés laissent deviner, demandés en cartes."""
         with begin_immediate(self._engine) as conn:
             pairs = transfers.refresh(conn)
             found = recurring.refresh(conn, self.today())
-        log.info("derived.refreshed", transfers=pairs, recurring=found)
-        return {"transfers": pairs, "recurring": found}
+            asked = crypto_pairing.request(conn, self.today().isoformat())
+        log.info("derived.refreshed", transfers=pairs, recurring=found, crypto_links=asked)
+        return {"transfers": pairs, "recurring": found, "crypto_links": asked}
 
     def run_sentinels(self) -> list[sentinels.Alert]:
         with begin_immediate(self._engine) as conn:

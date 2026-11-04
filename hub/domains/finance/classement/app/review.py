@@ -7,6 +7,8 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
+from hub.domains.finance.packs import CountryPack
+from hub.domains.finance.packs import instance as packs
 from hub.domains.finance.registre.app import ledger
 from hub.domains.finance.registre.model import merchant
 from hub.domains.finance.registre.model.amounts import (
@@ -16,6 +18,10 @@ from hub.domains.finance.registre.model.amounts import (
 from hub.kernel.text import normalize
 
 REVIEW_IDS = 50  # identifiants rendus par groupe : de quoi proposer un lot de recatégorisations
+# bornes des lectures (audit m17) : les écritures à classer les plus récentes, et les écritures
+# classées les plus récentes dont on tire l'historique d'un commerçant
+REVIEW_ROWS = 5_000
+HISTORY_ROWS = 20_000
 
 
 def _direction(amounts: list[int]) -> str:
@@ -48,15 +54,17 @@ CATCH_ALL = (
 )
 
 
-def review_key(counterparty: str | None, label: str) -> str:
+def review_key(counterparty: str | None, label: str, pack: CountryPack) -> str:
     """Groupe d'« À classer » : le commerçant lu dans le libellé (paiements par carte, TWINT),
     sinon la contrepartie, sinon le libellé. Sans vraie contrepartie, on groupe par libellé : un
     nom de remplissage réunirait des marchands sans rapport, et « Toujours » en ferait une règle
     beaucoup trop large. La clé est un morceau du texte de l'écriture : motif d'une règle."""
-    return merchant.key(label) or normalize(ledger.party(counterparty) or label) or "(inconnu)"
+    return (
+        merchant.key(label, pack) or normalize(ledger.party(counterparty) or label) or "(inconnu)"
+    )
 
 
-def _past_categories(conn: Connection, keys: set[str]) -> dict[str, list[str]]:
+def _past_categories(conn: Connection, keys: set[str], pack: CountryPack) -> dict[str, list[str]]:
     """Pour chaque groupe d'« À classer », les catégories que ses écritures déjà classées ont
     reçues (à la main ou par une règle précise), par nombre d'écritures décroissant."""
     if not keys:
@@ -68,13 +76,14 @@ def _past_categories(conn: Connection, keys: set[str]) -> dict[str, list[str]]:
             "LEFT JOIN categorizations c ON c.seq = vc.categorization_seq "
             "LEFT JOIN rules r ON r.id = c.rule_id "
             "WHERE e.kind = 'movement' AND vc.category_id IS NOT NULL "
-            f"AND vc.category_id != :uncat AND NOT ({CATCH_ALL})"
+            f"AND vc.category_id != :uncat AND NOT ({CATCH_ALL}) "
+            "ORDER BY e.booking_date DESC, e.seq DESC LIMIT :n"
         ),
-        {"uncat": UNCATEGORIZED},
+        {"uncat": UNCATEGORIZED, "n": HISTORY_ROWS},
     ).fetchall()
     counts: dict[str, dict[str, int]] = {}
     for counterparty, label, category in rows:
-        key = review_key(counterparty, label)
+        key = review_key(counterparty, label, pack)
         if key in keys:
             per = counts.setdefault(key, {})
             per[category] = per.get(category, 0) + 1
@@ -94,13 +103,15 @@ def review(conn: Connection, limit: int = 100) -> list[dict[str, Any]]:
             "LEFT JOIN rules r ON r.id = c.rule_id "
             "WHERE e.kind = 'movement' AND (vc.category_id IS NULL OR ("
             f"{CATCH_ALL}))"
-            "ORDER BY e.booking_date DESC, e.seq DESC"
-        )
+            "ORDER BY e.booking_date DESC, e.seq DESC LIMIT :n"
+        ),
+        {"n": REVIEW_ROWS},
     ).fetchall()
+    pack = packs.current()
     groups: dict[tuple[str, str, str | None], list[Any]] = {}
     for r in rows:
-        groups.setdefault((review_key(r[0], r[1]), r[2], r[9]), []).append(r)
-    history = _past_categories(conn, {k for k, _c, _g in groups})
+        groups.setdefault((review_key(r[0], r[1], pack), r[2], r[9]), []).append(r)
+    history = _past_categories(conn, {k for k, _c, _g in groups}, pack)
     out: list[dict[str, Any]] = []
     for (key, ccy, guess), v in groups.items():
         amounts = [int(r[3]) for r in v]

@@ -64,13 +64,13 @@ tests/              pytest, Hypothesis, Playwright à 375 px ; domaine factice
 uv sync --frozen && uv run pre-commit install   # ou : make install
 make check                                       # ruff, mypy --strict, import-linter, tests
 make dev                                         # API + app sur http://localhost:8710
-make web                                         # lint et tests des modules de l'app (Node 22)
+make web                                         # lint, types (tsc) et tests des modules de l'app (Node 22)
 ```
 
 En développement, les passkeys exigent `localhost` ou HTTPS : `make dev` sert l'app sur
 `http://localhost:8710` (données dans `./var`, ignoré par git). Un changement voulu du contrat
-d'API se valide avec `make openapi` ; une route, un outil ou un connecteur nouveau, avec
-`make reference`.
+d'API se valide avec `make openapi` (l'instantané du cœur et les types de l'app,
+`hub/web/api.d.ts`) ; une route, un outil ou un connecteur nouveau, avec `make reference`.
 
 ## Commande `hub`
 
@@ -89,7 +89,7 @@ d'API se valide avec `make openapi` ; une route, un outil ou un connecteur nouve
 | `hub ops databases` · `hub ops litestream` | bases montées et configuration de la réplication |
 | `hub scheduler deploy/crontab` | tâches planifiées du conteneur `scheduler` |
 | `hub finance …` | comptes, catégories, règles, imports, reprises, reconstruction ([docs/finance.md](docs/finance.md)) |
-| `hub-brain mcp` · `ask` · `suggest` · `check` | IA locale ([docs/brain.md](docs/brain.md)) |
+| `hub-brain mcp` · `suggest` · `catchup` · `direct` · `check` | IA locale ([docs/brain.md](docs/brain.md)) |
 
 Portées d'un jeton : `brain` (= `*:aggregates`), `brain=finance,agenda` (en plus, lecture et
 propositions des domaines nommés), `aggregates` (= `*:aggregates`), `collector`

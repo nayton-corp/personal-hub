@@ -15,6 +15,7 @@ from sqlalchemy import text
 
 from hub.api.app import create_app
 from hub.core.context import HubContext
+from hub.core.errors import Problem
 from hub.core.registry import Registry
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.patrimoine.app import holdings, snapshots, valuation
@@ -102,6 +103,8 @@ def set_budget(fin: FinanceDomain, category: str, minor: int) -> None:
             {
                 "category_id": category,
                 "monthly_minor": minor,
+                "amount_minor": minor,
+                "cadence": "month",
                 "currency": "CHF",
                 "valid_from": "2025-12-01",
                 "proposal_id": None,
@@ -418,6 +421,30 @@ def test_export_neutralizes_formulas() -> None:
     assert export._cell("=HYPERLINK()") == "'=HYPERLINK()"
     assert export._cell("Migros") == "Migros"
     assert export._cell(None) == ""
+    # chaque colonne de texte, la référence bancaire et les IBAN compris (audit m15)
+    trapped = (
+        12,
+        "2026-10-01",
+        None,
+        "Compte",
+        "=CMD()",
+        "debit",
+        -150000,
+        "CHF",
+        "+Régie",
+        "@IBAN",
+        "-label",
+        "=remise",
+        "=1+1",
+        "@code",
+        "-cat",
+        "+src",
+        "=imp",
+    )
+    got = export.row(trapped)
+    assert got[:3] == ["12", "2026-10-01", ""]
+    assert got[6] == "-1500.00"
+    assert all(c.startswith("'") for i, c in enumerate(got) if i not in (0, 1, 2, 3, 5, 6, 7))
 
 
 def test_ratio_and_periods() -> None:
@@ -454,22 +481,69 @@ def test_freshness_without_closing_balance(
 
 
 def test_month_start_day(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
+    """Le jour de début est une proposition datée (`set_month_start`, Double Sas) : les mois
+    d'avant gardent leur découpage, l'inverse repose la règle d'avant."""
+    from hub.core import proposals
+    from tests.finance.test_double_sas import APP, accept, create
+
     app_session(ctx, client)
     s = client.get("/api/finance/settings").json()
-    assert (s["month_start_day"], s["current_month"]) == (1, "2026-10")
-    s = client.post("/api/finance/settings", json={"month_start_day": 25}).json()
+    assert (s["month_start_day"], s["current_month"], s["rules"]) == (1, "2026-10", [])
+    with pytest.raises(Problem):
+        create(ctx, "set_month_start", {"start_day": 29})
+    p = create(ctx, "set_month_start", {"start_day": 25, "valid_from": "2026-10"})
+    assert p.preview["summary"] == "Mois budgétaire dès 2026-10 : commence le 25 (avant le 1er)"
+    assert accept(ctx, p).status == "applied"
+    s = client.get("/api/finance/settings").json()
     # après le 15 : le mois porte le nom de sa fin ; le 27 octobre est déjà en novembre
     assert s["current_month"] == "2026-11"
     assert s["current_period"] == {"start": "2026-10-25", "end": "2026-11-25"}
+    assert s["rules"] == [{"valid_from": "2026-10", "start_day": 25}]
     b = client.get("/api/finance/budget?month=2026-10").json()
     assert (b["start"], b["end"]) == ("2026-09-25", "2026-10-25")
     # le salaire du 25 septembre ouvre le mois d'octobre, celui du 25 octobre ouvre novembre
     oct_ = client.get("/api/finance/summary?month=2026-10").json()
     nov = client.get("/api/finance/summary?month=2026-11").json()
     assert (oct_["income"]["minor"], nov["income"]["minor"]) == (502_000, 500_000)
-    # un autre processus relit le réglage à sa première connexion
+    # les mois d'avant la règle gardent leur début civil ; celui de transition s'arrête où le
+    # nouveau découpage commence (aucun jour compté deux fois, aucun oublié)
+    sept = client.get("/api/finance/budget?month=2026-09").json()
+    assert (sept["start"], sept["end"]) == ("2026-09-01", "2026-09-25")
+    aug = client.get("/api/finance/budget?month=2026-08").json()
+    assert (aug["start"], aug["end"]) == ("2026-08-01", "2026-09-01")
+    # un autre processus relit les règles à sa première connexion
     period.set_start_day(1)
     with year.engine().connect():
-        assert period.start_day() == 25
-    assert client.post("/api/finance/settings", json={"month_start_day": 29}).status_code == 422
-    client.post("/api/finance/settings", json={"month_start_day": 1})
+        assert period.start_day("2026-11") == 25
+    # l'inverse repose le 1er dès octobre : la dernière règle posée l'emporte
+    with ctx.core.engine.connect() as conn:
+        fresh = proposals.get(conn, p.id)
+    assert proposals.revert(ctx, APP, fresh, None).status == "applied"
+    s = client.get("/api/finance/settings").json()
+    assert (s["month_start_day"], s["current_month"]) == (1, "2026-10")
+    assert s["rules"] == [{"valid_from": "2026-10", "start_day": 1}]
+
+
+def test_dated_month_start_rules() -> None:
+    """Une règle vaut pour les mois à partir de son mois ; chaque mois a ses bornes, et un jour
+    retrouve son mois par ces bornes."""
+    period.set_rules([("2026-03", 25), ("2026-10", 5)])
+    try:
+        assert (period.start_day("2026-02"), period.start_day("2026-03")) == (1, 25)
+        assert (period.start_day("2026-09"), period.start_day("2026-10")) == (25, 5)
+        assert period.start_day() == 5
+        # les mois de transition sont raccourcis ou allongés, jamais à cheval ni troués
+        assert period.bounds("2026-02") == (date(2026, 2, 1), date(2026, 2, 25))
+        assert period.bounds("2026-03") == (date(2026, 2, 25), date(2026, 3, 25))
+        assert period.bounds("2026-09") == (date(2026, 8, 25), date(2026, 10, 5))
+        assert period.bounds("2026-10") == (date(2026, 10, 5), date(2026, 11, 5))
+        assert period.month_of(date(2026, 2, 27)) == "2026-03"
+        assert period.month_of(date(2026, 9, 24)) == "2026-09"
+        assert period.month_of(date(2026, 10, 3)) == "2026-09"
+        assert period.month_of(date(2026, 10, 7)) == "2026-10"
+        assert period.month_of(date(2026, 11, 2)) == "2026-10"
+        # un même mois posé deux fois : la dernière règle l'emporte
+        period.set_rules([("2026-03", 25), ("2026-03", 10)])
+        assert period.start_day("2026-04") == 10
+    finally:
+        period.set_rules([])

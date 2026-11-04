@@ -1,5 +1,5 @@
 """Registre des domaines, alimenté par le point d'entrée `hub.domains` et filtré par
-`HUB_DOMAINS` ; les autres points d'entrée (`hub.connectors`, `hub.country_modules`,
+`HUB_DOMAINS` ; les autres points d'entrée (`hub.connectors`, `hub.country_packs`,
 `hub.connection_imports`) portent ce qu'un domaine apporte au cœur sans être monté."""
 
 from __future__ import annotations

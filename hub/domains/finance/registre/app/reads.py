@@ -14,6 +14,8 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
+from hub.domains.finance.packs import CountryPack
+from hub.domains.finance.packs import instance as packs
 from hub.domains.finance.registre.app import ledger
 from hub.domains.finance.registre.model import merchant
 from hub.domains.finance.registre.model.amounts import (
@@ -42,73 +44,86 @@ def in_list(name: str, values: list[str]) -> tuple[str, dict[str, str]]:
 # --- comptes et fraîcheur -------------------------------------------------------------------
 
 
+# le dernier solde de clôture annoncé de chaque compte, et la somme des écritures jusqu'à lui :
+# une requête pour tous les comptes (audit m17)
+_LAST_CLBDS = (
+    "SELECT c.account_id, c.on_date, c.amount_minor, a.currency, "
+    "(SELECT coalesce(sum(e.amount_minor), 0) FROM entries e "
+    "WHERE e.account_id = c.account_id AND e.booking_date <= c.on_date) "
+    "FROM checkpoints c JOIN accounts a ON a.id = c.account_id "
+    "WHERE c.kind = 'CLBD' AND (:a IS NULL OR c.account_id = :a) "
+    "AND c.on_date = (SELECT max(x.on_date) FROM checkpoints x "
+    "WHERE x.account_id = c.account_id AND x.kind = 'CLBD')"
+)
+
+
+def closing_balances(conn: Connection, account_id: str | None = None) -> dict[str, dict[str, Any]]:
+    """{compte: dernier solde de clôture (date, montant, écart avec les écritures)}."""
+    out: dict[str, dict[str, Any]] = {}
+    for account, on, amount, ccy, computed in conn.execute(text(_LAST_CLBDS), {"a": account_id}):
+        out[str(account)] = {
+            "on_date": on,
+            "amount": money(amount, ccy),
+            "gap": money(int(computed) - int(amount), ccy),
+        }
+    return out
+
+
 def last_clbd(conn: Connection, account_id: str) -> dict[str, Any] | None:
-    row = conn.execute(
-        text(
-            "SELECT c.on_date, c.amount_minor, a.currency FROM checkpoints c "
-            "JOIN accounts a ON a.id = c.account_id WHERE c.account_id = :a AND c.kind = 'CLBD' "
-            "ORDER BY c.on_date DESC LIMIT 1"
-        ),
-        {"a": account_id},
-    ).first()
-    if row is None:
-        return None
-    computed = conn.execute(
-        text(
-            "SELECT coalesce(sum(amount_minor), 0) FROM entries WHERE account_id = :a "
-            "AND booking_date <= :d AND kind != 'correction'"
-        ),
-        {"a": account_id, "d": row[0]},
-    ).scalar_one()
-    return {
-        "on_date": row[0],
-        "amount": money(row[1], row[2]),
-        "gap": money(computed - row[1], row[2]),
-    }
+    return closing_balances(conn, account_id).get(account_id)
 
 
 # Une donnée d'un compte : écriture, position relevée, ordre ou solde de clôture. Seuls les
 # relevés bancaires ont un solde de clôture ; Revolut, les cryptos ou les titres n'en ont pas.
+# Une requête pour tous les comptes (audit m17), ou pour un seul (:a)
 _LAST_DATA = (
-    "SELECT max(d) FROM ("
-    "SELECT max(booking_date) AS d FROM entries WHERE account_id = :a AND kind != 'correction' "
-    "UNION ALL SELECT max(on_date) FROM holdings WHERE account_id = :a "
-    "UNION ALL SELECT max(trade_date) FROM trades WHERE account_id = :a "
-    "UNION ALL SELECT max(on_date) FROM checkpoints WHERE account_id = :a AND kind = 'CLBD')"
+    "SELECT account_id, max(d) FROM ("
+    "SELECT account_id, max(booking_date) AS d FROM entries WHERE kind != 'correction' "
+    "GROUP BY account_id "
+    "UNION ALL SELECT account_id, max(on_date) FROM holdings GROUP BY account_id "
+    "UNION ALL SELECT account_id, max(trade_date) FROM trades GROUP BY account_id "
+    "UNION ALL SELECT account_id, max(on_date) FROM checkpoints WHERE kind = 'CLBD' "
+    "GROUP BY account_id) WHERE d IS NOT NULL AND (:a IS NULL OR account_id = :a) "
+    "GROUP BY account_id"
 )
 # un import compte pour chaque compte qu'il a alimenté, y compris les comptes créés à sa lecture
 # (sous-comptes IBKR par devise), pas seulement pour le compte de son relevé
-_LAST_IMPORT = (
-    "SELECT max(i.received_at) FROM imports i WHERE i.id IN ("
-    "SELECT import_id FROM import_statements WHERE account_id = :a AND status = 'applied' "
-    "UNION SELECT import_id FROM entries WHERE account_id = :a "
-    "UNION SELECT import_id FROM holdings WHERE account_id = :a "
-    "UNION SELECT import_id FROM trades WHERE account_id = :a)"
+_LAST_IMPORTS = (
+    "SELECT x.account_id, max(i.received_at) FROM imports i JOIN ("
+    "SELECT account_id, import_id FROM import_statements WHERE status = 'applied' "
+    "UNION SELECT account_id, import_id FROM entries "
+    "UNION SELECT account_id, import_id FROM holdings "
+    "UNION SELECT account_id, import_id FROM trades) x ON x.import_id = i.id "
+    "GROUP BY x.account_id"
 )
 
 
+def last_dates(conn: Connection, account_id: str | None = None) -> dict[str, str]:
+    """{compte: date de sa dernière donnée (écriture, position, ordre, solde de clôture)}."""
+    return {str(a): str(d) for a, d in conn.execute(text(_LAST_DATA), {"a": account_id})}
+
+
 def last_data(conn: Connection, account_id: str) -> str | None:
-    d = conn.execute(text(_LAST_DATA), {"a": account_id}).scalar_one()
-    return str(d) if d is not None else None
+    return last_dates(conn, account_id).get(account_id)
 
 
 def freshness(conn: Connection) -> list[dict[str, Any]]:
-    out = []
     rows = conn.execute(text("SELECT id, name, institution, hidden FROM accounts ORDER BY name"))
-    for a in rows.fetchall():
-        out.append(
-            {
-                "account_id": a[0],
-                "name": a[1],
-                "institution": a[2],
-                "hidden": bool(a[3]),
-                "last_import": conn.execute(text(_LAST_IMPORT), {"a": a[0]}).scalar_one(),
-                "last_data": last_data(conn, a[0]),
-                "last_clbd": last_clbd(conn, a[0]),
-                "collector": None,  # collecteurs : lot 5
-            }
-        )
-    return out
+    imports = {str(a): str(at) for a, at in conn.execute(text(_LAST_IMPORTS))}
+    dates, clbds = last_dates(conn), closing_balances(conn)
+    return [
+        {
+            "account_id": a[0],
+            "name": a[1],
+            "institution": a[2],
+            "hidden": bool(a[3]),
+            "last_import": imports.get(a[0]),
+            "last_data": dates.get(a[0]),
+            "last_clbd": clbds.get(a[0]),
+            "collector": None,  # collecteurs : lot 5
+        }
+        for a in rows.fetchall()
+    ]
 
 
 TRADES_LIMIT = 200  # ordres montrés pour un actif dans l'app
@@ -153,7 +168,7 @@ _ENTRY_COLS = (
 )
 
 
-def _entry(r: Any) -> dict[str, Any]:
+def _entry(r: Any, pack: CountryPack) -> dict[str, Any]:
     return {
         "id": r[1],
         "account_id": r[2],
@@ -163,7 +178,7 @@ def _entry(r: Any) -> dict[str, Any]:
         "amount": money(r[6], r[7]),
         "counterparty": ledger.party(r[8]),
         # commerçant lu dans le libellé (carte, TWINT) : motif de « Toujours », titre dans l'app
-        "merchant": merchant.key(r[10]),
+        "merchant": merchant.key(r[10], pack),
         "counterparty_iban": mask_iban(r[9]),
         "label": r[10],
         "remittance": r[11],
@@ -259,7 +274,8 @@ def entries(
         next_cursor = (
             f"{abs(int(last[6]))}~{last[0]}" if by_amount else encode_cursor(last[4], last[0])
         )
-    return [_entry(r) for r in page], next_cursor
+    pack = packs.current()
+    return [_entry(r, pack) for r in page], next_cursor
 
 
 def entry_detail(conn: Connection, entry_id: str) -> dict[str, Any] | None:
@@ -273,7 +289,7 @@ def entry_detail(conn: Connection, entry_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
     seq = row[0]
-    out = _entry(row)
+    out = _entry(row, packs.current())
     out["categorizations"] = [
         {"category_id": c[0], "source": c[1], "rule_id": c[2], "at": c[3]}
         for c in conn.execute(
@@ -327,7 +343,8 @@ def search(conn: Connection, q: str, limit: int = SEARCH_LIMIT) -> list[dict[str
         ),
         {"q": query, "n": limit},
     ).fetchall()
-    return [_entry(r) for r in rows]
+    pack = packs.current()
+    return [_entry(r, pack) for r in rows]
 
 
 def import_detail(conn: Connection, import_id: str) -> dict[str, Any] | None:

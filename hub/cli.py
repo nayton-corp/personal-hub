@@ -12,7 +12,7 @@ import typer
 import yaml
 
 from hub import cli_inbox, cli_ops, cli_proposals, cli_tokens
-from hub.core import connections, connectors, profile, proposals, sessions, tokens
+from hub.core import connections, connectors, profile, proposal_reconcile, sessions, tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
@@ -33,6 +33,7 @@ app.add_typer(connections_app, name="connections")
 
 CLI_ACTOR = "system:cli"
 SERVICE_TOKEN_DAYS = 365  # jeton d'un service collecteur : make deploy en recrée un
+ORIGIN = "https://hub.votre-tailnet.ts.net"  # adresse du hub tant qu'on ne la connaît pas
 
 
 def _ctx() -> HubContext:
@@ -79,7 +80,7 @@ def serve(
         log_config=None,
         access_log=False,
         proxy_headers=True,
-        forwarded_allow_ips="*",
+        forwarded_allow_ips=settings.server.forwarded_allow_ips,
     )
 
 
@@ -171,7 +172,7 @@ def _settings_option(raw: str | None) -> dict[str, Any] | None:
 
 @connections_app.command("add")
 def connections_add(
-    connection_id: Annotated[str, typer.Argument(help="identifiant, ex. bcf ou n26")],
+    connection_id: Annotated[str, typer.Argument(help="identifiant, ex. revolut ou n26")],
     connector: Annotated[str, typer.Argument(help="entrée du catalogue, ex. enable_banking")],
     label: Annotated[str | None, typer.Option(help="nom affiché")] = None,
     schedule: Annotated[str | None, typer.Option(help="cron ; par défaut, le catalogue")] = None,
@@ -335,17 +336,16 @@ def init(
     home: Annotated[Path, typer.Option(help="Boîte d'entrée et sauvegardes locales.")],
     env_file: Annotated[Path, typer.Option("--env", help="Fichier écrit.")] = Path("deploy/.env"),
     template: Annotated[Path, typer.Option(help="Modèle.")] = Path("deploy/.env.example"),
-    origin: Annotated[
-        str, typer.Option(help="Adresse Tailscale du hub, connue après le 1er démarrage.")
-    ] = "https://hub.votre-tailnet.ts.net",
-    tz: Annotated[str, typer.Option(help="Fuseau (IANA).")] = "Europe/Zurich",
-    currency: Annotated[str, typer.Option(help="Devise de base, fixée ensuite.")] = "CHF",
-    country: Annotated[str, typer.Option(help="Pays (ISO, deux lettres).")] = "CH",
+    origin: Annotated[str, typer.Option(help="Adresse Tailscale du hub.")] = ORIGIN,
+    country: Annotated[str | None, typer.Option(help="Pays (ISO, deux lettres).")] = None,
+    tz: Annotated[str | None, typer.Option(help="Fuseau (IANA) ; sinon celui du pays.")] = None,
+    currency: Annotated[str | None, typer.Option(help="Devise ; sinon celle du pays.")] = None,
+    locale: Annotated[str | None, typer.Option(help="Locale BCP 47 ; sinon celle du pays.")] = None,
 ) -> None:
-    """Première installation : clé age, secrets, dossiers, deploy/.env ; ne remplace rien."""
+    """Première installation, sans rien remplacer ; le pays propose fuseau, devise, locale."""
     from hub.core import install
 
-    choices = install.Choices(config, home, origin, tz, currency, country)
+    choices = install.Choices(config, home, origin, tz, currency, country, locale)
     try:
         report = install.run(choices, env_file, template)
     except (install.InitError, secrets.SecretsError) as exc:
@@ -370,7 +370,7 @@ def nightly() -> None:
 def reconcile() -> None:
     """Recale les statuts des propositions sur `applied_proposals` (après une restauration)."""
     hub = _ready()
-    report = proposals.reconcile(hub)
+    report = proposal_reconcile.reconcile(hub)
     typer.echo(json.dumps({"applied": report.marked_applied, "released": report.released}))
 
 
@@ -421,12 +421,12 @@ def restore(
 
 
 @app.command()
-def scheduler(crontab: Path) -> None:
-    """Exécute la crontab du dépôt (conteneur `scheduler`)."""
+def scheduler(crontab: Path, state: Path | None = None) -> None:
+    """Exécute la crontab du dépôt (conteneur `scheduler`) ; `state` : dernière minute servie."""
     from hub.platform.cron import run_forever
 
     hub_logging.configure(get_settings().log_level)
-    run_forever(crontab)
+    run_forever(crontab, state=state or get_settings().paths.data / "scheduler.last")
 
 
 def main() -> None:

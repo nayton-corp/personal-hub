@@ -2,10 +2,9 @@
 passe par l'assistant, `python -m domia_assistant classify`).
 
 hub-brain mcp [--token brain|aggregates]   serveur MCP sur stdio (docker exec -i …)
-hub-brain ask "combien en restaurants ce mois ?"
 hub-brain suggest [--dry-run]              suggestions de catégorie (commerçants jamais vus)
 hub-brain catchup [--limit N] [--dry-run]  rattrapage : une règle proposée par commerçant à classer
-hub-brain check                            hub, modèle, et une question de contrôle
+hub-brain check                            hub, modèle, outil, et un tour de conversation
 """
 
 from __future__ import annotations
@@ -17,7 +16,6 @@ from typing import Annotated
 
 import typer
 
-from hub.brain import agent
 from hub.brain.config import BrainConfig, TokenMissing, TokenName, config, token
 from hub.brain.hubapi import HubApi, HubError
 from hub.brain.llm import LlmError, OpenAICompatible
@@ -38,7 +36,11 @@ from hub.platform.logging import get_logger
 from hub.platform.settings import get_settings
 
 CHECK_QUESTION = "Combien ai-je dépensé en restaurants ce mois-ci ?"
-CHECK_CATEGORY = "restaurants"
+CHECK_TOOL = "finance_month_summary"
+CHECK_SYSTEM = (
+    "Tu es l'assistant financier d'une personne. Nous sommes le {today}. Tout chiffre vient "
+    "d'un outil ; « ce mois » est le mois en cours ({month})."
+)
 log = get_logger("hub.brain")
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, help="IA locale du Personal Hub")
@@ -84,23 +86,6 @@ def mcp(
         raise typer.Exit(2)
     box = _toolbox(_cfg(), which)  # type: ignore[arg-type]
     McpServer(box).serve(sys.stdin, sys.stdout)
-
-
-@app.command()
-def ask(question: str) -> None:
-    """Pose une question au modèle local, outils du jeton « brain »."""
-    hub_logging.configure(get_settings().log_level, stream=sys.stderr)
-    cfg = _cfg()
-    box = _toolbox(cfg, "brain")
-    try:
-        answer = agent.ask(question, box, _model(cfg), _today().date(), cfg.max_steps)
-    except LlmError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(1) from None
-    typer.echo(answer.text)
-    if answer.proposals:
-        typer.echo(f"\n{len(answer.proposals)} carte(s) à valider dans l'app.")
-    log.info("brain.ask", tools=len(answer.tools), proposals=len(answer.proposals))
 
 
 @app.command("suggest")
@@ -174,11 +159,11 @@ def _report(event: str, report: Report, dry_run: bool) -> None:
 
 @app.command()
 def check() -> None:
-    """Contrôle de bout en bout : hub, modèle, puis la question de sortie du lot 7, comparée au
-    chiffre de l'outil."""
+    """Contrôle de bout en bout : hub, modèle, l'outil du résumé du mois, puis un tour de
+    conversation : à la question de sortie du lot 7, le modèle doit demander cet outil. La
+    conversation entière est l'affaire de l'assistant (une seule boucle, audit M12)."""
     hub_logging.configure(get_settings().log_level, stream=sys.stderr)
     cfg = _cfg()
-    ok = True
     box = _toolbox(cfg, "brain")
     typer.echo(f"hub : ok ({', '.join(d['domain'] for d in box.domains)})")
     model = _model(cfg)
@@ -191,26 +176,25 @@ def check() -> None:
         typer.echo(f"modèle : {cfg.model} absent ({', '.join(names) or 'aucun'}) ; ollama pull")
         raise typer.Exit(1)
     typer.echo(f"modèle : ok ({cfg.model})")
-    summary = box.call("finance_month_summary", {})
-    expected = None
-    currency = "CHF"
-    if not summary.is_error:
-        currency = str(summary.data.get("currency") or currency)
-        for c in summary.data["by_category"]:
-            if c["category"] == CHECK_CATEGORY:
-                expected = c["amount"]
-    answer = agent.ask(CHECK_QUESTION, box, model, _today().date(), cfg.max_steps)
-    typer.echo(f"question : {CHECK_QUESTION}\nréponse : {answer.text}")
-    typer.echo(f"outils appelés : {', '.join(answer.tools) or 'aucun'}")
-    if expected is None:
-        typer.echo("contrôle : aucune dépense « restaurants » ce mois, rien à comparer")
-    elif expected in answer.text or expected.replace(".", ",") in answer.text:
-        typer.echo(f"contrôle : ok, la réponse contient {expected} {currency}")
-    else:
-        typer.echo(f"contrôle : écart, l'outil donne {expected} {currency}")
-        ok = False
-    if not ok:
+    summary = box.call(CHECK_TOOL, {})
+    if summary.is_error:
+        typer.echo(f"outil : {summary.text}")
         raise typer.Exit(1)
+    typer.echo(f"outil : ok ({CHECK_TOOL}, données au {summary.data.get('data_as_of')})")
+    today = _today()
+    system = CHECK_SYSTEM.format(today=today.date().isoformat(), month=today.strftime("%Y-%m"))
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": CHECK_QUESTION}]
+    try:
+        reply = model.chat(messages, box.definitions())
+    except LlmError as exc:
+        typer.echo(f"modèle : {exc}")
+        raise typer.Exit(1) from None
+    asked = [c.name for c in reply.tool_calls]
+    typer.echo(f"question : {CHECK_QUESTION}\noutils demandés : {', '.join(asked) or 'aucun'}")
+    if CHECK_TOOL not in asked:
+        typer.echo(f"contrôle : écart, le modèle ne demande pas {CHECK_TOOL}")
+        raise typer.Exit(1)
+    typer.echo(f"contrôle : ok, le modèle demande {CHECK_TOOL}")
 
 
 def main() -> None:  # pragma: no cover - point d'entrée

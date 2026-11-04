@@ -53,13 +53,16 @@ def _bearer(request: Request) -> str | None:
 def current_principal(request: Request, hub: Ctx) -> Principal:
     secret = _bearer(request)
     if secret is not None:
-        # verify lit puis écrit last_used_at : en BEGIN simple, deux requêtes à la même
-        # milliseconde (les collecteurs, chaque minute pile) font échouer la seconde aussitôt
-        # (« database is locked », sans attendre busy_timeout) ; IMMEDIATE les met en file
-        with begin_immediate(hub.core.engine) as conn:
+        with hub.core.engine.connect() as conn:
             info = tokens.verify(conn, secret)
         if info is None:
             raise Problem("auth.invalid")
+        if tokens.needs_touch(info):
+            # `last_used_at` au plus une fois par minute (audit m7) : les collecteurs, qui
+            # appellent chaque minute pile, ne se mettent plus en file sur un verrou d'écriture ;
+            # IMMEDIATE pour les rares écritures simultanées (sinon « database is locked »)
+            with begin_immediate(hub.core.engine) as conn:
+                tokens.touch(conn, info.id)
         return Principal(actor=info.actor, scopes=frozenset(info.scopes))
     cookie = request.cookies.get(SESSION_COOKIE)
     if cookie:

@@ -199,7 +199,11 @@ def revoke(conn: Connection, token_id: str, by: str) -> bool:
     return done
 
 
+TOUCH_EVERY = timedelta(minutes=1)  # `last_used_at` ne s'écrit pas à chaque requête (audit m7)
+
+
 def verify(conn: Connection, secret: str) -> TokenInfo | None:
+    """Le jeton valide qui porte ce secret, sans rien écrire."""
     if not secret.startswith(TOKEN_PREFIX):
         return None
     row = conn.execute(
@@ -209,10 +213,18 @@ def verify(conn: Connection, secret: str) -> TokenInfo | None:
         ),
         {"h": hash_secret(secret), "now": now_iso()},
     ).fetchone()
-    if row is None:
-        return None
+    return None if row is None else _row(row)
+
+
+def needs_touch(info: TokenInfo, now: str | None = None) -> bool:
+    """`last_used_at` vaut d'être écrit : jamais posé, ou plus vieux que TOUCH_EVERY."""
+    if info.last_used_at is None:
+        return True
+    return parse_iso(now or now_iso()) - parse_iso(info.last_used_at) >= TOUCH_EVERY
+
+
+def touch(conn: Connection, token_id: str) -> None:
     conn.execute(
         text("UPDATE tokens SET last_used_at = :at WHERE id = :id"),
-        {"at": now_iso(), "id": row._mapping["id"]},
+        {"at": now_iso(), "id": token_id},
     )
-    return _row(row)

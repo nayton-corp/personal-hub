@@ -5,7 +5,8 @@ d'origine : les données de référence (devises, catégories, comptes avec leur
 règles dans leur état final, cours de change, étiquettes), les écritures d'ouverture, puis,
 dans l'ordre chronologique, chaque import relu depuis son archive chiffrée (même identifiant)
 et chaque proposition validée du domaine (même identifiant, paramètres lus dans `core.db`).
-Les règles tournent une dernière fois à la fin. La base reconstruite ouvre une nouvelle époque
+Les règles tournent une dernière fois à la fin, et les liens crypto posés par une migration
+sont recopiés par l'identifiant stable des écritures. La base reconstruite ouvre une nouvelle époque
 du journal (`rebuild_meta`).
 
 La comparaison des deux bases est dans compare.py.
@@ -25,6 +26,7 @@ from sqlalchemy import Connection, Engine, text
 
 from hub.core.errors import Problem
 from hub.domains.finance.classement.app import rules
+from hub.domains.finance.patrimoine.app import crypto_moves
 from hub.domains.finance.port import Finance
 from hub.domains.finance.registre.app import ledger, opening
 from hub.domains.finance.registre.model import errors, hashing
@@ -68,6 +70,7 @@ class RebuildReport:
     epoch: int = 0
     imports: int = 0
     proposals: int = 0
+    links: int = 0  # liens crypto recopiés (migration)
     skipped: dict[str, int] = field(default_factory=dict)  # motif -> nombre
     error: str | None = None
 
@@ -80,6 +83,7 @@ class RebuildReport:
             "epoch": self.epoch,
             "imports": self.imports,
             "proposals": self.proposals,
+            "links": self.links,
             "skipped": self.skipped,
             "error": self.error,
         }
@@ -142,7 +146,10 @@ def copy_reference(src: Connection, dst: Connection) -> None:
     for table, key in (
         ("debts", "id"),
         ("debt_balances", "debt_id, on_date"),
+        ("debt_balance_records", "id"),
         ("reconcile_decisions", "id"),
+        ("reconcile_withdrawals", "decision_id"),
+        ("budget_period_rules", "id"),
     ):
         cols, rows = _rows(src, table, key)
         _upsert(dst, table, key, cols, rows)
@@ -297,8 +304,10 @@ def rebuild(source: Finance, target: Finance, proposals: list[Applied]) -> Rebui
     for _at, _order, step in sorted(work, key=lambda w: (w[0], w[1])):
         step()
 
-    with begin_immediate(target.engine()) as dst:
+    with begin_immediate(target.engine()) as dst, source.engine().connect() as src:
         rules.run(dst)
+        # les liens crypto d'une migration : ni une source ni une proposition ne les rejouent
+        report.links = crypto_moves.carry_over(src, dst)
     target.refresh_snapshots(force=True)
     if report.skipped.get("params_missing"):
         report.ok = False

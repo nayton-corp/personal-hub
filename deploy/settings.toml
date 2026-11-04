@@ -11,6 +11,8 @@ backup = "/srv/hub/backup"
 [server]
 bind = "0.0.0.0:8710"         # réseau compose « hub » seulement : aucun port publié
 public_origin = "https://hub.example.ts.net"
+# en-têtes X-Forwarded-* crus depuis le réseau compose « hub » (Caddy) ; jamais "*"
+forwarded_allow_ips = "172.16.0.0/12,192.168.0.0/16"
 
 [auth]
 session_hours = 12
@@ -25,7 +27,8 @@ home = "/var/lib/hub-collector"
 [agenda]
 bridge_url = "http://host.docker.internal:8771"
 
-# l'assistant de la maison (assistant/), natif sur le Mac : l'orbe de l'app lui parle par le hub
+# l'assistant de la maison (assistant/), natif sur le Mac : l'orbe de l'app lui parle par le hub,
+# qui se présente avec le jeton `assistant.token` de secrets.enc.yaml (ASSISTANT_CALLER_HUB chez lui)
 [assistant]
 url = "http://host.docker.internal:8770"
 

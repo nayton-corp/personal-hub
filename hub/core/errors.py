@@ -19,6 +19,8 @@ PROBLEM_TYPES: dict[str, tuple[int, str]] = {
     "auth.bootstrap_invalid": (401, "Code d'amorçage invalide ou expiré"),
     "auth.passkey_invalid": (401, "Passkey refusée"),
     "auth.challenge_expired": (401, "Défi expiré"),
+    "auth.confirm_required": (403, "Une passkey existante doit valider ce geste"),
+    "auth.last_passkey": (409, "La dernière passkey reste"),
     "approval.signature_invalid": (401, "Signature de validation invalide"),
     "validation.params": (422, "Paramètres invalides"),
     "not_found": (404, "Introuvable"),

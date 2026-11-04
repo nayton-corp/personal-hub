@@ -1,5 +1,5 @@
 """Les sources de la finance (chantier S1) : le catalogue des connecteurs, déclaré au cœur par
-le point d'entrée `hub.connectors`, et les modules ouverts par pays (`hub.country_modules`).
+le point d'entrée `hub.connectors` (ce que la finance sait des pays : `packs`).
 
 Le cœur ne connaît ni banque ni portefeuille : il valide une connexion avec ce que ce catalogue
 déclare (secrets, réglages, et `clean` pour les portefeuilles de `market`).
@@ -18,9 +18,6 @@ MAX_WALLETS = 50
 WALLET_ASSETS = ("BTC", "ETH", "SOL", "ATOM")
 WALLET_NETWORKS = ("ethereum", "arbitrum", "base", "bsc", "polygon")  # d'un portefeuille ETH
 WALLET_ACCOUNT = re.compile(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$")
-
-# pays → modules de la finance qu'il ouvre (le pilier 3a en Suisse)
-COUNTRY_MODULES: dict[str, frozenset[str]] = {"CH": frozenset({"pillar3a"})}
 
 
 def clean_wallets(value: Any) -> list[dict[str, Any]]:
@@ -75,6 +72,7 @@ CATALOG: tuple[Connector, ...] = (
         ("contract", "password"),
         "30 7 * * 1-5",  # jours ouvrés 07:30 (une seule validation du push)
         ("camt053",),
+        refresh_hint="Valide la connexion sur ton téléphone.",
     ),
     Connector(
         "viac",
@@ -97,6 +95,7 @@ CATALOG: tuple[Connector, ...] = (
         ("revolut_eb",),
         ENABLE_BANKING,
         ("aspsp_name", "aspsp_country"),  # la banque, telle qu'Enable Banking la nomme
+        refresh_hint="Synchronisations par jour limitées par la banque.",
     ),
     Connector(
         "ibkr",

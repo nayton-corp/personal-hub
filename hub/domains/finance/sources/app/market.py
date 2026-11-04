@@ -15,7 +15,10 @@ Le fichier porte ces listes, chacune facultative :
   txId, sinon même quantité, à quelques jours près : `links`) en prend la valeur : c'est un
   virement entre mes comptes ;
 - `operations` : une opération d'une plateforme (dépôt, retrait, échange, récompense), au
-  registre de son compte (`exchange`).
+  registre de son compte (`exchange`) ;
+- `gaps` : ce que le collecteur n'a pas pu lire (fenêtre refusée, paire retirée), vers
+  `source_gaps` : la liste du passage remplace celle d'avant pour ce compte, et le
+  rapprochement la montre en rupture « historique non lu » (audit M15).
 
 Relevé 0 : les cours ; puis un relevé par portefeuille, un par transaction, un par opération. Un
 portefeuille dont le compte n'est pas encore déclaré (`hub finance crypto add-wallet`) attend,
@@ -29,16 +32,45 @@ from decimal import Decimal, localcontext
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.patrimoine.app import assets, links
+from hub.domains.finance.patrimoine.app import assets, crypto_moves, links
 from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.patrimoine.model.instruments import Result
 from hub.domains.finance.registre.app import catalog, ledger
 from hub.domains.finance.sources.app import exchange, ibkr_writer
 from hub.domains.finance.sources.infra import operations
 from hub.domains.finance.sources.infra.market_file import Balance, MarketFile, Transaction
-from hub.kernel import canonical
+from hub.kernel.clock import now_iso
 from hub.kernel.ids import urn
-from hub.kernel.money import DECIMAL_CONTEXT, base_currency
+from hub.kernel.money import DECIMAL_CONTEXT, base_currency, quantize
+
+
+def _apply_gaps(conn: Connection, doc: MarketFile) -> None:
+    """Les fenêtres non lues des comptes du fichier : celles d'un passage remplacent celles du
+    passage d'avant (un flux relu en entier n'a plus de trou)."""
+    accounts = {b.account for b in doc.balances} | {g.account for g in doc.gaps}
+    at = now_iso()
+    for ref in sorted(accounts):
+        account = catalog.account_by_ref(conn, ref)
+        if account is None:
+            continue
+        conn.execute(text("DELETE FROM source_gaps WHERE account_id = :a"), {"a": account.id})
+        for g in doc.gaps:
+            if g.account != ref:
+                continue
+            conn.execute(
+                text(
+                    "INSERT INTO source_gaps (account_id, step, from_date, to_date, reason, "
+                    "seen_at) VALUES (:a, :s, :f, :t, :r, :at)"
+                ),
+                {
+                    "a": account.id,
+                    "s": g.step,
+                    "f": g.from_date,
+                    "t": g.to_date,
+                    "r": g.reason,
+                    "at": at,
+                },
+            )
 
 
 def _apply_rates(conn: Connection, import_id: str, doc: MarketFile) -> Result:
@@ -162,6 +194,18 @@ class _Chain:
             self.opened.add(account.id)
             exchange.open_empty(self.conn, account, first)
 
+    def _parts(self, t: Transaction) -> tuple[str, Decimal, int]:
+        """(clé de la transaction, parts déjà écrites, lignes). Une seule forme de clé,
+        `txid|symbole` (audit m11) ; un bitcoin écrit avant sous `txid` seul garde sa clé, pour
+        que ses lignes ne soient pas réécrites."""
+        part = f"{t.txid}|{t.symbol}"
+        written, n = self._traded(t.account, part)
+        if not n and t.symbol == "BTC":
+            written, n = self._traded(t.account, t.txid)
+            if n:
+                part = t.txid
+        return part, written, n
+
     def _traded(self, ref: str, part: str) -> tuple[Decimal, int]:
         """Parts déjà écrites pour cette transaction, et le nombre de lignes (la première, puis
         ses corrections)."""
@@ -186,14 +230,9 @@ class _Chain:
             return result.review("currency_mismatch")
         self.open(account, first)
         self.writer.result = result
-        detail: dict[str, str | int] = {"txid": t.txid, "currency": t.symbol}
         sent = t.quantity + t.fee  # hors frais : ce qui quitte le portefeuille (négatif)
         moved = t.quantity if t.quantity > 0 else sent
         peer = links.counterpart(self.conn, t.account, t.symbol, t.on_date, moved, t.txid)
-        if peer:
-            detail["peer"] = peer[0]
-        if t.stake:
-            detail["stake"] = 1
         if t.quantity > 0:
             amount = -peer[1] if peer else self.value(t, t.quantity)
             legs = [("receive", "CRYPTO/RECEIVE", f"Réception {t.symbol}", t.quantity, amount)]
@@ -210,25 +249,39 @@ class _Chain:
             return result.review("missing_price")
         for leg, code, label, qty, amount in legs:
             if amount:
-                fx = canonical.dumps({**detail, "quantity": instruments.qty_text(qty)})
-                self.writer.entry(
+                seq = self.writer.entry(
                     account,
-                    f"{t.txid}|{leg}" if t.symbol == "BTC" else f"{t.txid}|{t.symbol}|{leg}",
+                    f"{t.txid}|{t.symbol}|{leg}",
                     t.on_date,
                     int(amount),
                     code,
                     label,
                     remittance=f"{instruments.qty_text(qty)} {t.symbol}",
-                    fx_json=fx,
+                    legacy=(f"{t.txid}|{leg}",) if t.symbol == "BTC" else (),
                 )
+                if seq is None:
+                    continue
+                at = self.writer.created
+                crypto_moves.record(self.conn, seq, code, t.symbol, qty, txid=t.txid, created_at=at)
+                if leg == "fee":
+                    continue
+                if peer:
+                    crypto_moves.link(
+                        self.conn, seq, "transfer", peer[0], peer[2], actor="import", created_at=at
+                    )
+                elif t.stake:
+                    crypto_moves.link(
+                        self.conn, seq, "stake", None, "source", actor="import", created_at=at
+                    )
         # une transaction Ethereum porte l'ETH (le gaz) et un jeton : une clé par crypto. Une
         # transaction relue avec une autre quantité nette (lecture corrigée) reçoit un mouvement
-        # de correction pour la différence : le registre ne réécrit jamais une ligne
-        part = t.txid if t.symbol == "BTC" else f"{t.txid}|{t.symbol}"
-        written, n = self._traded(t.account, part)
+        # de correction pour la différence (sa part du coût, à l'arrondi bancaire) : le registre
+        # ne réécrit jamais une ligne
+        part, written, n = self._parts(t)
         with localcontext(DECIMAL_CONTEXT):
             quantity = t.quantity - written
-            amount = cost if not n else int(cost * quantity / t.quantity) if t.quantity else 0
+            share = cost * quantity / t.quantity if t.quantity else Decimal(0)
+            amount = cost if not n else int(quantize(share, 0))
         if quantity:
             suffix = "trade" if not n else f"trade|fix-{n}"
             assets.upsert_instrument(
@@ -258,6 +311,7 @@ def apply(
     out = []
     if indexes is None or 0 in indexes:
         out.append((0, _apply_rates(conn, import_id, doc)))
+        _apply_gaps(conn, doc)
     applied: dict[tuple[str, str], set[str]] = {}
     for i, b in enumerate(doc.balances, start=1):
         if indexes is None or i in indexes:
@@ -274,7 +328,7 @@ def apply(
         for i, t in enumerate(doc.transactions, start=len(doc.balances) + 1):
             if indexes is None or i in indexes:
                 out.append((i, chain.apply(t, firsts[t.account])))
-        _appended(conn, import_id, chain.writer.touched)
+        appended(conn, import_id, chain.writer.touched)
     if doc.operations:
         journal = exchange.Journal(conn, import_id)
         starts: dict[str, str] = {}
@@ -284,11 +338,11 @@ def apply(
         for i, o in enumerate(doc.operations, start=first):
             if indexes is None or i in indexes:
                 out.append((i, journal.apply(o, starts[o.account])))
-        _appended(conn, import_id, journal.writer.touched)
+        appended(conn, import_id, journal.writer.touched)
     return out
 
 
-def _appended(conn: Connection, import_id: str, touched: dict[str, int]) -> None:
+def appended(conn: Connection, import_id: str, touched: dict[str, int]) -> None:
     for account_id, count in sorted(touched.items()):
         ledger.append_event(
             conn,

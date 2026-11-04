@@ -3,7 +3,7 @@
 // apports des douze derniers mois (des totaux), ses réglages. La page d'un actif montre ta
 // position (quantité, cours, prix de revient), les comptes qui le détiennent, sa composition
 // quand c'est un fonds, et mène aux achats et ventes du Journal.
-import { MOIS, MOIS_L, STALE_DAYS, base, date, daysSince } from "../../format.js";
+import { MOIS, MOIS_L, base, date, daysSince, staleDays } from "../../format.js";
 import { S, accLabel, asOf, day, lineId, range, sum } from "./wstate.js";
 import { amount, esc, ic, n0, n2, qty, share } from "../../ui.js";
 import { assetMark, facetName, instMark } from "./meta.js";
@@ -91,7 +91,7 @@ export function accountPage(m, r) {
   if (f.target) h += goal(f.target, tot, months);
   if (months && months.length) h += section(f.kind === "cash" ? "Entrées moins sorties par mois" : "Apports par mois", "12 derniers mois, totaux", bars(months.slice(-12)));
   const fresh = (store.data("/finance/freshness") || { items: [] }).items.find((x) => x.account_id === f.acc);
-  const age = fresh ? daysSince(fresh.last_data) : null, stale = age == null || age > STALE_DAYS;
+  const age = fresh ? daysSince(fresh.last_data) : null, stale = age == null || age > staleDays();
   h += section("Le compte", "", `<dl class="dl info">
       <dt>Institution</dt><dd>${esc(f.inst)}</dd><dt>Nature</dt><dd>${esc(facetName("cat", f.cat))}</dd>
       <dt>Disponibilité</dt><dd>${esc(facetName("liq", f.liq))}</dd><dt>Objectif</dt><dd>${esc(facetName("goal", f.goal))}</dd>

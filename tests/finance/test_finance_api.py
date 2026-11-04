@@ -370,9 +370,20 @@ def test_upload_and_import_detail(client: TestClient, ctx: HubContext, fin: Fina
     assert busy.status_code == 503
 
 
+def test_an_upload_too_big_is_refused_as_it_streams(
+    client: TestClient, ctx: HubContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from hub.domains.finance.sources.interface import api as sources_api
+
+    app_session(ctx, client)
+    monkeypatch.setattr(sources_api, "MAX_UPLOAD", 10)
+    r = client.post("/api/finance/imports?name=gros.xml", content=b"<x>" + b"." * 20)
+    assert (r.status_code, r.json()["type"]) == (422, "validation.params")
+
+
 def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
     r = client.get("/api/health").json()
-    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 20, "ok": True}
+    assert r["domains"]["finance"] == {"db": "ok", "schema_version": 24, "ok": True}
     events = loaded.events_since(0, 10)
     assert [e.type for e in events] == ["entries.appended", "import.applied"]
     assert loaded.applied([]) == {}
@@ -383,7 +394,7 @@ def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceD
     ]
     assert loaded.resolve(f"hub:finance:account:{acc['id']}") is not None
     assert loaded.resolve(events[1].urn) is not None
-    assert len(loaded.mcp_tools()) == 16  # lot 7, puis la catégorisation par lot
+    assert len(loaded.mcp_tools()) == 47  # lot 7, puis la parité avec les routes (M11)
 
 
 def test_viac_pdf_upload_and_holdings(

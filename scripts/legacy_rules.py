@@ -1,23 +1,27 @@
-"""Reprise des règles de `bcf_aggregate.py` (ticket L3-01).
+"""Reprise, une fois, des règles de l'ancien script `bcf_aggregate.py` (ticket L3-01) : un script
+hors du hub (audit m10), à lancer à la main dans le conteneur du hub :
+
+    uv run python scripts/legacy_rules.py /srv/hub/inbox/rules/bcf_rules.json [--no-run]
 
 L'ancien script catégorisait dans cet ordre : virement vers un de mes comptes (IBAN), puis
 destination d'épargne ou de virement (mots-clés, dans les deux sens), puis pour un crédit
 salaire, remboursement ou autre revenu, puis pour un débit les catégories dans l'ordre du
-fichier, TWINT entre particuliers et virements à qualifier. Le reste n'avait pas de catégorie.
-
-Cet ordre devient la priorité des règles. Le fichier personnel (`bcf_rules.json`) se reprend
-avec `hub finance rules import-legacy`, qui n'affiche que des compteurs. Les règles de départ
-d'une base neuve viennent des packs (`packs.py`), découpés du fichier de départ du script.
+fichier, paiements mobiles entre particuliers et virements à qualifier. Le reste n'avait pas de
+catégorie. Cet ordre devient la priorité des règles ; la sortie ne donne que des compteurs. Les
+règles de départ d'une base neuve viennent des packs (`classement/app/packs.py`).
 """
 
 from __future__ import annotations
 
+import json
 import re
+import sys
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Connection, text
+from sqlalchemy import Connection, Engine, text
 
 from hub.domains.finance.classement.app import rules
 from hub.kernel.text import normalize
@@ -227,3 +231,33 @@ def import_rules(conn: Connection, data: Mapping[str, Any], *, run: bool = True)
     if run:
         report.categorized = rules.run(conn)
     return report
+
+
+def main(argv: list[str], engine: Engine | None = None) -> int:
+    """`engine` : la base finance (sinon celle des réglages du hub)."""
+    from hub.platform.db import begin_immediate, make_engine
+    from hub.platform.settings import get_settings
+
+    args = [a for a in argv if not a.startswith("--")]
+    if len(args) != 1:
+        print(__doc__, file=sys.stderr)
+        return 2
+    try:
+        data = json.loads(Path(args[0]).read_text(encoding="utf-8"))
+        own = engine is None
+        engine = engine or make_engine(get_settings().db_path("finance"))
+        try:
+            with begin_immediate(engine) as conn:
+                report = import_rules(conn, data, run="--no-run" not in argv)
+        finally:
+            if own:
+                engine.dispose()
+    except (OSError, json.JSONDecodeError, LegacyError, rules.RuleError) as exc:
+        print(f"fichier refusé : {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(report.public(), ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

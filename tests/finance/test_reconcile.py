@@ -15,13 +15,18 @@ from fastapi.testclient import TestClient
 from hub.core.context import HubContext
 from hub.core.errors import Problem
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.patrimoine.app import crypto_cost, reconcile, valuation
+from hub.domains.finance.patrimoine.app import assets, crypto_cost, reconcile, valuation
+from hub.domains.finance.patrimoine.model import positions
+from hub.domains.finance.registre.model.fx import FxRates
+from hub.domains.finance.thresholds import Thresholds
 from hub.platform.db import begin_immediate
 from tests.finance.conftest import ready_account
 from tests.finance.test_crypto_cost import _crypto_gain, btc, doc, minor, setup
 from tests.finance.test_exchange import op
 from tests.finance.test_finance_api import app_session, client, ctx, fin  # noqa: F401 (fixtures)
 from tests.finance.test_wealth import add_ref
+
+TH = Thresholds.from_section({}, "CHF")
 
 ON = "2026-10-27"
 
@@ -199,7 +204,58 @@ def test_a_held_coin_without_price_or_with_an_old_one(finance: FinanceDomain) ->
     }
 
 
-def test_breaks_route_and_decision(client_fin: tuple[TestClient, FinanceDomain]) -> None:
+def test_a_no_price_decision_covers_the_parts_it_saw(finance: FinanceDomain) -> None:
+    """« Garder tel quel » sans cours couvre ces parts-là (audit M7) : si les parts changent, la
+    rupture se rouvre au lieu de valoir 0 à vie."""
+    add_ref(finance, "crypto:phantom", "crypto", "Phantom")
+    held = {"account": "crypto:phantom", "instrument": "BONK", "on_date": "2026-10-01"}
+    finance.importer.process([doc(balances=[{**held, "quantity": "1"}])])
+
+    def no_price() -> list[dict[str, Any]]:
+        return [x for x in breaks(finance)["items"] if x["kind"] == "no_price"]
+
+    (b,) = no_price()
+    assert b["quantity"] == "1"
+    decide(finance, b["id"], "accept")
+    assert no_price() == []
+    with finance.engine().connect() as conn:
+        (d,) = reconcile.decisions.read(conn)
+    assert (d.break_kind, d.quantity) == ("no_price", Decimal("1"))
+    finance.importer.process([doc(balances=[{**held, "on_date": "2026-10-20", "quantity": "3"}])])
+    (again,) = no_price()
+    assert again["quantity"] == "3"
+
+
+def test_an_old_exchange_rate_is_said_like_an_old_price(finance: FinanceDomain) -> None:
+    """Un change plus vieux que 7 jours convertit encore, mais ouvre une rupture « change
+    ancien » (audit M6) ; la décision la couvre jusqu'au change qu'elle a vu."""
+    add_ref(finance, "crypto:phantom", "crypto", "Phantom")
+    held = {"account": "crypto:phantom", "instrument": "SOL", "on_date": ON, "quantity": "1"}
+    finance.importer.process([doc(prices=[{**sol(ON, "100"), "currency": "USD"}], balances=[held])])
+    with begin_immediate(finance.engine()) as conn:
+        assets.add_fx(conn, "2026-10-10", "USD", "CHF", Decimal("0.8"), "test")
+    rep = breaks(finance)
+    (b,) = [x for x in rep["items"] if x["kind"] == "stale_fx"]
+    assert (b["symbol"], b["since"], b["actions"]) == ("USD", "2026-10-10", ["accept"])
+    assert rep["invested"]["minor"] == 8_000  # converti quand même, jamais 0 en silence
+    decide(finance, b["id"], "accept")
+    assert not [x for x in breaks(finance)["items"] if x["kind"] == "stale_fx"]
+    with begin_immediate(finance.engine()) as conn:  # un change plus récent, encore trop vieux
+        assets.add_fx(conn, "2026-10-29", "USD", "CHF", Decimal("0.81"), "test")
+    assert [
+        x["since"] for x in breaks(finance, "2026-11-10")["items"] if x["kind"] == "stale_fx"
+    ] == ["2026-10-29"]
+
+
+def test_breaks_route_and_decision(
+    client_fin: tuple[TestClient, FinanceDomain],
+    ctx: HubContext,  # noqa: F811
+) -> None:
+    """La décision est une proposition (`decide_break`, Double Sas) : aperçu, validation, et
+    un retrait qui rouvre la rupture (`withdraw_break_decision`)."""
+    from hub.core import proposals
+    from tests.finance.test_double_sas import APP, accept, create
+
     http, domain = client_fin
     today = domain.today()
     add_ref(domain, "crypto:phantom", "crypto", "Phantom")
@@ -223,13 +279,32 @@ def test_breaks_route_and_decision(client_fin: tuple[TestClient, FinanceDomain])
     assert r["count"] == 1
     (b,) = r["items"]
     assert b["account"] == "Phantom"
-    bad = http.post("/api/finance/breaks/decide", json={"id": b["id"], "decision": "gone"})
-    assert bad.status_code == 422
-    ok = http.post(
-        "/api/finance/breaks/decide", json={"id": b["id"], "decision": "cost", "cost_minor": 15_000}
-    )
-    assert ok.status_code == 200
-    assert (ok.json()["count"], ok.json()["decision"]["cost_minor"]) == (0, 15_000)
+    with pytest.raises(Problem):  # « parti » ne règle pas des parts sans historique
+        create(ctx, "decide_break", {"break_id": b["id"], "decision": "gone"})
+    with pytest.raises(Problem):  # un coût saisi demande son montant
+        create(ctx, "decide_break", {"break_id": b["id"], "decision": "cost"})
+    p = create(ctx, "decide_break", {"break_id": b["id"], "decision": "cost", "cost_minor": 15_000})
+    assert p.preview["summary"].startswith("Rupture « parts sans historique » sur Phantom (SOL)")
+    assert p.preview["details"]["break"]["id"] == b["id"]
+    outcome = accept(ctx, p)
+    assert outcome.status == "applied"
+    assert outcome.result is not None
+    assert outcome.result["decision"]["cost_minor"] == 15_000
+    assert http.get("/api/finance/breaks").json()["count"] == 0
+    with domain.engine().connect() as conn:
+        (d,) = reconcile.decisions.read(conn)
+    assert d.proposal_id == p.id
+    # un retrait (l'inverse) rouvre la rupture ; la décision reste dans l'historique
+    with ctx.core.engine.connect() as conn:
+        fresh = proposals.get(conn, p.id)
+    reverted = proposals.revert(ctx, APP, fresh, None)
+    assert reverted.status == "applied"
+    assert http.get("/api/finance/breaks").json()["count"] == 1
+    with domain.engine().connect() as conn:
+        assert reconcile.decisions.read(conn) == []
+        assert reconcile.decisions.get(conn, d.id) is None
+    with pytest.raises(Problem):
+        create(ctx, "withdraw_break_decision", {"decision_id": d.id})
 
 
 def test_verify_checks_the_figures(finance: FinanceDomain) -> None:
@@ -247,21 +322,14 @@ def test_verify_checks_the_figures(finance: FinanceDomain) -> None:
     assert gap <= minor(crypto["allowed_gap"])
 
 
-class _Fx:
-    def rate(self, ccy: str, on: str) -> Decimal:
-        return Decimal(1)
-
-
-class _Positions:
-    """Relevés et mouvements d'un compte, un cours de 500 la part."""
+class _Positions(positions.Positions):
+    """Relevés et mouvements d'un compte, un cours de 500 la part, en francs."""
 
     def __init__(self, reports: Any, trades: Any) -> None:
-        self.reports = {"a": reports}
-        self.trades = {"a": trades}
-        self.fx = _Fx()
+        super().__init__(FxRates("CHF", {}), {"a": trades}, {"a": reports}, {})
 
-    def price(self, key: str, on: str) -> tuple[str, Decimal, str]:
-        return on, Decimal(500), "CHF"
+    def price(self, isin: str, on_date: str) -> positions.Price | None:
+        return on_date, Decimal(500), "CHF"
 
 
 def test_a_fund_report_rounded_to_the_hundredth_is_not_a_break() -> None:
@@ -275,9 +343,9 @@ def test_a_fund_report_rounded_to_the_hundredth_is_not_a_break() -> None:
     ]
     trades = [("2026-02-10", "CH1", Decimal("0.003"))]
     p: Any = _Positions(reports, trades)
-    assert reconcile._unexplained(p, "a", "pillar3a", "2026-03-01", {}) == []
-    reports.append(("2026-03-31", {"CH1": (Decimal("12.40"), one, "CHF")}))
-    (b,) = reconcile._unexplained(p, "a", "pillar3a", "2026-04-01", {})
+    assert reconcile._unexplained(p, "a", "pillar3a", "2026-03-01", {}, TH) == []
+    later = [*reports, ("2026-03-31", {"CH1": (Decimal("12.40"), one, "CHF")})]
+    (b,) = reconcile._unexplained(_Positions(later, trades), "a", "pillar3a", "2026-04-01", {}, TH)
     assert (b.asset, b.quantity) == ("CH1", Decimal("0.04"))
 
 
@@ -286,4 +354,41 @@ def test_a_renamed_coin_counts_under_its_new_name() -> None:
     reports = [("2026-06-01", {"CRYPTO:RENDER": (Decimal("5"), one, "CHF")})]
     trades = [("2026-01-01", "CRYPTO:RNDR", Decimal("5"))]  # acheté sous l'ancien nom
     p: Any = _Positions(reports, trades)
-    assert reconcile._unexplained(p, "a", "crypto", "2026-06-02", {}) == []
+    assert reconcile._unexplained(p, "a", "crypto", "2026-06-02", {}, TH) == []
+
+
+def test_source_gap_is_a_break_until_accepted_or_filled(
+    ctx: HubContext,  # noqa: F811
+    client_fin: tuple[TestClient, FinanceDomain],
+) -> None:
+    """Audit M15 : ce qu'un collecteur n'a pas pu lire est une rupture « historique non lu »,
+    pas une note de passage ; « garder tel quel » la couvre jusqu'à sa fin, un trou plus large la
+    rouvre, un passage complet l'efface."""
+    from tests.finance.test_double_sas import accept, create
+
+    http, finance = client_fin
+    account = add_ref(finance, "crypto:binance", "crypto", "Binance")
+    gap = {"account": "crypto:binance", "step": "fiat", "from": "2019-01-01", "to": "2020-06-30"}
+    delisted = {**gap, "step": "trades:BTCBUSD", "reason": "delisted"}
+    finance.importer.process([doc(gaps=[gap, delisted])])
+
+    def open_gaps() -> dict[str, Any]:
+        items = http.get(f"/api/finance/breaks?on={ON}").json()["items"]
+        return {b["asset"]: b for b in items if b["kind"] == "source_gap"}
+
+    found = open_gaps()
+    assert set(found) == {"fiat", "trades:BTCBUSD"}
+    assert (found["fiat"]["since"], found["fiat"]["cause"]) == ("2019-01-01", "refused")
+    assert found["fiat"]["actions"] == ["accept"]
+    assert found["fiat"]["account_id"] == account.id
+    # garder tel quel : la rupture sort de la liste
+    p = create(ctx, "decide_break", {"break_id": found["fiat"]["id"], "decision": "accept"})
+    assert "historique non lu" in p.preview["summary"]
+    assert accept(ctx, p).status == "applied"
+    assert set(open_gaps()) == {"trades:BTCBUSD"}
+    # un trou plus large la rouvre ; un passage sans trou l'efface
+    finance.importer.process([doc(fetched_at="2026-10-28", gaps=[{**gap, "to": "2026-10-28"}])])
+    assert set(open_gaps()) == {"fiat"}
+    balance = {"account": "crypto:binance", "instrument": "BTC", "on_date": ON, "quantity": "0"}
+    finance.importer.process([doc(fetched_at="2026-10-29", gaps=[], balances=[balance])])
+    assert open_gaps() == {}

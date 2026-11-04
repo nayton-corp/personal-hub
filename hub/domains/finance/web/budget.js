@@ -1,11 +1,12 @@
 // Budget : reste à vivre et rythme du mois, projection et taux d'épargne ; une section
 // Catégories (variables d'abord, les dépassements en tête, puis les fixes repliées) ; le
 // diagramme de flux (revenus → usage → postes), toujours ouvert ; abonnements et tendance sur
-// six mois, repliés sur une ligne de résumé. Les
-// montants viennent de /finance/budget, /flows, /budget/months ; seul le rythme (part du mois
-// écoulée) et la projection se calculent ici.
+// six mois, repliés sur une ligne de résumé. Les montants, le rythme, l'état et la projection
+// viennent de /finance/budget, /flows, /budget/months (audit M3) : ici on met en mots, on ne
+// calcule pas.
 import { go, reveal } from "../../shell.js";
-import { MOIS, base, date, monthName } from "../../format.js";
+import { MOIS, base, date, monthName, toMinor, units } from "../../format.js";
+import { catState, model, rank, yearState } from "./bmodel.js";
 import { GROUP_LABEL, catLook, catMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { monthStartDay, shiftMonth, store } from "../../store.js";
@@ -26,44 +27,14 @@ const flowsPath = () => `/finance/flows?month=${P.month}&period=${P.period}`;
 const monthsPath = () => `/finance/budget/months?month=${P.month}&months=6`;
 const recurringPath = "/finance/recurring";
 const trendPath = (cat) => `/finance/trend?category=${encodeURIComponent(cat)}&months=6&month=${P.month}`;
-const u = (m) => (m ? m.minor / 100 : 0);
+const u = (m) => (m ? units(m) : 0);
 
-// jours de la période : le mois budgétaire peut commencer un autre jour que le 1er
-const daysIn = (b) => Math.round((Date.parse(`${b.end}T00:00:00Z`) - Date.parse(`${b.start}T00:00:00Z`)) / 864e5);
-
-// chiffres d'une période : dépensé, budget, reste, rythme attendu, état, projection
-export function model(b, current = b.month === store.today && b.period === "m") {
-  const lines = b.lines.map((l) => ({ ...l, s: u(l.spent), t: l.target ? u(l.target) : null }));
-  const T = b.budget ? u(b.budget) : null;
-  // hors catégories suivies à l'année : elles ont leur propre jauge, depuis janvier
-  const spent = u(b.budgeted_expenses || b.expenses);
-  const pace = current ? (daysIn(b) - b.days_left) / daysIn(b) : null;
-  const tf = lines.filter((l) => l.group === "fixed" && l.t).reduce((t, l) => t + l.t, 0);
-  const tv = lines.filter((l) => l.group !== "fixed" && l.t).reduce((t, l) => t + l.t, 0);
-  const expected = pace != null && tf + tv > 0 ? (tf + tv * pace) / (tf + tv) : null;
-  const rest = T == null ? null : u(b.rest_to_live);
-  const ratio = T ? spent / T : 0;
-  let state;
-  if (T == null) state = { k: "ok", short: "Sans budget", color: "var(--accent)", icon: "info", text: "Pas encore de budget : fixe une cible par catégorie pour suivre le reste à vivre." };
-  else if (!current) {
-    state = rest >= 0
-      ? { k: "good", short: "Clos", color: "var(--accent)", icon: "check", text: `Période close avec ${n0(rest)} ${base()} d'avance sur le budget` }
-      : { k: "bad", short: "Dépassé", color: "var(--neg)", icon: "alert", text: `Période close avec un dépassement de ${n0(-rest)} ${base()}` };
-  } else if (rest < 0) state = { k: "bad", short: "Dépassé", color: "var(--neg)", icon: "alert", text: `Budget dépassé de ${n0(-rest)} ${base()}` };
-  else if (expected != null && ratio > expected + 0.03) state = { k: "warn", short: "Au-dessus du rythme", color: "var(--s3)", icon: "alert", text: `Au-dessus du rythme : ${pf(ratio, 0)} % dépensés, ${pf(expected, 0)} % attendus à ce jour` };
-  else state = { k: "good", short: "Dans le rythme", color: "var(--accent)", icon: "check", text: expected != null ? `Dans le rythme : ${pf(ratio, 0)} % dépensés, ${pf(expected, 0)} % attendus à ce jour` : `${pf(ratio, 0)} % du budget dépensé` };
-  // fin de période : les fixes restants tombent, le reste suit son rythme actuel
-  const projection = pace ? lines.filter((l) => !l.yearly).reduce((t, l) => t + (l.group === "fixed" ? Math.max(l.s, l.t || 0) : l.s / pace), 0) : null;
-  return { lines, T, spent, rest, ratio, pace, expected, state, projection, current, daysLeft: b.days_left };
-}
-
-function catState(l, pace) {
-  if (l.t == null) return { k: "ok", col: "var(--faint)", txt: "Hors budget" };
-  const r = l.t ? l.s / l.t : 0;
-  if (l.s > l.t) return { k: "bad", col: "var(--neg)", txt: `Dépassé de ${n0(l.s - l.t)}` };
-  if (pace != null && l.group !== "fixed" && r > pace + 0.05) return { k: "warn", col: "var(--s3)", txt: `Reste ${n0(l.t - l.s)}, au-dessus du rythme` };
-  if (l.group === "fixed" && l.s >= l.t - 0.5) return { k: "ok", col: "var(--pos)", txt: "Payé" };
-  return { k: "ok", col: "var(--pos)", txt: `Reste ${n0(l.t - l.s)}` };
+// des écritures en devise sans change ce jour-là : laissées de côté par le serveur, dites ici
+function missingFx(items) {
+  if (!items.length) return "";
+  const n = items.reduce((t, x) => t + x.count, 0);
+  const ccys = [...new Set(items.map((x) => x.currency))].join(", ");
+  return `<div class="status warn">${ic("alert")}<span>${n} écriture${n > 1 ? "s" : ""} en ${esc(ccys)} sans taux de change ce jour-là : pas comptée${n > 1 ? "s" : ""} ici tant que le cours manque.</span></div>`;
 }
 
 const shortMonth = (m) => MOIS[Number(m.slice(5, 7)) - 1];
@@ -223,6 +194,7 @@ export function render() {
       ${m.T == null ? `<button class="primary plan-cta" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}Créer mon budget</button>` : `<div class="hint">${amount(m.spent)} dépensés sur ${amount(m.T)} de budget</div>
       <div class="pbar" role="img" aria-label="${pf(m.ratio, 0)} % du budget dépensé${m.expected != null ? `, ${pf(m.expected, 0)} % attendus à ce jour` : ""}" data-css="--c:${st.color}"><i data-css="width:${Math.min(100, m.ratio * 100).toFixed(1)}%"></i>${m.expected != null ? `<span class="pace" data-css="left:${(m.expected * 100).toFixed(1)}%"></span>` : ""}</div>`}
       <div class="status ${st.k}">${ic(st.icon)}<span>${st.text}</span></div>
+      ${missingFx(m.missingFx)}
       ${fe.data ? savingsStrip(fe.data) : ""}
       ${proj}
     </section>`;
@@ -253,14 +225,6 @@ function foldHead(id, title, open, sum) {
     ${open ? "" : `<button class="sec-sum" type="button" data-a="bfold" data-v="${id}" aria-label="Déplier ${title}"><span>${sum}</span></button>`}`;
 }
 
-// catégorie suivie à l'année : le cumul depuis janvier face à la cible annuelle
-function yearState(c) {
-  const y = c.yearly, done = u(y.spent), goal = y.target ? u(y.target) : null;
-  return goal == null ? { k: "ok", col: "var(--faint)", txt: "Sans cible annuelle" }
-    : done > goal ? { k: "bad", col: "var(--neg)", txt: `Dépassé de ${n0(done - goal)} sur l'année` }
-    : { k: "ok", col: "var(--pos)", txt: `Reste ${n0(goal - done)} sur l'année` };
-}
-
 function yearRow(c) {
   const y = c.yearly, done = u(y.spent), goal = y.target ? u(y.target) : null;
   const r = goal ? done / goal : 0;
@@ -276,7 +240,7 @@ function yearRow(c) {
 function catRow(c, pv) {
   if (c.yearly) return yearRow(c);
   const cp = c.group === "fixed" ? null : pv;
-  const s = catState(c, cp), r = c.t ? c.s / c.t : 0;
+  const s = catState(c), r = c.t ? c.s / c.t : 0;
   const tag = s.k === "bad" ? '<span class="pill bad">Dépassé</span>' : s.k === "warn" ? '<span class="pill warn">Au-dessus du rythme</span>' : "";
   return `<button class="crow" type="button" data-a="cat" data-v="${esc(c.category)}" aria-label="${esc(c.name)}, ${n0(c.s)}${c.t != null ? ` sur ${n0(c.t)}` : ""} ${base()}, ${s.txt}">
     ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}${tag}</b><span class="t num">${money(c.s)}${c.t != null ? ` / ${money(c.t)}` : ""}</span></span>
@@ -284,15 +248,12 @@ function catRow(c, pv) {
     <span class="crow-st ${s.k}">${s.txt}</span></span></button>`;
 }
 
-// gravité pour le tri : dépassé, puis au-dessus du rythme, puis le reste par part consommée
-const rank = (c, pv) => ({ bad: 2, warn: 1 })[catState(c, c.group === "fixed" ? null : pv).k] || 0;
-
 function categories(m) {
   const pv = m.pace;
   const uncl = m.lines.find((l) => l.category === UNCAT);
   const sum2 = (cs) => [cs.filter((c) => !c.yearly).reduce((t, c) => t + c.s, 0), cs.reduce((t, c) => t + (c.t || 0), 0)];
   const pick = (gs) => m.lines.filter((l) => gs.includes(l.group) && l.category !== UNCAT)
-    .sort((x, y) => rank(y, pv) - rank(x, pv) || (y.t ? y.s / y.t : 0) - (x.t ? x.s / x.t : 0) || y.s - x.s);
+    .sort((x, y) => rank(y) - rank(x) || (y.t ? y.s / y.t : 0) - (x.t ? x.s / x.t : 0) || y.s - x.s);
   if (B.bgroup === "savings" || B.bgroup === "rest") return savingsOrRest();
   const vars = B.bgroup === "fixed" ? [] : pick(["variable", "mixed"]);
   const fixed = B.bgroup === "variable" ? [] : pick(["fixed"]);
@@ -387,7 +348,7 @@ SHEETS.cat = (id, sh) => {
   if (sh.tmp == null) sh.tmp = sh.cad === "year" ? Math.round(year || 0) : target != null ? Math.round(target) : 0;
   const was = line && line.yearly ? "year" : "month";
   const shown = was === "year" ? Math.round(year ?? -1) : Math.round(target ?? -1);
-  const s = line ? (line.yearly ? yearState(line) : catState(line, group === "fixed" ? null : m.pace)) : { k: "ok", txt: "Aucune dépense" };
+  const s = line ? (line.yearly ? yearState(line) : catState(line)) : { k: "ok", txt: "Aucune dépense" };
   const te = store.use(trendPath(id));
   let hist = skel("block");
   if (te.data) {
@@ -556,7 +517,7 @@ export const actions = {
     SH.err = "";
     renderSheet();
     try {
-      const items = ch.map((r) => ["set_budget", { category_id: r.id, monthly_minor: Math.round((SH.tmp[r.id] * 100) / (r.year ? 12 : 1)), valid_from: `${store.today}-01` }]);
+      const items = ch.map((r) => ["set_budget", { category_id: r.id, amount_minor: toMinor(SH.tmp[r.id]), cadence: r.year ? "year" : "month", valid_from: `${store.today}-01` }]);
       const [text, bad] = outcome(await proposeAndApprove(items));
       if (bad) SH.err = text;
       else {
@@ -576,8 +537,7 @@ export const actions = {
     SH.err = "";
     renderSheet();
     try {
-      const monthly = Math.round((value * 100) / (yearly ? 12 : 1));
-      const [text, bad] = outcome(await proposeAndApprove([["set_budget", { category_id: id, monthly_minor: monthly, cadence: yearly ? "year" : "month" }]]));
+      const [text, bad] = outcome(await proposeAndApprove([["set_budget", { category_id: id, amount_minor: toMinor(value), cadence: yearly ? "year" : "month" }]]));
       if (bad) SH.err = text;
       else {
         closeSheet();

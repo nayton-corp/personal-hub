@@ -2,6 +2,172 @@
 
 ## [Non publié]
 
+## [0.14.0] · 2026-11-04
+
+### Assistant et sécurité
+
+- L'assistant de la maison reconnaît ses appelants à leur jeton (`listen.callers`,
+  `ASSISTANT_CALLER_<NOM>` dans son `.env`) et en déduit pour qui chacun parle : le hub parle
+  toujours pour son propriétaire, Domia nomme la personne de l'appareil parmi celles permises.
+  Sans jeton connu, `401` ; l'adresse (`allow_from`) n'est plus qu'une seconde barrière. Le hub
+  présente `assistant.token` de `secrets.enc.yaml` (créé par `hub init`) et ne passe plus de
+  personne ; `HUB_ASSISTANT__PERSON` disparaît.
+- Passkeys (audit M16) : en ajouter une demande le Face ID d'une passkey en place
+  (`POST /auth/passkey/confirm/begin`, puis `confirm` dans `register/begin`), jamais la session
+  seule ; `DELETE /auth/passkeys/{id}` en retire une (jamais la dernière) et ferme ses sessions.
+  Migration core 0009 (`passkeys.revoked_at`).
+- L'API ne gèle plus pendant un import ou une phrase dite à l'orbe (audit M13) : le corps se
+  lit en flux, borné, et le travail part dans le threadpool ; un test d'architecture interdit
+  à une route `async` d'appeler un port en direct. `server.forwarded_allow_ips` (Caddy) remplace
+  « * » ; une seule lecture d'évènements à la fois ; le texte d'une exception passe aussi par le
+  filtre des journaux.
+
+### Finance
+
+- Un seul moteur de valorisation (audit C2, M1, m4) : la série du patrimoine
+  (`patrimoine/model/engine.py`, pure, gelée une fois construite) donne la valeur et le flux de
+  chaque ligne et les versements cumulés, jour par jour ; `networth`, `kpis`, les instantanés,
+  la performance, le résultat des cryptos et le rapprochement la lisent, ou lisent les mêmes parts
+  et cours (`model/positions.py`). Les versements en devise sont convertis au change de leur
+  jour, plus de celui de la valorisation : sur un compte en devise, l'effet marché comprend le
+  change (les versements cumulés d'un tel compte changent ; le patrimoine, non). Une rupture
+  « sans historique » gardée telle quelle sans cours ce jour-là demande un coût au lieu d'en
+  poser un à 0. La série est gardée en mémoire par base, tant que rien n'a changé.
+- Les mouvements crypto ont leur table (audit C1, M2) : `crypto_moves` (rôle, crypto, parts,
+  txid) et `crypto_links` (l'autre côté d'un mouvement : virement entre mes comptes, mise ou
+  sortie de staking), écrits une fois par la source ou par une carte validée, retirés par une
+  ligne de retrait ; `fx_json` ne garde que le change. Plus rien n'est deviné à la lecture : un
+  envoi et une arrivée à quelques jours et frais près, ou une sortie de staking suivie de son
+  claim, deviennent des cartes `link_crypto_moves` (inverse `unlink_crypto_moves`), que le hub
+  redemande après chaque import et chaque nuit ; en attente, le mouvement reste « hors de mes
+  comptes » avec sa rupture. La migration finance 0022 reprend les jambes et applique les
+  anciennes règles une dernière fois (liens `legacy|…`, acteur `migration:0022`). Les deux
+  côtés d'un virement apparié entre mes comptes ne comptent plus comme versements, quelle que
+  soit leur catégorie.
+- Aucun zéro silencieux (audit M6, M7, M8, m6) : un montant sans change marque la série
+  partielle au lieu de valoir 0 ; un change de plus de 7 jours ouvre une rupture « change
+  ancien » (`stale_fx`, décision « garder tel quel ») ; une décision « sans cours » ou « cours
+  ancien » couvre les parts qu'elle a vues et se rouvre si elles changent ; un collecteur dont
+  une adresse dépasse les pages lues le dit (`partial history.<portefeuille>:truncated`) et
+  relit tout au passage suivant ; une santé « error » et des réglages de mois absents sont
+  journalisés et montrés.
+- Tout passe par le Double Sas (audit C5, M9, m1, m5) : une décision de rapprochement est la
+  proposition `decide_break` (annulable par `withdraw_break_decision`), le jour de début du
+  mois budgétaire est la proposition `set_month_start`, datée (règles `budget_period_rules` :
+  les mois d'avant gardent leur découpage), les soldes constatés des dettes sont en ajout seul
+  (`debt_balance_records`, le dernier relevé d'un jour fait foi). `POST /finance/breaks/decide`
+  et `POST /finance/settings` disparaissent ; `GET /finance/settings` rend les règles. Une
+  lecture n'écrit plus : `transfers`, `networth/history` et `/proposals` rafraîchissent après
+  la réponse. Migration 0021, additive.
+- Budget (audit C3, M3, M4, M5, m9) : une dépense en devise compte au change de son jour, et
+  sans change elle est signalée (`missing_fx`) au lieu de valoir 0 ; une cible est gardée telle
+  que saisie avec sa cadence (`set_budget` prend `amount_minor` et `cadence`, migration 0023,
+  les anciennes lignes mensuelles restent lisibles) ; le rythme, l'état et la projection d'une
+  période viennent du serveur (`classement/model/pace.py`), la même règle pour l'app et les
+  sentinelles, et le front ne divise plus par 100 : l'exposant de la devise vient du profil
+  (`currency_exponent`). La table des changes est lue par le registre (`registre/app/fx.py`).
+- Corriger une écriture (audit M14) : la proposition `correct_entry` (montant, date ou compte,
+  avec un motif) écrit une annulation puis une remplaçante (`kind` `correction`,
+  `corrects_seq`), la catégorie suit, l'original reste et montre ses corrections dans le
+  Journal, qui propose le geste ; inverse : corriger la remplaçante avec les valeurs d'origine.
+  Les corrections comptent dans les soldes vérifiés contre les relevés (BCF, IBKR, VIAC) ; les
+  instantanés se recalculent après une correction.
+- Historique Binance jamais tenu pour lu (audit M15) : chaque flux garde son curseur
+  (`stream_since`) ; une fenêtre refusée reste à relire, est déposée dans le fichier (`gaps`,
+  format `hub.market.v1`) et devient une rupture « historique non lu » (`source_gap`, avec
+  `until`, décision « garder tel quel » couvrant la fenêtre vue) ; une paire que l'API ne liste
+  plus se déclare dans `pairs` des secrets, et l'export CSV « Trade History » de Binance se
+  dépose comme un relevé (`binance_csv`). Migration 0024 (`source_gaps`, décisions acceptant
+  cette rupture).
+- Contrats d'API (audit M10, m9) : les trente routes Finance déclarent leur modèle de sortie
+  (`response_model`, un module `schemas.py` par sous-contexte ; `search` rend `EntrySearchOut`)
+  et un test vérifie, sur un jeu de données complet, qu'aucune réponse ne porte un champ hors
+  modèle. `make openapi` génère aussi `hub/web/api.d.ts` depuis l'OpenAPI, et `make web` passe
+  `tsc` sur les modules marqués `// @ts-check` (`format.js`, `bmodel.js` pour commencer).
+- L'assistant à parité avec l'app (audit M11, M12) : 47 outils Finance au lieu de 16. Chaque
+  route de lecture a son outil (écritures, une écriture, ordres, réglages, flux, budget mois
+  par mois, historique du patrimoine, positions, performance, transparence, cours, ruptures,
+  dettes, virements, packs de règles, comptes à ouvrir), et chaque type de proposition ouvert à
+  l'assistant (tous sauf `apply_import`) a le sien, engendré de son modèle de paramètres quand
+  aucun outil écrit à la main ne le couvre (`finance_propose_<type>`). Les montants restent du
+  texte, jamais d'IBAN ; le jeton des agrégats voit 20 outils de totaux. Un test tient la
+  parité routes ↔ outils ↔ types. Une seule boucle d'agent, celle de l'assistant :
+  `hub.brain.agent` et `hub-brain ask` disparaissent (leurs tests avec eux ; ceux de
+  l'assistant couvrent la boucle), `hub-brain check` fait un tour de conversation et vérifie
+  que le modèle demande `finance_month_summary` ; `brain.max_steps` n'a plus d'effet.
+- L'assistant sous les mêmes barrières que le hub (audit M12) : `mypy --strict` sur
+  `assistant/` (tout `dict` et `list` paramétré, chaque fonction annotée) et la règle des 400
+  lignes, tenue par le test du hub : `tools.py` devient la boîte à outils seule, ses familles
+  d'outils vont dans `tools_base`, `tools_house`, `tools_knowledge`, `tools_agenda` ;
+  `grammar.py` garde l'enchaînement, le lexique dans `grammar_lexicon`, les actes dans
+  `grammar_acts` ; `assistant.py` laisse ce qu'il dit à `phrasing`. Rien ne change pour qui
+  importe `domia_assistant.tools`, `.grammar` ou `.assistant`.
+- `hub finance golden save | check` : l'étalon des agrégats (patrimoine, positions,
+  performance, ruptures, budget, dettes) se fige avant une mise à jour et se vérifie après, au
+  centime ; le fichier ne contient que des chiffres et des identifiants.
+
+### Pack pays
+
+- Tout ce qu'une instance sait de son pays tient dans un pack (audit M17, m13),
+  `hub/domains/finance/packs/<pays>` (`ch` : la Suisse) : devise, fuseau et locale proposés à
+  l'installation, modules du pays (pilier 3a) et plafonds de l'épargne-retraite, formats des
+  libellés de carte et localités de la banque, consignes de l'IA pour le classement (contexte,
+  contenu des catégories, règle du paiement mobile), régions domestique et Europe de la
+  transparence des fonds, commerçants, établissements et catégories du pays pour les
+  pictogrammes de l'app. Le code générique du hub, de la finance, du brain et du front ne nomme
+  plus la Suisse, la BCF ni TWINT ; `tests/test_core_is_generic.py` le vérifie sur le cœur,
+  les modules génériques de la finance et le front (commentaires et docstrings exclus).
+- Le cœur reçoit les packs par le point d'entrée `hub.country_packs` (qui remplace
+  `hub.country_modules`) : `/profile` publie `locale` et `packs` (domaine → ce que son pack
+  publie, lu par le brain pour ses consignes) ; le catalogue des connecteurs publie
+  `refresh_hint` (ce que demande une actualisation, la validation sur le téléphone pour la
+  BCF). Sans `HUB_COUNTRY`, le pays d'une instance sans profil est le premier qu'un domaine
+  connaît.
+- `hub init` : `--country`, `--tz`, `--currency` et `--locale` n'ont plus de défaut suisse ; le
+  pays propose les trois autres, un pays sans pack les demande. `HUB_LOCALE` (compose,
+  `fr-CH` par défaut) règle la mise en forme des nombres et des dates dans l'app et le
+  navigateur des collecteurs ; l'image n'a plus de fuseau à elle (`TZ=UTC`, compose le pose).
+  Le franc suivi dans une autre base est un réglage (`market.currencies`), plus une exception du
+  collecteur. `hub finance accounts add` demande `--institution`.
+- `/finance/lookthrough` donne à chaque région son code (`home`, `europe`, `north_america`…) ;
+  l'app choisit l'icône par le code, les étiquettes gardées en base ne changent pas (« Suisse »,
+  « Europe (hors Suisse) »). L'unité « Performance en devise de base » du patrimoine s'enregistre
+  sous `money` (l'ancien `chf` est relu). Le nom du module `pillar3a` et les défauts du noyau
+  (`DEFAULT_TZ`, `DEFAULT_BASE`, quand compose ne pose rien) restent.
+
+### Mineurs de l'audit
+
+- Seuils en réglages (m2, m16) : la section `[finance]` règle la tolérance du rapprochement,
+  les délais d'un compte, d'un cours et d'un change anciens, l'epsilon des quantités et les
+  seuils des événements de la courbe de performance (`event_floor_minor`, `event_share_pct`,
+  `event_income_floor_minor`) ; l'app reçoit `stale_days` par `/finance/settings`.
+- Chaque dette porte sa convention de décompte des intérêts (m3) : `act/365` (le défaut, ce
+  que le hub faisait pour toutes), `act/360` ou `30/360` (hypothèques). Migration 0025,
+  `save_debt.day_count`, choix dans la fiche de la dette.
+- `last_used_at` d'un jeton s'écrit au plus une fois par minute (m7) : une requête de
+  collecteur ne prend plus le verrou d'écriture pour rien.
+- La reprise des règles de l'ancien script sort du hub (m10) : `scripts/legacy_rules.py`, à
+  lancer à la main ; la commande `rules import-legacy` disparaît.
+- Corrections de lecture d'une transaction crypto à l'arrondi bancaire (m11) ; une seule forme
+  de clé (`txid|symbole|jambe`), les bitcoins écrits avant gardent la leur sans doublon. Deux
+  opérations IBKR identiques sans identifiant se suivent d'un numéro (m12).
+- À date égale, la source d'un cours qui fait foi est déclarée (m13, `assets.PRICE_SOURCES` :
+  rapport du dépositaire, relevé saisi, clôture de marché, puis prix d'une opération), plus
+  l'ordre alphabétique de son nom ; un type d'instrument connu n'est plus remplacé par une
+  autre source ; Yahoo donne le type de ce qu'il cote. Les avis VIAC gardent une clé de
+  contenu (un même avis réexporté reste un doublon).
+- Le verrou de reprise d'historique expire après 6 h (m14) ; l'export CSV neutralise les
+  formules sur toutes les colonnes de texte (m15).
+- Compositions de fonds versionnées (m16, migration 0026) : la transparence à une date lit la
+  composition connue à cette date ; la table des pays est gelée.
+- Les listes de comptes, la fraîcheur et les comptes à rafraîchir se lisent en une requête par
+  liste (m17) ; « À classer » et l'historique d'un commerçant lisent les écritures les plus
+  récentes, bornées.
+- Le planificateur note la dernière minute servie (`scheduler.last` dans les données) et
+  rejoue une fois, au redémarrage, chaque job manqué pendant l'arrêt, au plus un jour en
+  arrière (m18). Un « oui » à l'assistant ne joue que la question dont il renvoie le jeton
+  (`confirm`, relayé par le hub et l'app) ; sans jeton, la voix garde son oui d'une minute.
+
 ## [0.13.19] · 2026-11-03
 
 ### Finance

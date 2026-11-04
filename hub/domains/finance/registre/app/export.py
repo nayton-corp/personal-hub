@@ -6,6 +6,7 @@ from __future__ import annotations
 import csv
 import io
 from collections.abc import Iterator
+from typing import Any
 
 from sqlalchemy import Connection, text
 
@@ -39,6 +40,15 @@ def _cell(value: object) -> str:
     return "'" + s if s.startswith(_FORMULA) else s
 
 
+def row(r: tuple[Any, ...]) -> list[str]:
+    """Une ligne du CSV : toute colonne de texte passe par `_cell`, la référence bancaire et les
+    IBAN compris (audit m15), les montants et les dates sont rendus par le hub."""
+    out = [str(r[0]), str(r[1])]
+    for i in range(2, 17):
+        out.append(Money(int(r[6]), r[7]).display() if i == 6 else _cell(r[i]))
+    return out
+
+
 def export_csv(conn: Connection, date_from: str | None, date_to: str | None) -> Iterator[str]:
     """Journal complet, une ligne par écriture, par paquets de 500 lignes."""
     rows = conn.execute(
@@ -57,27 +67,7 @@ def export_csv(conn: Connection, date_from: str | None, date_to: str | None) -> 
     writer = csv.writer(buf, lineterminator="\r\n")
     writer.writerow(EXPORT_COLUMNS)
     for i, r in enumerate(rows, 1):
-        writer.writerow(
-            [
-                r[0],
-                r[1],
-                r[2] or "",
-                _cell(r[3]),
-                r[4] or "",
-                r[5],
-                Money(int(r[6]), r[7]).display(),
-                r[7],
-                _cell(r[8]),
-                r[9] or "",
-                _cell(r[10]),
-                _cell(r[11]),
-                r[12] or "",
-                r[13] or "",
-                r[14] or "",
-                r[15] or "",
-                r[16] or "",
-            ]
-        )
+        writer.writerow(row(tuple(r)))
         if i % 500 == 0:
             yield buf.getvalue()
             buf.seek(0)

@@ -1,10 +1,13 @@
 """Le service de l'assistant (spec §6) : `POST /talk` (relayé par Domia), `GET /health`, et l'horloge de l'observateur
 (toutes les heures, et le brief du soir). Pour l'écran Assistant (spec de l'écran §7) : `GET /history`, `GET /planned`,
-`POST /planned/{id}` et `POST /voice`. Seules les adresses de `allow_from` parlent : le Pi et la machine elle-même."""
+`POST /planned/{id}` et `POST /voice`. Chaque appelant se présente avec son jeton (`Authorization: Bearer`,
+`domia_assistant.callers`) : la personne pour qui il parle en découle ; l'adresse (`allow_from`) reste une seconde
+barrière."""
 
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import logging
 import re
@@ -13,15 +16,18 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
 from . import VERSION
 from .assistant import Assistant
+from .callers import Caller, Callers, Refused, identify, person, speaker
 from .observer import Observer
-from .tools import Speaker
 from .voice import SPEECH_MIME, Voice, VoiceUnavailable, kind
+
+if TYPE_CHECKING:
+    from .engagements import Engagements
 
 LOG = logging.getLogger("assistant")
 MAX_BODY = 16 * 1024
@@ -30,14 +36,22 @@ PLANNED = re.compile(r"^/planned/(\d+)$")
 DECISIONS = ("ACCEPT", "REFUSE", "CANCEL")
 
 
-def handler(assistant: Assistant, allow_from: tuple[str, ...], status: Callable[[], dict], voice: Voice | None = None):
+def handler(
+    assistant: Assistant,
+    allow_from: tuple[str, ...],
+    status: Callable[[], dict[str, Any]],
+    voice: Voice | None = None,
+    callers: Callers | None = None,
+) -> type[BaseHTTPRequestHandler]:
+    known: Callers = callers or {}
+
     class Handler(BaseHTTPRequestHandler):
         server_version = f"domia-assistant/{VERSION}"
 
-        def log_message(self, fmt, *args):  # les accès vont au journal, pas sur stderr
+        def log_message(self, fmt: str, *args: Any) -> None:  # les accès vont au journal, pas sur stderr
             LOG.debug("http %s", fmt % args)
 
-        def _send(self, code: int, body: dict) -> None:
+        def _send(self, code: int, body: dict[str, Any]) -> None:
             data = json.dumps(body, ensure_ascii=False).encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -45,14 +59,28 @@ def handler(assistant: Assistant, allow_from: tuple[str, ...], status: Callable[
             self.end_headers()
             self.wfile.write(data)
 
-        def _allowed(self) -> bool:
-            if self.client_address[0] in allow_from:
-                return True
-            self._send(403, {"error": "adresse non autorisée"})
-            return False
+        def _allowed(self) -> Caller | None:
+            """L'appelant : son adresse d'abord (403), puis son jeton (401) ; None quand la réponse est partie."""
+            if self.client_address[0] not in allow_from:
+                self._send(403, {"error": "adresse non autorisée"})
+                return None
+            caller = identify(self.headers.get("Authorization"), known)
+            if caller is None:
+                self._send(401, {"error": "jeton absent ou inconnu"})
+                return None
+            return caller
 
-        def do_GET(self):
-            if not self._allowed():
+        def _person(self, caller: Caller, claimed: str | None) -> str | None:
+            """Pour qui l'appelant parle ; une personne qu'il ne peut pas nommer : 403, et la réponse est partie."""
+            try:
+                return person(caller, claimed)
+            except Refused as e:
+                self._send(403, {"error": str(e)})
+                raise
+
+        def do_GET(self) -> None:
+            caller = self._allowed()
+            if caller is None:
                 return
             url = urlsplit(self.path)
             query = {k: v[0] for k, v in parse_qs(url.query).items()}
@@ -62,26 +90,27 @@ def handler(assistant: Assistant, allow_from: tuple[str, ...], status: Callable[
                     {"version": VERSION, **status(), "voice": (voice.available() if voice else "pas de voix") or "ok"},
                 )
             elif url.path == "/history":
-                self._send(200, self._history(query))
+                with contextlib.suppress(Refused):
+                    self._send(200, self._history(query, self._person(caller, query.get("person"))))
             elif url.path == "/planned":
                 self._send(200, self._planned())
             else:
                 self._send(404, {"error": "route inconnue"})
 
-        def _history(self, query: dict) -> dict:
+        def _history(self, query: dict[str, Any], who: str | None) -> dict[str, Any]:
             now = datetime.now(UTC)
             days = min(max(_int(query.get("days"), 7), 1), 90)
             limit = min(max(_int(query.get("limit"), 60), 1), 200)
-            items = assistant.memory.history(query.get("person") or None, now - timedelta(days=days), limit)
+            items = assistant.memory.history(who, now - timedelta(days=days), limit)
             waiting = assistant.engagements.waiting(now) if assistant.engagements is not None else []
             return {"items": items, "waiting": [{"id": e["id"], "question": e["question"]} for e in waiting]}
 
-        def _planned(self) -> dict:
+        def _planned(self) -> dict[str, Any]:
             now = datetime.now(UTC)
             listing = assistant.engagements.listing(now) if assistant.engagements is not None else []
             return {"planned": listing, "remarks": assistant.memory.messages(now - timedelta(days=7))}
 
-        def _json_body(self) -> dict | None:
+        def _json_body(self) -> dict[str, Any] | None:
             length = int(self.headers.get("Content-Length") or 0)
             if length <= 0 or length > MAX_BODY:
                 self._send(400, {"error": "corps absent ou trop long"})
@@ -95,16 +124,17 @@ def handler(assistant: Assistant, allow_from: tuple[str, ...], status: Callable[
                 return None
             return body
 
-        def do_POST(self):
-            if not self._allowed():
+        def do_POST(self) -> None:
+            caller = self._allowed()
+            if caller is None:
                 return
             url = urlsplit(self.path)
             if url.path == "/voice":
-                self._voice({k: v[0] for k, v in parse_qs(url.query).items()})
+                self._voice(caller, {k: v[0] for k, v in parse_qs(url.query).items()})
                 return
             planned = PLANNED.match(url.path)
             if planned:
-                self._decide(int(planned.group(1)))
+                self._decide(caller, int(planned.group(1)))
                 return
             if url.path != "/talk":
                 self._send(404, {"error": "route inconnue"})
@@ -117,10 +147,15 @@ def handler(assistant: Assistant, allow_from: tuple[str, ...], status: Callable[
             except KeyError:
                 self._send(400, {"error": "corps illisible"})
                 return
-            who = Speaker(person=body.get("person"), room=body.get("room"), client=body.get("client"))
-            started = time.monotonic()
             try:
-                answer = assistant.talk(text, who)
+                who = speaker(caller, body.get("person"), body.get("room"), body.get("client"))
+            except Refused as e:
+                self._send(403, {"error": str(e)})
+                return
+            started = time.monotonic()
+            confirm = body.get("confirm")
+            try:
+                answer = assistant.talk(text, who, confirm=confirm if isinstance(confirm, str) else None)
             except Exception:  # une phrase ne fait jamais tomber le service
                 LOG.exception("talk_failed correlation_id=%s", body.get("correlation_id"))
                 self._send(500, {"error": "l'assistant a trébuché"})
@@ -135,7 +170,7 @@ def handler(assistant: Assistant, allow_from: tuple[str, ...], status: Callable[
             )
             self._send(200, answer)
 
-        def _decide(self, engagement_id: int) -> None:
+        def _decide(self, caller: Caller, engagement_id: int) -> None:
             body = self._json_body()
             if body is None:
                 return
@@ -143,21 +178,30 @@ def handler(assistant: Assistant, allow_from: tuple[str, ...], status: Callable[
             if decision not in DECISIONS or assistant.engagements is None:
                 self._send(400, {"error": "décision inconnue"})
                 return
-            done = assistant.engagements.decide(engagement_id, decision, body.get("person"), datetime.now(UTC))
+            try:
+                who = self._person(caller, body.get("person"))
+            except Refused:
+                return
+            done = assistant.engagements.decide(engagement_id, decision, who, datetime.now(UTC))
             LOG.info("planned_decision id=%d decision=%s done=%s", engagement_id, decision, done)
             self._send(
                 200 if done else 409, {"done": done} if done else {"error": "rien à faire : déjà réglé ou expiré"}
             )
 
-        def _voice(self, query: dict) -> None:
-            """Un son relayé par Domia : transcrit, joué comme une phrase dite, la réponse dite en retour. Le son
-            n'est gardé nulle part ; seule la phrase transcrite entre dans la conversation."""
+        def _voice(self, caller: Caller, query: dict[str, Any]) -> None:
+            """Un son relayé par Domia ou le hub : transcrit, joué comme une phrase dite, la réponse dite en retour.
+            Le son n'est gardé nulle part ; seule la phrase transcrite entre dans la conversation."""
             length = int(self.headers.get("Content-Length") or 0)
             mime = kind(self.headers.get("Content-Type"))
             if length <= 0 or length > MAX_AUDIO or mime is None:
                 self._send(400, {"error": "son absent, trop long ou d'un type inconnu"})
                 return
             audio = self.rfile.read(length)
+            try:
+                who = speaker(caller, query.get("person"), query.get("room"), query.get("client"))
+            except Refused as e:
+                self._send(403, {"error": str(e)})
+                return
             if voice is None:
                 self._send(503, {"error": "pas de voix sur cette machine", "code": "VOICE_UNAVAILABLE"})
                 return
@@ -172,9 +216,6 @@ def handler(assistant: Assistant, allow_from: tuple[str, ...], status: Callable[
                 self._send(500, {"error": "la transcription a trébuché"})
                 return
             heard_ms = (time.monotonic() - started) * 1000
-            who = Speaker(
-                person=query.get("person") or None, room=query.get("room") or None, client=query.get("client") or None
-            )
             answer: dict[str, Any]
             if not heard:
                 answer = {"answer": "Je n'ai rien entendu.", "done": [], "proposals": [], "confirm": None}
@@ -216,10 +257,13 @@ def serve(
     host: str,
     port: int,
     allow_from: tuple[str, ...],
-    status: Callable[[], dict],
+    status: Callable[[], dict[str, Any]],
     voice: Voice | None = None,
+    callers: Callers | None = None,
 ) -> ThreadingHTTPServer:
-    server = ThreadingHTTPServer((host, port), handler(assistant, allow_from, status, voice))
+    if not callers:
+        LOG.warning("listen callers=0 : aucun appelant déclaré, personne ne peut parler (listen.callers)")
+    server = ThreadingHTTPServer((host, port), handler(assistant, allow_from, status, voice, callers))
     threading.Thread(target=server.serve_forever, name="http", daemon=True).start()
     return server
 
@@ -230,7 +274,7 @@ def clock(
     brief_at: str | None,
     stop: threading.Event,
     tick: float = 30.0,
-    engagements=None,
+    engagements: Engagements | None = None,
     daily: dict[str, Callable[[], Any]] | None = None,
 ) -> None:
     """L'horloge de l'observateur : à chaque heure pile, un réveil ; à `brief_at`, le brief du soir ; à chaque tour, les

@@ -4,9 +4,10 @@
 import { accountsList } from "./accounts.js";
 import { accountsCard, connectionsCard } from "./connections.js";
 import { debtsList } from "./debts.js";
-import { STALE_DAYS, daysSince } from "../../format.js";
+import { daysSince, locale, staleDays } from "../../format.js";
 import { TAX_RATES, taxRate } from "./meta.js";
-import { api, monthStartDay, store } from "../../store.js";
+import { outcome, proposeAndApprove } from "./proposals.js";
+import { monthStartDay, store } from "../../store.js";
 import { esc, failure, fill, pf, setPref, toast } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -18,8 +19,8 @@ function example(s) {
   if (!s) return "";
   const [a, b] = [s.current_period.start, s.current_period.end].map((x) => new Date(`${x}T00:00:00Z`));
   b.setUTCDate(b.getUTCDate() - 1);
-  const f = (d) => d.toLocaleDateString("fr-CH", { day: "numeric", month: "long", timeZone: "UTC" });
-  const name = new Date(`${s.current_month}-01T00:00:00Z`).toLocaleDateString("fr-CH", { month: "long", timeZone: "UTC" });
+  const f = (d) => d.toLocaleDateString(locale(), { day: "numeric", month: "long", timeZone: "UTC" });
+  const name = new Date(`${s.current_month}-01T00:00:00Z`).toLocaleDateString(locale(), { month: "long", timeZone: "UTC" });
   return `Le mois en cours, ${name}, va du ${f(a)} au ${f(b)}.`;
 }
 
@@ -38,7 +39,7 @@ export function rubricStatus(k) {
     const f = d("/finance/freshness");
     if (!f) return null;
     const vis = f.items.filter((x) => !x.hidden);
-    const late = vis.filter((x) => { const a = daysSince(x.last_data); return a == null || a > STALE_DAYS; }).length;
+    const late = vis.filter((x) => { const a = daysSince(x.last_data); return a == null || a > staleDays(); }).length;
     return late ? [`${late} en retard`, "warn"] : [`${vis.length} à jour`, "ok"];
   }
   if (k === "debts") {
@@ -78,13 +79,18 @@ export const actions = {
   },
 };
 
+// le jour de début est une proposition (`set_month_start`, Double Sas) : un Face ID, et le
+// mois en cours suit ; les mois d'avant gardent leur découpage
 document.addEventListener("change", async (e) => {
   if (e.target.id !== "month-start") return;
   const day = Number(e.target.value);
   try {
-    const s = await api(SETTINGS, { month_start_day: day });
-    store.setMonthStart(s.month_start_day);
-    toast(`Le mois budgétaire commence le ${day === 1 ? "1er" : day}`);
+    const [text, bad] = outcome(await proposeAndApprove([["set_month_start", { start_day: day }]]));
+    if (bad) toast(text, { error: true });
+    else {
+      store.setMonthStart(day);
+      toast(`Le mois budgétaire commence le ${day === 1 ? "1er" : day}`);
+    }
   } catch (err) {
     toast(failure(err), { error: true });
     store.invalidate();

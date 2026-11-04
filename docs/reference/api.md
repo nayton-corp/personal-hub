@@ -14,11 +14,13 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `POST` | `/api/assistant/talk` | Talk |
 | `POST` | `/api/assistant/voice` | Voice |
 | `POST` | `/api/auth/logout` | Logout |
+| `POST` | `/api/auth/passkey/confirm/begin` | Défi qu'une passkey en place signe avant d'en ajouter ou d'en retirer une. |
 | `POST` | `/api/auth/passkey/login/begin` | Login Begin |
 | `POST` | `/api/auth/passkey/login/finish` | Login Finish |
 | `POST` | `/api/auth/passkey/register/begin` | Register Begin |
 | `POST` | `/api/auth/passkey/register/finish` | Register Finish |
 | `GET` | `/api/auth/passkeys` | List Passkeys |
+| `DELETE` | `/api/auth/passkeys/{credential_id}` | Retire une passkey (jamais la dernière) sous Face ID d'une passkey en place ; ses sessions sont fermées, la sienne comprise. |
 | `GET` | `/api/auth/session` | Session |
 | `GET` | `/api/collectors` | List Collectors |
 | `GET` | `/api/collectors/catalog` | Les connecteurs que ce hub sait collecter (méthode, pays, secrets attendus). |
@@ -83,8 +85,7 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 |---|---|---|
 | `GET` | `/api/finance/accounts` | Comptes, IBAN masqué, solde calculé, dernier CLBD et écart. |
 | `GET` | `/api/finance/accounts/pending` | Comptes vus dans des relevés en attente (Enable Banking, CSV Revolut) mais pas encore créés : clé, devise, nombre d'écritures et période. Aucun montant. |
-| `GET` | `/api/finance/breaks` | Rapprochement d'aujourd'hui : les ruptures ouvertes (compte, actif, parts, valeur, cause, gestes), leur total et la part des placements expliquée et cotée. |
-| `POST` | `/api/finance/breaks/decide` | Classe une rupture : coût saisi, garder tel quel, ou « parti » pour un envoi. |
+| `GET` | `/api/finance/breaks` | Rapprochement d'aujourd'hui : les ruptures ouvertes (compte, actif, parts, valeur, cause, gestes), leur total et la part des placements expliquée et cotée. Une rupture se règle par la proposition `decide_break` (Double Sas). |
 | `GET` | `/api/finance/budget` | Réel et cible par catégorie de dépense, dépassements, reste à vivre, jours restants. `period=q` : les trois mois complets avant `month`. |
 | `GET` | `/api/finance/budget/months` | Les totaux du budget mois par mois, jusqu'à `month` compris. |
 | `GET` | `/api/finance/budget/totals` | Revenus, dépenses (fixes, variables), épargne, placements et taux d'épargne. |
@@ -107,9 +108,8 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `GET` | `/api/finance/review` | Écritures sans catégorie, groupées par contrepartie normalisée. |
 | `GET` | `/api/finance/rules/packs` | Packs de règles livrés, version installée, ceux du pays de l'instance, et le nombre de règles actives hors système (parcours d'accueil). |
 | `GET` | `/api/finance/search` | Search |
-| `GET` | `/api/finance/settings` | Réglages du budget : jour où commence le mois, mois en cours et ses dates. |
-| `POST` | `/api/finance/settings` | Update Settings |
+| `GET` | `/api/finance/settings` | Réglages du budget : jour où commence le mois en cours, mois en cours et ses dates, règles datées (`set_month_start` en pose une nouvelle). |
 | `GET` | `/api/finance/summary` | Summary |
 | `GET` | `/api/finance/trades` | Achats et ventes d'un actif (ordres), pour le journal d'un actif dans l'app. |
-| `GET` | `/api/finance/transfers` | Virements appariés par méthode et virements sans autre côté. |
+| `GET` | `/api/finance/transfers` | Virements appariés par méthode et virements sans autre côté. Une lecture n'écrit pas : les instantanés se rafraîchissent après la réponse, en tâche de fond. |
 | `GET` | `/api/finance/trend` | Trend |

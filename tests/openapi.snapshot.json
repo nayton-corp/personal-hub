@@ -773,6 +773,27 @@
         "title": "CollectorRunsOut",
         "type": "object"
       },
+      "ConfirmIn": {
+        "additionalProperties": false,
+        "description": "Une passkey existante qui signe le geste (défi `confirm`).",
+        "properties": {
+          "challenge_id": {
+            "title": "Challenge Id",
+            "type": "string"
+          },
+          "credential": {
+            "additionalProperties": true,
+            "title": "Credential",
+            "type": "object"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "credential"
+        ],
+        "title": "ConfirmIn",
+        "type": "object"
+      },
       "ConnectionIn": {
         "additionalProperties": false,
         "properties": {
@@ -1065,6 +1086,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "refresh_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Hint"
           },
           "required_settings": {
             "items": {
@@ -1827,6 +1859,10 @@
             "title": "Currency",
             "type": "string"
           },
+          "currency_exponent": {
+            "title": "Currency Exponent",
+            "type": "integer"
+          },
           "display_name": {
             "anyOf": [
               {
@@ -1838,12 +1874,24 @@
             ],
             "title": "Display Name"
           },
+          "locale": {
+            "title": "Locale",
+            "type": "string"
+          },
           "modules": {
             "items": {
               "type": "string"
             },
             "title": "Modules",
             "type": "array"
+          },
+          "packs": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Packs",
+            "type": "object"
           },
           "timezone": {
             "title": "Timezone",
@@ -1854,8 +1902,11 @@
           "display_name",
           "country",
           "timezone",
+          "locale",
           "currency",
-          "modules"
+          "currency_exponent",
+          "modules",
+          "packs"
         ],
         "title": "ProfileOut",
         "type": "object"
@@ -2106,6 +2157,16 @@
               }
             ],
             "title": "Bootstrap Code"
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfirmIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "RegisterBeginIn",
@@ -2374,6 +2435,18 @@
       },
       "TalkIn": {
         "properties": {
+          "confirm": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm"
+          },
           "text": {
             "maxLength": 2000,
             "minLength": 1,
@@ -2710,6 +2783,28 @@
         ]
       }
     },
+    "/api/auth/passkey/confirm/begin": {
+      "post": {
+        "description": "Défi qu'une passkey en place signe avant d'en ajouter ou d'en retirer une.",
+        "operationId": "confirm_begin_api_auth_passkey_confirm_begin_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Confirm Begin",
+        "tags": [
+          "authentification"
+        ]
+      }
+    },
     "/api/auth/passkey/login/begin": {
       "post": {
         "operationId": "login_begin_api_auth_passkey_login_begin_post",
@@ -2870,6 +2965,53 @@
           }
         },
         "summary": "List Passkeys",
+        "tags": [
+          "authentification"
+        ]
+      }
+    },
+    "/api/auth/passkeys/{credential_id}": {
+      "delete": {
+        "description": "Retire une passkey (jamais la dernière) sous Face ID d'une passkey en place ; ses\nsessions sont fermées, la sienne comprise.",
+        "operationId": "revoke_passkey_api_auth_passkeys__credential_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "title": "Credential Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Passkey",
         "tags": [
           "authentification"
         ]
