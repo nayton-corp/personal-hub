@@ -4,6 +4,7 @@
 // dettes n'ont pas d'onglet, leurs actions passent par ici. Aucun chiffre n'est inventé : tout
 // vient de /api/finance, en centimes.
 import * as accounts from "./accounts.js";
+import { initAddAccount } from "./addaccount.js";
 import * as correct from "./correct.js";
 import * as debts from "./debts.js";
 import { initConnections } from "./connections.js";
@@ -25,6 +26,7 @@ const PARAMS = { tx: "all", q: "", txcat: null, jf: {} };
 export function init() {
   for (const [k, v] of Object.entries(PARAMS)) if (!(k in store.params)) store.params[k] = v;
   initConnections();
+  initAddAccount();
   initWelcome();
   window.addEventListener("hub:changed", () => journal.reset());
   // jour de début du mois budgétaire : le mois en cours en dépend

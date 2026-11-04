@@ -105,7 +105,7 @@ export function welcomeCard() {
       ["Remplir", () => goSources("form-profile")]],
     packStep(packs),
     [connections.items.length > 0, "Première connexion", "banque, plateforme ou cours",
-      ["Ajouter", () => goSources("conn-add")]],
+      ["Ajouter", () => goSources("acct-add")]],
     [accounts.items.length > 0, "Premier compte", "créé avec ses premiers relevés",
       ["Voir", () => goSources("acct-pending")]],
   ];
