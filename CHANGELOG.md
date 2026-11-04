@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.15.0] · 2026-11-04
+
 ### App
 
 - « Ajouter un compte » en trois étapes : le type (banque, titres, prévoyance, plateforme
