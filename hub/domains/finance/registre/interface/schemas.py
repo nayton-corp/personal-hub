@@ -137,3 +137,4 @@ class SettingsOut(Out):
     current_month: str
     current_period: PeriodOut
     rules: list[MonthRuleOut]
+    stale_days: int  # un compte sans donnée depuis plus longtemps est à rafraîchir

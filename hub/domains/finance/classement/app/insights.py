@@ -14,6 +14,7 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
+from hub.domains.finance import thresholds
 from hub.domains.finance.classement.app.totals import Line, Lines, Totals, period_report
 from hub.domains.finance.packs import CountryPack
 from hub.domains.finance.registre.app.reads import budget_accounts, in_list, last_data
@@ -28,7 +29,6 @@ from hub.domains.finance.registre.model.amounts import (
 )
 from hub.kernel.money import base_currency
 
-STALE_DAYS = 45
 PENSION_DEPOSITS = institutions.like_any(
     "bank_tx_code", institutions.prefixes(pension_deposit=True)
 )
@@ -174,10 +174,10 @@ def last_clbds(conn: Connection) -> list[tuple[str, str | None]]:
     return [(r[0], r[1]) for r in rows]
 
 
-def stale_accounts(conn: Connection, today: date) -> int:
+def stale_accounts(conn: Connection, today: date, days: int | None = None) -> int:
     """Comptes affichés dont la dernière donnée (écriture, position, solde de clôture) a plus de
-    STALE_DAYS jours. Un compte encore jamais alimenté n'en fait pas partie."""
-    limit = (today - timedelta(days=STALE_DAYS)).isoformat()
+    `days` jours (réglage `stale_account_days`). Un compte jamais alimenté n'en fait pas partie."""
+    limit = (today - timedelta(days=days or thresholds.current().stale_account_days)).isoformat()
     ids = conn.execute(
         text("SELECT id FROM accounts WHERE closed_on IS NULL AND hidden = 0")
     ).scalars()

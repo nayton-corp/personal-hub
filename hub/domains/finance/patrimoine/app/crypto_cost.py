@@ -31,6 +31,7 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
+from hub.domains.finance import thresholds
 from hub.domains.finance.patrimoine.app import crypto_moves, decisions
 from hub.domains.finance.patrimoine.app.market_data import Positions
 from hub.domains.finance.patrimoine.model import instruments
@@ -40,7 +41,7 @@ from hub.kernel.money import DECIMAL_CONTEXT, base_currency, quantize
 
 USD = "USD"
 ZERO = Decimal(0)
-EPS = Decimal("1e-9")  # reste d'arrondi des quantités
+EPS = Decimal("1e-9")  # reste d'arrondi des quantités ; le réglage `quantity_epsilon` le remplace
 
 
 @dataclass
@@ -56,6 +57,7 @@ class Book:
     sold_unknown: Decimal = ZERO  # ventes de parts que l'historique n'explique pas
     out_cost: Decimal = ZERO  # coût retiré par des envois vers l'extérieur
     arrived: Decimal = ZERO  # arrivées de l'extérieur, au cours du jour
+    eps: Decimal = EPS  # reste d'arrondi tenu pour zéro (réglage `quantity_epsilon`)
 
     def add(self, q: Decimal, cost: Decimal, cost_usd: Decimal) -> None:
         self.held += q
@@ -73,9 +75,9 @@ class Book:
         self.cost -= c
         self.cost_usd -= cu
         self.held -= q
-        if self.held <= EPS:  # plus rien : plus de coût (un reste négatif attend son arrivée)
+        if self.held <= self.eps:  # plus rien : plus de coût (un reste négatif attend son arrivée)
             self.cost = self.cost_usd = ZERO
-            if abs(self.held) <= EPS:
+            if abs(self.held) <= self.eps:
                 self.held = ZERO
         return c, cu, q - known
 
@@ -102,6 +104,7 @@ def walk(conn: Connection, on_date: str, fx: FxRates, lots: Sequence[Leg] = ()) 
     out: dict[str, Book] = {}
     flows: dict[tuple[str, str], dict[str, tuple[Decimal, Decimal]]] = {}
     usd_ok = True
+    eps = thresholds.current().quantity_epsilon
     legs = sorted(
         [*(x for x in lots if x[0] <= on_date), *crypto_moves.legs(conn, on_date)],
         key=lambda x: x[0],
@@ -109,7 +112,7 @@ def walk(conn: Connection, on_date: str, fx: FxRates, lots: Sequence[Leg] = ()) 
     with localcontext(DECIMAL_CONTEXT):
         for on, kind, amount, symbol, q, internal, account in legs:
             key = instruments.crypto_key(symbol)
-            b = out.setdefault(key, Book())
+            b = out.setdefault(key, Book(eps=eps))
             day = flows.setdefault((account, key), {})
             v = Decimal(abs(amount))
             rate = fx.rate(USD, on)
@@ -204,16 +207,17 @@ def result(conn: Connection, on_date: str, positions: Positions) -> dict[str, An
         ZERO,
     )
     by_asset: dict[str, Any] = {}
+    eps = thresholds.current().quantity_epsilon
     with localcontext(DECIMAL_CONTEXT):
         for key in sorted(set(held) | set(bk)):
             q, value = held.get(key, (ZERO, 0))
-            b = bk.get(key, Book())
+            b = bk.get(key, Book(eps=eps))
             v = Decimal(value)
             unknown = ZERO
             missing_out = ZERO
-            if q > 0 and q > b.held + EPS:  # des parts sans historique : sans prix de revient
+            if q > 0 and q > b.held + eps:  # des parts sans historique : sans prix de revient
                 unknown = v * (q - max(b.held, ZERO)) / q
-            elif b.held > q + EPS and b.held > 0:  # sorties que l'historique ne montre pas
+            elif b.held > q + eps and b.held > 0:  # sorties que l'historique ne montre pas
                 missing_out = b.cost * (b.held - q) / b.held
                 b.cost_usd -= b.cost_usd * (b.held - q) / b.held
                 b.cost -= missing_out

@@ -421,6 +421,30 @@ def test_export_neutralizes_formulas() -> None:
     assert export._cell("=HYPERLINK()") == "'=HYPERLINK()"
     assert export._cell("Migros") == "Migros"
     assert export._cell(None) == ""
+    # chaque colonne de texte, la référence bancaire et les IBAN compris (audit m15)
+    trapped = (
+        12,
+        "2026-10-01",
+        None,
+        "Compte",
+        "=CMD()",
+        "debit",
+        -150000,
+        "CHF",
+        "+Régie",
+        "@IBAN",
+        "-label",
+        "=remise",
+        "=1+1",
+        "@code",
+        "-cat",
+        "+src",
+        "=imp",
+    )
+    got = export.row(trapped)
+    assert got[:3] == ["12", "2026-10-01", ""]
+    assert got[6] == "-1500.00"
+    assert all(c.startswith("'") for i, c in enumerate(got) if i not in (0, 1, 2, 3, 5, 6, 7))
 
 
 def test_ratio_and_periods() -> None:

@@ -69,6 +69,11 @@ par module (`make web`).
   les titres VIAC, valorisés par leurs positions (lot 4).
 - **3e pilier.** Plafond 2026 : 7'258 CHF. Une autre valeur se règle dans `settings.toml`,
   section `[finance]`, clé `pillar3a_cap_minor` (en centimes).
+- **Seuils.** Dans la même section (audit m2), en devise de base ou en jours :
+  `tolerance_minor` (rupture du rapprochement ignorée en dessous ; 1 unité de la devise de base
+  sans réglage), `stale_account_days` (45 : compte à rafraîchir), `stale_price_days` (14) et
+  `stale_crypto_price_days` (3 : cours ancien), `stale_fx_days` (7 : change ancien),
+  `quantity_epsilon` (`1e-9` : reste d'arrondi d'une quantité tenu pour zéro).
 
 ## Reprendre l'historique (L1-11)
 
@@ -128,19 +133,10 @@ as désactivée le reste ; une nouvelle version d'un pack désactive les règles
 export contient tes mots-clés : il reste hors du dépôt.
 
 **Reprise de l'ancien script.** Sur une base d'avant les packs, les règles de
-`bcf_aggregate.py` sont déjà en base (préfixe `seed-`) ; reprends en plus ton fichier de
-règles, une fois :
-
-```
-mkdir -p ~/PersonalHub/inbox/rules
-cp ~/Downloads/viac_out/bcf_rules.json ~/PersonalHub/inbox/rules/
-fin rules import-legacy /srv/hub/inbox/rules/bcf_rules.json
-rm -r ~/PersonalHub/inbox/rules
-```
-
-La sortie ne donne que des compteurs (règles ajoutées, gardées, désactivées, catégories
-créées, écritures catégorisées). Une règle `seed-` ou `legacy-` absente du fichier est
-désactivée ; tes IBAN propres sont ignorés (les virements internes ont leurs règles
+`bcf_aggregate.py` sont déjà en base (préfixe `seed-`) ; le fichier de règles personnel se
+reprend, une fois, par un script hors du hub (`scripts/legacy_rules.py <fichier.json>`, dans
+le conteneur), qui n'affiche que des compteurs. Une règle `seed-` ou `legacy-` absente du
+fichier est désactivée ; les IBAN propres sont ignorés (les virements internes ont leurs règles
 système). `fin rules list [--all]` montre les règles, `fin rules run` les rejoue.
 
 **Double Sas.** Rien ne change au registre sans une proposition validée. L'app montre
@@ -418,7 +414,7 @@ fichier dans la boîte d'entrée.
 |---|---|
 | `fin accounts add|list|open` | comptes (`add` passe par une proposition `create_account`) ; `open` crée un solde d'ouverture à la main |
 | `fin categories add|list` | catégories, créées par une proposition `create_category` |
-| `fin rules list [--all]` · `fin rules run` · `fin rules import-legacy FICHIER` · `fin rules packs list\|install` · `fin rules export FICHIER` | règles de catégorisation |
+| `fin rules list [--all]` · `fin rules run` · `fin rules packs list\|install` · `fin rules export FICHIER` | règles de catégorisation |
 | `fin imports list [--status …]` · `fin imports retry [ID…]` | suivi et rejeu des imports |
 | `fin watch-inbox --once` | un passage de la boîte d'entrée |
 | `fin verify-ledger` | chaîne et empreintes, code 1 au moindre écart |

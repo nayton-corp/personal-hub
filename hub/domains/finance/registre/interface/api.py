@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 
 from hub.core.auth import AppSession
 from hub.core.errors import Problem
+from hub.domains.finance import thresholds
 from hub.domains.finance.registre.app import export, period_kinds, reads
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.http import (
@@ -44,6 +45,7 @@ def build_router(host: http.Host) -> APIRouter:
             "current_month": month,
             "current_period": {"start": start.isoformat(), "end": end.isoformat()},
             "rules": [{"valid_from": v, "start_day": d} for v, d in dict(rules).items()],
+            "stale_days": thresholds.current().stale_account_days,
         }
 
     @r.get("/entries", response_model=EntryListOut)

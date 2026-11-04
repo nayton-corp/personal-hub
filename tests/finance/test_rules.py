@@ -12,7 +12,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from sqlalchemy import text
 
-from hub.domains.finance.classement.app import legacy, rules
+from hub.domains.finance.classement.app import rules
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.registre.app import catalog
 from hub.domains.finance.sources.infra.files import Incoming
@@ -26,6 +26,9 @@ from tests.finance.conftest import (
     without_seed_rules,
 )
 from tests.support import legacy_bcf_aggregate as old
+from tests.support.scripts import load_script
+
+legacy = load_script("legacy_rules")  # la reprise est un script hors du hub (audit m10)
 
 D = date(2026, 10, 1)
 
@@ -365,7 +368,9 @@ def test_import_legacy_merges_and_disables(finance: FinanceDomain) -> None:
     assert rows(finance, "SELECT grp FROM categories WHERE id = 'jardin'") == [("variable",)]
 
 
-def test_rules_cli(finance: FinanceDomain, tmp_path: Path) -> None:
+def test_rules_cli(
+    finance: FinanceDomain, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     import json
 
     from typer.testing import CliRunner
@@ -381,13 +386,16 @@ def test_rules_cli(finance: FinanceDomain, tmp_path: Path) -> None:
     data["categories"]["Restaurants & sorties"].append("chez zorglub")
     path = tmp_path / "bcf_rules.json"
     path.write_text(json.dumps(data), encoding="utf-8")
-    out = runner.invoke(app, ["rules", "import-legacy", str(path)])
-    assert out.exit_code == 0, out.stdout
-    assert json.loads(out.stdout)["categorized"] == 1
-    assert "Bistrot" not in out.stdout  # compteurs seulement
+    # la reprise de l'ancien fichier est un script hors du hub (audit m10)
+    assert legacy.main([str(path)], finance.engine()) == 0
+    out = capsys.readouterr().out
+    assert json.loads(out)["categorized"] == 1
+    assert "Bistrot" not in out  # compteurs seulement
     assert json.loads(runner.invoke(app, ["rules", "run"]).stdout) == {"categorized": 0}
     bad = tmp_path / "bad.json"
     bad.write_text("{", encoding="utf-8")
-    assert runner.invoke(app, ["rules", "import-legacy", str(bad)]).exit_code == 1
+    assert legacy.main([str(bad)], finance.engine()) == 1
+    assert "fichier refusé" in capsys.readouterr().err
+    assert legacy.main([], finance.engine()) == 2
     assert "désactivée" not in runner.invoke(app, ["rules", "list"]).stdout
     assert runner.invoke(app, ["rules", "list", "--all"]).exit_code == 0

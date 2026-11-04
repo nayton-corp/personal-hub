@@ -1116,6 +1116,7 @@ export interface SettingsOut {
   current_month: string;
   current_period: PeriodOut;
   rules: MonthRuleOut[];
+  stale_days: number;
 }
 
 export interface SettingsSectionOut {

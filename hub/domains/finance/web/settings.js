@@ -4,7 +4,7 @@
 import { accountsList } from "./accounts.js";
 import { accountsCard, connectionsCard } from "./connections.js";
 import { debtsList } from "./debts.js";
-import { STALE_DAYS, daysSince, locale } from "../../format.js";
+import { daysSince, locale, staleDays } from "../../format.js";
 import { TAX_RATES, taxRate } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { monthStartDay, store } from "../../store.js";
@@ -39,7 +39,7 @@ export function rubricStatus(k) {
     const f = d("/finance/freshness");
     if (!f) return null;
     const vis = f.items.filter((x) => !x.hidden);
-    const late = vis.filter((x) => { const a = daysSince(x.last_data); return a == null || a > STALE_DAYS; }).length;
+    const late = vis.filter((x) => { const a = daysSince(x.last_data); return a == null || a > staleDays(); }).length;
     return late ? [`${late} en retard`, "warn"] : [`${vis.length} à jour`, "ok"];
   }
   if (k === "debts") {

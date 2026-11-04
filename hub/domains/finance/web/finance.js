@@ -7,7 +7,7 @@ import * as accounts from "./accounts.js";
 import * as correct from "./correct.js";
 import * as debts from "./debts.js";
 import { initConnections } from "./connections.js";
-import { freshLine } from "../../format.js";
+import { freshLine, setStaleDays } from "../../format.js";
 import * as journal from "./journal.js";
 import { action, go } from "../../shell.js";
 import { api, store } from "../../store.js";
@@ -29,7 +29,10 @@ export function init() {
   window.addEventListener("hub:changed", () => journal.reset());
   // jour de début du mois budgétaire : le mois en cours en dépend
   api("/finance/settings")
-    .then((s) => store.setMonthStart(s.month_start_day))
+    .then((s) => {
+      store.setMonthStart(s.month_start_day);
+      setStaleDays(s.stale_days);
+    })
     .catch((e) => {
       // sans réglages, le mois budgétaire commence au 1er : dit, jamais tu (audit m6)
       if (!store.offline) toast(`Réglages Finance indisponibles : ${e.message}`, { error: true });

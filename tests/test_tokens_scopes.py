@@ -7,6 +7,7 @@ from sqlalchemy import text
 from hub.core import tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
+from hub.kernel import clock
 from tests.conftest import bearer
 
 
@@ -51,9 +52,20 @@ def test_token_is_stored_as_hash_and_revocable(hub: HubContext) -> None:
     assert stored == tokens.hash_secret(secret)
     assert secret not in dump
     with hub.core.engine.begin() as conn:
-        assert tokens.verify(conn, secret) is not None
+        found = tokens.verify(conn, secret)
+        assert found is not None
         assert tokens.verify(conn, "hub_wrong") is None
         assert tokens.verify(conn, "nope") is None
+        # vérifier n'écrit rien ; `last_used_at` se pose à part, au plus une fois par minute
+        assert found.last_used_at is None
+        assert tokens.needs_touch(found)
+        tokens.touch(conn, info.id)
+        touched = tokens.verify(conn, secret)
+        assert touched is not None
+        assert touched.last_used_at is not None
+        assert not tokens.needs_touch(touched)
+        later = (clock.parse_iso(touched.last_used_at) + tokens.TOUCH_EVERY).isoformat()
+        assert tokens.needs_touch(touched, later.replace("+00:00", "Z"))
         assert tokens.revoke(conn, info.id, "system:test")
         assert not tokens.revoke(conn, info.id, "system:test")
         assert tokens.verify(conn, secret) is None

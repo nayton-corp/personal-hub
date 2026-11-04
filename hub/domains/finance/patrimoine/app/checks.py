@@ -60,7 +60,7 @@ def figures(conn: Connection, on: str) -> tuple[bool, dict[str, Any]]:
     gap = crypto_gap(conn, on)
     if gap is not None:
         max_gain, since_purchase = gap
-        allowed = reconcile.TOLERANCE_MINOR * (1 + lines) + out_of_result
+        allowed = rep.tolerance_minor * (1 + lines) + out_of_result
         ok = abs(max_gain - since_purchase) <= allowed
         detail["crypto"] = {
             "performance_max": money(max_gain, ccy),

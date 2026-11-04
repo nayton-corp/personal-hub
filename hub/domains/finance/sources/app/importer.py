@@ -328,7 +328,7 @@ class ImportService(Rework):
     def process_inbox(self) -> BatchReport:
         """Traite l'inbox jusqu'à ce qu'elle soit vide ; rien pendant une reprise d'historique."""
         total = BatchReport()
-        if self.lock_file.exists():
+        if self._history_running():
             log.info("import.paused", reason="history")
             return total
         while paths := self.ready_files():
@@ -342,6 +342,12 @@ class ImportService(Rework):
 
     def receive(self, name: str, data: bytes) -> BatchReport:
         """POST /api/finance/imports : même traitement que l'inbox."""
-        if self.lock_file.exists():
+        if self._history_running():
             raise ImportRefused("busy.retry", "reprise d'historique en cours")
         return self.process([Incoming(name, data)])
+
+    def _history_running(self) -> bool:
+        """Une reprise d'historique tient le verrou (un verrou expiré ne compte plus)."""
+        from hub.domains.finance.sources.app.history import lock_is_stale
+
+        return self.lock_file.exists() and not lock_is_stale(self.lock_file)

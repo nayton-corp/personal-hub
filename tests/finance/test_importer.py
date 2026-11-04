@@ -360,6 +360,13 @@ def test_history_refusals(finance: FinanceDomain, tmp_path: Path) -> None:
     finance.importer.lock_file.touch()
     with pytest.raises(errors.ImportRefused):
         history.import_history(finance.importer, folder)
+    # un verrou laissé par un conteneur tué expire : la reprise repart (audit m14)
+    old = time.time() - history.LOCK_MAX_AGE.total_seconds() - 1
+    os.utime(finance.importer.lock_file, (old, old))
+    assert history.lock_is_stale(finance.importer.lock_file)
+    report = history.import_history(finance.importer, folder)  # plus refusé pour le verrou
+    assert report.error == "compte inconnu : CH93…957"
+    assert not finance.importer.lock_file.exists()
 
 
 def test_opening_only_once(finance: FinanceDomain) -> None:

@@ -13,13 +13,41 @@ Create Date: 2026-10-27
 from alembic import op
 from sqlalchemy import text
 
-from hub.domains.finance.classement.app import legacy
-
 revision = "0004_rules"
 down_revision = "0003_snapshots"
 branch_labels = None
 depends_on = None
 
+# les catégories de l'ancien script (identifiant, nom, groupe), figées ici : une migration ne
+# lit pas le code vivant (la reprise est devenue `scripts/legacy_rules.py`, audit m10)
+CATEGORIES = (
+    ("logement", "Logement", "fixed"),
+    ("assurances", "Assurances", "fixed"),
+    ("impots", "Impôts", "fixed"),
+    ("transports", "Transports", "variable"),
+    ("abonnements", "Abonnements", "fixed"),
+    ("alimentation", "Alimentation", "variable"),
+    ("restaurants", "Restaurants et sorties", "variable"),
+    ("loisirs", "Loisirs et sport", "variable"),
+    ("sante", "Santé", "variable"),
+    ("shopping", "Shopping", "variable"),
+    ("voyages", "Vacances", "variable"),
+    ("cadeaux", "Cadeaux et dons", "variable"),
+    ("frais-bancaires", "Frais bancaires", "fixed"),
+    ("retraits", "Retraits d'espèces", "variable"),
+    ("soins", "Soins et beauté", "variable"),
+    ("formation", "Formation et outils", "variable"),
+    ("twint-particuliers", "TWINT entre particuliers", "variable"),
+    ("virements-particuliers", "Virements à des particuliers", "variable"),
+    ("a-qualifier", "Virements à qualifier", "variable"),
+    ("salaire", "Salaire", "income"),
+    ("remboursements", "Remboursements", "income"),
+    ("autres-revenus", "Autres revenus", "income"),
+    ("transfer-own", "Virement entre mes comptes", "transfer"),
+    ("epargne-3a", "Pilier 3a", "savings"),
+    ("investissements", "Investissements", "savings"),
+    ("crypto", "Crypto", "savings"),
+)
 # comptes de l'ancien script, pas des catégories pour tout le monde
 PERSONAL = frozenset({"transfer-revolut", "transfer-raiffeisen"})
 RENAMED = {
@@ -31,8 +59,7 @@ RENAMED = {
 
 def upgrade() -> None:
     conn = op.get_bind()
-    needed = [*legacy.CATEGORY_MAP.values(), *legacy.TRANSFER_MAP.values()]
-    for c_id, c_name, c_grp in needed:
+    for c_id, c_name, c_grp in CATEGORIES:
         if c_id in PERSONAL:
             continue
         conn.execute(

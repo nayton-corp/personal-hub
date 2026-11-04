@@ -31,20 +31,19 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.core.errors import Problem
+from hub.domains.finance import thresholds
 from hub.domains.finance.patrimoine.app import crypto_moves, decisions
 from hub.domains.finance.patrimoine.app.market_data import Positions
 from hub.domains.finance.patrimoine.model import instruments
 from hub.domains.finance.registre.model.amounts import money
 from hub.domains.finance.registre.model.fx import FxRates
+from hub.domains.finance.thresholds import Thresholds
 from hub.kernel.money import DECIMAL_CONTEXT, base_currency
 
-TOLERANCE_MINOR = 100  # 1 CHF par compte et par actif
+# tolérance, âge d'un cours ou d'un change anciens : `thresholds` (réglages `[finance]`)
 ROUNDING = Decimal("0.01")  # un relevé de fonds arrondit ses parts au centième
 # une crypto renommée : ses parts sorties sous l'ancien nom rentrent sous le nouveau
 RENAMED = {"CRYPTO:RNDR": "CRYPTO:RENDER", "CRYPTO:MATIC": "CRYPTO:POL"}
-STALE_DAYS = {"crypto": 3}  # âge d'un cours au-delà duquel il est « ancien »
-STALE_DAYS_OTHER = 14
-STALE_FX_DAYS = 7  # un change plus vieux se signale comme un cours ancien (audit M6)
 ZERO = Decimal(0)
 # les gestes de l'app pour chaque rupture, dans l'ordre où elle les propose
 ACTIONS = {
@@ -99,6 +98,7 @@ class Report:
     breaks: list[Break]
     total: int  # valeur des placements suivis
     explained: int  # dont expliquée et cotée
+    tolerance_minor: int = 0  # en dessous, une rupture ne se dit pas (réglage)
 
     def public(self, names: dict[str, str]) -> dict[str, Any]:
         ccy = base_currency()
@@ -115,7 +115,7 @@ class Report:
             "completeness": None
             if self.total <= 0
             else str((Decimal(self.explained) / Decimal(self.total)).quantize(Decimal("0.001"))),
-            "tolerance": money(TOLERANCE_MINOR, ccy),
+            "tolerance": money(self.tolerance_minor, ccy),
         }
 
 
@@ -139,6 +139,7 @@ def _unexplained(
     kind: str,
     on: str,
     covered: dict[tuple[str, str], Decimal],
+    th: Thresholds,
 ) -> list[Break]:
     reports = [(d, held) for d, held in positions.reports.get(account, []) if d <= on]
     if not reports:
@@ -182,14 +183,16 @@ def _unexplained(
             if not rest:
                 continue
             value = positions.worth(k, rest, on)
-            if value is not None and abs(value) < TOLERANCE_MINOR:
+            if value is not None and abs(value) < th.tolerance_minor:
                 continue
             cause = "no_history" if rest > 0 else "missing_out"
             out.append(Break("unexplained", account, k, rest, value, first.get(k, last_day), cause))
     return out
 
 
-def _outside(legs: list[crypto_moves.Leg], decided: Decided, accounts: set[str]) -> list[Break]:
+def _outside(
+    legs: list[crypto_moves.Leg], decided: Decided, accounts: set[str], th: Thresholds
+) -> list[Break]:
     """Envois et arrivées crypto sans autre côté connu, après ta dernière décision."""
     sums: dict[tuple[str, str, str], tuple[int, str]] = {}
     for on, role, amount, symbol, _q, internal, account in legs:
@@ -204,7 +207,7 @@ def _outside(legs: list[crypto_moves.Leg], decided: Decided, accounts: set[str])
     return [
         Break(kind, account, key, None, total, since, "untracked_wallet")
         for (kind, account, key), (total, since) in sorted(sums.items())
-        if total >= TOLERANCE_MINOR
+        if total >= th.tolerance_minor
     ]
 
 
@@ -217,14 +220,12 @@ def _covers(decided: Decided, key: tuple[str, str, str], quantity: Decimal | Non
 
 
 def _prices(
-    positions: Positions, account: str, kind: str, on: str, decided: Decided
+    positions: Positions, account: str, kind: str, on: str, decided: Decided, th: Thresholds
 ) -> tuple[list[Break], int, int, set[str]]:
     """Cours absents ou anciens d'un compte, (valeur du compte, dont au cours ancien), et les
     devises de ses cours."""
     out, total, stale, currencies = [], 0, 0, set()
-    limit = (
-        date.fromisoformat(on) - timedelta(days=STALE_DAYS.get(kind, STALE_DAYS_OTHER))
-    ).isoformat()
+    limit = (date.fromisoformat(on) - timedelta(days=th.price_stale_days(kind))).isoformat()
     for x in positions.lines(account, on):
         if instruments.known_currency(instruments.symbol_of(x.isin)):
             continue
@@ -234,7 +235,7 @@ def _prices(
                 out.append(Break("no_price", account, x.isin, x.quantity, None, on, "no_price"))
             continue
         currencies.add(x.currency)
-        if x.price_date and x.price_date < limit and x.value >= TOLERANCE_MINOR:
+        if x.price_date and x.price_date < limit and x.value >= th.tolerance_minor:
             if _covers(decided, ("stale_price", account, x.isin), x.quantity) >= x.price_date:
                 continue
             stale += x.value
@@ -244,11 +245,13 @@ def _prices(
     return out, total, stale, currencies
 
 
-def _fx(fx: FxRates, account: str, currencies: set[str], on: str, decided: Decided) -> list[Break]:
-    """Un change plus vieux que `STALE_FX_DAYS` convertit encore, mais se dit (audit M6) ; une
+def _fx(
+    fx: FxRates, account: str, currencies: set[str], on: str, decided: Decided, th: Thresholds
+) -> list[Break]:
+    """Un change plus vieux que `stale_fx_days` convertit encore, mais se dit (audit M6) ; une
     décision le couvre jusqu'au jour du change qu'elle a vu."""
     out = []
-    limit = (date.fromisoformat(on) - timedelta(days=STALE_FX_DAYS)).isoformat()
+    limit = (date.fromisoformat(on) - timedelta(days=th.stale_fx_days)).isoformat()
     for ccy in sorted(currencies - {fx.base}):
         known = fx.dated(ccy, on)
         if known is None or known[0] >= limit:
@@ -289,7 +292,8 @@ def _source_gaps(conn: Connection, account: str, decided: Decided) -> list[Break
     return out
 
 
-def report(conn: Connection, on: str) -> Report:
+def report(conn: Connection, on: str, th: Thresholds | None = None) -> Report:
+    th = th or thresholds.current()
     positions = Positions(conn)
     found = decisions.read(conn)
     covered: dict[tuple[str, str], Decimal] = {}
@@ -305,22 +309,23 @@ def report(conn: Connection, on: str) -> Report:
     total = unexplained = stale = 0
     shown = [a for a in _accounts(conn) if not a[3] and a[0] in positions.accounts]
     for account, kind, _name, _hidden, currency in shown:
-        gaps = _unexplained(positions, account, kind, on, covered)
-        priced, value, old, currencies = _prices(positions, account, kind, on, decided)
-        breaks += gaps + priced + _fx(positions.fx, account, currencies | {currency}, on, decided)
+        gaps = _unexplained(positions, account, kind, on, covered, th)
+        priced, value, old, currencies = _prices(positions, account, kind, on, decided, th)
+        breaks += gaps + priced
+        breaks += _fx(positions.fx, account, currencies | {currency}, on, decided, th)
         total += value
         stale += old
         unexplained += sum(b.value or 0 for b in gaps if (b.quantity or ZERO) > 0)
     crypto = {a[0] for a in shown if a[1] == "crypto"}
     if crypto:
-        breaks += _outside(crypto_moves.legs(conn, on), decided, crypto)
+        breaks += _outside(crypto_moves.legs(conn, on), decided, crypto, th)
     for account, _kind, _name, hidden, _ccy in _accounts(conn):
         if not hidden:  # un compte encore sans position peut déjà avoir un historique non lu
             breaks += _source_gaps(conn, account, decided)
     order = {k: i for i, k in enumerate(ACTIONS)}
     breaks.sort(key=lambda b: (-(abs(b.value or 0)), order.get(b.kind, 9), b.account_id, b.asset))
     explained = max(0, total - unexplained - stale)
-    return Report(on, breaks, total, explained)
+    return Report(on, breaks, total, explained, th.tolerance_minor)
 
 
 def names(conn: Connection) -> dict[str, str]:

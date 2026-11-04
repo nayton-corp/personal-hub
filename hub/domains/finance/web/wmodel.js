@@ -6,7 +6,7 @@
 // « estimée » à cet endroit.
 import { S, activeCount, asOf, day, here, iso, lines, paths, perfPath, range, scopeLines, selIds } from "./wstate.js";
 import { rate, units } from "./perf.js";
-import { STALE_DAYS, base } from "../../format.js";
+import { base, staleDays } from "../../format.js";
 import { store } from "../../store.js";
 
 const STEP = "day"; // le serveur garde au plus 400 points, la fin comprise
@@ -67,9 +67,9 @@ function uncertain(pts, sel) {
       // de clôture : un compte qui ne bouge pas garde une vieille dernière donnée)
       if (Math.abs(mine.reduce((t, l) => t + l.value, 0)) < 0.5) continue;
       const seen = f.last_import && f.last_import.slice(0, 10) > f.last_data ? f.last_import.slice(0, 10) : f.last_data;
-      if (Math.round((end - day(seen)) / 864e5) <= STALE_DAYS) continue;
+      if (Math.round((end - day(seen)) / 864e5) <= staleDays()) continue;
       const age = Math.round((end - day(f.last_data)) / 864e5);
-      if (age <= STALE_DAYS || f.last_data >= pts[pts.length - 1].d) continue;
+      if (age <= staleDays() || f.last_data >= pts[pts.length - 1].d) continue;
       const k = Math.max(0, indexOf(pts, f.last_data) - 1);
       if (k < pts.length - 1) out.push({ k0: k, k1: pts.length - 1, stale: true, acc: f.account_id, age, why: `${f.name} : aucun relevé depuis le ${f.last_data.split("-").reverse().join(".")}, valeur reprise telle quelle` });
     }

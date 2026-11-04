@@ -18,12 +18,15 @@ from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.patrimoine.app import assets, crypto_cost, reconcile, valuation
 from hub.domains.finance.patrimoine.model import positions
 from hub.domains.finance.registre.model.fx import FxRates
+from hub.domains.finance.thresholds import Thresholds
 from hub.platform.db import begin_immediate
 from tests.finance.conftest import ready_account
 from tests.finance.test_crypto_cost import _crypto_gain, btc, doc, minor, setup
 from tests.finance.test_exchange import op
 from tests.finance.test_finance_api import app_session, client, ctx, fin  # noqa: F401 (fixtures)
 from tests.finance.test_wealth import add_ref
+
+TH = Thresholds.from_section({}, "CHF")
 
 ON = "2026-10-27"
 
@@ -340,9 +343,9 @@ def test_a_fund_report_rounded_to_the_hundredth_is_not_a_break() -> None:
     ]
     trades = [("2026-02-10", "CH1", Decimal("0.003"))]
     p: Any = _Positions(reports, trades)
-    assert reconcile._unexplained(p, "a", "pillar3a", "2026-03-01", {}) == []
+    assert reconcile._unexplained(p, "a", "pillar3a", "2026-03-01", {}, TH) == []
     later = [*reports, ("2026-03-31", {"CH1": (Decimal("12.40"), one, "CHF")})]
-    (b,) = reconcile._unexplained(_Positions(later, trades), "a", "pillar3a", "2026-04-01", {})
+    (b,) = reconcile._unexplained(_Positions(later, trades), "a", "pillar3a", "2026-04-01", {}, TH)
     assert (b.asset, b.quantity) == ("CH1", Decimal("0.04"))
 
 
@@ -351,7 +354,7 @@ def test_a_renamed_coin_counts_under_its_new_name() -> None:
     reports = [("2026-06-01", {"CRYPTO:RENDER": (Decimal("5"), one, "CHF")})]
     trades = [("2026-01-01", "CRYPTO:RNDR", Decimal("5"))]  # acheté sous l'ancien nom
     p: Any = _Positions(reports, trades)
-    assert reconcile._unexplained(p, "a", "crypto", "2026-06-02", {}) == []
+    assert reconcile._unexplained(p, "a", "crypto", "2026-06-02", {}, TH) == []
 
 
 def test_source_gap_is_a_break_until_accepted_or_filled(

@@ -5,7 +5,7 @@ import { hiddenIds } from "./accounts.js";
 import { model } from "./bmodel.js";
 import { budgetPath } from "./budget.js";
 import { go } from "../../shell.js";
-import { base, date, monthName, units } from "../../format.js";
+import { base, date, monthName, staleDays, units } from "../../format.js";
 import { catMark, taxRate } from "./meta.js";
 import { shiftMonth, store } from "../../store.js";
 import { esc, fill, ic, n0, n2, nf, pctOnly, pf, pref, setPref, sgn, skel } from "../../ui.js";
@@ -13,7 +13,6 @@ import { gapRows } from "./gaps.js";
 import { breaksPath } from "./wplace.js";
 import * as wealth from "./wealth.js";
 
-const STALE_DAYS = 45;
 const RESERVE_MONTHS = 6;
 const BILAN_DAYS = 7; // le bilan du mois passé reste sur l'accueil la première semaine
 const kpisPath = () => `/finance/kpis?month=${store.today}`;
@@ -47,7 +46,7 @@ export function rows() {
   const missing = cs ? cs.items.filter((c) => !c.ready) : [];
   if (missing.length) out.push({ ic: "key", c: "var(--s3)", t: `${missing.length} connexion${missing.length > 1 ? "s" : ""} à régler`, s: `${missing.map((c) => c.label).join(", ")} : identifiants à donner`, a: "rubric", v: "conn" });
   out.push(...gapRows(store.data(runsPath)));
-  if (k.stale_accounts > 0) out.push({ ic: "clock", c: "var(--s3)", t: `${k.stale_accounts} compte${k.stale_accounts > 1 ? "s" : ""} à rafraîchir`, s: `Dernière donnée il y a plus de ${STALE_DAYS} jours`, a: "rubric", v: "accounts" });
+  if (k.stale_accounts > 0) out.push({ ic: "clock", c: "var(--s3)", t: `${k.stale_accounts} compte${k.stale_accounts > 1 ? "s" : ""} à rafraîchir`, s: `Dernière donnée il y a plus de ${staleDays()} jours`, a: "rubric", v: "accounts" });
   // à savoir : dépassements, hausses, marge 3a, réserve
   const b = store.data(budgetPath(store.today, "m"));
   for (const l of b ? b.lines.filter((x) => x.over).sort((x, y) => Number(y.ratio) - Number(x.ratio)) : []) {

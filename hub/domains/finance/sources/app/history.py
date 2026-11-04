@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -33,6 +34,8 @@ from hub.domains.finance.sources.infra.viac import ViacError
 from hub.kernel.text import mask_iban
 from hub.platform.db import begin_immediate
 
+LOCK_MAX_AGE = timedelta(hours=6)  # une reprise plus longue est un conteneur tué
+
 
 @dataclass
 class HistoryReport:
@@ -56,7 +59,10 @@ class HistoryReport:
 
 @contextmanager
 def _locked(lock_file: Path) -> Any:
+    """Une seule reprise à la fois ; un verrou laissé par un conteneur tué expire (audit m14)."""
     lock_file.parent.mkdir(parents=True, exist_ok=True)
+    if lock_is_stale(lock_file):
+        lock_file.unlink(missing_ok=True)
     try:
         lock_file.touch(exist_ok=False)
     except FileExistsError:
@@ -65,6 +71,15 @@ def _locked(lock_file: Path) -> Any:
         yield
     finally:
         lock_file.unlink(missing_ok=True)
+
+
+def lock_is_stale(lock_file: Path, now: float | None = None) -> bool:
+    """Le verrou existe et a dépassé LOCK_MAX_AGE : la reprise qui l'a posé n'est plus là."""
+    try:
+        age = (now if now is not None else time.time()) - lock_file.stat().st_mtime
+    except FileNotFoundError:
+        return False
+    return age > LOCK_MAX_AGE.total_seconds()
 
 
 def _day_before(iso_date: str) -> str:
