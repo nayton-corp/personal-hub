@@ -25,11 +25,20 @@ def _get(page: Any, path: str) -> Any:
 def _start(page: Any) -> Any:
     page.click('#tabs button[data-v="accueil"]')
     page.locator('#accueil [data-a="settings"]').click()
-    page.locator('#rubrics [data-a="rubric"][data-v="conn"]').click()
-    page.wait_for_selector('#sources [data-rubric="conn"]:not(.off-rubric)', state="attached")
+    page.locator('#rubrics [data-a="rubric"][data-v="accounts"]').click()
+    page.wait_for_selector('#sources [data-rubric="accounts"]:not(.off-rubric)', state="attached")
     page.click("#acct-add")
-    page.wait_for_selector("#acct-editor:not([hidden])")
+    # une page à part, son titre, l'étape 1 ; Comptes n'est plus affiché
+    page.wait_for_selector("#acct-editor:not([hidden]):not(.off-rubric)")
+    assert page.inner_text("#t-sources") == "Ajouter un compte"
+    assert page.locator("#fresh-list").is_hidden()
     return page.locator("#acct-editor")
+
+
+def _back_on_accounts(page: Any) -> None:
+    page.wait_for_selector('#sources [data-rubric="accounts"]:not(.off-rubric)', state="attached")
+    assert page.inner_text("#t-sources") == "Comptes"
+    assert page.locator("#acct-editor").is_hidden()
 
 
 def test_a_platform_account_brings_its_connection(page: Any) -> None:
@@ -40,7 +49,7 @@ def test_a_platform_account_brings_its_connection(page: Any) -> None:
     for key in ("api_key", "api_secret", "passphrase"):
         page.fill(f"#aa-secret-{key}", f"test-{key}")
     ed.get_by_role("button", name="Brancher et créer le compte avec Face ID").click()
-    page.wait_for_selector("#acct-editor", state="hidden")
+    _back_on_accounts(page)
     assert "KuCoin branché" in page.inner_text("#acct-msg")
 
     conn = next(
@@ -56,6 +65,20 @@ def test_a_platform_account_brings_its_connection(page: Any) -> None:
     ed.get_by_role("button", name="KuCoin").click()
     assert "déjà branché" in ed.inner_text()
     ed.get_by_role("button", name="Fermer").click()
+    _back_on_accounts(page)
+    assert page.problems == []
+
+
+def test_the_page_starts_over_each_time(page: Any) -> None:
+    ed = _start(page)
+    ed.get_by_role("button", name="Crypto : portefeuille").click()
+    assert "Étape 2 sur 3" in ed.inner_text()
+    page.go_back()
+    _back_on_accounts(page)
+    ed = _start(page)
+    assert "Étape 1 sur 3" in ed.inner_text()
+    ed.get_by_role("button", name="Annuler").click()
+    _back_on_accounts(page)
     assert page.problems == []
 
 
@@ -68,7 +91,7 @@ def test_a_wallet_joins_the_prices_connection(page: Any) -> None:
     page.fill("#aa-wkeys", "0x" + "1" * 40)
     ed.get_by_label("Base").check()
     ed.get_by_role("button", name="Ajouter avec Face ID").click()
-    page.wait_for_selector("#acct-editor", state="hidden")
+    _back_on_accounts(page)
     assert "Rabby ajouté" in page.inner_text("#acct-msg")
 
     market = next(

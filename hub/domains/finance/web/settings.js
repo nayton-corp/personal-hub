@@ -1,8 +1,9 @@
 // Rubriques de la finance dans Sources et réglages (la page est celle de la coquille, sources.js) :
-// connexions (connections.js), ajout d'un compte et comptes en attente (addaccount.js),
-// comptes avec leur fraîcheur et leurs réglages (accounts.js), dettes (debts.js), budget, impôts.
+// connexions (connections.js), comptes avec leur fraîcheur et leurs réglages (accounts.js), ceux
+// que les relevés attendent et la page « Ajouter un compte » (addaccount.js), dettes (debts.js),
+// budget, impôts.
 import { accountsList } from "./accounts.js";
-import { accountsCard } from "./addaccount.js";
+import { accountsCard, enterAddAccount } from "./addaccount.js";
 import { connectionsCard } from "./connections.js";
 import { debtsList } from "./debts.js";
 import { daysSince, locale, staleDays } from "../../format.js";
@@ -29,16 +30,17 @@ function example(s) {
 export function rubricStatus(k) {
   const d = (path) => store.data(path);
   if (k === "conn") {
-    const c = d("/collectors/connections"), pe = d("/finance/accounts/pending");
+    const c = d("/collectors/connections");
     if (!c) return null;
-    const miss = c.items.filter((x) => !x.ready).length, wait = pe ? pe.items.length : 0;
+    const miss = c.items.filter((x) => !x.ready).length;
     if (miss) return [`${miss} à régler`, "warn"];
-    if (wait) return [`${wait} compte${wait > 1 ? "s" : ""} en attente`, "warn"];
     return c.items.length ? [`${c.items.length} active${c.items.length > 1 ? "s" : ""}`, "ok"] : ["aucune", ""];
   }
   if (k === "accounts") {
-    const f = d("/finance/freshness");
+    const f = d("/finance/freshness"), pe = d("/finance/accounts/pending");
     if (!f) return null;
+    const wait = pe ? pe.items.length : 0;
+    if (wait) return [`${wait} en attente`, "warn"];
     const vis = f.items.filter((x) => !x.hidden);
     const late = vis.filter((x) => { const a = daysSince(x.last_data); return a == null || a > staleDays(); }).length;
     return late ? [`${late} en retard`, "warn"] : [`${vis.length} à jour`, "ok"];
@@ -56,8 +58,9 @@ export function rubricStatus(k) {
 }
 
 export function rubric(r) {
-  if (r === "conn") { connectionsCard(); accountsCard(); }
-  if (r === "accounts") accountsList();
+  if (r === "add-account") enterAddAccount();
+  if (r === "conn") connectionsCard();
+  if (r === "accounts") { accountsList(); accountsCard(); }
   if (r === "debts") debtsList();
   if (r === "budget") {
     const se = store.use(SETTINGS), day = se.data ? se.data.month_start_day : monthStartDay();

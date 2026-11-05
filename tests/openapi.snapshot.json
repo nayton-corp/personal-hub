@@ -2385,6 +2385,11 @@
             "title": "Label",
             "type": "string"
           },
+          "listed": {
+            "default": true,
+            "title": "Listed",
+            "type": "boolean"
+          },
           "module": {
             "title": "Module",
             "type": "string"

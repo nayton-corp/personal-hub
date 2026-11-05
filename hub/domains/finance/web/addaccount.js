@@ -1,13 +1,16 @@
 // Ajouter un compte, en trois étapes : son type, sa plateforme, puis la façon dont le hub reçoit ses données
 // (identifiants d'un connecteur du catalogue, adresses publiques d'un portefeuille, ou rien : à la main). La
 // connexion, s'il en faut une, est créée en passant et resservira aux comptes suivants de la même plateforme ;
-// le compte se crée par une proposition validée avec Face ID. Aussi : les comptes que les relevés attendent.
+// le compte se crée par une proposition validée avec Face ID. Le parcours a sa page (la rubrique « Ajouter un
+// compte », ouverte depuis Comptes) : chaque étape y remplace la précédente, et la fin ramène à Comptes. Aussi :
+// les comptes que les relevés attendent.
 import { base, date, el } from "../../format.js";
 import {
   FIELD_LABEL, WALLET_ASSETS, button, field, input, instAv, link, networkChecks, open as openConnection, paths,
   readSetting, run, say, secretInput, settingInput, slug, walletOf,
 } from "./connections.js";
 import { approve, propose } from "./proposals.js";
+import { action, go } from "../../shell.js";
 import { api, store } from "../../store.js";
 
 const $ = (id) => document.getElementById(id);
@@ -18,20 +21,34 @@ const TYPES = [
 ];
 const CHAIN_LABEL = { BTC: "Bitcoin", ETH: "Ethereum et réseaux EVM", SOL: "Solana", ATOM: "Cosmos" };
 
+// une étape de la page : son titre quand il précise (la plateforme, la chaîne), son rang, l'étape
+// d'avant ; la flèche du haut, elle, quitte la page
 function editor(title, step, back) {
   const box = $("acct-editor");
-  box.replaceChildren(el("h2", "", title));
+  box.replaceChildren();
+  if (title !== "Ajouter un compte") box.append(el("h2", "", title));
   if (step) box.append(el("p", "note", `Étape ${step} sur 3`));
   box.hidden = false;
-  if (back) box.append(link("‹ Retour", back));
-  box.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (back) box.append(link("‹ Étape précédente", back));
+  window.scrollTo({ top: 0 });
   return box;
 }
 
-function close() {
+// la page s'ouvre sur l'étape 1 ; quittée, elle se vide et repartira de zéro
+export function enterAddAccount() {
+  if (!$("acct-editor").childElementCount) addAccount();
+}
+
+function leaveAddAccount() {
   const box = $("acct-editor");
   box.hidden = true;
   box.replaceChildren();
+}
+
+// fin du parcours (ou Annuler) : retour à la page d'avant, Comptes ; `to` : une autre rubrique
+function close(to) {
+  if (to) go("sources", { rubric: to, replace: true });
+  else action("back")();
 }
 
 function choices(box, items, pick) {
@@ -51,7 +68,7 @@ function actions(box, label, fn) {
   const cancel = button("Annuler", "btn secondary");
   acts.append(go, cancel);
   box.append(acts, msg);
-  cancel.addEventListener("click", close);
+  cancel.addEventListener("click", () => close());
   go.addEventListener("click", () => run(go, msg, fn));
 }
 
@@ -76,7 +93,7 @@ export function addAccount() {
     else pickPlatform(kind);
   });
   const cancel = button("Annuler", "btn secondary");
-  cancel.addEventListener("click", close);
+  cancel.addEventListener("click", () => close());
   box.append(cancel);
 }
 
@@ -115,9 +132,9 @@ function connect(kind, spec, existing) {
     box.append(el("p", "hint", `${mine[0].label} est déjà branché : ses comptes arrivent avec ses relevés. S'il en manque un, il attend dans « Comptes en attente ».`));
     const acts = el("div", "acts");
     const settings = button("Régler la connexion", "btn secondary");
-    settings.addEventListener("click", () => { close(); openConnection({ id: mine[0].id }); });
+    settings.addEventListener("click", () => { close("conn"); openConnection({ id: mine[0].id }); });
     const done = button("Fermer", "btn secondary");
-    done.addEventListener("click", close);
+    done.addEventListener("click", () => close());
     acts.append(settings, done);
     box.append(acts);
     return;
@@ -149,7 +166,7 @@ function connect(kind, spec, existing) {
     // le compte avant le premier relevé : l'import le trouve, rien n'attend
     if (crypto) await createAccount({ institution: spec.label, name, kind: "crypto", currency: base(), external_ref: `crypto:${c.id}` });
     if (Object.keys(given).length === spec.secrets.length && spec.method !== "open_banking") await api(`/collectors/${c.id}/refresh`, {});
-    close();
+    close(spec.method === "open_banking" ? "conn" : undefined);
     if (spec.method === "open_banking") {
       openConnection({ id: c.id });
       say("coll-msg", `${name} branchée : « Lier le compte » ouvre l'autorisation chez la banque.`);
@@ -301,7 +318,7 @@ export function accountsCard() {
     const n = el("div", "n");
     n.append(el("b", "", t.title), el("span", "", t.sub));
     const v = el("div", "v");
-    v.append(link("Créer", () => openAccount(t.preset)));
+    v.append(link("Créer", () => { go("sources", { rubric: "add-account" }); openAccount(t.preset); }));
     r.append(instAv(t.preset.institution, t.preset.institution, "av g"), n, v);
     list.append(r);
   }
@@ -320,5 +337,7 @@ export function sourceOf(a, connections) {
 }
 
 export function initAddAccount() {
-  $("acct-add").addEventListener("click", addAccount);
+  store.on(() => {
+    if (store.params.tab !== "sources" || store.params.rubric !== "add-account") leaveAddAccount();
+  });
 }

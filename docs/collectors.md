@@ -39,8 +39,8 @@ sélecteur, jamais un montant ni un texte de page. Un fichier qui n'a pas la for
 
 ## Gérer les connexions
 
-**Depuis l'app** (onglet Sources) : « Ajouter un compte », sur la carte **Comptes en attente**,
-demande le type du compte (banque, titres, prévoyance, plateforme crypto, portefeuille, autre),
+**Depuis l'app** (onglet Sources, rubrique **Comptes**) : « Ajouter un compte » ouvre une page à
+part, une étape à la fois, qui ramène à Comptes une fois le compte créé. Elle demande le type du compte (banque, titres, prévoyance, plateforme crypto, portefeuille, autre),
 sa plateforme parmi les connecteurs du catalogue qui alimentent ce type, puis ce que la
 plateforme demande : identifiants, banque Enable Banking, adresses publiques, ou rien pour un
 compte tenu à la main. La connexion se crée en passant (son identifiant vient du nom) et sert

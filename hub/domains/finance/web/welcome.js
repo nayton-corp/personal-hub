@@ -4,6 +4,7 @@
 // ou quand on la masque.
 import { el } from "../../format.js";
 import { approve, propose } from "./proposals.js";
+import { go } from "../../shell.js";
 import { store } from "../../store.js";
 
 const $ = (id) => document.getElementById(id);
@@ -105,9 +106,9 @@ export function welcomeCard() {
       ["Remplir", () => goSources("form-profile")]],
     packStep(packs),
     [connections.items.length > 0, "Première connexion", "banque, plateforme ou cours",
-      ["Ajouter", () => goSources("acct-add")]],
+      ["Ajouter", () => go("sources", { rubric: "add-account" })]],
     [accounts.items.length > 0, "Premier compte", "créé avec ses premiers relevés",
-      ["Voir", () => goSources("acct-pending")]],
+      ["Voir", () => go("sources", { rubric: "accounts" })]],
   ];
   const left = steps.filter(([done]) => !done).length;
   card.hidden = left === 0;

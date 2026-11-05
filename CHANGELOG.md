@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+### App
+
+- « Ajouter un compte » passe dans la rubrique Comptes, en tête, et s'ouvre sur sa propre page :
+  chaque étape remplace la précédente, la fin (ou « Annuler ») ramène à Comptes, et la page
+  repart de l'étape 1 à chaque ouverture. Les comptes en attente suivent dans Comptes ; la
+  rubrique Connexions ne garde que les connexions. Une rubrique de domaine peut être une page
+  hors de la liste (`SettingsSection.listed=False`).
+
 ## [0.15.0] · 2026-11-04
 
 ### App

@@ -62,6 +62,9 @@ MANIFEST = Manifest(
         settings=(
             SettingsSection("conn", "Connexions", "plug", "Données", "settings.js"),
             SettingsSection("accounts", "Comptes", "wallet", "Données", "settings.js"),
+            SettingsSection(
+                "add-account", "Ajouter un compte", "wallet", "Données", "settings.js", listed=False
+            ),
             SettingsSection("debts", "Dettes", "landmark", "Données", "settings.js"),
             SettingsSection("export", "Exporter", "download", "Données", "settings.js"),
             SettingsSection("budget", "Budget", "piggy", "Préférences", "settings.js"),

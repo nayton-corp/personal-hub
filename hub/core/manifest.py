@@ -58,6 +58,7 @@ class SettingsSection:
     icon: str
     group: str
     module: str
+    listed: bool = True  # False : une page ouverte depuis une autre rubrique, absente de la liste
 
 
 @dataclass(frozen=True)
