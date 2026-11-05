@@ -28,6 +28,7 @@ from hub.collectors.http import Http
 from hub.collectors.runtime import Env
 
 MAX_PAGES = 10
+STAMP_RETRIES = 2
 AUTH_CODES = {"400001", "400002", "400003", "400004", "400005", "400006", "400007", "411100"}
 
 
@@ -36,7 +37,7 @@ def _sign(secret: str, message: str) -> str:
     return base64.b64encode(digest).decode()
 
 
-def get(env: Env, http: Http, path: str, step: str) -> Any:
+def _signed(env: Env, http: Http, path: str, step: str) -> Any:
     secret = env.secret("api_secret")
     stamp = str(now_ms())
     headers = {
@@ -46,7 +47,19 @@ def get(env: Env, http: Http, path: str, step: str) -> Any:
         "KC-API-PASSPHRASE": _sign(secret, env.secret("passphrase")),
         "KC-API-KEY-VERSION": "2",
     }
-    doc = http.json(f"{env.cfg.exchanges.kucoin_url}{path}", step, headers=headers)
+    return http.json(f"{env.cfg.exchanges.kucoin_url}{path}", step, headers=headers)
+
+
+def get(env: Env, http: Http, path: str, step: str) -> Any:
+    # KuCoin refuse par un HTTP 400 (400002) un appel arrivé trop tard : un seul, sur les centaines
+    # du grand livre, ferait écarter tout l'historique. Un horodatage neuf le fait passer.
+    for attempt in range(STAMP_RETRIES + 1):
+        try:
+            doc = _signed(env, http, path, step)
+            break
+        except Failure as f:
+            if not f.detail.endswith(":http_400") or attempt == STAMP_RETRIES:
+                raise
     code = str(doc.get("code")) if isinstance(doc, dict) else ""
     if code in AUTH_CODES:
         raise Failure("auth_error", f"{step}:{code}")
