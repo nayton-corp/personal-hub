@@ -1126,6 +1126,7 @@ export interface SettingsSectionOut {
   icon: string;
   group: string;
   module: string;
+  listed?: boolean;
 }
 
 export interface SpendRuleOut {

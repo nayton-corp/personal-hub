@@ -63,6 +63,7 @@ class SettingsSectionOut(BaseModel):
     icon: str
     group: str
     module: str
+    listed: bool = True
 
 
 class AppModuleOut(BaseModel):

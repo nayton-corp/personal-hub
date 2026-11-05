@@ -31,7 +31,8 @@ const rank = (r) => (GROUPS.includes(r.group) ? GROUPS.indexOf(r.group) : GROUPS
 
 function groups() {
   if (ordered) return ordered;
-  const all = [...OWN.map((r) => ({ ...r, sec: "Hub" })), ...RUBRICS.map((r) => ({ ...r, sec: capital(r.domain) }))];
+  const listed = RUBRICS.filter((r) => r.listed !== false); // les autres s'ouvrent depuis une rubrique
+  const all = [...OWN.map((r) => ({ ...r, sec: "Hub" })), ...listed.map((r) => ({ ...r, sec: capital(r.domain) }))];
   ordered = [...new Set(all.map((r) => r.sec))].map((g) => [g, all.filter((r) => r.sec === g).sort((a, b) => rank(a) - rank(b))]);
   return ordered;
 }

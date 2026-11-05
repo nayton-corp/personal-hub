@@ -64,19 +64,24 @@ const RUBRICS = `
       </section>
       <section class="card form" data-rubric="conn" id="conn-editor" hidden></section>
 
-      <section class="card" data-rubric="conn" aria-labelledby="t-pending">
-        <div class="head"><h2 id="t-pending">Comptes en attente</h2><button class="link" id="acct-add" type="button">Ajouter un compte</button></div>
-        <p class="note">Les relevés d'un compte inconnu attendent sa création, validée avec Face ID.</p>
-        <div id="acct-pending"></div>
+      <section class="card" data-rubric="accounts">
+        <button class="btn" id="acct-add" type="button" data-a="rubric" data-v="add-account">Ajouter un compte</button>
         <p id="acct-msg" class="message" role="status"></p>
       </section>
-      <section class="card form" data-rubric="conn" id="acct-editor" hidden></section>
 
       <section class="card" data-rubric="accounts" aria-labelledby="t-fresh">
         <div class="head"><h2 id="t-fresh">Comptes</h2></div>
         <p class="note">Date de la dernière donnée reçue pour chaque compte : au-delà de 45 jours, il est à rafraîchir. Touche un compte pour le renommer, le classer ou le masquer.</p>
         <div id="fresh-list"></div>
       </section>
+
+      <section class="card" data-rubric="accounts" aria-labelledby="t-pending">
+        <div class="head"><h2 id="t-pending">Comptes en attente</h2></div>
+        <p class="note">Les relevés d'un compte inconnu attendent sa création, validée avec Face ID.</p>
+        <div id="acct-pending"></div>
+      </section>
+
+      <section class="card form" data-rubric="add-account" id="acct-editor" hidden></section>
 
       <section class="card" data-rubric="debts" aria-labelledby="t-debts">
         <div class="head"><h2 id="t-debts">Dettes</h2><button class="link" type="button" data-a="debt-add">Ajouter</button></div>
