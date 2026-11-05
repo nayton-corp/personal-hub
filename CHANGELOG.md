@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### Collecteurs
+
+- KuCoin : un appel refusé pour son horodatage (HTTP 400, `400002`, un appel arrivé trop tard) est
+  relancé deux fois avec un horodatage neuf. Un seul refus sur les centaines d'appels du grand
+  livre faisait écarter tout l'historique du premier passage.
+
 ### App
 
 - « Ajouter un compte » passe dans la rubrique Comptes, en tête, et s'ouvre sur sa propre page :

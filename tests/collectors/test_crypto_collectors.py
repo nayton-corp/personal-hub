@@ -964,6 +964,33 @@ def test_kucoin_signs_and_sums_accounts_and_earn(make_env: Any) -> None:
     assert exc.value.outcome == "site_unavailable"
 
 
+def test_kucoin_retries_a_refused_timestamp_with_a_new_one(
+    make_env: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = make_env("kucoin")
+    api = kucoin_api().route
+    refusals = [2]
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if refusals[0]:
+            refusals[0] -= 1
+            return 400, {"code": "400002", "msg": "Invalid KC-API-TIMESTAMP."}
+        return api(method, url, headers, data)
+
+    ticks = iter(range(1_000, 1_100))
+    monkeypatch.setattr(kucoin, "now_ms", lambda: next(ticks))
+    fake = Fake(route)
+    assert kucoin.get(env, Http(fake), "/api/v1/accounts", "s")
+    assert [c[2]["KC-API-TIMESTAMP"] for c in fake.calls] == ["1000", "1001", "1002"]
+
+    refusals[0] = 3  # deux relances, pas plus : le refus reste dit
+    fake = Fake(route)
+    with pytest.raises(Failure) as exc:
+        kucoin.get(env, Http(fake), "/api/v1/accounts", "s")
+    assert (exc.value.outcome, exc.value.detail) == ("site_unavailable", "s:http_400")
+    assert len(fake.calls) == 3
+
+
 def b64url_decode(part: str) -> bytes:
     return base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))
 
