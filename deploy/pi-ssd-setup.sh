@@ -23,6 +23,11 @@ case "$DEV" in /dev/mmcblk*) echo "$DEV est la carte SD : refusé"; exit 1 ;; es
 if lsblk -no MOUNTPOINT "$DEV" | grep -q .; then
   echo "$DEV a une partition montée : la démonter d'abord"; exit 1
 fi
+# arrêter Docker coupe le conteneur Tailscale : une session SSH qui passe par lui tombe en pleine
+# copie. Lancer depuis le réseau local (ssh <compte>@<pi>.local) ou au clavier du Pi.
+case "${SSH_CONNECTION:-}" in
+  100.*) echo "session SSH par Tailscale : se reconnecter par le réseau local (ssh $OWNER@$(hostname).local)"; exit 1 ;;
+esac
 command -v cryptsetup >/dev/null || apt-get install -y cryptsetup
 command -v rsync >/dev/null || apt-get install -y rsync
 
