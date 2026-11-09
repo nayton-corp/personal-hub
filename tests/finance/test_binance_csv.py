@@ -79,3 +79,50 @@ def test_trades_land_once_in_the_journal(finance: FinanceDomain) -> None:
     assert sum(s.new for s in again.statements) == 0  # un export plus long : rien en double
     moves = rows(finance, "SELECT isin, quantity FROM trades ORDER BY seq")
     assert ("CRYPTO:ETH", "-0.5") in {(m[0], str(m[1])) for m in moves}
+
+
+# export « Historique des trades Spot » en français, chiffres inventés ; l'ordre 9 est celui que
+# l'API a déjà lu (test_exchange : trade:BTCUSDT:9:100), l'ordre 77 arrive en deux exécutions
+CSV_FR = (
+    "﻿N° de commande,Durée,Paire,Côté,Prix,Exécuté,Montant,Frais,"
+    "Paire de conversion AOR,Taux de conversion AOR\r\n"
+    "9,2026-03-03 00:30:00,BTCUSDT,BUY,60000,0.001BTC,60USDT,0.00008BNB,,\r\n"
+    "77,2026-03-04 10:00:00,ETHUSDT,BUY,2000,0.1ETH,200USDT,0.0001ETH,,\r\n"
+    "77,2026-03-04 10:00:01,ETHUSDT,BUY,2000,0.05ETH,100USDT,0.00005ETH,,\r\n"
+)
+
+
+def test_french_export_groups_an_order() -> None:
+    assert documents.detect("trades.csv", CSV_FR.encode()) == binance_csv.SOURCE
+    st = binance_csv.parse(CSV_FR.encode())
+    assert [o.id for o in st.operations] == ["csv:BTCUSDT:order:9", "csv:ETHUSDT:order:77"]
+    eth = st.operations[-1]
+    assert [(leg.symbol, str(leg.quantity), leg.role) for leg in eth.legs] == [
+        ("ETH", "0.15", "trade"),
+        ("USDT", "-300", "trade"),
+        ("ETH", "-0.00015", "fee"),
+    ]
+
+
+@pytest.mark.usefixtures("accounts")
+def test_french_export_skips_orders_the_api_already_read(finance: FinanceDomain) -> None:
+    import json
+
+    from tests.finance.test_exchange import BINANCE
+
+    finance.importer.process([Incoming("binance.json", json.dumps(BINANCE).encode())])
+    before = rows(finance, "SELECT count(*) FROM entries WHERE kind = 'movement'")[0][0]
+    finance.importer.process([Incoming("trades.csv", CSV_FR.encode())])
+    eth = rows(
+        finance,
+        "SELECT m.asset, m.quantity FROM crypto_moves m JOIN entries e ON e.seq = m.entry_seq "
+        "WHERE m.role = 'trade' AND e.booking_date = '2026-03-04' ORDER BY e.seq",
+    )
+    assert eth == [("ETH", "0.15"), ("USDT", "-300")]  # seul l'ordre 77 entre
+    btc = rows(
+        finance,
+        "SELECT count(*) FROM crypto_moves WHERE role = 'trade' AND asset = 'BTC'",
+    )
+    assert btc == [(1,)]  # l'ordre 9 n'est pas compté deux fois
+    after = rows(finance, "SELECT count(*) FROM entries WHERE kind = 'movement'")[0][0]
+    assert after - before == 3  # achat, vente, frais de l'ordre 77

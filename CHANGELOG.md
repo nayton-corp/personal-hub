@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+## [0.16.3] · 2026-11-09
+
+### Finance
+
+- Binance : l'export « Historique des trades Spot » du site en français (`N° de commande,Durée,
+  Paire,Côté,…`) est lu ; les exécutions d'un même ordre font une opération. Un ordre déjà au
+  registre (lu par l'API : même actif, même quantité, à un jour près) est sauté : l'export
+  entier se dépose sans doublon. L'API ne rend plus les échanges anciens (2021-2022), même sur
+  des paires encore cotées : c'est par ce fichier qu'ils entrent.
+
 ## [0.16.2] · 2026-11-09
 
 ### Collecteurs
