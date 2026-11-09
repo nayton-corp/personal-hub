@@ -20,10 +20,14 @@ from hub.collectors.base import Failure, Kind, Result
 from hub.collectors.browser import Browser
 from hub.collectors.dropbox import is_pdf, safe
 from hub.collectors.runtime import Env
+from hub.platform.logging import get_logger
 
 SELECTORS = Path(__file__).with_name("selectors.toml")
 PAGE_ROWS = 20
 MAX_PAGES = 50
+IGNORED_KEPT = 200
+
+log = get_logger("hub.collector")
 
 
 def open_documents(b: Browser, *, reload: bool = True) -> None:
@@ -75,6 +79,7 @@ def _rows(b: Browser) -> list[tuple[str, str, str, int]]:
 def fetch_documents(b: Browser, env: Env, since: str) -> tuple[int, str]:
     wanted = tuple(b.sel.items("wanted.prefixes"))
     seen_keys = set(env.memory.get("keys", []))
+    ignored: list[str] = list(env.memory.get("ignored", []))
     files, newest = 0, since
     occurrences: Counter[str] = Counter()  # deux documents de même nom le même jour
     for _page in range(MAX_PAGES):
@@ -88,7 +93,14 @@ def fetch_documents(b: Browser, env: Env, since: str) -> tuple[int, str]:
             base = f"{on}|{portfolio}|{name}"
             key = f"{base}|{occurrences[base]}"
             occurrences[base] += 1
-            if key in seen_keys or not name.startswith(wanted):
+            if key in seen_keys:
+                continue
+            if not name.startswith(wanted):
+                # un type de document inconnu (ex. fusion de fonds) : noté une fois, titre et
+                # date seulement, pour qu'une opération ne disparaisse pas sans trace
+                if key not in ignored:
+                    ignored.append(key)
+                    log.warning("viac.document_ignored", on=on, name=name)
                 continue
             link = links[i].query_selector(b.sel.get("documents.link"))
             if link is None:
@@ -107,6 +119,7 @@ def fetch_documents(b: Browser, env: Env, since: str) -> tuple[int, str]:
             seen_keys.add(key)
             newest = max(newest, on)
         env.memory.put("keys", sorted(seen_keys)[-5000:])
+        env.memory.put("ignored", ignored[-IGNORED_KEPT:])
         nxt = b.find("documents.next", 1_000)
         if stop or len(rows) < PAGE_ROWS or nxt is None or not nxt.is_enabled():
             break

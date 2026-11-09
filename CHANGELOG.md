@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+## [0.16.2] · 2026-11-09
+
+### Collecteurs
+
+- VIAC : les documents « Transaction de titres » sont récupérés. VIAC s'en sert pour la sortie
+  d'un fonds quand il le fusionne dans un autre (fonds CS repris par UBS fin octobre) ; le bot les
+  ignorait, et l'entrée dans le nouveau fonds, lue comme un achat, laissait un écart.
+- VIAC : un document d'un type inconnu est noté une fois au journal (`viac.document_ignored`, date
+  et titre) et dans la mémoire du collecteur (`ignored`), au lieu de disparaître sans trace.
+
 ## [0.16.1] · 2026-11-09
 
 ### Collecteurs
