@@ -2,6 +2,13 @@
 
 ## [Non publié]
 
+## [0.16.5] · 2026-11-09
+
+### Exploitation
+
+- Publication : nouveau cache de construction des images. La 0.16.4 n'a pas pu publier l'image du
+  collecteur (ghcr refusait une couche venue de l'ancien cache) ; la 0.16.5 la contient.
+
 ## [0.16.4] · 2026-11-09
 
 ### Finance
