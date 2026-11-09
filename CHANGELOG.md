@@ -4,6 +4,7 @@
 
 ### Exploitation
 
+- pi.md : `HUB_SKIP_TRIAL=1` sur le Pi (l'essai est déjà fait par la CI) ; une mise à jour prend 1 à 2 min.
 - `mac-preflight.sh` lit les droits de la clé age avec le `stat` de Linux sur le Pi : il y affichait
   « clé age en File: … » et refusait de déployer (donc aussi la mise à jour automatique).
 
