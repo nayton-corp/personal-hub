@@ -346,11 +346,16 @@ attente en `SYM:CHF`), avec le cours du jour tiré du fichier (contre-valeur USD
 le change USD/CHF de ses mouvements en francs. Achat, dépôt, rendement et remise de frais
 créditent le net ; vente, retrait et frais périodiques débitent.
 
-**Binance, paires retirées.** Ce que l'API ne rend plus (une paire retirée comme BTC/BUSD) se
-reprend par l'export « Trade History » de Binance (Commandes → Historique des échanges →
-Exporter, `.csv` avec `Date(UTC),Pair,Side,Price,Executed,Amount,Fee`), déposé tel quel : chaque
-exécution devient un échange du compte `crypto:binance` avec ses frais, une seule fois quelle que
-soit la relecture, valorisé par son prix (en dollar pour un stablecoin). Un frais en BNB attend
+**Binance, paires retirées et anciens échanges.** Ce que l'API ne rend plus (une paire retirée
+comme BTC/BUSD, ou des échanges anciens que `myTrades` ne sert plus, même sur une paire encore
+cotée) se reprend par l'export « Trade History » de Binance (Ordres → Ordre Spot → Historique
+des échanges → Exporter, période « Tout » : la liste à l'écran s'arrête à 6 mois, l'export non).
+Deux formes sont lues : `Date(UTC),Pair,Side,Price,Executed,Amount,Fee` (chaque exécution) et
+l'export français `N° de commande,Durée,Paire,Côté,…` (les exécutions d'un ordre regroupées).
+Le fichier entier se dépose tel quel : un ordre déjà au registre (même actif, même quantité, à
+un jour près) n'est pas repris, les autres deviennent des échanges du compte `crypto:binance`
+avec leurs frais, une seule fois quelle que soit la relecture, valorisés par leur prix (en dollar
+pour un stablecoin). Un frais en BNB attend
 le cours du jour comme les autres opérations. Le collecteur relit d'abord ce qu'il peut : une
 paire déclarée dans `pairs` des secrets est demandée à chaque passage.
 
