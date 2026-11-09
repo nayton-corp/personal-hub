@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.16.1] · 2026-11-09
+
 ### Collecteurs
 
 - KuCoin : les ordres du marché spot (type « Spot » au grand livre) deviennent des échanges, les
