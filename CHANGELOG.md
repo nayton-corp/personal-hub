@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+## [0.16.1] · 2026-11-09
+
+### Collecteurs
+
+- KuCoin : les ordres du marché spot (type « Spot » au grand livre) deviennent des échanges, les
+  deux côtés de l'ordre regroupés ; ils étaient comptés comme type inconnu et laissés de côté.
+  L'historique déjà lu est relu une fois de lui-même (version d'historique 3).
+
 ### Exploitation
 
 - pi.md : `HUB_SKIP_TRIAL=1` sur le Pi (l'essai est déjà fait par la CI) ; une mise à jour prend 1 à 2 min.

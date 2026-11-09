@@ -1253,6 +1253,26 @@ def ledger_rows(q: dict[str, str]) -> list[Any]:
             "createdAt": at("2026-09-05"),
             "context": "",
         },
+        {  # un ordre du marché spot : le grand livre dit « Spot », pas « Exchange »
+            "id": "l7",
+            "currency": "USDT",
+            "amount": "50",
+            "fee": "0",
+            "direction": "out",
+            "bizType": "Spot",
+            "createdAt": at("2026-09-06"),
+            "context": '{"orderId":"o2","symbol":"TAO-USDT","tradeId":"t2"}',
+        },
+        {
+            "id": "l8",
+            "currency": "TAO",
+            "amount": "0.2",
+            "fee": "0.0002",
+            "direction": "in",
+            "bizType": "Spot",
+            "createdAt": at("2026-09-06"),
+            "context": '{"orderId":"o2","symbol":"TAO-USDT","tradeId":"t2"}',
+        },
     ]
     return [r for r in rows if start <= r["createdAt"] <= end]
 
@@ -1275,6 +1295,11 @@ def test_kucoin_history_reads_the_ledger_day_by_day(make_env: Any) -> None:
             [("BTC", "-0.05", "trade"), ("USDT", "3000", "trade"), ("USDT", "-3", "fee")],
         ),
         ("ledger:l6", "reward", [("USDT", "0.5", "income")]),
+        (
+            "order:o2:l7",
+            "trade",
+            [("USDT", "-50", "trade"), ("TAO", "0.2", "trade"), ("TAO", "-0.0002", "fee")],
+        ),
     ]
     assert doc.operations[0].txid == "kk1"
     days = [query(u) for _m, u, _h in fake.calls if "ledgers" in u]

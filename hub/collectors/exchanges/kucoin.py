@@ -86,7 +86,7 @@ def fetch(env: Env, http: Http) -> list[tuple[str, Any]]:
 
 
 LEDGER_DAYS = 365  # lu au minimum au premier passage
-HISTORY_VERSION = 2  # 2 : depuis le plus ancien dépôt (avant : un an seulement)
+HISTORY_VERSION = 3  # 2 : depuis le plus ancien dépôt (avant : un an) ; 3 : les ordres « Spot »
 
 
 def _earliest(env: Env, http: Http) -> date | None:
@@ -116,7 +116,7 @@ def _role(biz: str) -> str | None:
         return "deposit"
     if "withdraw" in b:
         return "withdrawal"
-    if any(k in b for k in ("exchange", "trade", "convert", "lite", "dust")):
+    if any(k in b for k in ("exchange", "trade", "spot", "convert", "lite", "dust")):
         return "trade"
     if any(
         k in b
