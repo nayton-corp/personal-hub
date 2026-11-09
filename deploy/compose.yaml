@@ -24,6 +24,9 @@ x-hub-env: &hub-env
   HUB_LOCALE: ${HUB_LOCALE:-fr-CH}
   HUB_DOMAINS: ${HUB_DOMAINS:-*}   # domaines montés : * tous, ou finance,agenda
   HUB_AUTH__TOKEN_PROPOSALS_PER_HOUR: ${HUB_PROPOSALS_PER_HOUR:-60}   # cartes par heure et par jeton
+  # l'assistant et le pont Rappels/Calendrier tournent sur le Mac : sur le Pi, son nom Tailscale
+  HUB_ASSISTANT__URL: ${HUB_ASSISTANT_URL:-http://host.docker.internal:8770}
+  HUB_AGENDA__BRIDGE_URL: ${HUB_AGENDA_BRIDGE_URL:-http://host.docker.internal:8771}
 
 x-collector: &collector
   <<: *hardening

@@ -137,10 +137,18 @@ class Settings(BaseSettings):
         return tuple(sources)
 
     def domain(self, name: str) -> dict[str, Any]:
-        """Section propre à un domaine (`[finance]`), lue par le domaine lui-même."""
+        """Section propre à un domaine (`[finance]`), lue par le domaine lui-même. Une variable
+        `HUB_<DOMAINE>__<CLÉ>` l'emporte sur le fichier, comme pour le cœur : la machine qui porte
+        le hub règle ainsi ce qui lui est propre (l'adresse du pont de l'agenda sur le Pi) sans
+        toucher au fichier de l'image."""
         extra = self.model_extra or {}
         section = extra.get(name, {})
-        return dict(section) if isinstance(section, dict) else {}
+        merged = dict(section) if isinstance(section, dict) else {}
+        prefix = f"HUB_{name.upper()}__"
+        for key, value in os.environ.items():
+            if key.startswith(prefix) and len(key) > len(prefix):
+                merged[key[len(prefix) :].lower()] = value
+        return merged
 
     def active_domains(self) -> frozenset[str] | None:
         """Les domaines à monter ; None : tous ceux qui sont installés."""

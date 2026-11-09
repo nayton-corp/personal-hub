@@ -2,6 +2,19 @@
 
 ## [Non publié]
 
+### Exploitation
+
+- Le hub passe sur le Pi ([pi.md](docs/exploitation/pi.md), D-026). La fusion de la PR de
+  version publie : `release.yml` pose lui-même le tag quand la version de `pyproject.toml` n'en
+  a pas, puis publie les images et la release. Sur le Pi, le minuteur `hub-autoupdate`
+  (`make autoupdate-install`) installe chaque nouvelle release avec `deploy/deploy.sh`, fige et
+  recompte les chiffres (`golden save` / `golden check`) et prévient par ntfy (`hub ops
+  notify`).
+- `deploy.sh` met `HUB_TAG` de `deploy/.env` à la version déployée.
+- L'adresse de l'assistant et du pont Rappels/Calendrier se règle dans `deploy/.env`
+  (`HUB_ASSISTANT_URL`, `HUB_AGENDA_BRIDGE_URL`) ; une variable `HUB_<DOMAINE>__<CLÉ>`
+  l'emporte sur la section du domaine dans `settings.toml`.
+
 ## [0.15.1] · 2026-11-09
 
 ### Collecteurs

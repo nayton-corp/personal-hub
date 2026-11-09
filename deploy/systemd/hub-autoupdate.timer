@@ -1,0 +1,12 @@
+# Toutes les 5 min, et 2 min après le démarrage du Pi.
+[Unit]
+Description=Hub : cherche une nouvelle version toutes les 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

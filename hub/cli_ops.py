@@ -9,6 +9,8 @@ import typer
 
 from hub.core import ops
 from hub.core.context import HubContext
+from hub.core.notify import Message, Notifier
+from hub.platform.settings import get_settings
 
 
 def build(ctx: Callable[[], HubContext]) -> typer.Typer:
@@ -24,5 +26,17 @@ def build(ctx: Callable[[], HubContext]) -> typer.Typer:
     def litestream() -> None:
         """La configuration Litestream de ces bases, sur la sortie standard."""
         typer.echo(ops.litestream_config(ctx()), nl=False)
+
+    @app.command("notify")
+    def notify(
+        title: str,
+        body: str,
+        urgent: bool = typer.Option(False, "--urgent", help="priorité haute (un échec)"),
+    ) -> None:
+        """Une notification ntfy depuis un script d'exploitation (mise à jour du Pi). Un texte
+        générique : jamais un montant. Sans sujet ntfy, rien n'est envoyé (code 0)."""
+        Notifier(get_settings()).send(
+            Message(title, body, priority="high" if urgent else "default", tags="package")
+        )
 
     return app

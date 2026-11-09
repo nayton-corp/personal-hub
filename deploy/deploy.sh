@@ -164,6 +164,13 @@ done
 [ "$healthy" = 1 ] || rollback "/api/health ne répond pas"
 
 echo "$TAG" > "$STATE"
+# deploy/.env suit la version en place : hubc et un `docker compose` à la main lancent la bonne
+# image (sed -i.bak : la même écriture sous macOS et Linux)
+if grep -q '^HUB_TAG=' "$HERE/.env"; then
+  sed -i.bak "s/^HUB_TAG=.*/HUB_TAG=$TAG/" "$HERE/.env" && rm -f "$HERE/.env.bak"
+else
+  printf 'HUB_TAG=%s\n' "$TAG" >> "$HERE/.env"
+fi
 say "Déployé : $TAG (précédent : ${PREV:-aucun})"
 
 if [ "$first_deploy" = 1 ]; then
