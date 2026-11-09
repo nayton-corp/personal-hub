@@ -2,6 +2,11 @@
 
 ## [Non publié]
 
+### Exploitation
+
+- `mac-preflight.sh` lit les droits de la clé age avec le `stat` de Linux sur le Pi : il y affichait
+  « clé age en File: … » et refusait de déployer (donc aussi la mise à jour automatique).
+
 ## [0.16.0] · 2026-11-09
 
 ### Exploitation
