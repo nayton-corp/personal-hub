@@ -28,7 +28,8 @@ docker info >/dev/null 2>&1 && ok "docker répond ($(docker context show 2>/dev/
 
 echo "Clé et secrets"
 if [ -f "${HUB_AGE_KEY:-}" ]; then
-  perm="$(stat -f %Lp "$HUB_AGE_KEY" 2>/dev/null || stat -c %a "$HUB_AGE_KEY")"
+  # GNU stat (Linux, le Pi) d'abord : `stat -f` y existe aussi, mais décrit le système de fichiers
+  perm="$(stat -c %a "$HUB_AGE_KEY" 2>/dev/null || stat -f %Lp "$HUB_AGE_KEY")"
   [ "$perm" = "400" ] && ok "clé age en 0400" || ko "clé age en $perm (chmod 400)"
 else
   ko "clé age absente : $HUB_AGE_KEY"
