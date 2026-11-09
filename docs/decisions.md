@@ -7,6 +7,18 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-026 · Le Pi installe seul chaque version publiée (09.11.2026)
+
+- **Contexte** : chaque déploiement sur le Mac demandait un « oui déploie vX », un `git
+  checkout`, un `make deploy` et bloquait souvent sur Docker Desktop ; le Mac devait rester
+  allumé. Le hub passe sur le Pi ([exploitation/pi.md](exploitation/pi.md)).
+- **Décision** (Nathan, 09.11.2026) : la fusion de la PR de version est l'accord. `release.yml`
+  pose le tag et publie ; le Pi voit la release et l'installe seul (`deploy/autoupdate.sh`),
+  avec les mêmes filets (essai, `verify`, copie, retour arrière) et une notification ntfy.
+  Remplace D-007.
+- **Conséquence** : fusionner une PR de version, c'est déployer. Le minuteur ne descend jamais
+  de version et ne retente pas une version en échec ; un retour arrière voulu reste à la main.
+
 ## D-025 · Les documents se reconstruisent de leur archive ; « foyer » se marque (30.10.2026)
 
 - **Contexte** : la bibliothèque de l'assistant de Domia vivait dans un dossier (fiches YAML,

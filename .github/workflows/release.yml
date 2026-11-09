@@ -1,43 +1,88 @@
-# Publication d'une version (chantier S13) : un tag vX.Y.Z posé sur main par `make tag`.
-# 1. le tag est égal à la version de pyproject.toml et le CHANGELOG a sa section ;
-# 2. toutes les barrières de la CI : si la CI de main est déjà verte sur ce même commit, elle
-# n'est pas rejouée (on attend sa fin si elle tourne encore) ; sinon elle est relancée ici ; 3. images linux/arm64 poussées sur GHCR, avec leur SBOM
-# et leur provenance ; 4. analyse des vulnérabilités de chaque image ; 5. notes de version.
-# Rien ne se déploie ici : le Mac tire l'image après un « oui déploie vX » (make deploy).
+# Publication d'une version (chantier S13, D-012) : la fusion de la PR de version sur main.
+# 1. la version de pyproject.toml n'a pas encore de tag : il est posé sur ce commit (un tag poussé
+# à la main par `make tag` lance aussi ce workflow) ; le tag est égal à la version et le
+# CHANGELOG a sa section ; 2. toutes les barrières de la CI : si la CI de main est déjà verte sur
+# ce même commit, elle n'est pas rejouée (on attend sa fin si elle tourne encore) ; sinon elle est
+# relancée ici ; 3. images linux/arm64 poussées sur GHCR, avec leur SBOM et leur provenance ;
+# 4. analyse des vulnérabilités de chaque image ; 5. notes de version (la release GitHub).
+# Le Pi voit cette release et l'installe seul (deploy/autoupdate.sh). Une fusion qui ne change
+# pas la version ne publie rien : tous les jobs sont sautés.
 name: Release
 
 on:
   push:
+    branches: [main]
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 permissions:
   contents: read
 
+# par commit : un tag poussé à la main et la fusion du même commit passent l'un après l'autre,
+# le second voit la release du premier et ne publie rien
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
   version:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      go: ${{ steps.tag.outputs.go }}
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - id: tag
+        name: Une version à publier ?
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="v$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)"
+          fi
+          # le commit du tag s'il existe (^{} : celui d'un tag annoté)
+          at="$(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}" | awk '{print $1}' | tail -1)"
+          go=false
+          if [ -z "$at" ]; then
+            go=true
+          elif [ "$at" = "$GITHUB_SHA" ] && ! gh release view "$tag" >/dev/null 2>&1; then
+            go=true  # tag posé, release absente : premier passage, ou un passage relancé
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+          echo "$tag : publication $go"
+      - if: steps.tag.outputs.go == 'true'
+        uses: astral-sh/setup-uv@v6
         with:
           version: "0.13.6"
-      - run: uv python install 3.12
-      - run: uv sync --frozen
+      - if: steps.tag.outputs.go == 'true'
+        run: uv python install 3.12 && uv sync --frozen
       - name: Le tag est la version de pyproject.toml, et le CHANGELOG la décrit
-        run: uv run python scripts/release.py check "$GITHUB_REF_NAME"
-      - name: Le tag est sur main
+        if: steps.tag.outputs.go == 'true'
+        run: uv run python scripts/release.py check "${{ steps.tag.outputs.tag }}"
+      - name: Le commit est sur main
+        if: steps.tag.outputs.go == 'true'
         run: |
           git fetch --quiet origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Le tag, posé sur ce commit
+        if: steps.tag.outputs.go == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if [ -z "$(git ls-remote origin "refs/tags/$TAG")" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA"
+          fi
 
   # la CI de main a-t-elle déjà validé ce commit ? « true » : verte ; « false » : pas de CI de
   # main pour ce commit, on la rejoue ; rouge : la release s'arrête
   main-ci:
     needs: version
+    if: needs.version.outputs.go == 'true'
     runs-on: ubuntu-24.04
     permissions:
       actions: read
@@ -70,7 +115,7 @@ jobs:
       release: true
 
   publish:
-    needs: [main-ci, quality]
+    needs: [version, main-ci, quality]
     if: ${{ !cancelled() && needs.main-ci.result == 'success' && (needs.quality.result == 'success' || needs.quality.result == 'skipped') }}
     # un runner arm64 natif : plus d'émulation QEMU, l'image collector se construit bien plus vite
     runs-on: ubuntu-24.04-arm
@@ -94,8 +139,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.target }}
           tags: |
-            type=semver,pattern=v{{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{version}},value=${{ needs.version.outputs.tag }}
+            type=semver,pattern=v{{major}}.{{minor}},value=${{ needs.version.outputs.tag }}
           labels: |
             org.opencontainers.image.title=personal-hub ${{ matrix.target }}
       - id: build
@@ -136,7 +181,7 @@ jobs:
             trivy-${{ matrix.target }}.txt
 
   notes:
-    needs: publish
+    needs: [version, publish]
     if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
@@ -150,18 +195,19 @@ jobs:
       - name: Notes de version (CHANGELOG et empreintes des images)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
           {
-            python3 scripts/release.py notes "$GITHUB_REF_NAME"
+            python3 scripts/release.py notes "$TAG"
             echo
             echo "### Images (linux/arm64)"
             echo
             for f in digest-*.txt; do
               t="${f#digest-}"; t="${t%.txt}"
-              echo "- \`ghcr.io/${GITHUB_REPOSITORY}/$t:$GITHUB_REF_NAME\` · \`$(cut -d= -f2 "$f")\`"
+              echo "- \`ghcr.io/${GITHUB_REPOSITORY}/$t:$TAG\` · \`$(cut -d= -f2 "$f")\`"
             done
             echo
-            echo "Déployer : \`make deploy TAG=$GITHUB_REF_NAME\` sur le Mac, après « oui déploie $GITHUB_REF_NAME »."
+            echo "Le Pi l'installe seul dans les minutes qui suivent (deploy/autoupdate.sh, notification ntfy)."
           } > notes.md
-          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" \
+          gh release create "$TAG" --verify-tag --title "$TAG" \
             --notes-file notes.md trivy-*.txt

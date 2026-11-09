@@ -74,6 +74,16 @@ deploy:
 	deploy/mac-preflight.sh
 	deploy/deploy.sh $(TAG)
 
+autoupdate-install:  # sur le Pi, une fois : minuteur qui installe chaque version publiée (pi.md)
+	@test "$$(uname -s)" = Linux || (echo "autoupdate-install : sur le Pi (Linux, systemd)" && exit 1)
+	mkdir -p $(HOME)/.config/systemd/user
+	sed "s#@ROOT@#$(CURDIR)#" deploy/systemd/hub-autoupdate.service > $(HOME)/.config/systemd/user/hub-autoupdate.service
+	cp deploy/systemd/hub-autoupdate.timer $(HOME)/.config/systemd/user/
+	loginctl enable-linger "$$(id -un)"
+	systemctl --user daemon-reload
+	systemctl --user enable --now hub-autoupdate.timer
+	systemctl --user list-timers hub-autoupdate.timer
+
 release:  # sur une branche : prépare la PR de version (pyproject, uv.lock, CHANGELOG)
 	@test -n "$(VERSION)" || (echo "usage : make release VERSION=0.12.0" && exit 1)
 	uv run python scripts/release.py prepare $(VERSION)

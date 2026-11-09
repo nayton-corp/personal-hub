@@ -8,6 +8,32 @@
   deux côtés de l'ordre regroupés ; ils étaient comptés comme type inconnu et laissés de côté.
   L'historique déjà lu est relu une fois de lui-même (version d'historique 3).
 
+### Exploitation
+
+- pi.md : `HUB_SKIP_TRIAL=1` sur le Pi (l'essai est déjà fait par la CI) ; une mise à jour prend 1 à 2 min.
+- `mac-preflight.sh` lit les droits de la clé age avec le `stat` de Linux sur le Pi : il y affichait
+  « clé age en File: … » et refusait de déployer (donc aussi la mise à jour automatique).
+
+## [0.16.0] · 2026-11-09
+
+### Exploitation
+
+- `deploy/pi-ssd-setup.sh` déplace aussi `/var/lib/containerd` sur le SSD : Docker 29 y range ses
+  images (17 Go sur le Pi), qui restaient sur la carte SD.
+
+### Exploitation
+
+- Le hub passe sur le Pi ([pi.md](docs/exploitation/pi.md), D-026). La fusion de la PR de
+  version publie : `release.yml` pose lui-même le tag quand la version de `pyproject.toml` n'en
+  a pas, puis publie les images et la release. Sur le Pi, le minuteur `hub-autoupdate`
+  (`make autoupdate-install`) installe chaque nouvelle release avec `deploy/deploy.sh`, fige et
+  recompte les chiffres (`golden save` / `golden check`) et prévient par ntfy (`hub ops
+  notify`).
+- `deploy.sh` met `HUB_TAG` de `deploy/.env` à la version déployée.
+- L'adresse de l'assistant et du pont Rappels/Calendrier se règle dans `deploy/.env`
+  (`HUB_ASSISTANT_URL`, `HUB_AGENDA_BRIDGE_URL`) ; une variable `HUB_<DOMAINE>__<CLÉ>`
+  l'emporte sur la section du domaine dans `settings.toml`.
+
 ## [0.15.1] · 2026-11-09
 
 ### Collecteurs

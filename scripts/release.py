@@ -5,7 +5,8 @@
     python scripts/release.py notes v0.12.0    # notes de version, tirées du CHANGELOG
 
 `prepare` se lance sur une branche, avant la PR de version ; le tag se pose sur main après la
-fusion (`make tag`), et c'est lui qui publie les images (.github/workflows/release.yml).
+fusion (par .github/workflows/release.yml lui-même, ou `make tag`), et c'est lui qui publie
+les images.
 """
 
 import datetime as dt

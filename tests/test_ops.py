@@ -62,3 +62,11 @@ def test_restore_brings_back_the_demo_domain(settings: Settings, tmp_path: Path)
     assert report.checks["demo.verify"] == "ok"
     assert demo.applied(["p1"]) == {"p1": {"seq": 1}}
     hub.dispose()
+
+
+def test_ops_notify_without_topic_sends_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HUB_PATHS__DATA", str(tmp_path / "data"))
+    out = CliRunner().invoke(cli.app, ["ops", "notify", "Hub v1.2.3", "Déployé.", "--urgent"])
+    assert out.exit_code == 0, out.output

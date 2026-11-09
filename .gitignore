@@ -25,4 +25,7 @@ tests/fixtures/generated/
 .DS_Store
 deploy/.current-tag
 deploy/litestream.local.yml
+deploy/.failed-tag
+deploy/.autoupdate.lock
+deploy/logs/
 .audit-requirements.txt
