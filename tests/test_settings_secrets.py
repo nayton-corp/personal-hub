@@ -26,6 +26,19 @@ def test_toml_then_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert s.db_path("core") == Path("/x/data/core.db")
 
 
+def test_a_domain_setting_from_the_environment_wins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # sur le Pi, le pont de l'agenda est sur le Mac : l'adresse vient de deploy/.env
+    toml = tmp_path / "settings.toml"
+    toml.write_text('[agenda]\nbridge_url = "http://host.docker.internal:8771"\nother = 1\n')
+    monkeypatch.setenv("HUB_SETTINGS", str(toml))
+    monkeypatch.setenv("HUB_AGENDA__BRIDGE_URL", "http://mac.t.ts.net:8771")
+    s = Settings()
+    assert s.domain("agenda") == {"bridge_url": "http://mac.t.ts.net:8771", "other": 1}
+    assert s.domain("finance") == {}
+
+
 def test_origin_must_be_an_origin() -> None:
     with pytest.raises(ValueError, match="origine"):
         Server(public_origin="https://hub.t.ts.net/app")

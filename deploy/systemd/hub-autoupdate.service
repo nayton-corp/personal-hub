@@ -1,0 +1,13 @@
+# Mise à jour seule du hub (deploy/autoupdate.sh). Installé par `make autoupdate-install`, qui
+# remplace @ROOT@ par le chemin du clone. Service utilisateur : le compte est dans le groupe docker.
+[Unit]
+Description=Hub : installe la dernière version publiée
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=@ROOT@/deploy/autoupdate.sh
+# un déploiement (images, essai, migrations) tient largement en 30 min
+TimeoutStartSec=30min
+Nice=10
