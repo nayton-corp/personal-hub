@@ -155,8 +155,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           provenance: mode=max
           sbom: true
-          cache-from: type=gha,scope=${{ matrix.target }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+          # « -2 » : nouveau cache (0.16.4 : une couche du cache du collecteur que ghcr ne sert
+          # plus, HEAD 403 sur son blob, bloquait la publication)
+          cache-from: type=gha,scope=${{ matrix.target }}-2
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}-2
       - name: Vulnérabilités de l’image (Trivy, critiques corrigeables)
         env:
           IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.target }}@${{ steps.build.outputs.digest }}
