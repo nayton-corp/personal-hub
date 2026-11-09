@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.16.0] · 2026-11-09
+
 ### Exploitation
 
 - `deploy/pi-ssd-setup.sh` déplace aussi `/var/lib/containerd` sur le SSD : Docker 29 y range ses
