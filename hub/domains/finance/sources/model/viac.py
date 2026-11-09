@@ -11,7 +11,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-NoticeKind = Literal["buy", "sell", "dividend", "interest", "fee", "deposit", "withdrawal"]
+NoticeKind = Literal[
+    "buy", "sell", "dividend", "interest", "fee", "deposit", "withdrawal", "switch"
+]
 # effet de chaque type sur les liquidités du portefeuille
 CASH_SIGN: dict[str, int] = {
     "buy": -1,
@@ -21,6 +23,7 @@ CASH_SIGN: dict[str, int] = {
     "fee": -1,
     "deposit": 1,
     "withdrawal": -1,
+    "switch": 0,  # un fonds contre un autre à valeur égale : rien ne passe par les liquidités
 }
 # code porté par l'écriture : les règles système le reconnaissent, la valorisation aussi
 # (`VIAC/INCOME` et `VIAC/FEE` sont du rendement, pas des apports)
@@ -32,6 +35,7 @@ TX_CODE: dict[str, str] = {
     "fee": "VIAC/FEE",
     "deposit": "VIAC/DEPOSIT",
     "withdrawal": "VIAC/WITHDRAWAL",
+    "switch": "VIAC/TRADE/SWITCH",
 }
 LABEL: dict[str, str] = {
     "buy": "Achat de parts",
@@ -41,6 +45,7 @@ LABEL: dict[str, str] = {
     "fee": "Commission de gestion",
     "deposit": "Versement 3a",
     "withdrawal": "Retrait 3a",
+    "switch": "Échange de fonds",
 }
 
 
@@ -54,13 +59,17 @@ class Notice(_Frozen):
     kind: NoticeKind
     portfolio: str  # 3.123.456.789.01
     value_date: str
-    amount: Decimal  # CHF comptabilisé, positif
+    amount: Decimal  # CHF comptabilisé, positif (0 pour un échange de fonds)
     isin: str | None = None
     fund: str | None = None
     quantity: Decimal | None = None  # parts, positif
     price: Decimal | None = None  # cours unitaire, dans price_currency
     price_currency: str | None = None
     detail: str = ""
+    # échange de fonds (fusion) : `isin`/`fund`/`quantity` sortent, ceux-ci entrent
+    new_isin: str | None = None
+    new_fund: str | None = None
+    new_quantity: Decimal | None = None
 
     @property
     def is_trade(self) -> bool:

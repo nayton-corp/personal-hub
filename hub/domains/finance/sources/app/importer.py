@@ -37,6 +37,7 @@ from hub.domains.finance.sources.app.viac_docs import (
     ViacDoc,
     apply_viac,
     read_viac,
+    retry_rejected,
 )
 from hub.domains.finance.sources.infra import camt as parser
 from hub.domains.finance.sources.infra import revolut
@@ -151,6 +152,9 @@ class ImportService(Rework):
     def stage(self, f: Incoming) -> tuple[FileOutcome, Staged | None]:
         digest = sha256(f.data)
         if self._known(digest):
+            retried = self._retry_viac(f, digest)
+            if retried is not None:
+                return retried
             self.archiver.store(f.data, "duplicates", f"{digest[:16]}-{safe_name(f.name)}")
             log.info("import.duplicate_file")
             return FileOutcome(f.name, None, "duplicate", "import.duplicate_file"), None
@@ -191,6 +195,14 @@ class ImportService(Rework):
             f, digest, "staged", stats, None, source=source, rows=doc.statements()
         )
         return FileOutcome(f.name, import_id, "staged"), doc
+
+    def _retry_viac(self, f: Incoming, digest: str) -> tuple[FileOutcome, Staged] | None:
+        """Un PDF VIAC refusé, déposé à nouveau, se relit (viac_docs.retry_rejected)."""
+        got = retry_rejected(self.engine, self.pdf_text, f.data, digest)
+        if got is None:
+            return None
+        log.info("import.retried", import_id=got[0])
+        return FileOutcome(f.name, got[0], "staged"), got[1]
 
     def _stage_doc(
         self, f: Incoming, digest: str, source: str

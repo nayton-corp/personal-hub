@@ -7,16 +7,21 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import Connection
+from sqlalchemy import Connection, Engine, text
 
 from hub.domains.finance.sources.app import viac as viac_apply
 from hub.domains.finance.sources.app.outcomes import StatementOutcome
 from hub.domains.finance.sources.app.statements import (
     _set_statement,
 )
+from hub.domains.finance.sources.infra.viac import ViacError
 from hub.domains.finance.sources.infra.viac import notice as viac_notice
 from hub.domains.finance.sources.infra.viac import report as viac_report
+from hub.domains.finance.sources.infra.viac import text as viac_text
 from hub.domains.finance.sources.model.viac import Notice, Report
+from hub.kernel import canonical
+from hub.kernel.clock import now_iso
+from hub.platform.db import begin_immediate
 
 
 @dataclass(frozen=True)
@@ -99,3 +104,46 @@ VIAC_NOTICE = "viac_notice"
 VIAC_REPORT = "viac_report"
 VIAC_OTHER = "viac_other"  # attestation, relevé récapitulatif ou PDF refusé
 VIAC_SOURCES = frozenset({VIAC_NOTICE, VIAC_REPORT, VIAC_OTHER})
+
+
+def retry_rejected(
+    engine: Engine, pdf_text: Callable[[bytes], str], data: bytes, digest: str
+) -> tuple[str, ViacDoc] | None:
+    """Un PDF VIAC refusé et déposé à nouveau se relit : le parseur a pu apprendre son type
+    depuis (« Transaction de fonds »). Lu, il reprend son import refusé (même empreinte, donc
+    même ligne d'`imports`) et passe en attente d'application ; sinon, c'est un doublon."""
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT id FROM imports WHERE file_sha256 = :h AND status = 'rejected' "
+                "AND source = :s"
+            ),
+            {"h": digest, "s": VIAC_OTHER},
+        ).first()
+    if row is None or not viac_text.is_pdf(data):
+        return None
+    try:
+        doc = read_viac(pdf_text, data)
+    except ViacError:
+        return None
+    if isinstance(doc, str):
+        return None
+    import_id, now = str(row[0]), now_iso()
+    source = VIAC_NOTICE if doc.notice is not None else VIAC_REPORT
+    with begin_immediate(engine) as conn:
+        conn.execute(
+            text(
+                "UPDATE imports SET source = :s, status = 'staged', stats_json = :j, "
+                "updated_at = :at WHERE id = :i"
+            ),
+            {"s": source, "j": canonical.dumps({"document": source}), "at": now, "i": import_id},
+        )
+        for index, opbd, clbd in doc.statements():
+            conn.execute(
+                text(
+                    "INSERT INTO import_statements (import_id, stmt_index, opbd_date, "
+                    "clbd_date, status, updated_at) VALUES (:i, :x, :o, :c, 'pending', :at)"
+                ),
+                {"i": import_id, "x": index, "o": opbd, "c": clbd, "at": now},
+            )
+    return import_id, doc

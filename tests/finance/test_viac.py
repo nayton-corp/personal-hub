@@ -441,3 +441,73 @@ def test_accounts_route_gives_market_value(viac: FinanceDomain) -> None:
         by_id = {a["id"]: a for a in account_list.accounts(conn)}
     assert by_id[titles]["balance"]["minor"] == 95000
     assert by_id[titles]["value"]["minor"] == 104500
+
+
+# --- échange de fonds (« Transaction de fonds ») ----------------------------------------------
+
+
+def test_parse_fund_switch() -> None:
+    n = viac_notice.parse(f.switch(date(2026, 10, 29), "9.5", "11.25"))
+    assert (n.kind, n.value_date, n.amount) == ("switch", "2026-10-29", Decimal(0))
+    assert (n.isin, n.quantity, n.fund) == (
+        f.FUND_WORLD[1],
+        Decimal("9.5"),
+        f.FUND_WORLD[0] + " (old)",
+    )
+    assert (n.new_isin, n.new_quantity, n.new_fund) == (
+        f.FUND_CH[1],
+        Decimal("11.25"),
+        f.FUND_CH[0],
+    )
+    assert not n.is_trade
+    broken = f.switch(date(2026, 10, 29), "9.5", "11.25").replace("Nous ajoutons", "Nous gardons")
+    with pytest.raises(ViacError):
+        viac_notice.parse(broken)
+
+
+def test_fund_switch_moves_parts_not_cash(viac: FinanceDomain) -> None:
+    cash, titles = open_portfolio(viac)
+    send(viac, f.deposit(D1, "1000.00"), f.buy(D2, "9.5", "950.00"))
+    on = date(2026, 10, 29)
+    report = send(viac, f.switch(on, "9.5", "11.25"))
+    assert [o.status for o in report.statements] == ["applied"]
+    assert (balance(viac, cash), balance(viac, titles)) == (5000, 95000)  # rien ne bouge
+    assert rows(viac, "SELECT isin, quantity, amount_minor FROM trades ORDER BY seq") == [
+        (f.FUND_WORLD[1], "9.5", 95000),
+        (f.FUND_WORLD[1], "-9.5", -95000),  # sortie au coût de l'achat
+        (f.FUND_CH[1], "11.25", 95000),  # entrée au même coût
+    ]
+    again = send(viac, f.switch(on, "9.5", "11.25"))
+    assert again.counters()["new_entries"] == 0
+    assert len(rows(viac, "SELECT 1 FROM trades")) == 3
+    # le rapport suivant ne voit plus d'écart : l'ancien fonds a disparu, le nouveau a ses parts
+    pos = f.Pos("11.25", "1046.25", fund=f.FUND_CH, price="93.00")
+    folio = f.Folio("VIAC1", cash="50.00", positions=[pos])
+    checked = send(viac, f.report(date(2026, 10, 31), [folio]))
+    assert all(o.reasons == [] for o in checked.statements)
+    assert viac.verify_ledger().ok
+
+
+def test_refused_pdf_dropped_again_is_read_again(
+    viac: FinanceDomain, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # avant l'échange de fonds, le parseur refusait ce document ; déposé à nouveau après la
+    # mise à jour, il se relit et reprend son import refusé (même fichier, même empreinte)
+    open_portfolio(viac)
+    send(viac, f.deposit(D1, "1000.00"), f.buy(D2, "9.5", "950.00"))
+    doc = f.switch(date(2026, 10, 29), "9.5", "11.25")
+    learned = viac_notice.parse
+
+    def old_parser(txt: str):  # type: ignore[no-untyped-def]
+        raise ViacError("viac.unrecognized", "type d'avis inconnu")
+
+    monkeypatch.setattr(viac_notice, "parse", old_parser)
+    first = send(viac, doc)
+    assert [x.status for x in first.files] == ["rejected"]
+    monkeypatch.setattr(viac_notice, "parse", learned)
+    again = send(viac, doc)
+    assert [x.status for x in again.files] == ["staged"]
+    assert {o.status for o in again.statements} == {"applied"}
+    assert len(rows(viac, "SELECT 1 FROM trades")) == 3
+    third = send(viac, doc)
+    assert [x.status for x in third.files] == ["duplicate"]

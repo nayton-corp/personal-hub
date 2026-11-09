@@ -188,6 +188,7 @@ les motifs de tes scripts `viac_parser.py` et `viac_rapport.py`, portés côté 
 | Document | Ce qu'il écrit |
 |---|---|
 | Opération de bourse (achat, vente) | deux écritures (liquidités et titres), l'opération (parts, ISIN), le cours |
+| Transaction de fonds (fusion d'un fonds dans un autre, document « Transaction de titres ») | aucune écriture : la sortie des parts de l'ancien ISIN et l'entrée du nouveau, au coût moyen de l'ancien |
 | Avis de dividende, intérêts, commission | une écriture sur les liquidités, catégories `rendement` ou `frais-placement` |
 | Versement, retrait | une écriture sur les liquidités, catégorie `transfer-own` (c'est un apport) |
 | Rapport « Rapport au JJ.MM.AAAA » | les positions (parts, valeur), leurs cours, et le solde du compte 3a comme point de contrôle |
