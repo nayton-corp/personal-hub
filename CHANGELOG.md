@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### Collecteurs
+
+- KuCoin : les ordres du marché spot (type « Spot » au grand livre) deviennent des échanges, les
+  deux côtés de l'ordre regroupés ; ils étaient comptés comme type inconnu et laissés de côté.
+  L'historique déjà lu est relu une fois de lui-même (version d'historique 3).
+
 ## [0.15.1] · 2026-11-09
 
 ### Collecteurs
