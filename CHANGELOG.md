@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.15.1] · 2026-11-09
+
 ### Collecteurs
 
 - KuCoin : un appel refusé pour son horodatage (HTTP 400, `400002`, un appel arrivé trop tard) est
