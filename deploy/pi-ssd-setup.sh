@@ -5,7 +5,8 @@
 # Déverrouillage au démarrage par une clé sur la carte SD (/etc/cryptsetup-keys.d/hubssd.key) :
 # tout redémarre seul après une coupure, Domia compris. Une phrase de secours est ajoutée
 # au chiffrement : à noter dans le kit de secours. L'ancien dossier de Docker est gardé
-# (/var/lib/docker.avant-ssd) jusqu'à ce que tout tourne ; le supprimer ensuite à la main.
+# (/var/lib/docker.avant-ssd, et /var/lib/containerd.avant-ssd pour les images de Docker 29)
+# jusqu'à ce que tout tourne ; le supprimer ensuite à la main.
 set -euo pipefail
 
 DEV="${1:?usage: sudo deploy/pi-ssd-setup.sh /dev/sdX (lsblk pour le trouver)}"
@@ -54,10 +55,23 @@ systemctl daemon-reload
 mount "$MNT"
 
 echo "==> Docker sur le SSD (le hub et Domia s'arrêtent quelques minutes)"
-systemctl stop docker.socket docker.service
+systemctl stop docker.socket docker.service containerd
 rsync -aHAX --info=progress2 /var/lib/docker/ "$MNT/docker/"
 mv /var/lib/docker /var/lib/docker.avant-ssd
 mkdir -p /var/lib/docker
+# Docker 29 range ses images dans containerd (snapshotter) : elles suivent aussi
+if [ -d /var/lib/containerd ] && [ -f /etc/containerd/config.toml ]; then
+  rsync -aHAX --info=progress2 /var/lib/containerd/ "$MNT/containerd/"
+  mv /var/lib/containerd /var/lib/containerd.avant-ssd
+  mkdir -p /var/lib/containerd
+  if grep -qE '^#?root = ' /etc/containerd/config.toml; then
+    sed -i -E "0,/^#?root = /s|^#?root = .*|root = \"$MNT/containerd\"|" /etc/containerd/config.toml  # la première seulement
+  else
+    sed -i "1i root = \"$MNT/containerd\"" /etc/containerd/config.toml
+  fi
+  install -d /etc/systemd/system/containerd.service.d
+  printf '[Unit]\nRequiresMountsFor=%s\n' "$MNT" > /etc/systemd/system/containerd.service.d/ssd.conf
+fi
 python3 - "$MNT/docker" <<'EOF'
 import json, pathlib, sys
 p = pathlib.Path("/etc/docker/daemon.json")
@@ -70,7 +84,7 @@ EOF
 install -d /etc/systemd/system/docker.service.d
 printf '[Unit]\nRequiresMountsFor=%s\n' "$MNT" > /etc/systemd/system/docker.service.d/ssd.conf
 systemctl daemon-reload
-systemctl start docker
+systemctl start containerd docker
 
 echo "==> Dossiers du hub"
 install -d -o "$OWNER" -g "$OWNER" "$MNT/hub" "$MNT/hub/inbox" "$MNT/hub/backup" \
@@ -78,4 +92,4 @@ install -d -o "$OWNER" -g "$OWNER" "$MNT/hub" "$MNT/hub/inbox" "$MNT/hub/backup"
 
 docker info --format 'Docker : {{.DockerRootDir}}'
 docker ps --format '{{.Names}} {{.Status}}'
-echo "Prêt. Vérifier Domia, puis : sudo rm -rf /var/lib/docker.avant-ssd"
+echo "Prêt. Vérifier Domia, puis : sudo rm -rf /var/lib/docker.avant-ssd /var/lib/containerd.avant-ssd"

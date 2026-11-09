@@ -4,6 +4,11 @@
 
 ### Exploitation
 
+- `deploy/pi-ssd-setup.sh` déplace aussi `/var/lib/containerd` sur le SSD : Docker 29 y range ses
+  images (17 Go sur le Pi), qui restaient sur la carte SD.
+
+### Exploitation
+
 - Le hub passe sur le Pi ([pi.md](docs/exploitation/pi.md), D-026). La fusion de la PR de
   version publie : `release.yml` pose lui-même le tag quand la version de `pyproject.toml` n'en
   a pas, puis publie les images et la release. Sur le Pi, le minuteur `hub-autoupdate`
