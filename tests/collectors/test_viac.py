@@ -82,3 +82,17 @@ def test_relogin_with_wrong_code(make_env, bank: Bank) -> None:  # type: ignore[
     with pytest.raises(Failure) as exc:
         flow.relogin(make_env("viac"), lambda: "000000")
     assert exc.value.outcome == "auth_error"
+
+
+def test_unknown_document_is_noted_once_and_not_downloaded(make_env, bank: Bank) -> None:  # type: ignore[no-untyped-def]
+    # titre inventé : un document hors des préfixes connus (une fusion de fonds, par exemple)
+    bank.documents.insert(0, ("Avis de transfert de fonds", "30.10.2026"))
+    env = make_env("viac", viac_overlap_days=0)
+    env.memory.put("last_date", "2026-02-01")
+    assert execute(env, "run").outcome == "ok"
+    assert not any("transfert" in n for n in inbox_files(env.inbox_root))
+    assert env.memory.get("ignored") == ["2026-10-30|Portefeuille 1|Avis de transfert de fonds|0"]
+    again = make_env("viac", viac_overlap_days=0)
+    again.memory.put("last_date", "2026-02-01")
+    execute(again, "run")
+    assert again.memory.get("ignored") == env.memory.get("ignored")
