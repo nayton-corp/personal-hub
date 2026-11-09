@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+## [0.16.4] · 2026-11-09
+
+### Finance
+
+- VIAC : l'avis « Transaction de fonds » (fusion d'un fonds dans un autre à valeur égale, comme
+  les fonds CS repris par UBS fin octobre 2026) est lu : les parts de l'ancien ISIN sortent et
+  celles du nouveau entrent, au coût moyen de l'ancien, sans écriture de liquidités ni de titres.
+  Il était refusé, et les rapports suivants montraient des parts sorties de nulle part.
+- Import : un PDF VIAC refusé puis déposé à nouveau est relu (au lieu d'être écarté comme
+  doublon) ; s'il se lit désormais, il reprend son import refusé.
+
 ## [0.16.3] · 2026-11-09
 
 ### Finance

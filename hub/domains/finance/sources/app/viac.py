@@ -199,6 +199,11 @@ def apply_notice(conn: Connection, import_id: str, n: Notice) -> Outcome:
         out.status, out.reasons = "needs_review", sorted(set(reasons))
         return out
 
+    if n.kind == "switch":
+        from hub.domains.finance.sources.app import viac_switch
+
+        out.new, out.duplicates = viac_switch.apply(conn, import_id, n, titles.id)
+        return out
     amount = CASH_SIGN[n.kind] * minor(n.amount)
     sides = [("cash", cash, amount)]
     if n.is_trade:

@@ -82,6 +82,32 @@ def buy(
     return _letter("Opération de bourse", portfolio, on, body)
 
 
+def switch(
+    on: date,
+    out_qty: str,
+    in_qty: str,
+    old: tuple[str, str] = FUND_WORLD,
+    new: tuple[str, str] = FUND_CH,
+    portfolio: str = PORTFOLIO,
+) -> str:
+    """« Transaction de fonds » : la forme du vrai document (fusion de fonds), sans montant."""
+    body = [  # disposition de pdftotext -layout : libellé, puis parts et nom, puis ISIN
+        "Nous avons exécuté la transaction de fonds suivante pour vous:",
+        "",
+        f"Etat de votre dépôt au {d(on)}:",
+        f"   {out_qty}     {old[0]} (old)",
+        f"                 ISIN: {old[1]}",
+        f"Rapport: 1 {old[0]} (old) pour 1 {new[0]}",
+        "Nous retirons de votre dépôt:",
+        f"   -{out_qty}    {old[0]} (old)",
+        f"                 ISIN: {old[1]}",
+        "Nous ajoutons à votre dépôt:",
+        f"   {in_qty}      {new[0]}",
+        f"                 ISIN: {new[1]}",
+    ]
+    return _letter("Décompte de bourse: Transaction de fonds", portfolio, on, body)
+
+
 def dividend(
     on: date, amount: str, fund: tuple[str, str] = FUND_CH, portfolio: str = PORTFOLIO
 ) -> str:

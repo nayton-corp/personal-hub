@@ -1,11 +1,13 @@
 """Avis d'opération VIAC (ticket L4-03), portés de `viac_parser.py`.
 
 Une opération par document : achat ou vente de parts, dividende, intérêts, commission,
-versement, retrait. Les motifs de lecture sont ceux du script du Mac ; ce qui ne se lit pas
-entièrement est refusé (`viac.unrecognized`) au lieu de devenir une ligne « inconnu ». Les
-attestations fiscales et les relevés récapitulatifs sont reconnus et n'écrivent rien : une
-attestation cite des versements, elle ne doit pas en devenir un. Un décompte de commission
-à 0 CHF (mois sans frais) est reconnu de la même façon : il n'y a rien à comptabiliser.
+versement, retrait, échange de fonds (« Transaction de fonds » : VIAC fusionne un fonds dans un
+autre, les parts de l'ancien sortent et celles du nouveau entrent, sans liquidités). Les motifs
+de lecture sont ceux du script du Mac ; ce qui ne se lit pas entièrement est refusé
+(`viac.unrecognized`) au lieu de devenir une ligne « inconnu ». Les attestations fiscales et les
+relevés récapitulatifs sont reconnus et n'écrivent rien : une attestation cite des versements,
+elle ne doit pas en devenir un. Un décompte de commission à 0 CHF (mois sans frais) est reconnu
+de la même façon : il n'y a rien à comptabiliser.
 """
 
 from __future__ import annotations
@@ -79,9 +81,51 @@ def _fund(txt: str) -> tuple[str | None, str | None, str | None]:
     return m.group(1), re.sub(r"\s{2,}", " ", m.group(2)).strip(), isin
 
 
+ISIN = r"[A-Z]{2}[A-Z0-9]{10}"
+
+
+def _moved(label: str, txt: str) -> tuple[Decimal, str, str]:
+    """(parts, fonds, ISIN) d'une ligne « Nous retirons / ajoutons à votre dépôt: … »."""
+    m = re.search(rf"{label}:\s*({NUM})\s+(.+?)\s*/?\s*ISIN:\s*({ISIN})\b", txt, re.S)
+    if m is None:
+        raise ViacError("viac.unrecognized", "échange de fonds sans parts ou ISIN")
+    quantity = abs(num(m.group(1)))
+    if quantity == 0:
+        raise ViacError("viac.unrecognized", "échange de fonds sans parts")
+    return quantity, re.sub(r"\s+", " ", m.group(2)).strip(), m.group(3)
+
+
+def _switch(txt: str, portfolio: str) -> Notice:
+    out_qty, out_fund, out_isin = _moved("Nous retirons de votre dépôt", txt)
+    in_qty, in_fund, in_isin = _moved("Nous ajoutons à votre dépôt", txt)
+    if out_isin == in_isin:
+        raise ViacError("viac.unrecognized", "échange de fonds vers le même ISIN")
+    # la date de l'avis (après l'échange) ; à défaut, celle de l'état du dépôt avant l'échange
+    on = first(rf"B[âa]le,\s+({DATE})", txt) or first(
+        rf"(?:Etat|État) de votre dépôt au\s+({DATE})", txt
+    )
+    if on is None:
+        raise ViacError("viac.unrecognized", "date de l'échange de fonds absente")
+    return Notice(
+        kind="switch",
+        portfolio=portfolio,
+        value_date=iso(on),
+        amount=Decimal(0),
+        isin=out_isin,
+        fund=out_fund,
+        quantity=out_qty,
+        new_isin=in_isin,
+        new_fund=in_fund,
+        new_quantity=in_qty,
+        detail=f"{out_fund} → {in_fund}"[:80],
+    )
+
+
 def parse(txt: str) -> Notice:
     """Lit un avis ; `classify(txt)` doit valoir « notice »."""
     portfolio = _portfolio(txt)
+    if re.search(r"Transaction de fonds", txt):
+        return _switch(txt, portfolio)
     qty, fund, isin = _fund(txt)
     kind: NoticeKind
     price = price_ccy = None
