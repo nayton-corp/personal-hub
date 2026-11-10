@@ -888,6 +888,45 @@ def test_binance_rewards_missed_before_are_read_again(make_env: Any) -> None:
     assert [int(q["startTime"]) for q in earn] == [at("2026-10-24", 0)]
 
 
+def test_binance_token_swap_is_an_exchange_read_again_once(
+    make_env: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RNDR devenu RENDER : Binance verse le nouveau jeton par une distribution « Token Swap » et
+    retire l'ancien sans l'écrire. C'est un échange part pour part, pas un revenu ; un
+    historique déjà lu relit ses distributions une fois depuis le début pour le corriger."""
+    swap = {
+        "id": 7,
+        "tranId": 11,
+        "amount": "3.1",
+        "asset": "RENDER",
+        "divTime": at("2026-04-08"),
+        "enInfo": "Token Swap - Distribution",
+    }
+    rows = [*BINANCE_ROWS["/sapi/v1/asset/assetDividend"], swap]
+    monkeypatch.setitem(BINANCE_ROWS, "/sapi/v1/asset/assetDividend", rows)
+    env = make_env("binance")
+    for key, value in (
+        ("history_since", "2026-10-26"),
+        ("first_day", "2026-03-01"),
+        ("rewards_since", "2026-10-26"),
+    ):
+        env.memory.put(key, value)
+    fake = binance_api(history=binance_history_route())
+    assert binance.run(env, "run", Http(fake)).detail is None
+    got = [op for d in dropped(env) for op in ops_of(d) if op[1].startswith("dividend:")]
+    assert got == [
+        ("2026-04-05", "dividend:9", [("BNB", "0.5", "income")]),
+        ("2026-04-08", "dividend:11", [("RENDER", "3.1", "trade"), ("RNDR", "-3.1", "trade")]),
+    ]
+    kind = next(o.kind for d in dropped(env) for o in d.operations if o.id == "dividend:11")
+    assert kind == "trade"
+    assert env.memory.get("dividends_swaps") == 1
+    again = binance_api(history=binance_history_route())
+    binance.run(env, "run", Http(again))
+    calls = [query(u) for _m, u, _h in again.calls if "assetDividend" in u]
+    assert [int(q["startTime"]) for q in calls] == [at("2026-10-24", 0)]
+
+
 def test_binance_first_history_is_all_or_nothing(make_env: Any) -> None:
     env = make_env("binance")
     fake = binance_api(history=binance_history_route(broken="convert"))
@@ -1188,6 +1227,41 @@ def test_coinbase_history_reads_every_wallet(make_env: Any) -> None:
     later = coinbase_api(lambda *_a: None, coinbase_txs)
     coinbase.run(env, "run", Http(later))
     assert [len(d.operations) for d in dropped(env)].count(0) == 1
+
+
+def test_coinbase_earn_rewards_are_income_not_deposits(make_env: Any) -> None:
+    """Les cryptos de Coinbase Earn arrivent en « send » hors chaîne : des récompenses."""
+    env = make_env("coinbase", creds=ed25519_creds())
+
+    def tx(n: str, sender: str, about: str, status: str = "off_blockchain") -> dict[str, Any]:
+        return {
+            "id": n,
+            "type": "send",
+            "status": "completed",
+            "amount": {"amount": "2", "currency": "XLM"},
+            "native_amount": {"amount": "0.50", "currency": "CHF"},
+            "created_at": "2021-05-01T10:00:00Z",
+            "from": {"resource": "user", "name": sender},
+            "description": about,
+            "network": {"status": status},
+        }
+
+    got = [
+        (op.kind, op.legs[0][2])
+        for op in (
+            coinbase._op(env, tx("e1", "Coinbase Earn", "")),
+            coinbase._op(env, tx("e2", "Coinbase", "Earn Task")),
+            coinbase._op(env, tx("e3", "Ami", "")),
+            coinbase._op(env, tx("e4", "Coinbase Earn", "", status="confirmed")),
+        )
+        if op is not None
+    ]
+    assert got == [
+        ("reward", "income"),
+        ("reward", "income"),
+        ("deposit", "deposit"),
+        ("deposit", "deposit"),
+    ]
 
 
 def ledger_rows(q: dict[str, str]) -> list[Any]:

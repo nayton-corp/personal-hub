@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+## [0.16.6] · 2026-11-10
+
+### Finance
+
+- Binance : la distribution « Token Swap » qui remplace un jeton renommé (RNDR → RENDER,
+  MATIC → POL) est un échange : l'ancien jeton sort, le nouveau entre, sans revenu. Avant, seul
+  le nouveau entrait et le rapprochement comptait les parts deux fois. Les distributions déjà
+  lues sont relues une fois au prochain passage pour ajouter la sortie de l'ancien jeton.
+- Coinbase : les cryptos reçues de Coinbase Earn sont des récompenses, plus des dépôts venus
+  d'un portefeuille non suivi.
+
 ## [0.16.5] · 2026-11-09
 
 ### Exploitation

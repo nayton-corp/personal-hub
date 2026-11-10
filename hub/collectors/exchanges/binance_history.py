@@ -60,6 +60,7 @@ from hub.collectors.exchanges.binance_api import (
     _qty,
     _rows,
 )
+from hub.collectors.exchanges.binance_extras import dividends, dust
 from hub.collectors.http import Http
 from hub.collectors.market.flow import binance_prices, fx_rates
 from hub.collectors.runtime import Env
@@ -224,44 +225,6 @@ def _earn_pages(
         else:
             api.skipped[f"{step}:truncated"] += 1
         cursor = stop + 1
-
-
-# les intérêts Simple Earn viennent de `rewards` : pas deux fois
-_EARN_INFO = ("simple earn", "flexible", "locked")
-
-
-def dividends(api: Api, start: int, end: int) -> list[Op]:
-    out = []
-    path, step = "/sapi/v1/asset/assetDividend", "binance.dividends"
-    for r in api.windows(path, step, start, end, 89, _rows, limit=500, params={"limit": 500}):
-        info = str(r.get("enInfo") or "")
-        if any(k in info.lower() for k in _EARN_INFO):
-            continue
-        op = Op(f"dividend:{r.get('tranId') or r['id']}", "distribution", _day(r["divTime"]))
-        out.append(op.leg(r["asset"], _qty(r["amount"]), "income"))
-    return out
-
-
-def dust(api: Api, start: int) -> list[Op]:
-    """Petits soldes convertis en BNB (les 100 dernières conversions, que l'API garde)."""
-    doc = api.get("/sapi/v1/asset/dribblet", "binance.dust", {})
-    if doc is None:
-        api.gaps["binance.dust"].append((start, 0))
-        return []
-    groups = doc.get("userAssetDribblets") if isinstance(doc, dict) else None
-    if not isinstance(groups, list):
-        raise Failure("invalid_file", "binance.dust")
-    out = []
-    for g in groups:
-        if int(g["operateTime"]) < start:
-            continue
-        op = Op(f"dust:{g['transId']}", "dust", _day(g["operateTime"]))
-        for d in g.get("userAssetDribbletDetails") or []:
-            fee = _qty(d.get("serviceChargeAmount") or 0)
-            op.leg(d["fromAsset"], -_qty(d["amount"]), "trade")
-            op.leg("BNB", _qty(d["transferedAmount"]) + fee, "trade").leg("BNB", -fee, "fee")
-        out.append(op)
-    return out
 
 
 def declared_pairs(creds: dict[str, Any]) -> dict[str, tuple[str, str]]:
@@ -439,7 +402,12 @@ def collect(
     if earn_full and not full:
         earn_start = _ms(date.fromisoformat(first_day) if first_day else first)
     stream("rewards", lambda: rewards(api, earn_start, end, env.today))
-    stream("dividends", lambda: dividends(api, from_("dividends"), end))
+    # distributions : relues une fois depuis le début pour les échanges de jeton (v0.16.6)
+    swaps_full = not full and memory.get("dividends_swaps") is None
+    div_start = from_("dividends")
+    if swaps_full:
+        div_start = _ms(date.fromisoformat(first_day) if first_day else first)
+    stream("dividends", lambda: dividends(api, div_start, end))
     stream("dust", lambda: dust(api, from_("dust")))
     extra = env.creds.get("assets") or []
     assets = (
@@ -486,6 +454,7 @@ def collect(
         refused[name] = min(refused.get(name, day), day)
 
     earn_ok = not [f for f in failed if f.startswith("rewards")]
+    swaps_ok = not [f for f in failed if f.startswith("dividends")]
 
     def commit() -> None:
         memory.put("assets", sorted(assets))
@@ -493,6 +462,8 @@ def collect(
             memory.put("first_day", ops[0].on_date)
         if earn_ok and not (full and broken):
             memory.put("rewards_since", env.today.isoformat())
+        if swaps_ok and not (full and broken):
+            memory.put("dividends_swaps", 1)
         if not (full and broken):
             memory.put("trade_ids", cursor)
         if not broken:
