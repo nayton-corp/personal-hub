@@ -146,6 +146,10 @@ class Health:
     db: str  # 'ok', 'missing', 'outdated', 'error' ou un écart propre au domaine
     schema_version: int
     detail: dict[str, Any] = field(default_factory=dict)
+    # ce qui mérite ton attention sans mettre l'intégrité en cause (un écart entre deux calculs,
+    # un import resté en plan) : des codes génériques, jamais un montant. `ok` reste vrai : un
+    # avertissement alerte, il ne bloque ni une mise à jour ni un retour arrière.
+    warnings: tuple[str, ...] = ()
 
 
 @runtime_checkable

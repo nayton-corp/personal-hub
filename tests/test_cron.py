@@ -62,3 +62,34 @@ def test_repository_crontab_is_valid() -> None:
 
     jobs = parse((Path(__file__).parents[1] / "deploy" / "crontab").read_text())
     assert {j.command[1] for j in jobs} >= {"verify", "backup", "nightly"}
+
+
+def test_a_failing_job_is_reported_and_a_reported_one_is_not_repeated() -> None:
+    from hub.platform.cron import REPORTED
+
+    seen: list[tuple[tuple[str, ...], int]] = []
+    codes = {"verify": REPORTED, "backup": 1, "nightly": 0}
+    jobs = parse("0 3 * * * hub verify\n0 3 * * * hub backup\n0 3 * * * hub nightly\n")
+    results = tick(
+        jobs,
+        datetime(2026, 10, 27, 3, 0),
+        lambda cmd: codes[cmd[1]],
+        lambda cmd, code: seen.append((cmd, code)),
+    )
+    assert [code for _line, code in results] == [REPORTED, 1, 0]
+    assert seen == [(("hub", "backup"), 1)]  # verify a déjà prévenu lui-même, nightly a réussi
+
+
+def test_an_alert_that_fails_does_not_stop_the_scheduler() -> None:
+    def broken(_cmd: tuple[str, ...], _code: int) -> None:
+        raise OSError
+
+    jobs = parse("0 3 * * * hub backup\n0 3 * * * hub nightly\n")
+    results = tick(jobs, datetime(2026, 10, 27, 3, 0), lambda _cmd: 1, broken)
+    assert len(results) == 2
+
+
+def test_a_missing_command_is_a_failure_not_a_crash() -> None:
+    from hub.platform.cron import NOT_FOUND, _run
+
+    assert _run(("commande-qui-n-existe-pas",)) == NOT_FOUND

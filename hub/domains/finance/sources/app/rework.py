@@ -46,6 +46,17 @@ Staged = ParsedFile | ViacDoc | documents.Doc
 # un import « staged » depuis plus longtemps n'est plus en cours d'application : son processus
 # s'est arrêté (redémarrage, base occupée) et personne ne le reprendra sans nous
 STALE_STAGED = timedelta(minutes=10)
+STUCK_AFTER = timedelta(hours=1)  # au-delà, la reprise n'a pas abouti : la santé le signale
+
+
+def stuck(conn: Connection) -> int:
+    """Imports encore « staged » bien après leur réception (compteur seul)."""
+    return int(
+        conn.execute(
+            text("SELECT count(*) FROM imports WHERE status = 'staged' AND received_at <= :c"),
+            {"c": iso(utcnow() - STUCK_AFTER)},
+        ).scalar_one()
+    )
 
 
 class Rework:

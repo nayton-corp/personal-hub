@@ -28,7 +28,7 @@ from hub.domains.finance.packs import CountryPack, instance
 from hub.domains.finance.patrimoine.app import checks, crypto_pairing, snapshots, transfers
 from hub.domains.finance.registre.app import ledger, reads
 from hub.domains.finance.registre.model import period
-from hub.domains.finance.sources.app import statements
+from hub.domains.finance.sources.app import rework, statements
 from hub.domains.finance.sources.app.importer import ImportService
 from hub.domains.finance.sources.infra.files import Archiver, recipient_from_key
 from hub.domains.finance.tools import FinanceTools
@@ -290,8 +290,18 @@ class FinanceDomain:
         except Exception:
             return Health(ok=False, db="error", schema_version=self.schema_version)
         return Health(
-            ok=current, db="ok" if current else "outdated", schema_version=self.schema_version
+            ok=current,
+            db="ok" if current else "outdated",
+            schema_version=self.schema_version,
+            warnings=self._stuck_imports() if current else (),
         )
+
+    def _stuck_imports(self) -> tuple[str, ...]:
+        """Un import encore « staged » une heure après sa réception : sa reprise automatique
+        n'a pas abouti (archive illisible, importeur arrêté)."""
+        with self._engine.connect() as conn:
+            stuck = rework.stuck(conn)
+        return ("imports.stuck",) if stuck else ()
 
     def verify(self) -> Health:
         health = self.health()
@@ -300,11 +310,14 @@ class FinanceDomain:
         result = self.verify_ledger()
         with self._engine.connect() as conn:  # les chiffres (docs/finance-politique.md)
             figures_ok, figures = checks.figures(conn, self.today().isoformat())
+        # l'intégrité (la chaîne du registre) fait foi et bloque ; un écart entre deux calculs
+        # avertit sans bloquer une mise à jour, correctif de sécurité compris (audit 10/11, V1)
         return Health(
-            ok=result.ok and figures_ok,
+            ok=result.ok,
             db=health.db,
             schema_version=self.schema_version,
             detail={"ledger": result.public(), "figures": figures},
+            warnings=(*health.warnings, *(() if figures_ok else ("figures.crypto_gap",))),
         )
 
 

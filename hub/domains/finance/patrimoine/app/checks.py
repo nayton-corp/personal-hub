@@ -6,8 +6,9 @@
 - Un seul gain : la performance « Max » des cryptos et leur résultat depuis l'achat
   (crypto_cost.py) s'accordent, à la tolérance par ligne près, plus ce que les ruptures ouvertes
   laissent hors du résultat et ce que le résultat montre à part (parts sans prix de revient,
-  sorties que l'historique ne montre pas : la courbe les compte au cours). Au-delà, le contrôle
-  échoue : un des deux calculs se trompe.
+  sorties que l'historique ne montre pas : la courbe les compte au cours). Au-delà, un des
+  deux calculs se trompe : `hub verify` le rend en avertissement (`figures.crypto_gap`) et le
+  contrôle de santé alerte, sans bloquer une mise à jour (audit du 10/11, V1).
 - Les relevés à valeur 0 pour des parts tenues (SwissBorg) : comptés, jamais pris comme valeur.
 
 Des agrégats seulement.

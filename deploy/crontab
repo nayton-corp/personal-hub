@@ -1,6 +1,10 @@
 # Tâches planifiées, exécutées par `hub scheduler` dans le conteneur « scheduler ».
 # Fuseau de l'instance (HUB_TZ dans deploy/.env). Même fichier sur le Mac (phase 1) et sur le Pi.
 # min heure jour mois jour-semaine commande
-15 2 * * * hub verify
+15 2 * * * hub verify --notify
 30 2 * * * hub backup --restic
 0 3 * * * hub nightly
+# santé : disques, réplique, sauvegardes, imports en plan ; alerte ntfy, puis signal de vie
+5 * * * * hub ops health
+# dimanche : chaque dépôt restic est contrôlé et les dernières copies en sont ressorties
+0 4 * * 0 hub backup-check

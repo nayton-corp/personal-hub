@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -91,6 +92,23 @@ class Backup(BaseModel):
     restic_local: Path | None = Path("/restic")  # dépôt restic sur le disque externe
     replica: Path | None = Path("/replica")  # réplique Litestream, sauvegardée elle aussi
     keep_local_days: int = Field(default=7, ge=1)
+    # ce que restic emporte en plus des bases, de l'archive et des secrets chiffrés : la
+    # configuration de l'installation, montée en lecture seule dans le conteneur `scheduler`
+    extra: tuple[Path, ...] = (Path("/srv/hub/config"),)
+
+
+class Monitoring(BaseModel):
+    """Seuils du contrôle de santé (`hub ops health`, chaque heure). L'adresse du signal de vie
+    vaut un secret : elle vit dans `secrets.enc.yaml` (section `monitoring`, `heartbeat_url`)."""
+
+    disk_percent: int = Field(default=85, ge=1, le=100)  # alerte à partir de ce remplissage
+    backup_hours: int = Field(default=36, ge=1)  # âge maximal de la dernière sauvegarde
+    replica_hours: int = Field(default=6, ge=1)  # retard maximal de la réplique sur la base
+    remind_hours: int = Field(default=24, ge=1)  # rappel d'une alerte qui dure
+    # échéances que le hub ne peut pas lire lui-même (jeton du registre d'images, clé d'une
+    # plateforme) : nom → date ; rappel 14 jours avant, puis chaque semaine. Par exemple
+    # HUB_MONITORING__EXPIRIES='{"jeton GHCR du Pi": "2027-02-01"}'
+    expiries: dict[str, date] = Field(default_factory=dict)
 
 
 class Assistant(BaseModel):
@@ -117,6 +135,7 @@ class Settings(BaseSettings):
     notify: Notify = Notify()
     secrets: Secrets = Secrets()
     backup: Backup = Backup()
+    monitoring: Monitoring = Monitoring()
     assistant: Assistant = Assistant()
     log_level: str = "INFO"
     domains: str = "*"  # HUB_DOMAINS : « * » tous, sinon « finance,agenda » ; vide : aucun
