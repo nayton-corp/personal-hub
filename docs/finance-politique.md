@@ -105,6 +105,12 @@ jamais tenu pour complet. Une fenêtre refusée par la plateforme n'est jamais t
 le curseur de ce flux (`stream_since`) reste au premier jour refusé, la fenêtre est redemandée
 au passage suivant et déposée avec le fichier (`gaps`), où elle devient une rupture du compte.
 
+Un explorateur public qui refuse l'accès (403 sans clé : Blockscout pour Base) met le réseau en
+« solde seul » : le solde reste lu chaque jour, l'historique n'est redemandé qu'une fois par
+semaine (`blocked`), et la connexion le dit à côté de son dernier passage. Ce n'est pas une ligne
+« À faire », faute de geste possible : un mouvement que l'historique aurait expliqué sort au
+rapprochement, en rupture du compte, comme tout solde venu de nulle part.
+
 ## Budget
 
 Les totaux par catégorie (`summary`, `budget`, `flows`, `trend`) sont dans la devise de base.

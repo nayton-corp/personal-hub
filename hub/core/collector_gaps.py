@@ -4,8 +4,8 @@ le montre avec son action (politique de calcul, docs/finance-politique.md), au l
 compter comme les autres.
 
 Le cœur ne connaît que la forme : une portée (étape, sous-étapes séparées par des points) et une
-raison (`needs_key`, `pruned`, `unsupported`, un résultat de run, `skipped=<n>`). Les mots pour
-le dire viennent du domaine qui a déclaré la connexion.
+raison (`needs_key`, `pruned`, `unsupported`, `blocked`, un résultat de run, `skipped=<n>`). Les
+mots pour le dire viennent du domaine qui a déclaré la connexion.
 """
 
 from __future__ import annotations

@@ -431,6 +431,67 @@ def test_a_network_without_etherscan_key_is_flagged_and_read_later(make_env: Any
     assert "crypto:coinbase-wallet@arbitrum" in env.memory.get("chain_txs")
 
 
+def test_an_explorer_closed_to_robots_is_named_and_asked_once_a_week(make_env: Any) -> None:
+    """Audit du 10/11, X1 : Blockscout répond 403 pour Base. Le manque dit sa cause (`blocked`),
+    le solde reste lu, et l'explorateur n'est redemandé qu'une fois par semaine."""
+    base, closed = chain(), [True]
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if "base.blockscout" in url and closed[0]:
+            return 403, b"<html>Forbidden</html>"
+        return base.route(method, url, headers, data)
+
+    wallet = {
+        "account": "crypto:coinbase-wallet",
+        "asset": "ETH",
+        "addresses": [ETH_ME],
+        "networks": ["ethereum", "base"],
+    }
+    env = make_env("market", creds={"wallets": [wallet]}, market={"erc20_tokens": {}})
+    fake = Fake(route)
+    asked = lambda: len([u for _m, u, _h in fake.calls if "base.blockscout" in u])  # noqa: E731
+    result = market.run(env, "run", Http(fake))
+    assert result.detail == "partial history.coinbase-wallet.base:blocked"
+    (doc,) = dropped(env)
+    assert held(doc) == [("crypto:coinbase-wallet", "CRYPTO:ETH", Decimal(1))]  # les deux soldes
+    assert asked() == 1  # pas d'insistance sur un refus
+    assert env.memory.get("chain_txs") == ["crypto:coinbase-wallet"]
+    start = env.today
+    env.today = start + timedelta(days=3)
+    assert market.run(env, "run", Http(fake)).detail == result.detail  # toujours dit
+    assert asked() == 1  # sans le redemander
+    env.today = start + timedelta(days=7)
+    assert market.run(env, "run", Http(fake)).detail == result.detail
+    assert asked() == 2  # un essai par semaine
+    closed[0] = False
+    env.today = start + timedelta(days=14)
+    assert market.run(env, "run", Http(fake)).detail is None
+    assert asked() == 5  # rouvert : relu en entier, une page par liste
+    assert env.memory.get("chain_blocked") == {}
+    assert "crypto:coinbase-wallet@base" in env.memory.get("chain_txs")
+
+
+def test_a_refused_etherscan_key_is_said_as_such(make_env: Any) -> None:
+    base = chain()
+
+    def route(method: str, url: str, headers: dict[str, str], data: bytes | None) -> Any:
+        if "api.etherscan.io" in url:
+            return 403, b""
+        return base.route(method, url, headers, data)
+
+    wallet = {
+        "account": "crypto:coinbase-wallet",
+        "asset": "ETH",
+        "addresses": [ETH_ME],
+        "networks": ["ethereum", "arbitrum"],
+    }
+    creds = {"wallets": [wallet], "etherscan_key": "cle-retiree"}
+    env = make_env("market", creds=creds, market={"erc20_tokens": {}})
+    result = market.run(env, "run", Http(Fake(route)))
+    assert result.detail == "partial history.coinbase-wallet.arbitrum:key"
+    assert not env.memory.get("chain_blocked")  # une clé se corrige : redemandée à chaque passage
+
+
 def test_an_unknown_network_is_refused(make_env: Any) -> None:
     wallet = {"account": "crypto:x", "asset": "ETH", "addresses": [ETH_ME], "networks": ["mars"]}
     env = make_env("market", creds={"wallets": [wallet]})

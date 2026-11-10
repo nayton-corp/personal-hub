@@ -3,10 +3,10 @@
 // ses portefeuilles, lier un consentement Enable Banking, actualiser une connexion (ou toutes)
 // hors horaire. Une connexion se crée en ajoutant un compte (addaccount.js), qui reprend les
 // champs et les aides d'ici.
-//
 // La liste se redessine à chaque réponse ; les formulaires, eux, ne sont construits qu'à
 // l'ouverture, pour ne jamais effacer une saisie en cours.
 import { ago, date, el, initials } from "../../format.js";
+import { gapNote } from "./gaps.js";
 import { brandColors, brandSvg, instLook } from "./meta.js";
 import { api, store } from "../../store.js";
 
@@ -136,7 +136,7 @@ function sub(c, s) {
   if (!c.ready) return "identifiants à donner";
   const last = s && s.last_run;
   const outcome = last && (DETAIL_LABEL[last.detail] || OUTCOME_LABEL[last.outcome] || last.outcome);
-  let text = last ? `${outcome} ${ago(Date.parse(last.ended_at))}` : "jamais lancé";
+  let text = last ? `${outcome} ${ago(Date.parse(last.ended_at))}${gapNote(s)}` : "jamais lancé";
   if (s && s.run_requested) text = `actualisation en cours · ${text}`;
   if (s && s.check_requested) text += " · contrôle demandé";
   if (s && (s.link_requested || s.link_url)) text += " · liaison en cours";
