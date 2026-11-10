@@ -147,6 +147,8 @@ export interface BudgetLineOut {
   projected?: MoneyOut | null;
   state?: string | null;
   yearly?: YearlyOut | null;
+  paid_on?: string | null;
+  expected_on?: string | null;
 }
 
 export interface BudgetMonthsOut {
@@ -809,6 +811,9 @@ export interface MonthTotalsOut {
   savings: MoneyOut;
   invested: MoneyOut;
   rate: string | null;
+  budget?: MoneyOut | null;
+  budgeted_expenses?: MoneyOut | null;
+  over?: MoneyOut | null;
 }
 
 export interface NetworthHistoryOut {

@@ -10,6 +10,7 @@ from typing import Any
 
 from sqlalchemy import Connection
 
+from hub.domains.finance.classement.app import due
 from hub.domains.finance.classement.app.insights import (
     EXPENSE_GROUPS,
     FLOW_GROUPS,
@@ -104,6 +105,11 @@ def budget(
     year = yearly(conn)
     clock = _clock(months, today)
     unit = 10 ** exponent(base_currency())  # une unité de la devise, en unités mineures
+    # charges fixes : la date du dernier paiement de la période, et le jour où on les attend
+    start, _ = period_rules.bounds(months[0])
+    _, after = period_rules.bounds(months[-1])
+    paid_on = due.last_paid(conn, start, after)
+    expected_on = due.expected(conn, month) if period == "m" and clock.current else {}
     ytd: dict[str, int] = {}
     if year:
         for x in lines_for(conn, year_months(months[-1])):
@@ -159,6 +165,8 @@ def budget(
                 "projected": in_base(will) if clock.current else None,
                 "rest": _money(target - minor if target is not None else None),
             }
+            if group == "fixed":
+                line |= {"paid_on": paid_on.get(cat), "expected_on": expected_on.get(cat)}
         out.append(line)
     out.sort(key=lambda i: (EXPENSE_GROUPS.index(i["group"]), -i["spent"]["minor"], i["category"]))
     if aggregates_only:
@@ -220,8 +228,23 @@ def budget_totals(conn: Connection, month: str, period: str) -> dict[str, Any]:
 
 
 def budget_months(conn: Connection, month: str, count: int) -> dict[str, Any]:
+    """Les totaux de chaque mois, avec son budget d'alors et ce qui en a été dépensé : le même
+    périmètre que le reste à vivre (hors catégories suivies à l'année), pour que la tendance
+    dise « au-dessus du budget » comme l'écran du mois (audit du 10/11, B6)."""
     months = [*previous_months(month, count - 1), month]
+    year = yearly(conn)
     series = []
     for m in months:
-        series.append({"month": m, **totals_json(Totals.of(lines_for(conn, [m])))})
+        lines = lines_for(conn, [m])
+        goal = expense_budget(conn, m)
+        used = monthly_expenses(lines, year)
+        series.append(
+            {
+                "month": m,
+                **totals_json(Totals.of(lines)),
+                "budget": _money(goal),
+                "budgeted_expenses": in_base(used),
+                "over": _money(max(0, used - goal) if goal is not None else None),
+            }
+        )
     return {"currency": base_currency(), "series": series}

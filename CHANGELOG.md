@@ -2,6 +2,43 @@
 
 ## [Non publié]
 
+La courbe, la répartition et le budget du second audit (10 novembre), tels que validés sur la page
+« avant / après ». Aucun chiffre du patrimoine ne change.
+
+### À la mise à jour
+
+- Courbe : au-delà de six mois, un point par dimanche (par fin de mois sur les très longues
+  périodes) au lieu d'un jour sur N. Le plus haut et le plus bas affichés sont ceux de tous les
+  jours, à leur vraie date : ils peuvent différer de ceux d'avant.
+- « Apports nets » partout, y compris sur le patrimoine total (plus de « Versé » ni d'« Épargne »
+  selon l'écran). La ligne reste à activer.
+- Répartition : par secteur, par région et par devise portent sur tout le patrimoine affiché. Les
+  liquidités ont leur case, « Non réparti » est la part qu'un fonds ne détaille pas, « Secteur
+  inconnu » un actif sans fiche. La ligne sous les blocs dit la part sûre et la part estimée.
+- Budget : les barres sont à la même échelle d'une catégorie à l'autre (longueur = montant), une
+  seule couleur, rouge seulement au-delà de la cible. Les charges fixes n'ont plus de barre :
+  « Payé le 1 nov. » ou « Attendu vers le 15 nov. ». La tendance montre le budget de chaque mois
+  (trait pointillé) et ce qui le dépasse.
+- `hub finance golden check` : le plus haut et le plus bas de la courbe, apparus avec cette
+  version, ne comptent pas comme un écart face à une photo prise avant.
+
+### Finance
+
+- Courbe (audit, lot C) : l'échantillonnage est calé sur le calendrier (`returns._sample` :
+  jour, dimanche, fin de mois, le pas s'élargit au-delà de 400 points), la courbe d'une période ne
+  change plus de forme selon le jour où on la regarde. `/performance` donne `extremes` (plus haut
+  et plus bas sur tous les jours). Le pas demandé par l'app et le mot affiché (« par semaine »)
+  viennent de `wcurve.js`. La zone entre la valeur et les apports a sa légende (Gain, Perte).
+- Répartition (audit, lot B) : un seul calcul, côté serveur, sur les lignes de la courbe
+  (`patrimoine/app/allocation.py`) : la somme des cases, dettes à part, est le patrimoine affiché.
+  Chaque case dit sa nature (`kind` : nommée, liquidités, non détaillée, inconnue), si elle est
+  estimée et les actifs qui la remplissent ; les positions sans cours sont nommées (`unpriced`).
+  `/lookthrough` accepte `line` (la sélection de l'écran). Le navigateur n'ajoute plus rien.
+- Budget (audit, lot D) : `/budget` donne `paid_on` et `expected_on` aux charges fixes
+  (`classement/app/due.py`), `/budget/months` donne `budget`, `budgeted_expenses` et `over` par
+  mois, dans le périmètre du reste à vivre. « Hors cible » se déplie. L'écran est découpé
+  (`bviews.js`, `bflow.js`), `budget.js` repasse sous 400 lignes.
+
 ## [0.17.0] · 2026-11-10
 
 Les urgences du second audit (10 novembre). Aucun chiffre du patrimoine ne change.
