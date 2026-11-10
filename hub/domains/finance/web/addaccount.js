@@ -19,7 +19,7 @@ const TYPES = [
   ["cash", "Banque"], ["securities", "Titres"], ["pension", "Prévoyance"],
   ["crypto", "Crypto : plateforme"], ["wallet", "Crypto : portefeuille"], ["other", "Autre"],
 ];
-const CHAIN_LABEL = { BTC: "Bitcoin", ETH: "Ethereum et réseaux EVM", SOL: "Solana", ATOM: "Cosmos" };
+const CHAIN_LABEL = { BTC: "Bitcoin", ETH: "Ethereum et réseaux EVM", SOL: "Solana", ATOM: "Cosmos", EGLD: "MultiversX" };
 
 // une étape de la page : son titre quand il précise (la plateforme, la chaîne), son rang, l'étape
 // d'avant ; la flèche du haut, elle, quitte la page

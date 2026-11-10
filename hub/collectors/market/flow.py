@@ -32,7 +32,7 @@ from embit import bip32, script
 from hub.collectors.base import Failure, Kind, Result
 from hub.collectors.dropbox import is_market_json
 from hub.collectors.http import Http
-from hub.collectors.market import history, net
+from hub.collectors.market import history, multiversx, net
 from hub.collectors.market.cosmos import atom_wallet
 from hub.collectors.market.evm import networks
 from hub.collectors.market.history import (
@@ -387,7 +387,9 @@ WALLETS: dict[str, Callable[[Env, Http, dict[str, Any]], dict[str, Decimal]]] = 
     "ETH": eth_wallet,
     "SOL": sol_wallet,
     "ATOM": atom_wallet,
+    "EGLD": multiversx.egld_wallet,
 }
+FORMS = {"ATOM": re.compile(r"cosmos1[02-9ac-hj-np-z]{38}"), "EGLD": multiversx.ADDRESS}
 _ACCOUNT = re.compile(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$")
 
 
@@ -415,9 +417,7 @@ def wallet_entries(env: Env) -> list[dict[str, Any]]:
         ):
             raise Failure("auth_error", "secret:wallets")
         chains = w.get("networks") or []
-        if asset == "ATOM" and not all(
-            re.fullmatch(r"cosmos1[02-9ac-hj-np-z]{38}", str(a)) for a in addresses
-        ):
+        if asset in FORMS and not all(FORMS[asset].fullmatch(str(a)) for a in addresses):
             raise Failure("auth_error", "secret:wallets")
         if asset == "ETH" and (
             not all(re.fullmatch(r"0x[0-9a-fA-F]{40}", str(a)) for a in addresses)

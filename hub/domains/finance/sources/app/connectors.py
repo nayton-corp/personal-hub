@@ -15,7 +15,7 @@ from hub.core.errors import Problem
 
 ENABLE_BANKING = ("aspsp_name", "aspsp_country", "psu_type", "consent_days", "max_syncs_per_day")
 MAX_WALLETS = 50
-WALLET_ASSETS = ("BTC", "ETH", "SOL", "ATOM")
+WALLET_ASSETS = ("BTC", "ETH", "SOL", "ATOM", "EGLD")
 WALLET_NETWORKS = ("ethereum", "arbitrum", "base", "bsc", "polygon")  # d'un portefeuille ETH
 WALLET_ACCOUNT = re.compile(r"^crypto:[a-z0-9][a-z0-9-]{0,40}$")
 
@@ -36,7 +36,7 @@ def clean_wallets(value: Any) -> list[dict[str, Any]]:
         if not WALLET_ACCOUNT.match(account):
             raise Problem("validation.params", "portefeuille : compte crypto:<nom>")
         if asset not in WALLET_ASSETS:
-            raise Problem("validation.params", "portefeuille : BTC, ETH, SOL ou ATOM")
+            raise Problem("validation.params", "portefeuille : BTC, ETH, SOL, ATOM ou EGLD")
         if not isinstance(addresses, list) or not all(isinstance(a, str) for a in addresses):
             raise Problem("validation.params", "portefeuille : adresses en liste de textes")
         if not isinstance(xpubs, list) or not all(isinstance(x, str) for x in xpubs):
