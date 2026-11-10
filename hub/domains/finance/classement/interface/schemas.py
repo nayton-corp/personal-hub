@@ -190,6 +190,11 @@ class ReviewGroupOut(Out):
     samples: list[ReviewSampleOut]
 
 
+class TodoOut(Out):
+    to_categorize: int
+    today: str
+
+
 class ReviewOut(Out):
     groups: list[ReviewGroupOut]
 

@@ -56,8 +56,9 @@ def holdings(conn: Connection, on_date: str) -> dict[str, Any]:
     ]
     total = sum(x.value for x in lines)
     items = []
+    basis = _Costs(conn, on_date)
     for x in lines:
-        cost = _cost(conn, x.account_id, x.isin, x.quantity, on_date)
+        cost = _cost(basis, x.account_id, x.isin, x.quantity)
         if cost is None and x.account_id in crypto:
             # portefeuille sans opérations au registre : coût à l'arrivée
             cost = _arrival_cost(positions, x.account_id, x.isin, x.quantity, on_date)
@@ -151,21 +152,50 @@ def _crypto(
     }
 
 
-def _cost(
-    conn: Connection, account_id: str, isin: str, quantity: Decimal, on_date: str
-) -> int | None:
+class _Costs:
+    """Ce qu'il faut pour le prix de revient de toutes les positions, lu une fois (audit du
+    10/11, Q4) : les achats et ventes jusqu'à la date, et au besoin le dernier relevé de chacune."""
+
+    def __init__(self, conn: Connection, on_date: str) -> None:
+        self.conn, self.on_date = conn, on_date
+        self.trades: dict[tuple[str, str], list[tuple[str, int]]] = {}
+        for account_id, isin, qty, amount in conn.execute(
+            text(
+                "SELECT account_id, isin, quantity, amount_minor FROM trades "
+                "WHERE trade_date <= :d ORDER BY trade_date, seq"
+            ),
+            {"d": on_date},
+        ):
+            self.trades.setdefault((account_id, isin), []).append((qty, amount))
+        self._reported: dict[tuple[str, str], tuple[str, str | None, str]] | None = None
+
+    def reported(self, account_id: str, isin: str) -> tuple[str, str | None, str] | None:
+        """(parts, prix de revient, devise) du dernier relevé de la position."""
+        if self._reported is None:
+            self._reported = {
+                (r[0], r[1]): (r[2], r[3], r[4])
+                for r in self.conn.execute(
+                    text(
+                        "SELECT account_id, isin, quantity, cost_price, currency FROM ("
+                        "SELECT h.account_id, h.isin, h.quantity, h.cost_price, n.currency, "
+                        "ROW_NUMBER() OVER (PARTITION BY h.account_id, h.isin "
+                        "ORDER BY h.on_date DESC, h.seq DESC) AS rank "
+                        "FROM holdings h JOIN instruments n ON n.isin = h.isin "
+                        "WHERE h.on_date <= :d) WHERE rank = 1"
+                    ),
+                    {"d": self.on_date},
+                )
+            }
+        return self._reported.get((account_id, isin))
+
+
+def _cost(costs: _Costs, account_id: str, isin: str, quantity: Decimal) -> int | None:
     """Coût moyen : un achat ajoute son montant, une vente retire sa part du coût. Si les avis
     ne rendent pas compte de toutes les parts (historique partiel), le prix de revient du
     dernier rapport, s'il est en CHF (il est dans la devise du fonds)."""
     with localcontext(DECIMAL_CONTEXT):
         held, cost = Decimal(0), Decimal(0)
-        for qty, amount in conn.execute(
-            text(
-                "SELECT quantity, amount_minor FROM trades WHERE account_id = :a AND isin = :i "
-                "AND trade_date <= :d ORDER BY trade_date, seq"
-            ),
-            {"a": account_id, "i": isin, "d": on_date},
-        ):
+        for qty, amount in costs.trades.get((account_id, isin), ()):
             q = Decimal(qty)
             if q > 0:
                 cost += Decimal(amount)
@@ -175,14 +205,7 @@ def _cost(
         # une crypto peut porter plus de décimales que son relevé (arrondi à 12)
         if held.quantize(QTY_QUANTUM) == quantity.quantize(QTY_QUANTUM) and held:
             return int(quantize(cost, 0))
-        row = conn.execute(
-            text(
-                "SELECT h.quantity, h.cost_price, n.currency FROM holdings h JOIN instruments n "
-                "ON n.isin = h.isin WHERE h.account_id = :a AND h.isin = :i AND h.on_date <= :d "
-                "ORDER BY h.on_date DESC, h.seq DESC LIMIT 1"
-            ),
-            {"a": account_id, "i": isin, "d": on_date},
-        ).first()
+        row = costs.reported(account_id, isin)
         if (
             row is None
             or row[1] is None

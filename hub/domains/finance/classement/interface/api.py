@@ -9,7 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Query
 
 from hub.core import profile
 from hub.domains.finance.classement.app import budget as budget_app
-from hub.domains.finance.classement.app import packs, recurring, rules, totals
+from hub.domains.finance.classement.app import insights, packs, recurring, rules, totals
 from hub.domains.finance.classement.app import review as reviewing
 from hub.domains.finance.classement.interface.schemas import (
     BudgetMonthsOut,
@@ -20,6 +20,7 @@ from hub.domains.finance.classement.interface.schemas import (
     ReviewOut,
     RulePacksOut,
     SummaryOut,
+    TodoOut,
     TrendOut,
 )
 from hub.domains.finance.registre.interface import http
@@ -109,6 +110,16 @@ def build_router(host: Host) -> APIRouter:
         with engine.connect() as conn:
             series = totals.trend(conn, category, months, month or this_month(host))
         return {"category": category, "series": series}
+
+    @r.get("/todo", response_model=TodoOut)
+    def todo(_p: AnyReader) -> dict[str, Any]:
+        """Le nombre d'écritures à classer, seul : la pastille du Journal ne recalcule pas les
+        chiffres clés (audit du 10/11, P1)."""
+        with engine.connect() as conn:
+            return {
+                "to_categorize": insights.to_categorize(conn),
+                "today": host.today().isoformat(),
+            }
 
     @r.get("/review", response_model=ReviewOut)
     def review(_p: Reader) -> dict[str, Any]:

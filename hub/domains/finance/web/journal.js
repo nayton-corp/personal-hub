@@ -16,7 +16,7 @@ const reviewPath = "/finance/review";
 const packsPath = "/finance/rules/packs";
 // tout le reste d'avant une date : catégorie proposée d'abord
 const REST_DEFAULT = "divers";
-const kpisPath = () => `/finance/kpis?month=${store.today}`;
+const todoPath = "/finance/todo"; // la pastille « à classer » : une route légère, pas les chiffres clés (audit P1)
 const tx = { key: null, items: [], cursor: null, loading: false, error: null };
 const picks = {}; // groupe (clé) → catégorie choisie
 const always = new Set();
@@ -83,7 +83,7 @@ export function reset() {
 
 // badge de l'onglet : les écritures à classer
 export const todoLabel = "à classer";
-export const todoCount = () => (store.data(kpisPath()) || { to_categorize: 0 }).to_categorize;
+export const todoCount = () => (store.data(todoPath) || { to_categorize: 0 }).to_categorize;
 
 function catMap() {
   const c = store.data(catsPath);
@@ -114,7 +114,7 @@ function filterChips(cats) {
 export function render() {
   const cats = catMap();
   store.use(accountsPath);
-  store.use(kpisPath());
+  store.use(todoPath);
   const nu = todoCount();
   const cat = P.txcat ? cats[P.txcat.id] : null;
   const span = P.txcat ? (P.txcat.from === P.txcat.to ? date(`${P.txcat.from}-01`).split(" ").slice(1).join(" ") : `${P.txcat.from} – ${P.txcat.to}`) : "";
@@ -149,7 +149,7 @@ export function render() {
     // trié par montant : une seule liste, la date passe sous le nom
     if (list.length) h += `<div class="txlist">${list.map((e) => txRow(e, cats, accName, true)).join("")}</div>`;
   } else {
-    const today = store.data(kpisPath())?.as_of;
+    const today = store.data(todoPath)?.today;
     const yesterday = today ? new Date(Date.parse(`${today}T00:00:00Z`) - 864e5).toISOString().slice(0, 10) : null;
     const days = [...new Set(list.map((e) => e.booking_date))];
     h += days.map((d) => {
