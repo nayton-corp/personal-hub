@@ -3,7 +3,7 @@
 // calcule (/finance/budget : state, pace, expected, projection ; model/pace.py, la même règle que
 // les sentinelles, audit M3). Ici on lit et on met en mots, on ne calcule pas.
 import { base, ratio, units } from "../../format.js";
-import { n0, pf } from "../../ui.js";
+import { n0, n2, pf } from "../../ui.js";
 
 /** @typedef {import("../../api").BudgetOut} BudgetOut */
 /** @typedef {import("../../api").BudgetLineOut} BudgetLineOut */
@@ -50,13 +50,17 @@ export function model(b) {
   return { lines, T, spent, rest, ratio: r, pace: ratio(b.pace), expected, state, projection, current: Boolean(b.current), daysLeft: b.days_left, missingFx: b.missing_fx || [] };
 }
 
+// un écart sous l'unité s'écrit avec ses décimales : « Dépassé de 0.35 », jamais « de 0 »
+/** @param {number} v */
+const gap = (v) => (Math.abs(v) < 1 ? n2(v) : n0(v));
+
 // l'état d'une catégorie, en mots, d'après `state` du serveur (untracked, over, likely_over,
 // paid, ok)
 /** @param {Line} l */
 export function catState(l) {
   const t = l.t ?? 0;
   switch (l.state) {
-    case "over": return { k: "bad", col: "var(--neg)", txt: `Dépassé de ${n0(l.s - t)}` };
+    case "over": return { k: "bad", col: "var(--neg)", txt: `Dépassé de ${gap(l.s - t)}` };
     case "likely_over": return { k: "warn", col: "var(--s3)", txt: `Reste ${n0(t - l.s)}, au-dessus du rythme` };
     case "paid": return { k: "ok", col: "var(--pos)", txt: "Payé" };
     case "ok": return { k: "ok", col: "var(--pos)", txt: `Reste ${n0(t - l.s)}` };
@@ -72,7 +76,7 @@ export function yearState(c) {
   if (!y) return { k: "ok", col: "var(--faint)", txt: "Sans cible annuelle" };
   const done = u(y.spent), goal = y.target ? u(y.target) : null;
   return goal == null ? { k: "ok", col: "var(--faint)", txt: "Sans cible annuelle" }
-    : c.state === "over" ? { k: "bad", col: "var(--neg)", txt: `Dépassé de ${n0(done - goal)} sur l'année` }
+    : c.state === "over" ? { k: "bad", col: "var(--neg)", txt: `Dépassé de ${gap(done - goal)} sur l'année` }
     : { k: "ok", col: "var(--pos)", txt: `Reste ${n0(goal - done)} sur l'année` };
 }
 

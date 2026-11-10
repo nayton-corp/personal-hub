@@ -83,12 +83,15 @@ _TARGETS = (
 
 
 def targets(conn: Connection, month: str) -> dict[str, Target]:
-    """Cible en vigueur au début du mois, par catégorie (la dernière ligne gagne)."""
+    """Cible en vigueur au début du mois, par catégorie (la dernière ligne gagne). Une dernière
+    ligne à zéro retire la cible : la catégorie redevient « hors budget », elle n'est pas
+    « dépassée » au premier centime (audit du 10/11, B3)."""
     rows = conn.execute(
         text(_TARGETS.format(where=" AND valid_from <= :m")),
         {"m": f"{month}-01", "ccy": base_currency()},
     )
-    return {r[0]: target_of(r[1], r[2], r[3], r[4]) for r in rows}
+    found = {r[0]: target_of(r[1], r[2], r[3], r[4]) for r in rows}
+    return {c: t for c, t in found.items() if t.amount > 0}
 
 
 def category_groups(conn: Connection) -> dict[str, str]:

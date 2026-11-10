@@ -120,6 +120,12 @@ Le rythme, l'état et la projection d'une période se calculent une fois, côté
 7e jour (fixes au plus haut de payé et cible, variables au rythme), « au-dessus du rythme » à
 plus de 10 % au-delà de la cible. Le front met en mots, il ne calcule pas.
 
+Une charge fixe se juge à la tolérance près : une unité de la devise ou 1 % de la cible, le plus
+grand des deux. Une prime de 1'336.05 pour une cible de 1'336 est « payée », pas « dépassée de
+0 » ; au-delà de la tolérance elle est « dépassée », en deçà il « reste » à payer. Une dépense
+variable reste jugée au centime, et un écart sous l'unité s'affiche avec ses décimales. Une
+cible mise à zéro est retirée : la catégorie redevient « hors budget ».
+
 ## Contrôles
 
 `hub verify` contrôle aussi les chiffres : le gain depuis l'achat et la performance « Max »

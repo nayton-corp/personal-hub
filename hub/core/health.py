@@ -77,12 +77,15 @@ def disks(hub: HubContext) -> list[Finding]:
     return found
 
 
-def _newest(root: Path) -> float:
-    newest = 0.0
+NS = 1_000_000_000  # les dates de fichier se comparent en nanosecondes entières
+
+
+def _newest(root: Path) -> int:
+    newest = 0
     for folder, _dirs, files in os.walk(root):
         for f in files:
             try:
-                newest = max(newest, os.stat(os.path.join(folder, f)).st_mtime)
+                newest = max(newest, os.stat(os.path.join(folder, f)).st_mtime_ns)
             except OSError:  # segment retiré par Litestream pendant la marche
                 continue
     return newest
@@ -98,14 +101,14 @@ def replicas(hub: HubContext, databases: dict[str, Path]) -> list[Finding]:
     for name, path in databases.items():
         if not path.exists():
             continue
-        written = max(p.stat().st_mtime for p in (path, Path(f"{path}-wal")) if p.exists())
-        late = written - _newest(root / f"{name}.db")
+        written = max(p.stat().st_mtime_ns for p in (path, Path(f"{path}-wal")) if p.exists())
+        late = (written - _newest(root / f"{name}.db")) // NS
         if late > limit:
             found.append(
                 Finding(
                     f"replica:{name}",
                     "Réplique en retard",
-                    f"Base {name} : la réplique Litestream a plus de {int(late // 3600)} h de "
+                    f"Base {name} : la réplique Litestream a plus de {late // 3600} h de "
                     "retard sur la base.",
                 )
             )
@@ -131,11 +134,14 @@ def backups(hub: HubContext, now: datetime, since: datetime) -> list[Finding]:
     dest = hub.settings.paths.backup
     found = []
 
-    def age(stamp: float | None) -> timedelta:
-        return now - (since if stamp is None else datetime.fromtimestamp(stamp, tz=now.tzinfo))
+    def age(files: list[Path]) -> timedelta:
+        """Depuis le plus récent de ces fichiers ; sans aucun, depuis le premier contrôle."""
+        if not files:
+            return now - since
+        newest = max(f.stat().st_mtime_ns for f in files)
+        return now - datetime.fromtimestamp(newest // NS, tz=now.tzinfo)
 
-    copies = [f.stat().st_mtime for f in dest.glob("core-????-??-??.db")] if dest.is_dir() else []
-    late = age(max(copies) if copies else None)
+    late = age(list(dest.glob("core-????-??-??.db")) if dest.is_dir() else [])
     if late > limit:
         found.append(
             Finding(
@@ -147,7 +153,7 @@ def backups(hub: HubContext, now: datetime, since: datetime) -> list[Finding]:
     if hub.settings.backup.restic_local is None:
         return found
     mark = dest / RESTIC_MARK
-    late = age(mark.stat().st_mtime if mark.exists() else None)
+    late = age([mark] if mark.exists() else [])
     if late > limit:
         found.append(
             Finding(
