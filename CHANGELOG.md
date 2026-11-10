@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+### Finance
+
+- Cryptos, résultat depuis l'achat : il s'accorde de nouveau avec la courbe « Max ». Deux
+  calculs du prix de revient étaient faux. Une vente lue avant l'achat qui la couvre (le même
+  jour, fréquent sur USDC et USDT) laissait tout le coût de l'achat aux parts restantes ; des
+  frais payés en crypto emportaient leur part du coût sans la compter en perte. Ensemble, ils
+  gonflaient le résultat d'environ 890 CHF. Le contrôle de `hub verify` qui compare les deux
+  chiffres a refusé d'installer la 0.16.7 dès que les ruptures sont tombées à zéro.
+
 ## [0.16.7] · 2026-11-10
 
 ### Finance

@@ -52,7 +52,8 @@ plus ce que les ventes ont réalisé. La performance « Max » de l'écran est c
 | Écart de parts d'un fonds entre deux relevés | Moins d'un centième de part, sur des parts fractionnées : l'arrondi du relevé (VIAC publie deux décimales), pas une rupture. |
 | Virement entre deux de mes comptes sans txid commun | Un envoi et une arrivée de la même crypto, à quelques jours, l'arrivée recevant au plus 5 % de moins (frais de retrait) : le hub te propose de les relier (carte `link_crypto_moves`). Validé, le coût suit les parts et la différence est un frais ; en attente, l'envoi est sorti au coût et l'arrivée entrée au cours du jour, chacun avec sa rupture. Rien n'est deviné à la lecture. |
 | Mise en staking et sortie (parts brûlées, ETH réclamé) | Les cryptos restent à moi : le coût ne bouge pas, ni envoi ni arrivée hors de mes comptes. Une sortie lue sans marque (avant la marque `stake`) suivie d'un claim dans les 60 jours, qui rend entre 100 % et 125 % de la mise, t'est proposée en carte ; validée, elle est reliée au claim. Ce que le claim rend en plus est du gain à coût zéro. |
-| Frais payés en crypto | Des parts en moins, le coût reste sur les autres : une perte. |
+| Frais payés en crypto | Des parts en moins, le coût reste sur les autres : une perte (s'il n'en reste aucune, le coût est réalisé en perte). |
+| Vente lue avant l'achat qui la couvre (même jour, ordre de lecture) | L'achat couvre d'abord la vente, à son prix : l'aller-retour se réalise, sans charger les parts restantes de son coût. |
 | Arrivée d'un portefeuille non suivi | Coûte sa valeur du jour, et ouvre une rupture « arrivée de l'extérieur » tant que tu ne l'as pas classée. |
 | Envoi vers un portefeuille non suivi | Sort au coût, sans gain ni perte, et ouvre une rupture « envoi vers l'extérieur » tant que tu ne l'as pas classé. |
 | Parts sans historique d'achat | Rupture « sans historique » : valeur montrée à part, hors du gain, jusqu'à l'import ou la saisie du coût. |

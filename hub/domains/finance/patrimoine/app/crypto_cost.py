@@ -13,6 +13,8 @@ prix de revient réel, commun à tous les comptes crypto, et le résultat se lit
   parts sans retirer de coût ;
 - une arrivée de l'extérieur (sans autre côté connu) coûte sa valeur du jour ; un envoi vers
   l'extérieur retire sa part du coût, sans gain ni perte ;
+- une sortie lue avant l'entrée qui la couvre (le même jour, dans l'ordre de lecture) attend
+  cette entrée, qui la réalise à son prix au lieu de charger les parts restantes ;
 - les parts tenues sans historique qui les explique (relevé d'un portefeuille) n'ont pas de prix
   de revient : leur valeur est montrée à part et ne compte pas dans le résultat.
 
@@ -54,12 +56,32 @@ class Book:
     realized: Decimal = ZERO
     realized_usd: Decimal = ZERO
     income: Decimal = ZERO
-    sold_unknown: Decimal = ZERO  # ventes de parts que l'historique n'explique pas
+    sold_unknown: Decimal = ZERO  # ventes de parts que l'historique n'explique pas (encore)
     out_cost: Decimal = ZERO  # coût retiré par des envois vers l'extérieur
     arrived: Decimal = ZERO  # arrivées de l'extérieur, au cours du jour
     eps: Decimal = EPS  # reste d'arrondi tenu pour zéro (réglage `quantity_epsilon`)
+    # parts sorties avant leur entrée (une vente lue avant l'achat qui la couvre) : ce
+    # qu'elles ont rapporté, en attente de l'entrée qui les explique
+    short_q: Decimal = ZERO
+    short: Decimal = ZERO
+    short_usd: Decimal = ZERO
 
     def add(self, q: Decimal, cost: Decimal, cost_usd: Decimal) -> None:
+        """Des parts qui entrent. Si des parts sont sorties avant d'entrer, celles-ci les
+        couvrent d'abord : la sortie se réalise alors contre ce coût (un aller-retour lu dans
+        le désordre n'est ni un gain ni une perte de plus)."""
+        cover = min(q, self.short_q, max(-self.held, ZERO)) if self.held < 0 else ZERO
+        if cover > 0:
+            part = cover / self.short_q
+            got, got_usd = self.short * part, self.short_usd * part
+            c, cu = cost * cover / q, cost_usd * cover / q
+            self.realized += got - c
+            self.realized_usd += got_usd - cu
+            self.sold_unknown -= min(self.sold_unknown, got)
+            self.short -= got
+            self.short_usd -= got_usd
+            self.short_q -= cover
+            cost, cost_usd = cost - c, cost_usd - cu
         self.held += q
         self.cost += cost
         self.cost_usd += cost_usd
@@ -80,6 +102,13 @@ class Book:
             if abs(self.held) <= self.eps:
                 self.held = ZERO
         return c, cu, q - known
+
+    def owe(self, unknown: Decimal, got: Decimal, got_usd: Decimal) -> None:
+        """Des parts sorties sans historique (`unknown`), pour `got` : l'entrée qui les
+        expliquera plus tard les réalise."""
+        self.short_q += unknown
+        self.short += got
+        self.short_usd += got_usd
 
 
 Leg = crypto_moves.Leg
@@ -145,14 +174,23 @@ def walk(conn: Connection, on_date: str, fx: FxRates, lots: Sequence[Leg] = ()) 
             if kind == "out":  # au coût ; des parts sans historique, à leur valeur
                 flow = -(c + v * unknown / -q)
             day[on] = (had_q + q, had_f + flow)
+            gone = unknown / -q  # la part sortie sans historique
             if kind == "trade":
-                known = (-q - unknown) / -q
-                b.realized += v * known - c
-                b.realized_usd += vu * known - cu
-                b.sold_unknown += v * (1 - known)
+                b.realized += v * (1 - gone) - c
+                b.realized_usd += vu * (1 - gone) - cu
+                b.sold_unknown += v * gone
+                b.owe(unknown, v * gone, vu * gone)
             elif kind == "out":
                 b.out_cost += c
-            # frais : des parts en moins, le coût reste sur les autres
+                b.owe(unknown, v * gone, vu * gone)
+            else:  # frais : des parts en moins, le coût reste sur les autres
+                b.owe(unknown, ZERO, ZERO)
+                if b.held > b.eps:
+                    b.cost += c
+                    b.cost_usd += cu
+                else:  # plus rien pour le porter : une perte
+                    b.realized -= c
+                    b.realized_usd -= cu
     return Walk(out, usd_ok, flows)
 
 
