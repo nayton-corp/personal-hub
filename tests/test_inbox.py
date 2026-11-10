@@ -105,3 +105,20 @@ def test_the_archive_of_before_moves_under_finance(settings: Settings) -> None:
     finance.migrate()  # relancé : rien ne bouge
     assert sorted(p.name for p in old.iterdir()) == ["autre", "finance"]
     finance.engine().dispose()
+
+
+def test_watch_inbox_survives_a_failing_domain_and_alerts_once(settings: Settings) -> None:
+    sent: list[str] = []
+    hub = SimpleNamespace(notifier=SimpleNamespace(send=lambda m: sent.append(m.title)))
+    guard = cli_inbox.Guard(hub)  # type: ignore[arg-type]
+
+    def boom() -> dict[str, int]:
+        raise RuntimeError("base occupée")
+
+    for _ in range(cli_inbox.ALERT_AFTER + 2):
+        assert guard.run("finance", boom) == {"failed": 1}
+    assert sent == ["Boîte d'entrée : traitement en échec"]  # une fois par panne
+    assert guard.run("finance", lambda: {"files": 0}) == {"files": 0}
+    assert sent[-1] == "Boîte d'entrée : rétablie"
+    assert guard.run("demo", boom) == {"failed": 1}
+    assert len(sent) == 2  # un raté isolé n'alerte pas
