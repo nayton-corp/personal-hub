@@ -48,7 +48,7 @@ function bars(data) {
 function perfStrip(c, days) {
   if (!c) return "";
   const g = units(c.gain), r = rate(c.twr), yr = rate(c.twr_yearly);
-  return `<div class="strip"><div><span>Gain</span><b class="num ${tone(g)}"><span class="money">${sgnMoney(g)}</span></b></div><div><span>Rendement</span><b class="num ${tone(r)}">${pct(r)}</b></div><div><span>Par an</span><b class="num">${yr == null || days < 365 ? "—" : pct(yr)}</b></div></div>
+  return `<div class="strip"><div><span>Gain</span><b class="num ${tone(g)}"><span class="money">${sgnMoney(g)}</span></b></div><div><span>Rendement pondéré</span><b class="num ${tone(r)}">${pct(r)}</b></div><div><span>Par an</span><b class="num">${yr == null || days < 365 ? "—" : pct(yr)}</b></div></div>
     ${c.complete ? "" : '<p class="pnote">Des cours manquent sur la période : chiffres partiels.</p>'}`;
 }
 

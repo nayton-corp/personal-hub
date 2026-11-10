@@ -12,6 +12,7 @@ import { cmpBtn, drawLand, drawTop, heroHTML, periodsHTML, toolbarHTML } from ".
 import { facetMark, assetMark } from "./meta.js";
 import { gainSpan, perfSection, perfSummary, rate, signedMoney, units } from "./perf.js";
 import { kindFor, model } from "./wmodel.js";
+import { moneyRate } from "./wcurve.js";
 import { DEBT_KIND, debtMark } from "./debts.js";
 import { byLabel } from "./wsheets.js";
 import * as place from "./wplace.js";
@@ -163,12 +164,14 @@ function listSection(sel) {
   rows.sort(S.sort === "val" ? (a, b) => b.value - a.value : S.sort === "chg" ? (a, b) => gainOf(b) - gainOf(a) : (a, b) => a.title.localeCompare(b.title, "fr"));
   rows = rows.filter((r) => Math.abs(r.value) >= 0.5 || S.view === "acc");
   const so = SORTS.find((s) => s.k === S.sort);
+  const days = M.pts.length > 1 ? Math.round((Date.parse(M.pts[M.pts.length - 1].d) - Date.parse(M.pts[0].d)) / 864e5) : 0;
   const delta = (r) => {
     if (!r.c || M.pts.length < 2) return "";
     const g = units(r.c.gain);
     if (r.debt) return `<span class="faint num">intérêts ${signedMoney(g)}</span>`;
     if (r.cash) return `<span class="faint num">apports ${signedMoney(units(r.c.net_flows))}</span>`;
-    return gainSpan(g, rate(r.c.twr)).replace(` ${base()}`, "");
+    const x = moneyRate(rate(r.c.personal), days);
+    return gainSpan(g, x ? x.v : null).replace(` ${base()}`, "");
   };
   return `<section class="section" aria-labelledby="t-detail"><div class="detail-head" id="detailHead">
       <div class="seg" role="group" aria-label="Comptes ou actifs">${[["acc", "Comptes"], ["asset", "Actifs"]].map(([k, l]) => `<button type="button" data-a="w-view" data-v="${k}" aria-pressed="${S.view === k}">${l}</button>`).join("")}</div>

@@ -2,6 +2,34 @@
 
 ## [Non publié]
 
+## [0.18.3] · 2026-11-10
+
+À côté d'un gain en francs, le rendement de ton argent.
+
+### À la mise à jour
+
+- Le pourcentage sous le grand chiffre du Patrimoine change de définition : c'était le rendement
+  pondéré dans le temps, qui ignore les montants (+16 % affichés pour 1 214 francs gagnés) ;
+  c'est maintenant le rendement de l'argent engagé, qui va avec les francs. Le rendement pondéré
+  reste dans la section Performance, où il sert à se comparer à un indice.
+- Rien à faire sur la machine. L'étalon (`golden check`) ne bouge pas : un chiffre apparu depuis
+  la photo n'est pas un écart, à toute profondeur.
+
+### Finance
+
+- Patrimoine : sous le grand chiffre (tout le patrimoine, un compte, un actif), le gain en
+  francs est suivi du rendement de l'argent engagé. Jusqu'à un an, celui de la période : le
+  gain rapporté au capital moyen, chaque apport compté depuis son jour. Au-delà, le taux annuel
+  exact, « par an ». Dans la liste des comptes et des actifs, et le doigt sur la courbe, le
+  pourcentage suit la même règle jusqu'à un an ; au-delà, les francs seuls plutôt qu'un taux
+  approché.
+- La section Performance et la bande d'un compte nomment leur chiffre : « pondéré dans le
+  temps », « Rendement pondéré ».
+- Accueil : le pourcentage sur 30 jours de la tuile Patrimoine est celui des seuls avoirs. Un
+  crédit dans le total réduisait sa base et grossissait le chiffre.
+- `/finance/performance` : `personal` dans chaque point et chaque résumé, et `owned`, le résumé
+  des seuls avoirs quand la sélection contient un crédit.
+
 ## [0.18.2] · 2026-11-10
 
 Le gain et le rendement n'oublient plus les positions vendues.

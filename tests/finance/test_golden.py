@@ -120,6 +120,17 @@ def test_a_performance_figure_added_since_the_golden_is_not_a_difference(
         found.as_of, found.created_at, "0.17.0", {**found.sections, "performance": before}
     )
     assert golden.check(finance.engine(), older).ok
+    # à toute profondeur : le rendement de l'argent engagé (0.18.3) dans le résumé et les points
+    deep = {
+        **perf,
+        "summary": {k: v for k, v in perf["summary"].items() if k != "personal"},
+        "items": [{k: v for k, v in p.items() if k != "personal"} for p in perf["items"]],
+    }
+    assert "personal" in perf["summary"]
+    older = golden.Golden(
+        found.as_of, found.created_at, "0.18.2", {**found.sections, "performance": deep}
+    )
+    assert golden.check(finance.engine(), older).ok
     moved = {**before, "contributions": {"moved": True}}
     changed = golden.Golden(
         found.as_of, found.created_at, "0.17.0", {**found.sections, "performance": moved}

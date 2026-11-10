@@ -9,6 +9,8 @@ import { esc, fill, ic, n0, nf } from "../../ui.js";
 import { assetMark, instMark } from "./meta.js";
 import { base } from "../../format.js";
 import { kindFor } from "./wmodel.js";
+import { moneyRate } from "./wcurve.js";
+import { rate } from "./perf.js";
 
 const $ = (id) => document.getElementById(id);
 const yearly = (r, days) => (r != null && days >= 365 ? (1 + r) ** (365 / days) - 1 : null);
@@ -80,6 +82,10 @@ export function heroHTML(m, all, r = here()) {
   const days = Math.round((Date.parse(p.d) - Date.parse(p0.d)) / 864e5);
   const since = scrub ? `du ${p0.d.split("-").reverse().join(".")} au ${p.d.split("-").reverse().join(".")}` : m.label;
   const kind = kindFor(r);
+  // à côté des francs : le rendement de ton argent (wcurve.js), exact sur la période entière
+  const whole = k === pts.length - 1 && m.perf && m.perf.summary ? rate(m.perf.summary.mwr) : null;
+  const mine = moneyRate(p.pr, days, whole);
+  const mineTxt = mine ? ` · ${pct(mine.v)}${mine.yr ? " par an" : ""}` : "";
   const at = (s) => (scrub ? `<b>${longDate(p.d)}</b>` : s);
   let label, big, sub = "";
   if (kind === "price") {
@@ -93,12 +99,12 @@ export function heroHTML(m, all, r = here()) {
     label = at(`Ma position · ${where}`);
     big = `<span class="money">${n0(p.v)}</span><small>${base()}</small>`;
     const lat = m.cost != null && !scrub ? p.v - m.cost : null;
-    sub = `<div class="hero-delta"><span class="delta ${tone(p.g)}"><span class="money">${sgnMoney(p.g)}</span> ${base()} · ${pct(p.r)}</span><span class="period-link">${since}</span></div>${lat != null ? `<div class="hero-sub">Gain latent depuis l'achat <span class="money">${sgnMoney(lat)}</span> ${base()} (${pct(m.cost ? lat / m.cost : 0)})</div>` : ""}`;
+    sub = `<div class="hero-delta"><span class="delta ${tone(p.g)}"><span class="money">${sgnMoney(p.g)}</span> ${base()}${mineTxt}</span><span class="period-link">${since}</span></div>${lat != null ? `<div class="hero-sub">Gain latent depuis l'achat <span class="money">${sgnMoney(lat)}</span> ${base()} (${pct(m.cost ? lat / m.cost : 0)})</div>` : ""}`;
   } else if (kind === "val") {
     label = at(what);
     big = `<span class="money">${nf(p.v)}</span><small>${base()}</small>`;
     if (m.onlyDebt) sub = `<div class="hero-delta"><span class="delta ${tone(p.v - p0.v)}"><span class="money">${sgnMoney(p.v - p0.v)}</span> ${base()}</span><span class="period-link">remboursés ${since}</span></div><div class="hero-sub">Intérêts <span class="money">${sgnMoney(p.g)}</span> ${base()}</div>`;
-    else sub = `<div class="hero-delta"><span class="delta ${tone(p.g)}"><span class="money">${sgnMoney(p.g)}</span> ${base()}${p.r == null ? "" : ` · ${pct(p.r)}`}</span><span class="period-link">de gain ${since}</span></div><div class="hero-sub">Apports nets <span class="money">${sgnMoney(p.f)}</span> · variation totale <span class="money">${sgnMoney(p.v - p0.v)}</span></div>`;
+    else sub = `<div class="hero-delta"><span class="delta ${tone(p.g)}"><span class="money">${sgnMoney(p.g)}</span> ${base()}${mineTxt}</span><span class="period-link">de gain ${since}</span></div><div class="hero-sub">Apports nets <span class="money">${sgnMoney(p.f)}</span> · variation totale <span class="money">${sgnMoney(p.v - p0.v)}</span></div>`;
   } else {
     const yr = yearly(p.r, days);
     label = at(`Performance ${m.label}`);

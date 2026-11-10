@@ -95,7 +95,8 @@ export function model(r = here()) {
   out.pts = items.map((it) => {
     const o = own ? own.get(it.on_date) || it : it;
     const f = units(it.net_flows);
-    return { d: it.on_date, v: units(it.value), f, dep: v0 + f, g: units(o.gain), r: rate(o.twr), dd: rate(o.drawdown), ok: it.complete, a: own ? units(o.value) : units(it.value) };
+    const perf = { g: units(o.gain), r: rate(o.twr), pr: rate(o.personal), dd: rate(o.drawdown) };
+    return { d: it.on_date, v: units(it.value), f, dep: v0 + f, ...perf, ok: it.complete, a: own ? units(o.value) : units(it.value) };
   });
   const pts = out.pts;
   // plus haut et plus bas de tous les jours de la période, pas des seuls points tracés

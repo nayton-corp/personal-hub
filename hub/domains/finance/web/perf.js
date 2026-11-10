@@ -13,7 +13,7 @@ export const ratePct = (r) => (r == null ? "—" : `${sgn(r)}${pf(Math.abs(r))} 
 export const tone = (v) => (v == null ? "" : v >= 0 ? "pos" : "neg");
 // un gain (et son rendement) qui s'arrondit à zéro reste gris : ni gain ni perte
 const toneOf = (g, r) => (Math.round(g) === 0 && (r == null || Math.round(r * 1000) === 0) ? "zero" : tone(r ?? g));
-// gain en francs puis rendement pondéré, comme la ligne « montant · % » d'avant
+// gain en francs, puis le rendement de l'argent engagé quand il se dit (moneyRate, wcurve.js)
 export const gainSpan = (g, r) => `<span class="delta ${toneOf(g, r) === "zero" ? "zero" : tone(g)} num">${signedMoney(g)} ${base()}${r == null ? "" : ` · ${ratePct(r)}`}</span>`;
 
 const MOIS1 = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
@@ -59,7 +59,7 @@ export function perfSummary(perf, label) {
   const s = perf.summary;
   if (!s) return "<span>Rien à mesurer pour cette sélection</span>";
   const r = rate(s.twr), g = units(s.gain);
-  return `<span class="delta ${toneOf(g, r)} num">${r == null ? signedMoney(g) : ratePct(r)}</span><span>${r == null ? "de gain" : `rendement · gain ${signedMoney(g)} ${base()}`} · ${label}</span>`;
+  return `<span class="delta ${toneOf(g, r)} num">${r == null ? signedMoney(g) : ratePct(r)}</span><span>${r == null ? "de gain" : "pondéré dans le temps"} · ${label}</span>`;
 }
 
 export function perfSection(ctx) {
