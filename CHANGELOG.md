@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.18.0] · 2026-11-10
+
 La courbe, la répartition et le budget du second audit (10 novembre), tels que validés sur la page
 « avant / après ». Aucun chiffre du patrimoine ne change.
 
