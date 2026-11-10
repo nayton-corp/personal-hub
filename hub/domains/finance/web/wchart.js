@@ -6,7 +6,7 @@
 import { MOIS, base } from "../../format.js";
 import { S, day, longDate, shortDate } from "./wstate.js";
 import { esc, n0, n2 } from "../../ui.js";
-import { granLabel } from "./wmodel.js";
+import { granLabel } from "./wcurve.js";
 
 export const compact = (v) => {
   const a = Math.abs(v), s = v < 0 ? "−" : "";
@@ -93,12 +93,14 @@ export function chartSVG(m, kind, w, h, opts = {}) {
   const bench = kind === "pct" && m.cmp && show("bench") ? pts.map((p) => p.b) : null;
   const pru = kind === "price" && show("pru") ? m.pru : null;
   const goal = kind === "val" && m.target && show("goal") ? m.target : null;
-  const all = [...ys, ...(ref || []), ...(av || []), ...(bench || []).filter((v) => v != null), ...(pru ? [pru] : []), ...(goal ? [goal] : [])];
+  // plus haut, plus bas : ceux de chaque jour (serveur) quand la courbe saute des jours
+  const ext = (kind === "val" || kind === "pos") && show("marks") ? m.ext : null;
+  const all = [...ys, ...(ext ? [ext.hi.v, ext.lo.v] : []), ...(ref || []), ...(av || []), ...(bench || []).filter((v) => v != null), ...(pru ? [pru] : []), ...(goal ? [goal] : [])];
   let mn = Math.min(...all), mx = Math.max(...all);
   if (kind === "gain" || kind === "pct") { mn = Math.min(mn, 0); mx = Math.max(mx, 0); }
   const pad = (mx - mn) * 0.06 || Math.abs(mx) * 0.05 || (kind === "pct" ? 0.01 : 1);
   mn -= pad; mx += pad;
-  const { t0, span, R, X, xi } = frame(m, w, opts.big);
+  const { t0, span, R, X, xi, tOf } = frame(m, w, opts.big);
   const Y = (v) => T + (h - T - B) * (1 - (v - mn) / (mx - mn));
   const path = (vs) => vs.map((v, k) => (v == null ? "" : `${k && vs[k - 1] != null ? "L" : "M"}${xi(k).toFixed(1)},${Y(v).toFixed(1)}`)).join("");
   const fmtY = kind === "pct" ? (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v * 100).toFixed(Math.abs(mx - mn) < 0.1 ? 1 : 0)} %`
@@ -158,13 +160,14 @@ export function chartSVG(m, kind, w, h, opts = {}) {
   }
   if ((kind === "val" || kind === "price" || kind === "pos") && show("marks")) {
     const kmax = ys.indexOf(Math.max(...ys)), kmin = ys.indexOf(Math.min(...ys));
-    for (const [k, lab, below] of [[kmax, "plus haut", false], [kmin, "plus bas", true]]) {
-      if (k === ys.length - 1 || k === 0) continue;
-      const x = xi(k), y = Y(ys[k]);
+    const at = (k) => ({ d: pts[k].d, v: ys[k] });
+    for (const [e, lab, below] of [[ext ? ext.hi : at(kmax), "plus haut", false], [ext ? ext.lo : at(kmin), "plus bas", true]]) {
+      if (e.d <= pts[0].d || e.d >= pts[pts.length - 1].d) continue;
+      const x = X(tOf(e.d)), y = Y(e.v);
       const low = below && y + 14 > h - B - 2;
       const anchor = low ? (x > w / 2 ? "end" : "start") : x < 60 ? "start" : x > w - R - 60 ? "end" : "middle";
       const tx = low ? (x > w / 2 ? x - 7 : x + 7) : x, ty = low ? y + 3.5 : below ? y + 14 : Math.max(10, y - 7);
-      over += `<circle class="mk" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3"/><text class="ann money" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${anchor}">${lab} ${kind === "price" ? px(ys[k]) : compact(ys[k])}</text>`;
+      over += `<circle class="mk" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3"/><text class="ann money" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${anchor}">${lab} ${kind === "price" ? px(e.v) : compact(e.v)}</text>`;
     }
   }
   const si = S.scrub == null || !opts.interactive ? ys.length - 1 : Math.min(S.scrub, ys.length - 1);
@@ -208,7 +211,9 @@ export function legendHTML(m, kind) {
     if (m.cmp) it.push(lg("bench", "dash", "var(--s3)", esc(m.cmp.name)));
     it.push(...evs);
   }
-  const est = (m.unc || []).length ? fixed("dash", "var(--warn)", "Estimé") : "";
+  // la zone entre la valeur et les apports : verte au-dessus (gain), rouge en dessous (perte)
+  const zone = (kind === "val" || kind === "pos") && show("dep") && !m.onlyDebt && !(kind === "val" && m.hasDebt && !S.gross && show("assets"));
+  const est = ((m.unc || []).length ? fixed("dash", "var(--warn)", "Estimé") : "") + (zone ? fixed("box zk", "var(--pos)", "Gain") + fixed("box zk", "var(--neg)", "Perte") : "");
   return `<div class="lgrow">${it[0]}${est}<span class="gran">${granLabel(m.pts)}</span></div>${it.length > 1 ? `<div class="lgrow chips"><span class="lgl">Afficher</span>${it.slice(1).join("")}</div>` : ""}`;
 }
 

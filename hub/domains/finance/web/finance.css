@@ -363,7 +363,7 @@
 .chart .bench { fill: none; stroke: var(--s3); stroke-width: 1.6; stroke-dasharray: 5 3; }
 .chart .assets { stroke: var(--s2); stroke-width: 1.2; }
 .chart .pru { stroke: var(--s4); stroke-width: 1.2; stroke-dasharray: 3 3; }
-.chart .zpos { fill: var(--pos); fill-opacity: .13; } .chart .zneg { fill: var(--neg); fill-opacity: .12; }
+.chart .zpos { fill: var(--pos); fill-opacity: .2; } .chart .zneg { fill: var(--neg); fill-opacity: .2; }
 .chart .zl { stroke: var(--faint); stroke-width: .8; }
 .chart .dot2 { fill: var(--muted); stroke: var(--surface); stroke-width: 2; }
 .chart .dot3 { fill: var(--s3); stroke: var(--surface); stroke-width: 2; }
@@ -397,6 +397,7 @@
 .lg { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 8px; border-radius: 8px; flex: none; white-space: nowrap; }
 .lg i { width: 14px; height: 2px; border-radius: 1px; background: var(--c); display: inline-block; }
 .lg i.box { height: 9px; width: 11px; border-radius: 2px; }
+.lg i.zk { opacity: .3; }
 .lg i.dot { width: 8px; height: 8px; border-radius: 50%; background: none; border: 1.4px solid var(--c); }
 button.lg { border: 1px solid var(--line); border-radius: 999px; min-height: 32px; }
 button.lg[aria-pressed="false"] i { display: none; }

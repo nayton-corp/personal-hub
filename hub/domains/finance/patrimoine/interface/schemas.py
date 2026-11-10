@@ -317,6 +317,16 @@ class RiskOut(Out):
     recovered_on: str | None
 
 
+class ExtremeOut(Out):
+    on_date: str
+    value: MoneyOut
+
+
+class ExtremesOut(Out):
+    high: ExtremeOut
+    low: ExtremeOut
+
+
 class PerformanceOut(Out):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
@@ -326,6 +336,7 @@ class PerformanceOut(Out):
     first_day: str | None = None
     lines: int
     items: list[PerformancePointOut]
+    extremes: ExtremesOut | None = None
     summary: LineSummaryOut | None
     by_account: dict[str, LineSummaryOut]
     by_asset: dict[str, LineSummaryOut]

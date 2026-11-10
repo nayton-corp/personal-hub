@@ -581,6 +581,16 @@ export interface EntrySearchOut {
   items: EntryOut[];
 }
 
+export interface ExtremeOut {
+  on_date: string;
+  value: MoneyOut;
+}
+
+export interface ExtremesOut {
+  high: ExtremeOut;
+  low: ExtremeOut;
+}
+
 export interface FlowGroupOut {
   group: string;
   total: MoneyOut;
@@ -879,6 +889,7 @@ export interface PerformanceOut {
   first_day?: string | null;
   lines: number;
   items: PerformancePointOut[];
+  extremes?: ExtremesOut | null;
   summary: LineSummaryOut | null;
   by_account: Record<string, LineSummaryOut>;
   by_asset: Record<string, LineSummaryOut>;

@@ -151,7 +151,9 @@ def build_router(host: Host) -> APIRouter:
         `debt:<id>` ; par défaut, celles de l'app) : courbe de la valeur, des apports nets, du
         gain et du rendement pondéré dans le temps ; résumé (gain, revenus, frais, rendement,
         rendement personnel annuel) ; le même par compte, par actif, par ligne ; par mois et par
-        année ; risque. Des agrégats seulement."""
+        année ; risque. Les points tombent sur le calendrier (chaque jour, chaque dimanche, chaque
+        fin de mois) ; au-delà de 400, le pas s'élargit. `extremes` : le plus haut et le plus bas
+        de tous les jours de la période. Des agrégats seulement."""
         if line is not None and len(line) > 500:
             raise Problem("validation.params", "trop de lignes")
         with engine.connect() as conn:

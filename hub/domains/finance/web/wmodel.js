@@ -6,10 +6,9 @@
 // « estimée » à cet endroit.
 import { S, activeCount, asOf, day, here, iso, lines, paths, perfPath, range, scopeLines, selIds } from "./wstate.js";
 import { rate, units } from "./perf.js";
+import { stepFor } from "./wcurve.js";
 import { base, staleDays } from "../../format.js";
 import { store } from "../../store.js";
-
-const STEP = "day"; // le serveur garde au plus 400 points, la fin comprise
 
 // courbe affichée : Valeur, Performance en francs ou en %, position ou cours d'un actif
 export function kindFor(r = here()) {
@@ -38,12 +37,6 @@ function indexOf(pts, d) {
   }
   return lo;
 }
-
-export const granLabel = (pts) => {
-  if (pts.length < 2) return "";
-  const s = Math.round((day(pts[pts.length - 1].d) - day(pts[0].d)) / 864e5 / (pts.length - 1));
-  return s <= 1 ? "par jour" : s === 7 ? "par semaine" : `tous les ${s} jours`;
-};
 
 // plages estimées : points sans cours ni change, et fin de courbe d'un compte resté sans relevé
 function uncertain(pts, sel) {
@@ -77,7 +70,7 @@ function uncertain(pts, sel) {
   return out;
 }
 
-// { status, error, pts, events, unc, label, sel, perf, net, hasDebt, onlyDebt, target, pru, cmp }
+// { status, error, pts, events, unc, ext, label, sel, perf, net, hasDebt, onlyDebt, target, pru, cmp }
 export function model(r = here()) {
   const all = lines();
   if (!all) return { status: "loading", pts: [], sel: [] };
@@ -89,8 +82,9 @@ export function model(r = here()) {
   const owned = sel.filter((l) => l.kind !== "debt");
   const hasDebt = owned.length < sel.length && owned.length > 0;
   const plain = r.t === "home" && !activeCount() && !S.gross;
-  const e = store.use(perfPath(rg.from, rg.to, STEP, selIds(sel, plain)));
-  const a = hasDebt ? store.use(perfPath(rg.from, rg.to, STEP, selIds(owned))) : e;
+  const step = stepFor(rg.from, rg.to || asOf());
+  const e = store.use(perfPath(rg.from, rg.to, step, selIds(sel, plain)));
+  const a = hasDebt ? store.use(perfPath(rg.from, rg.to, step, selIds(owned))) : e;
   const out = { ...base0, status: e.status === "ok" ? a.status : e.status, error: e.error || a.error, net: e.data, perf: a.data, hasDebt, onlyDebt: !owned.length };
   if (!e.data) return out;
   const own = a.data && a !== e ? new Map(a.data.items.map((it) => [it.on_date, it])) : null;
@@ -102,6 +96,9 @@ export function model(r = here()) {
     return { d: it.on_date, v: units(it.value), f, dep: v0 + f, g: units(o.gain), r: rate(o.twr), dd: rate(o.drawdown), ok: it.complete, a: own ? units(o.value) : units(it.value) };
   });
   const pts = out.pts;
+  // plus haut et plus bas de tous les jours de la période, pas des seuls points tracés
+  const x = e.data.extremes;
+  out.ext = x ? { hi: { d: x.high.on_date, v: units(x.high.value) }, lo: { d: x.low.on_date, v: units(x.low.value) } } : null;
   if (pts.length > 1) {
     const evs = (a.data || e.data).events || [];
     out.events = evs.map((x) => ({ d: x.on_date, kind: x.kind, v: units(x.amount), k: indexOf(pts, x.on_date) }));
