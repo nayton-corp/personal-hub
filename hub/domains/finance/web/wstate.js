@@ -155,6 +155,9 @@ export const lineId = (l) => (l.kind === "debt" ? l.asset : l.asset.startsWith("
 export const perfPath = (from, to, step, ids) =>
   `/finance/performance?${from ? `from=${from}&` : ""}${to ? `to=${to}&` : ""}step=${step}${ids ? ids.map((i) => `&line=${encodeURIComponent(i)}`).join("") : ""}`;
 
+// la répartition par région, secteur ou devise : la sélection de l'écran, comme la courbe
+export const lookPath = (sel) => `/finance/lookthrough?dimension=${S.by}${activeCount() || S.gross ? selIds(sel).map((i) => `&line=${encodeURIComponent(i)}`).join("") : ""}`;
+
 // lignes demandées : aucune pour tout le patrimoine (le serveur prend celles de l'app), sinon la
 // sélection ; « compte|cash » porte aussi les revenus et frais d'un compte à positions
 export function selIds(sel, all = false) {

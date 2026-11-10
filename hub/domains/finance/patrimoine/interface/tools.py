@@ -13,9 +13,9 @@ from hub.core.domain import McpTool, ToolCaller
 from hub.domains.finance.packs.base import CountryPack
 from hub.domains.finance.patrimoine.app import (
     account_list,
+    allocation,
     debts,
     holdings,
-    lookthrough,
     perf_lines,
     performance,
     price_history,
@@ -146,7 +146,7 @@ class PatrimoineTools(ToolBox):
 
     def lookthrough_report(self, a: LookthroughArgs, caller: ToolCaller) -> dict[str, Any]:
         with self.engine.connect() as conn:
-            out = lookthrough.breakdown(
+            out = allocation.breakdown(
                 conn, a.dimension, self.host.today().isoformat(), self.host.pack()
             )
             return self._wrap(conn, text_out(out))
@@ -213,8 +213,9 @@ class PatrimoineTools(ToolBox):
             ),
             tool(
                 "finance_lookthrough",
-                "Positions ventilées par région, secteur, devise, ou les plus grosses lignes "
-                "sous-jacentes des fonds.",
+                "Le patrimoine réparti par région, secteur ou devise, liquidités comprises (part "
+                "sûre, estimée, non répartie, inconnue), ou les plus grosses lignes sous-jacentes "
+                "des fonds.",
                 _obj(
                     {
                         "dimension": {

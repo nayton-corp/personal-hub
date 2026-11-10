@@ -11,8 +11,8 @@ from hub.core.errors import Problem
 from hub.domains.finance.packs import CountryPack
 from hub.domains.finance.patrimoine.app import (
     account_list,
+    allocation,
     debts,
-    lookthrough,
     perf_lines,
     performance,
     price_history,
@@ -100,12 +100,15 @@ def build_router(host: Host) -> APIRouter:
         _p: AnyReader,
         dimension: Annotated[str, Query(pattern=DIMENSION)] = "region",
         on: Annotated[str | None, Query(pattern=DATE)] = None,
+        line: Annotated[list[str] | None, Query(max_length=300)] = None,
     ) -> dict[str, Any]:
-        """Positions ventilées par région, secteur, devise, ou les dix plus grosses lignes
-        sous-jacentes (transparence des fonds)."""
+        """Le patrimoine réparti par région, secteur ou devise, liquidités comprises, ou les dix
+        plus grosses lignes sous-jacentes des fonds. `line` : la sélection de l'écran, comme
+        pour `/performance` (par défaut, les lignes de l'app). La somme des cases (`total`),
+        dettes à part (`owed`), est la valeur de la sélection. Des agrégats seulement."""
         with engine.connect() as conn:
-            return lookthrough.breakdown(
-                conn, dimension, on or host.today().isoformat(), host.pack()
+            return allocation.breakdown(
+                conn, dimension, on or host.today().isoformat(), host.pack(), line
             )
 
     @r.get("/transfers", response_model=TransfersOut, response_model_exclude_unset=True)

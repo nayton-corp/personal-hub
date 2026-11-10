@@ -20,7 +20,13 @@ from hub.core.registry import Registry
 from hub.domains.finance.classement.app import insights, recurring, rules
 from hub.domains.finance.domain import FinanceDomain
 from hub.domains.finance.packs import ch
-from hub.domains.finance.patrimoine.app import holdings, lookthrough, transfers, valuation
+from hub.domains.finance.patrimoine.app import (
+    allocation,
+    holdings,
+    lookthrough,
+    transfers,
+    valuation,
+)
 from hub.domains.finance.patrimoine.infra import composition
 from hub.domains.finance.registre.app import catalog, ledger
 from hub.domains.finance.sources.app import manual
@@ -497,26 +503,35 @@ def test_generic_composition_and_breakdown(finance: FinanceDomain) -> None:
         ]
     )
     with finance.engine().connect() as conn:
-        out = lookthrough.breakdown(conn, "region", "2026-10-27", ch.PACK)
-        cur = lookthrough.breakdown(conn, "currency", "2026-10-27", ch.PACK)
-        top = lookthrough.breakdown(conn, "holding", "2026-10-27", ch.PACK)
+        out = allocation.breakdown(conn, "region", "2026-10-27", ch.PACK)
+        cur = allocation.breakdown(conn, "currency", "2026-10-27", ch.PACK)
+        top = allocation.breakdown(conn, "holding", "2026-10-27", ch.PACK)
     items = {i["bucket"]: i["value"]["minor"] for i in out["items"]}
-    # fonds : 1000 → 700 / 200 / 100 non ventilé ; Apple 400 non ventilé ; ETH 4500 crypto
+    # fonds : 1000 → 700 / 200 / 100 que sa fiche ne détaille pas ; Apple 400 sans fiche ;
+    # ETH 4500 crypto
     assert items == {
         composition.NORTH_AMERICA: 70_000,
         ch.PACK.regions.europe: 20_000,
         composition.CRYPTO: 450_000,
-        composition.UNKNOWN: 50_000,
+        allocation.NOT_SPLIT: 10_000,
+        "Région inconnue": 40_000,
     }
-    assert out["items"][-1]["bucket"] == composition.UNKNOWN  # le reste en dernier
+    # ce qu'un fonds ne détaille pas, puis l'actif sans fiche : en dernier, et distincts
+    assert [(i["bucket"], i["kind"]) for i in out["items"][-2:]] == [
+        (allocation.NOT_SPLIT, "undetailed"),
+        ("Région inconnue", "unknown"),
+    ]
     # chaque case nomme les actifs qui la remplissent, le plus gros d'abord
     na = next(i for i in out["items"] if i["bucket"] == composition.NORTH_AMERICA)
     assert [(a["isin"], a["value"]["minor"]) for a in na["assets"]] == [(WORLD, 70_000)]
-    unknown = out["items"][-1]["assets"]
-    assert [a["value"]["minor"] for a in unknown] == sorted(
-        (a["value"]["minor"] for a in unknown), reverse=True
-    )
-    assert out["covered"] == "0.1695"
+    assert [a["isin"] for a in out["items"][-1]["assets"]] == ["SYM:AAPL"]
+    # part sûre : tout sauf les 100 non répartis et les 400 sans fiche
+    assert out["covered"] == "0.9153"
+    assert out["total"]["minor"] == sum(items.values()) == 590_000
+    # par devise : une action est dans sa devise de cotation ; pour un fonds, c'est une estimation
+    usd = next(i for i in cur["items"] if i["bucket"] == "USD")
+    assert usd["value"]["minor"] == 140_000
+    assert usd["estimated"] is True
     assert {i["bucket"] for i in cur["items"]} == {"USD", "CHF"}
     assert top["items"][0]["bucket"] == "Ethereum"
     # une composition plus ancienne ne remplace pas la plus récente : elle s'ajoute à

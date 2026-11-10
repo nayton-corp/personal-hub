@@ -38,7 +38,7 @@ par module (`make web`).
 |---|---|
 | `kpis?month=` | patrimoine net et variations (1 mois, depuis le 31 décembre), revenus, dépenses, épargne, reste à vivre, jours restants, liquidités, mois couverts, taux d'épargne 3 mois, comptes périmés, à catégoriser, marge 3a |
 | `networth/history?from=&to=&step=` | instantanés : patrimoine, versements cumulés, valeur par enveloppe et par compte ; `step=day\|week` calcule un point par jour ou par semaine à la demande (400 points au plus, `from` requis) |
-| `performance?from=&to=&step=&line=` | performance d'une sélection de lignes (`compte\|ISIN`, `compte\|cash`, `debt:…` ; celles de l'app par défaut) : valeur, apports nets, gain, rendement pondéré dans le temps, rendement personnel (TRI, dès un an), revenus, frais, par compte, par actif, par ligne, par mois et par année, baisse maximale et volatilité, et les événements de la courbe (`events` : gros versements et retraits, revenus, un agrégat par jour ; jamais sur des comptes bancaires seuls). Les virements entre mes comptes s'annulent sur le total ; une ligne qui reçoit son premier cours y entre comme un versement |
+| `performance?from=&to=&step=&line=` | performance d'une sélection de lignes (`compte\|ISIN`, `compte\|cash`, `debt:…` ; celles de l'app par défaut) : valeur, apports nets, gain, rendement pondéré dans le temps, rendement personnel (TRI, dès un an), revenus, frais, par compte, par actif, par ligne, par mois et par année, baisse maximale et volatilité, le plus haut et le plus bas de tous les jours (`extremes`), et les événements de la courbe (`events` : gros versements et retraits, revenus, un agrégat par jour ; jamais sur des comptes bancaires seuls). Les points tombent sur le calendrier (chaque jour, chaque dimanche, chaque fin de mois) ; au-delà de 400 le pas s'élargit, jamais « un jour sur N ». Les virements entre mes comptes s'annulent sur le total ; une ligne qui reçoit son premier cours y entre comme un versement |
 | `prices?isin=&from=&to=` | cours d'un actif, un par jour (la dernière source l'emporte), 400 points au plus : la courbe de la page d'un actif et le repère de la performance en % |
 | `flows?month=&period=m\|q` | revenus → fixe, variable, épargne → catégories, et le reste sur compte |
 | `accounts` | comptes, solde, valeur, disponibilité (`immediate`, `days`, `locked`, déduite du type) et objectif (`current`, `safety`, `projects`, `long_term`, `retirement`, déduit du type tant qu'il n'est pas choisi) et montant visé (`target`, réglé dans le compte ; 0 le retire) |
@@ -399,13 +399,21 @@ Chaque couple (compte, date) est un relevé complet des positions ; le cours est
 (sinon le dernier cours connu). Le registre ne voit pas d'écriture : l'argent envoyé vers ce
 compte compte comme un versement s'il est catégorisé `transfer-titres`.
 
-**Transparence des fonds.** `GET /api/finance/lookthrough?dimension=region|sector|currency|holding`
-ventile les positions selon ce que les fonds détiennent. Deux fichiers sont reconnus : la liste
-des lignes publiée par l'émetteur (iShares, Vanguard… : le fichier doit avoir l'ISIN du fonds
-dans son nom, par ex. `IE00B3RBWM25_holdings.csv`), ou un CSV générique
-`isin,dimension,bucket,weight_pct,on_date`. Sans composition, un fonds est classé d'après
-lui-même (catégorie VIAC, crypto), sinon « Non ventilé ». Chaque poche liste aussi les actifs qui
-la composent et leur part (touche une case de la carte de répartition).
+**Répartition du patrimoine.** `GET /api/finance/lookthrough?dimension=region|sector|currency|holding`
+répartit le patrimoine affiché, liquidités comprises (`patrimoine/app/allocation.py`) : un seul
+calcul, côté serveur, sur les lignes de la courbe (comptes non masqués par défaut ; `line=` pour
+la sélection de l'écran, comme `/performance`). La somme des cases est `total` ; `total + owed`
+(dettes et soldes négatifs, à part) est la valeur de la sélection, au centime. Chaque franc
+arrive dans une case par un chemin connu : la composition publiée d'un fonds ; les liquidités
+d'un compte (« Liquidités », ou la devise du compte) ; une crypto ; sinon ce que l'on sait de
+l'instrument (sa classe, sa devise de cotation), dit `estimated`. La part qu'un fonds ne détaille
+pas va dans « Non réparti » (`kind: undetailed`), un actif sans fiche dans « Secteur inconnu »,
+« Région inconnue » ou « Devise inconnue » (`kind: unknown`). `covered` est la part sûre du
+total ; `unpriced` nomme les positions sans cours, hors de la répartition. Deux fichiers de
+composition sont reconnus : la liste des lignes publiée par l'émetteur (iShares, Vanguard… : le
+fichier doit avoir l'ISIN du fonds dans son nom, par ex. `IE00B3RBWM25_holdings.csv`), ou un CSV
+générique `isin,dimension,bucket,weight_pct,on_date`. Chaque case liste aussi les actifs qui la
+composent et leur part (touche une case de la carte de répartition).
 
 **Virements appariés.** Un débit et un crédit de mes comptes à 5 jours au plus s'apparient, par
 ordre de confiance : IBAN de contrepartie, référence commune, puis montant seul quand il est

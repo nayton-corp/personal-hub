@@ -220,7 +220,8 @@ class BreaksOut(Out):
 
 
 class BucketAssetOut(Out):
-    isin: str
+    isin: str | None  # l'instrument, ou None pour les liquidités d'un compte
+    account_id: str | None = None
     name: str
     value: MoneyOut
 
@@ -228,19 +229,30 @@ class BucketAssetOut(Out):
 class BucketOut(Out):
     bucket: str
     code: str | None  # home, europe, north_america, japan, pacific, emerging, crypto, unknown…
+    kind: str  # named | cash | undetailed (part qu'un fonds ne détaille pas) | unknown
+    estimated: bool  # tirée de la classe ou de la devise de cotation, pas d'une composition
     value: MoneyOut
     weight: str
+    count: int  # actifs qui remplissent la case (`assets` n'en nomme que les premiers)
     assets: list[BucketAssetOut]
+
+
+class UnpricedOut(Out):
+    isin: str
+    account_id: str
+    name: str
 
 
 class LookthroughOut(Out):
     dimension: str
     on_date: str
     currency: str
-    total: MoneyOut
-    covered: str | None
+    total: MoneyOut  # ce qui est réparti : la somme des cases
+    owed: MoneyOut  # dettes et soldes négatifs, à part ; total + owed = la valeur affichée
+    covered: str | None  # part sûre : ni estimée, ni non répartie, ni inconnue
     compositions_since: str | None
     items: list[BucketOut]
+    unpriced: list[UnpricedOut]  # positions sans cours, hors de la répartition
 
 
 class UnmatchedOut(Out):

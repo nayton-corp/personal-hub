@@ -117,7 +117,8 @@ export interface BreaksOut {
 }
 
 export interface BucketAssetOut {
-  isin: string;
+  isin: string | null;
+  account_id?: string | null;
   name: string;
   value: MoneyOut;
 }
@@ -125,8 +126,11 @@ export interface BucketAssetOut {
 export interface BucketOut {
   bucket: string;
   code: string | null;
+  kind: string;
+  estimated: boolean;
   value: MoneyOut;
   weight: string;
+  count: number;
   assets: BucketAssetOut[];
 }
 
@@ -772,9 +776,11 @@ export interface LookthroughOut {
   on_date: string;
   currency: string;
   total: MoneyOut;
+  owed: MoneyOut;
   covered: string | null;
   compositions_since: string | null;
   items: BucketOut[];
+  unpriced: UnpricedOut[];
 }
 
 export interface MissingFxOut {
@@ -1235,6 +1241,12 @@ export interface UnmatchedOut {
   account: string;
   date: string;
   amount: MoneyOut;
+}
+
+export interface UnpricedOut {
+  isin: string;
+  account_id: string;
+  name: string;
 }
 
 export interface UploadItemOut {

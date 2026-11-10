@@ -2,7 +2,7 @@
 // (dix au choix, six épinglées, une plage libre), « Répartir par » (ce qui filtre, puis ce qui se
 // lit dans les fonds), « Voir le patrimoine de… » (passer d'un compte à l'autre), le repère de
 // la performance en %, et les actifs d'un bloc du contenu des fonds.
-import { BY, FILTERS, LOOK, PRESETS, S, accLabel, asOf, fMark, fName, firstDay, here, lines, match, sum } from "./wstate.js";
+import { BY, FILTERS, LOOK, PRESETS, S, accLabel, asOf, fMark, fName, firstDay, here, lines, lookPath, match, scopeLines, sum } from "./wstate.js";
 import { SHEETS, amount, esc, ic, share } from "../../ui.js";
 import { FACET, assetMark, facetMark, instMark } from "./meta.js";
 import { KIND_LABEL } from "./wstate.js";
@@ -100,21 +100,27 @@ SHEETS.cmp = () => {
   };
 };
 
-// actifs d'un bloc du contenu des fonds
+// actifs d'un bloc de la répartition (région, secteur, devise) : la même lecture que l'écran
 SHEETS.bucket = (k) => {
-  const e = store.data(`/finance/lookthrough?dimension=${S.by}`);
+  const all = lines() || [];
+  const e = store.data(lookPath(scopeLines(all, { t: "home" })));
   const x = e ? e.items.find((it) => it.bucket === k) : null;
   if (!x) return null;
-  const all = lines() || [];
+  const more = x.count - (x.assets || []).length;
+  const why = x.kind === "cash" ? "Les liquidités de ces comptes : elles n'ont ni secteur ni région."
+    : x.kind === "undetailed" ? "La part que la fiche de ces fonds ne détaille pas."
+    : x.kind === "unknown" ? "Ces actifs n'ont pas de fiche : dépose la composition d'un fonds dans la boîte d'entrée pour le répartir."
+    : x.estimated ? "Estimé d'après ce que l'on sait de ces actifs (classe, devise de cotation), faute de composition publiée."
+    : "Un fonds est réparti sur plusieurs blocs : ces actifs y contribuent pour une part, sans filtre sur l'écran.";
   return {
     title: esc(k),
-    body: `<div class="sheet-big num">${share(Number(x.weight || 0))} <small>· ${amount(units(x.value))}</small></div>
-      <p class="hint">Un fonds est réparti sur plusieurs blocs : ces actifs y contribuent pour une part, sans filtre sur l'écran.</p>
+    body: `<div class="sheet-big num">${share(units(x.value) / (units(e.total) || 1))} <small>· ${amount(units(x.value))}</small></div>
+      <p class="hint">${why}</p>
       <div class="list">${(x.assets || []).map((a) => {
-        const l = all.find((y) => y.asset === `isin:${a.isin}`);
-        return `<button class="sub-row" type="button" data-a="w-open" data-v="${esc(`s:isin:${a.isin}`)}">${l ? assetMark(l, "sm") : facetMark("cat", "funds")}
+        const l = a.isin ? all.find((y) => y.asset === `isin:${a.isin}`) : null;
+        return `<button class="sub-row" type="button" data-a="w-open" data-v="${esc(a.isin ? `s:isin:${a.isin}` : `a:${a.account_id}`)}">${a.isin ? (l ? assetMark(l, "sm") : facetMark("cat", "funds")) : fMark("acc", a.account_id)}
           <span class="row-main"><span class="row-title">${esc(a.name)}</span><span class="row-sub">${share(units(a.value) / (units(x.value) || 1))} du bloc</span></span>
           <span class="row-num"><span class="num sub-val">${amount(units(a.value))}</span></span><span class="go">${ic("chev")}</span></button>`;
-      }).join("")}</div>`,
+      }).join("")}</div>${more > 0 ? `<p class="hint">Et ${more} autre${more > 1 ? "s" : ""}, plus petit${more > 1 ? "s" : ""}.</p>` : ""}`,
   };
 };
