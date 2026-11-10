@@ -124,7 +124,9 @@ plus de 10 % au-delà de la cible. Le front met en mots, il ne calcule pas.
 
 `hub verify` contrôle aussi les chiffres : le gain depuis l'achat et la performance « Max »
 des cryptos s'accordent à la tolérance près (hors ruptures ouvertes et ce que le résultat montre à part : parts sans prix de revient, sorties que l'historique ne montre pas) ; les ruptures ouvertes
-sont comptées et chiffrées. Une fois par an, la valeur au 31 décembre se compare à la liste
+sont comptées et chiffrées. Un écart au-delà de la tolérance sort en avertissement
+(`figures.crypto_gap`) et t'arrive par ntfy : un des deux calculs se trompe, c'est un bug à
+corriger, pas une raison de bloquer une mise à jour ([D-027](decisions.md)). Une fois par an, la valeur au 31 décembre se compare à la liste
 des cours de l'AFC (déclaration d'impôt).
 
 ## État de départ (2 novembre 2026, agrégats)

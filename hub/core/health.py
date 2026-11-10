@@ -17,7 +17,7 @@ import shutil
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -208,13 +208,11 @@ def expiries(hub: HubContext, now: datetime) -> list[Finding]:
         left = day - now.date()
         if left <= EXPIRY_NOTICE:
             when = f"dans {left.days} jours" if left.days > 0 else "atteinte"
+            detail = f"{name[:80]} : échéance le {day.isoformat()} ({when})."
+            if day == date.min:
+                detail = f"{name[:80]} : date illisible dans HUB_EXPIRIES (attendu AAAA-MM-JJ)."
             found.append(
-                Finding(
-                    f"expiry:{name}",
-                    "Échéance proche",
-                    f"{name[:80]} : échéance le {day.isoformat()} ({when}).",
-                    remind_hours=WEEK_HOURS,
-                )
+                Finding(f"expiry:{name}", "Échéance proche", detail, remind_hours=WEEK_HOURS)
             )
     return found
 

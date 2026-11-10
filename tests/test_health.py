@@ -200,3 +200,12 @@ def test_a_declared_expiry_is_announced_two_weeks_ahead(hub: HubContext, box: In
     assert box.titles.count("Échéance proche") == 1  # un rappel par semaine, pas par jour
     keys(hub, NOW + timedelta(days=8))
     assert box.titles.count("Échéance proche") == 2
+
+
+def test_expiries_short_form_never_stops_the_hub() -> None:
+    from datetime import date
+
+    parsed = Monitoring(expiries="jeton GHCR du Pi=2027-11-01; clé=bientôt;;").expiries  # type: ignore[arg-type]
+    assert parsed == {"jeton GHCR du Pi": date(2027, 11, 1), "clé": date.min}
+    assert Monitoring(expiries="").expiries == {}  # type: ignore[arg-type]
+    assert Monitoring(expiries='{"a": "2027-01-01"}').expiries == {"a": date(2027, 1, 1)}  # type: ignore[arg-type]

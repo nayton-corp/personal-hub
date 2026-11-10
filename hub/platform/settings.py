@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import (
     BaseSettings,
+    NoDecode,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
     TomlConfigSettingsSource,
@@ -106,9 +108,30 @@ class Monitoring(BaseModel):
     replica_hours: int = Field(default=6, ge=1)  # retard maximal de la réplique sur la base
     remind_hours: int = Field(default=24, ge=1)  # rappel d'une alerte qui dure
     # échéances que le hub ne peut pas lire lui-même (jeton du registre d'images, clé d'une
-    # plateforme) : nom → date ; rappel 14 jours avant, puis chaque semaine. Par exemple
-    # HUB_MONITORING__EXPIRIES='{"jeton GHCR du Pi": "2027-02-01"}'
-    expiries: dict[str, date] = Field(default_factory=dict)
+    # plateforme) : nom → date ; rappel 14 jours avant, puis chaque semaine. Dans deploy/.env :
+    # HUB_EXPIRIES=jeton GHCR du Pi=2027-11-01;clé KuCoin=2027-05-01
+    expiries: Annotated[dict[str, date], NoDecode] = Field(default_factory=dict)
+
+    @field_validator("expiries", mode="before")
+    @classmethod
+    def _expiries(cls, v: object) -> object:
+        """Accepte la forme courte d'une variable d'environnement : `nom=date;nom=date`. Une
+        date illisible ne doit pas empêcher le hub de démarrer : elle devient une échéance
+        dépassée, que le contrôle de santé signale aussitôt."""
+        if not isinstance(v, str):
+            return v
+        if v.lstrip().startswith("{"):
+            return json.loads(v)
+        out: dict[str, date] = {}
+        for part in (p.strip() for p in v.split(";")):
+            if not part:
+                continue
+            name, _, day = part.rpartition("=")
+            try:
+                out[name.strip() or part] = date.fromisoformat(day.strip())
+            except ValueError:
+                out[name.strip() or part] = date.min
+        return out
 
 
 class Assistant(BaseModel):

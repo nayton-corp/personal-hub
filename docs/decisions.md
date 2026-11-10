@@ -7,6 +7,21 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-027 · L'intégrité bloque, les chiffres avertissent, et une nuit ratée se dit (10.11.2026)
+
+- **Contexte** : second audit (10.11.2026). `hub verify` mêlait l'intégrité et un recoupement
+  de calculs (gain des cryptos) : un écart de quelques francs refusait toute version, correctif
+  de sécurité compris (0.16.7). Et un contrôle ou une sauvegarde de nuit en échec n'écrivait
+  qu'une ligne de journal.
+- **Décision** : `hub verify` n'échoue que sur l'intégrité (bases, chaînes d'empreintes,
+  schémas, triggers). Ce qu'un domaine signale sans la mettre en cause sort en avertissement
+  (`Health.warnings`) et arrive par ntfy. Tout job planifié en échec alerte ; `hub ops health`
+  surveille chaque heure disques, réplique, sauvegardes, imports en plan ; `hub backup-check`
+  relit les sauvegardes chaque semaine.
+- **Conséquence** : un écart de calcul ne bloque plus une mise à jour ; il te parvient et se
+  traite comme un bug. `hub finance golden check` reste le recomptage au centime d'une mise à
+  jour.
+
 ## D-026 · Le Pi installe seul chaque version publiée (09.11.2026)
 
 - **Contexte** : chaque déploiement sur le Mac demandait un « oui déploie vX », un `git
