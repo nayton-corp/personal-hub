@@ -179,9 +179,11 @@ def _recurring(conn: Connection) -> list[Alert]:
         rise = last - usual
         if rise < RECURRING_UP_MIN or rise * 100 < usual * RECURRING_UP_PCT:
             continue
+        # la clé porte le nouveau prix, pas la date du paiement : une hausse prévient une fois,
+        # pas à chaque paiement tant que le prix habituel (une médiane) n'a pas suivi (audit N2)
         out.append(
             Alert(
-                f"recurring-up:{key}:{last_date}",
+                f"recurring-up:{key}:{last}",
                 "recurring_up",
                 f"Abonnement en hausse : {label}",
                 "Un abonnement a augmenté",

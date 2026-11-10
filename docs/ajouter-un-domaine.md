@@ -30,7 +30,9 @@ Les mots sont ceux du [glossaire](glossaire.md) ; la décision qui fonde le mani
   `hub.core.integrity.schema()` ; un registre `integrity.Ledger(fields)` écrit chaque ligne
   protégée avec son maillon. Les tables protégées sont en ajout seul (triggers anti
   `UPDATE`/`DELETE`, `integrity.append_only`).
-- `events_since(cursor, limit)` lit sa boîte de sortie, `applied(ids)` et
+- `events_since(cursor, limit)` lit sa boîte de sortie (le cœur la suit par un curseur ; une
+  notification que ntfy n'a pas prise ou un événement fautif attend dans `event_retries`, sans
+  bloquer la file, puis est mis de côté avec une alerte), `applied(ids)` et
   `record_applied(...)` tiennent `applied_proposals` : `integrity.events_since`,
   `integrity.applied` et `Ledger.record_applied` le font pour lui.
 - `health()` et `verify()` disent si la base répond et si le journal tient ; `hub verify` les

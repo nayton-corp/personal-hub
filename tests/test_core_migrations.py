@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "webauthn_challenges",
     "rate_limits",
     "event_cursors",
+    "event_retries",
     "alembic_version",
 }
 PROTECTED = ("audit", "links")
