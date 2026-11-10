@@ -14,7 +14,7 @@ from hub import cli
 from hub.core import maintenance, ops
 from hub.core.context import HubContext
 from hub.core.registry import Registry
-from hub.platform.settings import Settings
+from hub.platform.settings import Settings, get_settings
 from tests.support.demo_domain import DemoDomain
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,10 +39,13 @@ def test_a_mounted_domain_gets_replicated(hub: HubContext) -> None:
 def test_ops_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # les bases dans un dossier à soi, pas sous /srv/hub (refusé hors root, en CI)
     monkeypatch.setenv("HUB_PATHS__DATA", str(tmp_path / "data"))
+    # des réglages lus avant par un autre test du même processus garderaient /srv/hub
+    get_settings.cache_clear()
     out = CliRunner().invoke(cli.app, ["ops", "databases"])
     assert out.exit_code == 0, out.output
     assert out.output.split() == ["core", "agenda", "documents", "finance"]
     assert "dbs:" in CliRunner().invoke(cli.app, ["ops", "litestream"]).output
+    get_settings.cache_clear()
 
 
 def test_restore_brings_back_the_demo_domain(settings: Settings, tmp_path: Path) -> None:
