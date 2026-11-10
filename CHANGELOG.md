@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.16.9] · 2026-11-10
+
 ### Exploitation
 
 - Mise à jour : quand le `verify` d'avant migration échoue avec l'image en place, la nouvelle
