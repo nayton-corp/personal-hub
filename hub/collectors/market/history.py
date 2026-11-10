@@ -174,8 +174,8 @@ def eth_moves(
     première fois (mémoire `chain_txs` : `<compte>` pour Ethereum, `<compte>@<réseau>`
     sinon), ensuite la page la plus récente de chaque liste. Un réseau sans clé Etherscan est
     signalé (`needs_key`) et relu en entier quand elle arrive ; un explorateur sans clé qui
-    refuse l'accès (403) l'est aussi (`blocked`) : solde seul, nouvel essai chaque semaine. Rend (transactions, réseaux
-    relus en entier → premier jour, à signaler)."""
+    refuse l'accès (403) l'est aussi (`blocked`) : solde seul, nouvel essai chaque semaine.
+    Rend (transactions, réseaux relus en entier → premier jour, à signaler)."""
     account, addresses = str(w["account"]), w["addresses"]
     mine = {a.lower() for a in addresses}
     staking = env.cfg.market.staking_tokens
