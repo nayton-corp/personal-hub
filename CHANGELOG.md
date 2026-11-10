@@ -2,6 +2,27 @@
 
 ## [Non publié]
 
+## [0.18.2] · 2026-11-10
+
+Le gain et le rendement n'oublient plus les positions vendues.
+
+### À la mise à jour
+
+- Le gain et le pourcentage changent dans les vues qui nomment leurs lignes : un patrimoine
+  avec un crédit, la vue Brut, une vue filtrée, la page d'un compte. Ils comptent maintenant
+  les positions vendues pendant la période, comme la vue de tout le patrimoine le faisait déjà.
+- Rien à faire sur la machine. L'étalon (`golden check`) ne bouge pas.
+
+### Finance
+
+- Performance : dès qu'un crédit était dans le total, en vue Brut ou avec un filtre, l'app
+  demandait au serveur les seules lignes qu'elle connaît, celles d'aujourd'hui. Une position
+  vendue ou vidée depuis sortait du calcul avec son passé : le gain et le rendement de la
+  période étaient ceux des seules positions encore détenues. `/finance/performance` prend
+  `account=` (un compte entier, lignes passées comprises) et l'app demande ainsi tout compte
+  dont elle choisit toutes les lignes. Un actif choisi (page ou filtre « Actif ») reste demandé
+  ligne par ligne.
+
 ## [0.18.1] · 2026-11-10
 
 L'hygiène du second audit (10 novembre, lot E). Aucun chiffre ne change.

@@ -405,3 +405,41 @@ def test_route(
     assert body["items"][-1]["on_date"] == "2026-01-31"
     assert chf(body["summary"]["net_flows"]) == 150_000
     assert set(body["by_account"]) == {bcf.id}
+
+
+def test_a_sold_position_keeps_its_past_in_its_account(
+    client: TestClient,
+    ctx: HubContext,
+    fin: FinanceDomain,
+    fund: catalog.Account,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """L'app ne connaît que les lignes d'aujourd'hui. `account=` demande le compte en entier :
+    une position vendue depuis reste dans son gain et son rendement (une vue avec un crédit, en
+    Brut ou filtrée l'oubliait, audit du 10/11)."""
+    with begin_immediate(fin.engine()) as conn:
+        trade(conn, fund, "2026-03-25", "-20", -198_000)  # tout est vendu au cours du jour
+    monkeypatch.setattr(fin, "today", lambda: date(2026, 3, 31))
+
+    def get(**params: Any) -> dict[str, Any]:
+        r = client.get(
+            "/api/finance/performance",
+            params={"step": "month", **params},
+            headers=token(ctx, "brain=finance"),
+        )
+        assert r.status_code == 200, r.text
+        body: dict[str, Any] = r.json()
+        return body
+
+    whole = get(account=[fund.id])
+    assert f"{fund.id}|{FUND}" in whole["by_line"]
+    assert chf(whole["summary"]["gain"]) == 198_000 - 210_000
+    assert rate(whole["summary"]["twr"]) == pytest.approx(1.1 * 0.9 - 1, abs=1e-6)
+    assert whole["summary"] == get()["summary"]  # le seul compte : tout le patrimoine
+    # ce que l'app envoyait : les lignes encore détenues, donc plus rien de la position
+    held = get(line=[f"{fund.id}|cash"])
+    assert f"{fund.id}|{FUND}" not in held["by_line"]
+    # un compte inconnu n'est pas « tout le patrimoine »
+    unknown = get(account=["inconnu"])
+    assert unknown["lines"] == 0
+    assert unknown["summary"] is None

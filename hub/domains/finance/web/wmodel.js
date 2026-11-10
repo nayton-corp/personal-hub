@@ -4,9 +4,9 @@
 // /finance/prices. Les événements (gros versements, retraits, revenus) sont des totaux du jour
 // calculés par le serveur. Une date sans cours ou un compte resté sans relevé rend la courbe
 // « estimée » à cet endroit.
-import { S, activeCount, asOf, day, here, iso, lines, paths, perfPath, range, scopeLines, selIds } from "./wstate.js";
+import { S, activeCount, asOf, day, here, iso, lines, paths, perfPath, range, scopeLines } from "./wstate.js";
 import { rate, units } from "./perf.js";
-import { stepFor } from "./wcurve.js";
+import { perfSel, stepFor } from "./wcurve.js";
 import { base, staleDays } from "../../format.js";
 import { store } from "../../store.js";
 
@@ -83,8 +83,10 @@ export function model(r = here()) {
   const hasDebt = owned.length < sel.length && owned.length > 0;
   const plain = r.t === "home" && !activeCount() && !S.gross;
   const step = stepFor(rg.from, rg.to || asOf());
-  const e = store.use(perfPath(rg.from, rg.to, step, selIds(sel, plain)));
-  const a = hasDebt ? store.use(perfPath(rg.from, rg.to, step, selIds(owned))) : e;
+  // un actif choisi : ses lignes seules ; sinon un compte entier garde ses positions vendues
+  const narrow = r.t === "asset" || S.filters.asset.size > 0;
+  const e = store.use(perfPath(rg.from, rg.to, step, plain ? "" : perfSel(sel, all, narrow)));
+  const a = hasDebt ? store.use(perfPath(rg.from, rg.to, step, perfSel(owned, all, narrow))) : e;
   const out = { ...base0, status: e.status === "ok" ? a.status : e.status, error: e.error || a.error, net: e.data, perf: a.data, hasDebt, onlyDebt: !owned.length };
   if (!e.data) return out;
   const own = a.data && a !== e ? new Map(a.data.items.map((it) => [it.on_date, it])) : null;
@@ -149,6 +151,6 @@ export function monthly(sel) {
   d.setUTCFullYear(d.getUTCFullYear() - 1);
   d.setUTCDate(1);
   d.setUTCMonth(d.getUTCMonth() + 1);
-  const e = store.use(perfPath(iso(d), null, "month", selIds(sel)));
+  const e = store.use(perfPath(iso(d), null, "month", perfSel(sel, lines() || sel)));
   return e.data ? e.data.by_month.map((m) => ({ m: m.period, v: units(m.net_flows) })) : null;
 }
