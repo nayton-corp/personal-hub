@@ -361,6 +361,14 @@ frais compris (mémoire `<compte>@cosmos`) ; une mise en jeu y est un envoi vers
 nœuds publics élaguent leur index des transactions : s'ils n'en rendent aucune, c'est signalé
 (`partial history.<nom>.cosmos:pruned`) et relu au passage suivant ; un historique complet
 demande un indexeur (Mintscan, nœud d'archive), à brancher sur `cosmos_rest_url`.
+**EGLD** (MultiversX, adresse `erd1…`) : par l'API publique MultiversX (`multiversx_api_url`,
+sans clé), l'EGLD disponible, délégué à un fournisseur de staking, en cours de retrait et les
+récompenses à réclamer, le tout compté comme EGLD. Son historique vient des transferts réussis
+de l'adresse (`/accounts/<adresse>/transfers`), regroupés par transaction (un résultat de contrat
+rejoint la sienne, le gaz rendu est ignoré), frais compris (mémoire `<compte>@multiversx`). Une
+délégation, un retrait de délégation ou sa récupération ne bougent que les frais (les EGLD
+restent dans le solde) ; une récompense réclamée est une arrivée de staking. Au-delà de 20 pages
+au premier passage, c'est signalé (`multiversx:truncated`) et relu au passage suivant.
 
 **Historique ETH et SOL.** Leurs transactions partent aussi dans `transactions`, pour le
 registre : ETH par l'API de Routescan (`eth_history_url`, compatible Etherscan, sans clé) — envois et arrivées d'ETH, transferts internes de contrats et jetons suivis, les frais de

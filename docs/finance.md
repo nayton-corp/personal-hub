@@ -298,6 +298,10 @@ place :
 (compte `crypto:ledger-btc`) ; le collecteur « market » relève chaque jour le solde de ses
 adresses publiques et le cours (CoinGecko, en CHF) ; Binance, KuCoin et Coinbase ont leur
 collecteur. Une crypto détenue chez Revolut passe par le CSV de positions ci-dessous.
+Une crypto renommée que Binance remplace par une distribution « Token Swap » (RNDR devenu
+RENDER, MATIC devenu POL) est un échange part pour part : le nouveau jeton entre, l'ancien sort,
+sans revenu. Chez Coinbase, une crypto reçue de Coinbase Earn (un « send » hors chaîne de
+« Coinbase Earn » ou décrit « Earn Task ») est une récompense, pas un dépôt.
 
 **Transactions d'un portefeuille BTC.** Le collecteur dépose aussi chaque transaction confirmée
 (net reçu ou envoyé, frais de réseau payés) : elle devient une opération du compte en CHF et

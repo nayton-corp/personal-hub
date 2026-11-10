@@ -5,7 +5,8 @@ permission « View » seulement.
 L'historique : les transactions terminées de chaque portefeuille (achats, ventes, envois et
 réceptions avec leur hash, staking), une jambe chacune, à la contre-valeur que donne Coinbase
 (`native_amount`). Les mouvements entre portefeuilles Coinbase (staking, Advanced Trade) sont
-internes au compte ; un type inconnu est compté dans le détail (`type.<nom>:skipped=n`)."""
+internes au compte ; un type inconnu est compté dans le détail (`type.<nom>:skipped=n`). Les
+cryptos reçues de Coinbase Earn (des « send » hors chaîne) sont des récompenses, pas des dépôts."""
 
 from __future__ import annotations
 
@@ -127,6 +128,16 @@ ROLES: dict[str, str | None] = {
 KIND = {"transfer": "deposit", "trade": "trade", "income": "reward"}
 
 
+def _earned(tx: dict[str, Any]) -> bool:
+    """Une crypto reçue de Coinbase Earn (cours vidéo, quiz) : un « send » reçu hors chaîne
+    de l'expéditeur « Coinbase Earn », ou « Coinbase » avec la description « Earn Task »."""
+    if tx.get("type") != "send" or (tx.get("network") or {}).get("status") != "off_blockchain":
+        return False
+    sender = str((tx.get("from") or {}).get("name") or "").lower()
+    about = str(tx.get("description") or "").lower()
+    return "coinbase earn" in sender or "earn task" in about
+
+
 def _op(env: Env, tx: dict[str, Any]) -> Op | None:
     role = ROLES.get(str(tx.get("type")))
     amount = _qty(tx["amount"]["amount"])
@@ -140,7 +151,9 @@ def _op(env: Env, tx: dict[str, Any]) -> Op | None:
         (_qty(native["amount"]), str(native["currency"]).upper()) if native.get("amount") else None
     )
     day = date.fromisoformat(str(tx["created_at"])[:10]).isoformat()
-    if role == "transfer":
+    if role == "transfer" and amount > 0 and _earned(tx):
+        role = "income"
+    elif role == "transfer":
         role = "deposit" if amount > 0 else "withdrawal"
     kind = KIND.get(role, role)
     if tx.get("type") in ("fiat_deposit", "fiat_withdrawal"):

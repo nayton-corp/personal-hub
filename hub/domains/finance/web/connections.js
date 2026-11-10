@@ -406,7 +406,7 @@ export async function run(btn, msg, fn) {
 
 const NETWORK_LABEL = { ethereum: "Ethereum", arbitrum: "Arbitrum", base: "Base", bsc: "BNB Smart Chain", polygon: "Polygon" };
 
-export const WALLET_ASSETS = ["BTC", "ETH", "SOL", "ATOM"];
+export const WALLET_ASSETS = ["BTC", "ETH", "SOL", "ATOM", "EGLD"];
 
 // réseaux d'un portefeuille ETH : la même adresse sur Ethereum et ses couches 2
 export function networkChecks(networks) {

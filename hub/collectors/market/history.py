@@ -1,7 +1,8 @@
 """Historiques sur chaîne des portefeuilles suivis (règle : pas de soldes sans écritures) :
 BTC (mempool.space), EVM (explorateurs Etherscan/Blockscout), Solana (nœud public) ; ATOM vit
-dans `cosmos`. Chaque lecture page par page dit quand l'historique continue au-delà des pages
-lues (`truncated`, audit M8) : le passage est alors « incomplet » et relit tout la fois d'après.
+dans `cosmos`, EGLD dans `multiversx`. Chaque lecture page par page dit quand l'historique
+continue au-delà des pages lues (`truncated`, audit M8) : le passage est alors « incomplet »
+et relit tout la fois d'après.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from hub.collectors.base import Failure
 from hub.collectors.http import Http
 from hub.collectors.market.cosmos import atom_moves
 from hub.collectors.market.evm import Network, networks
+from hub.collectors.market.multiversx import egld_moves
 from hub.collectors.market.net import SATS, WEI, mempool, polite, rpc, scaled
 from hub.collectors.runtime import Env
 
@@ -319,6 +321,7 @@ HISTORIES: dict[str, History] = {
     "ETH": eth_moves,
     "SOL": sol_moves,
     "ATOM": atom_moves,
+    "EGLD": egld_moves,
 }
 
 

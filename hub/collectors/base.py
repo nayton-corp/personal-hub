@@ -94,6 +94,7 @@ class MarketConfig(BaseModel):
         "POL": "polygon-ecosystem-token",
         "BNB": "binancecoin",
         "ATOM": "cosmos",
+        "EGLD": "elrond-erd-2",  # MultiversX
         "ETHW": "ethereum-pow-iou",  # EthereumPoW (fusion de 2022) : Binance ne le cote pas
         # tenus chez SwissBorg, dont les cours ne venaient que des exports (vieillis entre deux)
         "BORG": "swissborg",
@@ -126,6 +127,8 @@ class MarketConfig(BaseModel):
     solana_rpc_url: str = "https://api.mainnet-beta.solana.com"
     # Cosmos Hub : API REST publique (soldes, staking, récompenses, transactions)
     cosmos_rest_url: str = "https://cosmos-rest.publicnode.com"
+    # MultiversX : API publique (soldes, délégations, transferts), sans clé
+    multiversx_api_url: str = "https://api.multiversx.com"
     # jetons lus en plus de la crypto native ; les autres (souvent du spam) sont ignorés
     erc20_tokens: dict[str, str] = {  # symbole → contrat Ethereum
         "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
