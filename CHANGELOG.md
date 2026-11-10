@@ -2,6 +2,66 @@
 
 ## [Non publié]
 
+## [0.17.0] · 2026-11-10
+
+Les urgences du second audit (10 novembre). Aucun chiffre du patrimoine ne change.
+
+### À la mise à jour
+
+- Budget : une charge fixe payée à la tolérance près (une unité, ou 1 % de la cible) passe de
+  « Dépassé de 0 » à « Payé ». Une cible à zéro disparaît de l'écran (« hors budget »).
+- `hub ops health` tourne chaque heure. Tant qu'aucun dépôt restic hors de la machine n'est
+  déclaré, il le rappelle une fois par semaine (« Pas de sauvegarde hors de la machine ») : voir
+  [docs/exploitation/pi.md](docs/exploitation/pi.md#une-copie-hors-du-pi).
+- À faire une fois sur la machine : `hub backup --restic` puis `hub backup-check`, pour voir
+  l'essai de restauration passer avec le vrai restic (les tests le remplacent par un faux).
+- « À valider » : une carte proposée par un assistant n'est plus cochée d'avance.
+
+### Exploitation
+
+- Être prévenu (audit O1, D1) : un job de la crontab qui échoue donne une alerte ntfy ; le
+  contrôle de nuit nomme ce qui a échoué (`hub verify --notify`). `hub ops health`, chaque heure,
+  regarde les disques (85 %), le retard de la réplique Litestream, l'âge de la copie de nuit, du
+  passage restic et du contrôle de nuit, les imports restés en plan et les échéances déclarées
+  (`HUB_EXPIRIES`, par exemple le jeton GHCR du Pi) : une alerte à l'apparition, un rappel par
+  jour, un mot quand c'est réglé. Quand tout va bien, un signal de vie part vers
+  `monitoring.heartbeat_url` des secrets : son absence dit que la machine est éteinte.
+- Sauvegardes (audit E1, K1) : restic sauvegarde aussi la configuration (secrets chiffrés,
+  secrets des collecteurs, `deploy/.env`) et la réplique, vers le dépôt local puis vers un dépôt
+  hors de la machine s'il est déclaré (`repository_offsite`, `env` dans la section `restic` des
+  secrets). Chaque dimanche, `hub backup-check` contrôle chaque dépôt, en ressort les dernières
+  copies des bases, les compare aux originaux et leur passe `integrity_check`. Les copies
+  d'avant migration ne s'accumulent plus (trois gardées). Kit de secours réécrit.
+- `hub verify` à deux niveaux (audit V1, [D-027](docs/decisions.md)) : l'intégrité bloque une
+  mise à jour ; un écart entre deux calculs (`figures.crypto_gap`) sort en `warnings`, alerte par
+  ntfy et ne bloque plus rien. La 0.16.7 avait été refusée pour un écart de ce genre.
+- Journaux des conteneurs bornés (10 Mo, trois fichiers).
+
+### Finance
+
+- Import (audit I1) : un import interrompu (redémarrage, base occupée) est repris depuis
+  l'archive chiffrée au passage suivant, au lieu de rester « en attente » pour toujours ; au-delà
+  d'une heure, il est signalé. La boucle de la boîte d'entrée survit à un échec et alerte au
+  troisième de suite.
+- Budget (audit B1, B3) : une charge fixe se juge à la tolérance près (une unité de la devise
+  ou 1 % de la cible) : 1'336.05 payés pour une cible de 1'336 sont « Payé », plus « Dépassé de
+  0 ». Un écart sous l'unité s'affiche avec ses décimales. Une cible se retire (« Retirer la
+  cible ») : la catégorie redevient « hors budget ».
+
+### Collecteurs
+
+- Base (audit X1) : l'explorateur public répond 403 ; le manque disait « réponse illisible,
+  nouvel essai au prochain passage » à chaque heure. Le réseau passe en « solde seul » : solde lu
+  chaque jour, historique redemandé une fois par semaine (`blocked`), dit sur la connexion et
+  plus dans « À faire ». Un mouvement non expliqué sort au rapprochement. Un 403 avec une clé
+  Etherscan se dit « clé refusée ».
+
+### App
+
+- « À valider » (audit W1) : le Face ID de l'accueil ne signe que les trois cartes qu'il montre
+  et le dit ; « Tout voir » porte les autres. Une carte proposée par un assistant, ou qui a
+  changé depuis sa lecture, n'est jamais cochée d'avance.
+
 ## [0.16.9] · 2026-11-10
 
 ### Exploitation
