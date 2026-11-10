@@ -26,6 +26,10 @@ reste ouverte.
   jour. Le relevé d'un compte (rapport VIAC, solde lu par l'API) donne les parts ; sa valeur
   annoncée ne sert que si elle est positive : un relevé à 0 pour des parts tenues (SwissBorg,
   un jour sans échange) n'est pas une valeur.
+- **Avant le premier cours d'un actif**, d'autres prix réels en tiennent lieu : un stablecoin
+  vaut un dollar ; le premier cours vaut pour la semaine qui le précède (le jour d'une fusion
+  de fonds) ; sinon, le prix de la dernière opération sur l'actif (montant ÷ parts). La courbe
+  n'est « estimée » que là où aucun de ces prix n'existe.
 - **Un cours a un âge.** Au-delà de 3 jours pour une crypto, 14 jours pour un titre ou un fonds,
   la position est signalée « cours ancien » ; sans aucun cours, « sans cours » : la valeur est
   inconnue, jamais 0 en silence.

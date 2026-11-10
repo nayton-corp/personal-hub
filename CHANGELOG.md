@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+## [0.16.7] · 2026-11-10
+
+### Finance
+
+- Patrimoine : avant le premier cours d'un actif, la courbe prend d'autres prix réels au lieu de
+  se dire « estimée » : un stablecoin vaut un dollar, le premier cours vaut pour la semaine qui
+  le précède (le jour de la fusion d'un fonds VIAC), sinon le prix de la dernière opération sur
+  l'actif (montant ÷ parts). Les longues plages hachurées (CFG chez KuCoin, anciennes cryptos
+  Binance et Coinbase) disparaissent.
+
 ## [0.16.6] · 2026-11-10
 
 ### Finance

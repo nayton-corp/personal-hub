@@ -11,6 +11,7 @@ from hub.domains.finance.patrimoine.app import assets
 from hub.domains.finance.patrimoine.model import positions
 from hub.domains.finance.registre.app.fx import FxTable as FxTable
 from hub.domains.finance.registre.model import fx
+from hub.kernel.money import exponent
 
 Line = positions.Line
 
@@ -50,4 +51,16 @@ class Positions(positions.Positions):
             )
         ):
             prices.setdefault(isin, []).append((on, Decimal(price), str(ccy)))
-        super().__init__(table or FxTable(conn), trades, reports, prices)
+        # prix des opérations (montant ÷ parts, en devise du compte), faute de cours
+        paid: dict[str, list[positions.Price]] = {}
+        for isin, on, qty, amount, ccy in conn.execute(
+            text(
+                "SELECT isin, trade_date, quantity, amount_minor, currency FROM trades "
+                "WHERE amount_minor != 0 ORDER BY trade_date, seq"
+            )
+        ):
+            q = abs(Decimal(qty))
+            if q:
+                unit = abs(Decimal(int(amount))) / 10 ** exponent(str(ccy)) / q
+                paid.setdefault(isin, []).append((on, unit, str(ccy)))
+        super().__init__(table or FxTable(conn), trades, reports, prices, paid)
