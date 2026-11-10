@@ -149,20 +149,24 @@ def build_router(host: Host) -> APIRouter:
         to: Annotated[str | None, Query(pattern=DATE)] = None,
         step: Annotated[str, Query(pattern=r"^(day|week|month)$")] = "week",
         line: Annotated[list[str] | None, Query(max_length=300)] = None,
+        account: Annotated[list[str] | None, Query(max_length=300)] = None,
     ) -> dict[str, Any]:
-        """Performance d'une sélection de lignes (`line=<compte>|<instrument>`, `<compte>|cash`,
-        `debt:<id>` ; par défaut, celles de l'app) : courbe de la valeur, des apports nets, du
+        """Performance d'une sélection (`account=<compte>` : toutes ses lignes, celles d'une
+        position vendue depuis comprises ; `line=<compte>|<instrument>`, `<compte>|cash`,
+        `debt:<id>` ; par défaut, les lignes de l'app) : courbe de la valeur, des apports nets, du
         gain et du rendement pondéré dans le temps ; résumé (gain, revenus, frais, rendement,
         rendement personnel annuel) ; le même par compte, par actif, par ligne ; par mois et par
         année ; risque. Les points tombent sur le calendrier (chaque jour, chaque dimanche, chaque
         fin de mois) ; au-delà de 400, le pas s'élargit. `extremes` : le plus haut et le plus bas
         de tous les jours de la période. Des agrégats seulement."""
-        if line is not None and len(line) > 500:
-            raise Problem("validation.params", "trop de lignes")
         with engine.connect() as conn:
             eng = perf_lines.engine_for(conn, host.today().isoformat())
         if eng is None:
             return performance.empty(base_currency())
+        if account:
+            line = sorted({*(line or []), *eng.account_lines(account)})
+            if not line:  # un compte inconnu n'est pas « tout le patrimoine »
+                return performance.empty(base_currency())
         return performance.report(eng, line, from_, to, step)
 
     @r.get("/prices", response_model=PricesOut)

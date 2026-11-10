@@ -5,6 +5,9 @@ import { CCY_NAME, FACETS, assetMark, facetMark, facetName, instMark, setInstitu
 import { MOIS, MOIS_L, base, units } from "../../format.js";
 import { pref, setPref } from "../../ui.js";
 import { store } from "../../store.js";
+import { lineId } from "./wcurve.js";
+
+export { lineId };
 
 export const paths = { accounts: "/finance/accounts", holdings: "/finance/holdings", history: "/finance/networth/history", fresh: "/finance/freshness", debts: "/finance/debts" };
 export const KIND_LABEL = { cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto", debt: "Dette" };
@@ -149,19 +152,16 @@ export function scopeLines(all, r = here()) {
   return all.filter((l) => match(l) && !(S.gross && l.kind === "debt"));
 }
 
-// identifiant d'une ligne pour /finance/performance : « compte|ISIN », « compte|cash », « debt:… »
-export const lineId = (l) => (l.kind === "debt" ? l.asset : l.asset.startsWith("isin:") ? `${l.acc}|${l.asset.slice(5)}` : `${l.acc}|cash`);
+// la sélection demandée à /finance/performance (wcurve.js, perfSel) ; vide : les lignes de l'app
+export const perfPath = (from, to, step, sel = "") =>
+  `/finance/performance?${from ? `from=${from}&` : ""}${to ? `to=${to}&` : ""}step=${step}${sel}`;
 
-export const perfPath = (from, to, step, ids) =>
-  `/finance/performance?${from ? `from=${from}&` : ""}${to ? `to=${to}&` : ""}step=${step}${ids ? ids.map((i) => `&line=${encodeURIComponent(i)}`).join("") : ""}`;
-
-// la répartition par région, secteur ou devise : la sélection de l'écran, comme la courbe
+// la répartition par région, secteur ou devise : la sélection de l'écran, à une date (une
+// position vendue n'y vaut plus rien : les lignes d'aujourd'hui suffisent)
 export const lookPath = (sel) => `/finance/lookthrough?dimension=${S.by}${activeCount() || S.gross ? selIds(sel).map((i) => `&line=${encodeURIComponent(i)}`).join("") : ""}`;
 
-// lignes demandées : aucune pour tout le patrimoine (le serveur prend celles de l'app), sinon la
-// sélection ; « compte|cash » porte aussi les revenus et frais d'un compte à positions
-export function selIds(sel, all = false) {
-  if (all) return null;
+// « compte|cash » porte aussi les revenus et frais d'un compte à positions
+function selIds(sel) {
   const ids = new Set(sel.map(lineId));
   for (const l of sel) if (l.kind !== "debt") ids.add(`${l.acc}|cash`);
   return [...ids].sort();

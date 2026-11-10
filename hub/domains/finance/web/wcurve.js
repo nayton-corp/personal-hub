@@ -15,3 +15,28 @@ export function granLabel(pts) {
   const s = gaps[gaps.length >> 1];
   return s <= 1 ? "par jour" : s === 7 ? "par semaine" : s >= 28 && s <= 31 ? "par mois" : `tous les ${s} jours`;
 }
+
+// identifiant d'une ligne pour /finance/performance : « compte|ISIN », « compte|cash », « debt:… »
+export const lineId = (l) => (l.kind === "debt" ? l.asset : l.asset.startsWith("isin:") ? `${l.acc}|${l.asset.slice(5)}` : `${l.acc}|cash`);
+
+// Ce que l'écran demande à /finance/performance pour la sélection `sel`, parmi les lignes `every`
+// de l'app. L'app ne connaît que les lignes d'aujourd'hui : un compte dont elles sont toutes
+// choisies est demandé en entier (`account=`), et le serveur y joint les positions vendues depuis.
+// Sans cela une vente efface le passé du gain et du rendement. `narrow` (un actif choisi) : rien
+// de plus que les lignes nommées. « compte|cash » porte aussi les revenus et frais du compte.
+export function perfSel(sel, every, narrow = false) {
+  const count = (ls) => {
+    const m = new Map();
+    for (const l of ls) if (l.kind !== "debt") m.set(l.acc, (m.get(l.acc) || 0) + 1);
+    return m;
+  };
+  const have = count(every), got = count(sel);
+  const accounts = new Set(), ids = new Set();
+  for (const l of sel) {
+    if (l.kind === "debt") ids.add(l.asset);
+    else if (!narrow && got.get(l.acc) === have.get(l.acc)) accounts.add(l.acc);
+    else ids.add(lineId(l)).add(`${l.acc}|cash`);
+  }
+  const q = (k, xs) => [...xs].sort().map((x) => `&${k}=${encodeURIComponent(x)}`).join("");
+  return q("account", accounts) + q("line", ids);
+}

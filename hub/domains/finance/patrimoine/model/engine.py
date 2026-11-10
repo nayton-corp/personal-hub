@@ -162,6 +162,12 @@ class Series:
         """Les lignes de l'app : comptes non masqués et dettes."""
         return [i for i, ln in self.lines.items() if not ln.hidden]
 
+    def account_lines(self, accounts: Sequence[str]) -> list[str]:
+        """Toutes les lignes de ces comptes, d'hier comme d'aujourd'hui : une position vendue
+        depuis garde son passé dans la performance du compte."""
+        wanted = set(accounts)
+        return [i for i, ln in self.lines.items() if ln.account_id in wanted]
+
     def values_at(self, k: int) -> dict[str, int]:
         """La valeur de chaque compte (et dette) le jour `k` : la somme de ses lignes."""
         out: dict[str, int] = {}
