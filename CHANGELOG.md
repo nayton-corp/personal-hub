@@ -2,6 +2,21 @@
 
 ## [Non publié]
 
+## [0.16.8] · 2026-11-10
+
+### Finance
+
+- Cryptos, résultat depuis l'achat : il s'accorde de nouveau avec la courbe « Max ». Le prix
+  de revient se trompait dans trois cas : des parts en route entre deux de mes comptes (l'arrivée
+  lue après une vente faite avec, fréquent sur USDC SwissBorg → Binance) sortaient du compte
+  global, la vente passait « sans historique » et l'arrivée gardait le coût ; une vente lue avant
+  l'achat du même jour qui la couvre ; des frais payés en crypto qui emportaient leur part du coût
+  sans la compter en perte. Le contrôle de `hub verify` qui compare les deux chiffres a refusé
+  d'installer la 0.16.7 dès que les ruptures sont tombées à zéro.
+- `hub verify` : l'écart permis entre les deux chiffres compte aussi ce que le résultat montre à
+  part (parts sans prix de revient, sorties que l'historique ne montre pas), que la courbe compte
+  au cours du jour.
+
 ## [0.16.7] · 2026-11-10
 
 ### Finance

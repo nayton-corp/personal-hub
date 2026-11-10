@@ -47,12 +47,13 @@ plus ce que les ventes ont réalisé. La performance « Max » de l'écran est c
 | Achat | Ajoute ce qu'il a coûté, frais compris. |
 | Vente | Retire sa part du prix de revient au coût moyen ; la différence est réalisée. |
 | Échange crypto contre crypto | Une vente suivie d'un achat, à la même valeur. |
-| Transfert entre deux de mes comptes | Les parts changent de compte, le coût les suit : ni gain ni perte. |
+| Transfert entre deux de mes comptes | Les parts changent de compte, le coût les suit : ni gain ni perte. En route (l'arrivée datée après l'envoi, même après une vente faite avec), elles restent à moi ; ce qui n'arrive jamais (frais de retrait) sort sans coût. |
 | Récompense (staking, Earn, airdrop) | Revenu à la valeur du jour de réception, puis coût zéro. Comme l'AFC. |
 | Écart de parts d'un fonds entre deux relevés | Moins d'un centième de part, sur des parts fractionnées : l'arrondi du relevé (VIAC publie deux décimales), pas une rupture. |
 | Virement entre deux de mes comptes sans txid commun | Un envoi et une arrivée de la même crypto, à quelques jours, l'arrivée recevant au plus 5 % de moins (frais de retrait) : le hub te propose de les relier (carte `link_crypto_moves`). Validé, le coût suit les parts et la différence est un frais ; en attente, l'envoi est sorti au coût et l'arrivée entrée au cours du jour, chacun avec sa rupture. Rien n'est deviné à la lecture. |
 | Mise en staking et sortie (parts brûlées, ETH réclamé) | Les cryptos restent à moi : le coût ne bouge pas, ni envoi ni arrivée hors de mes comptes. Une sortie lue sans marque (avant la marque `stake`) suivie d'un claim dans les 60 jours, qui rend entre 100 % et 125 % de la mise, t'est proposée en carte ; validée, elle est reliée au claim. Ce que le claim rend en plus est du gain à coût zéro. |
-| Frais payés en crypto | Des parts en moins, le coût reste sur les autres : une perte. |
+| Frais payés en crypto | Des parts en moins, le coût reste sur les autres : une perte (s'il n'en reste aucune, le coût est réalisé en perte). |
+| Vente lue avant l'achat qui la couvre (même jour, ordre de lecture) | L'achat couvre d'abord la vente, à son prix : l'aller-retour se réalise, sans charger les parts restantes de son coût. |
 | Arrivée d'un portefeuille non suivi | Coûte sa valeur du jour, et ouvre une rupture « arrivée de l'extérieur » tant que tu ne l'as pas classée. |
 | Envoi vers un portefeuille non suivi | Sort au coût, sans gain ni perte, et ouvre une rupture « envoi vers l'extérieur » tant que tu ne l'as pas classé. |
 | Parts sans historique d'achat | Rupture « sans historique » : valeur montrée à part, hors du gain, jusqu'à l'import ou la saisie du coût. |
@@ -122,7 +123,7 @@ plus de 10 % au-delà de la cible. Le front met en mots, il ne calcule pas.
 ## Contrôles
 
 `hub verify` contrôle aussi les chiffres : le gain depuis l'achat et la performance « Max »
-des cryptos s'accordent à la tolérance près (hors ruptures ouvertes) ; les ruptures ouvertes
+des cryptos s'accordent à la tolérance près (hors ruptures ouvertes et ce que le résultat montre à part : parts sans prix de revient, sorties que l'historique ne montre pas) ; les ruptures ouvertes
 sont comptées et chiffrées. Une fois par an, la valeur au 31 décembre se compare à la liste
 des cours de l'AFC (déclaration d'impôt).
 

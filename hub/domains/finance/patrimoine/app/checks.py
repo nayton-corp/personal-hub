@@ -5,7 +5,9 @@
   décision ou un import, et le contrôle la montre sans échouer.
 - Un seul gain : la performance « Max » des cryptos et leur résultat depuis l'achat
   (crypto_cost.py) s'accordent, à la tolérance par ligne près, plus ce que les ruptures ouvertes
-  laissent hors du résultat. Au-delà, le contrôle échoue : un des deux calculs se trompe.
+  laissent hors du résultat et ce que le résultat montre à part (parts sans prix de revient,
+  sorties que l'historique ne montre pas : la courbe les compte au cours). Au-delà, le contrôle
+  échoue : un des deux calculs se trompe.
 - Les relevés à valeur 0 pour des parts tenues (SwissBorg) : comptés, jamais pris comme valeur.
 
 Des agrégats seulement.
@@ -23,8 +25,9 @@ from hub.domains.finance.registre.model.amounts import money
 from hub.kernel.money import base_currency
 
 
-def crypto_gap(conn: Connection, on: str) -> tuple[int, int] | None:
-    """(performance « Max », résultat depuis l'achat) des cryptos, en centimes, ou None."""
+def crypto_gap(conn: Connection, on: str) -> tuple[int, int, int] | None:
+    """(performance « Max », résultat depuis l'achat, montré à part) des cryptos, en centimes,
+    ou None."""
     eng = perf_lines.build(conn, on)
     crypto = set(conn.execute(text("SELECT id FROM accounts WHERE kind = 'crypto'")).scalars())
     res = crypto_cost.result(conn, on, val.Positions(conn))
@@ -34,7 +37,8 @@ def crypto_gap(conn: Connection, on: str) -> tuple[int, int] | None:
     if not ids:
         return None
     gain = performance.report(eng, ids, None, None, "month")["summary"]["gain"]["minor"]
-    return int(gain), int(res["result"]["minor"])
+    apart = abs(res["unknown_cost_value"]["minor"]) + abs(res["unexplained_out_cost"]["minor"])
+    return int(gain), int(res["result"]["minor"]), int(apart)
 
 
 def figures(conn: Connection, on: str) -> tuple[bool, dict[str, Any]]:
@@ -59,8 +63,8 @@ def figures(conn: Connection, on: str) -> tuple[bool, dict[str, Any]]:
     ok = True
     gap = crypto_gap(conn, on)
     if gap is not None:
-        max_gain, since_purchase = gap
-        allowed = rep.tolerance_minor * (1 + lines) + out_of_result
+        max_gain, since_purchase, apart = gap
+        allowed = rep.tolerance_minor * (1 + lines) + out_of_result + apart
         ok = abs(max_gain - since_purchase) <= allowed
         detail["crypto"] = {
             "performance_max": money(max_gain, ccy),
