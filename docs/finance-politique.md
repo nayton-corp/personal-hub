@@ -47,7 +47,7 @@ plus ce que les ventes ont réalisé. La performance « Max » de l'écran est c
 | Achat | Ajoute ce qu'il a coûté, frais compris. |
 | Vente | Retire sa part du prix de revient au coût moyen ; la différence est réalisée. |
 | Échange crypto contre crypto | Une vente suivie d'un achat, à la même valeur. |
-| Transfert entre deux de mes comptes | Les parts changent de compte, le coût les suit : ni gain ni perte. |
+| Transfert entre deux de mes comptes | Les parts changent de compte, le coût les suit : ni gain ni perte. En route (l'arrivée datée après l'envoi, même après une vente faite avec), elles restent à moi ; ce qui n'arrive jamais (frais de retrait) sort sans coût. |
 | Récompense (staking, Earn, airdrop) | Revenu à la valeur du jour de réception, puis coût zéro. Comme l'AFC. |
 | Écart de parts d'un fonds entre deux relevés | Moins d'un centième de part, sur des parts fractionnées : l'arrondi du relevé (VIAC publie deux décimales), pas une rupture. |
 | Virement entre deux de mes comptes sans txid commun | Un envoi et une arrivée de la même crypto, à quelques jours, l'arrivée recevant au plus 5 % de moins (frais de retrait) : le hub te propose de les relier (carte `link_crypto_moves`). Validé, le coût suit les parts et la différence est un frais ; en attente, l'envoi est sorti au coût et l'arrivée entrée au cours du jour, chacun avec sa rupture. Rien n'est deviné à la lecture. |

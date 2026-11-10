@@ -65,6 +65,9 @@ class Book:
     short_q: Decimal = ZERO
     short: Decimal = ZERO
     short_usd: Decimal = ZERO
+    # parts en route entre deux de mes comptes : sorties de l'un, pas encore entrées dans l'autre
+    # (l'arrivée est souvent datée après l'envoi, et même après une vente faite avec)
+    transit: Decimal = ZERO
 
     def add(self, q: Decimal, cost: Decimal, cost_usd: Decimal) -> None:
         """Des parts qui entrent. Si des parts sont sorties avant d'entrer, celles-ci les
@@ -154,8 +157,8 @@ def walk(conn: Connection, on_date: str, fx: FxRates, lots: Sequence[Leg] = ()) 
                 b.held += q
                 day[on] = (had_q + q, had_f)
                 continue
-            if internal:
-                b.held += q  # les parts changent de compte, le coût reste
+            if internal:  # les parts changent de compte : toujours à moi, le coût reste
+                b.transit -= q
                 day[on] = (had_q + q, had_f + (v if q > 0 else -v))  # au cours, s'annule au total
                 continue
             if q > 0:
@@ -191,6 +194,9 @@ def walk(conn: Connection, on_date: str, fx: FxRates, lots: Sequence[Leg] = ()) 
                 else:  # plus rien pour le porter : une perte
                     b.realized -= c
                     b.realized_usd -= cu
+    for b in out.values():  # ce qui n'est jamais arrivé (frais de retrait) sort sans coût
+        b.held -= b.transit
+        b.transit = ZERO
     return Walk(out, usd_ok, flows)
 
 

@@ -519,3 +519,64 @@ def test_crypto_fees_leave_their_cost_on_the_other_coins(finance: FinanceDomain)
     )
     assert (minor(r["value"]), minor(r["cost"])) == (114_000, 100_000)
     assert _crypto_gain(finance, "2026-10-27") == minor(r["result"]) == 14_000
+
+
+def test_coins_on_their_way_between_my_accounts_are_still_mine(finance: FinanceDomain) -> None:
+    # 0.03 BTC achetés 1 500 chez Binance, 0.02 envoyés à la Ledger. Le 10 mars, la Ledger les
+    # renvoie ; Binance en vend 0.02 le 12 et lit l'arrivée du même jour après la vente (USDC
+    # SwissBorg → Binance). Les parts en route restent à moi : la vente sort son coût (1 000),
+    # il reste 0.01 BTC payé 500. Avant, la vente était à moitié « sans historique » et
+    # l'arrivée gardait le coût.
+    add_ref(finance, "crypto:binance", "crypto", "Binance")
+    add_ref(finance, "crypto:ledger", "crypto", "Ledger")
+    row = {"account": "crypto:ledger", "instrument": "BTC", "fee": "0"}
+    finance.importer.process(
+        [
+            doc(
+                prices=[btc(d, "50000") for d in ("2026-03-02", "2026-03-10", "2026-03-12")]
+                + [btc("2026-10-01", "60000")],
+                operations=[
+                    op("fiat:1", "fiat_deposit", "2026-03-01", ("CHF", "1500", "deposit")),
+                    op(
+                        "buy:1",
+                        "trade",
+                        "2026-03-02",
+                        ("CHF", "-1500", "trade"),
+                        ("BTC", "0.03", "trade"),
+                    ),
+                    op(
+                        "out:1",
+                        "withdrawal",
+                        "2026-03-03",
+                        ("BTC", "-0.02", "withdrawal"),
+                        txid="t1",
+                    ),
+                    op(
+                        "a-sell",
+                        "trade",
+                        "2026-03-12",
+                        ("BTC", "-0.02", "trade"),
+                        ("CHF", "1000", "trade"),
+                    ),
+                    op("z-dep", "deposit", "2026-03-12", ("BTC", "0.02", "deposit"), txid="t2"),
+                ],
+            )
+        ]
+    )
+    finance.importer.process(
+        [
+            doc(
+                transactions=[
+                    {**row, "on_date": "2026-03-03", "txid": "t1", "quantity": "0.02"},
+                    {**row, "on_date": "2026-03-10", "txid": "t2", "quantity": "-0.02"},
+                ]
+            )
+        ]
+    )
+    with finance.engine().connect() as conn:
+        r = crypto_cost.result(conn, "2026-10-27", valuation.Positions(conn))
+    assert r is not None
+    assert (minor(r["value"]), minor(r["cost"]), minor(r["realized"])) == (60_000, 50_000, 0)
+    assert minor(r["sold_without_history"]) == 0
+    assert minor(r["sent_outside_cost"]) == minor(r["arrived_from_outside"]) == 0
+    assert _crypto_gain(finance, "2026-10-27") == minor(r["result"]) == 10_000
