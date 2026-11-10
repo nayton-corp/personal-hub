@@ -6,6 +6,11 @@ position vaut ses parts fois le dernier cours connu, converti au change du jour 
 annoncée par le relevé ne sert que le jour du relevé, pour des parts que rien n'a bougées, et si
 elle est positive. Sans cours, ou sans change pour sa devise, la position n'a pas de valeur :
 `price` est None, jamais 0 en silence.
+
+Avant le premier cours d'un actif, d'autres prix réels tiennent lieu de cours : un stablecoin
+vaut un dollar, le premier cours s'il arrive dans la semaine (le jour d'une fusion de fonds),
+sinon le prix de sa dernière opération (montant ÷ parts : ce qu'il a coûté ou rapporté ce
+jour-là).
 """
 
 from __future__ import annotations
@@ -13,6 +18,7 @@ from __future__ import annotations
 import bisect
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal, localcontext
 
 from hub.domains.finance.registre.model.fx import FxRates
@@ -23,6 +29,10 @@ Report = tuple[
 ]  # (jour, {instrument: (parts, valeur, devise)})
 Trade = tuple[str, str, Decimal]  # (jour, instrument, parts signées)
 Price = tuple[str, Decimal, str]  # (jour, cours, devise)
+STABLECOINS = frozenset(
+    f"CRYPTO:{s}" for s in ("USDT", "USDC", "BUSD", "FDUSD", "TUSD", "USDP", "DAI")
+)
+SOON_DAYS = 7  # un premier cours aussi proche vaut pour les jours qui le précèdent
 
 
 @dataclass(frozen=True)
@@ -70,6 +80,10 @@ class Holding:
                 self.ti += 1
 
 
+def _days(start: str, end: str) -> int:
+    return (date.fromisoformat(end) - date.fromisoformat(start)).days
+
+
 class Positions:
     """Parts, relevés de positions et cours de tous les comptes à positions."""
 
@@ -79,12 +93,16 @@ class Positions:
         trades: Mapping[str, Sequence[Trade]],
         reports: Mapping[str, Sequence[Report]],
         prices: Mapping[str, Sequence[Price]],
+        paid: Mapping[str, Sequence[Price]] | None = None,
     ) -> None:
         self.fx = fx
         self.trades = {a: list(t) for a, t in trades.items()}
         self.reports = {a: list(r) for a, r in reports.items()}
         self.prices = {i: list(p) for i, p in prices.items()}
         self._dates = {i: [d for d, _p, _c in p] for i, p in self.prices.items()}
+        # prix des opérations (montant ÷ parts), par instrument et triés : faute de cours
+        self.paid = {i: list(p) for i, p in (paid or {}).items()}
+        self._paid_dates = {i: [d for d, _p, _c in p] for i, p in self.paid.items()}
 
     @property
     def accounts(self) -> set[str]:
@@ -94,8 +112,16 @@ class Positions:
         return Holding(self.reports.get(account_id, []), self.trades.get(account_id, []))
 
     def price(self, isin: str, on_date: str) -> Price | None:
-        k = bisect.bisect_right(self._dates.get(isin, []), on_date)
-        return self.prices[isin][k - 1] if k else None
+        dates = self._dates.get(isin, [])
+        k = bisect.bisect_right(dates, on_date)
+        if k:
+            return self.prices[isin][k - 1]
+        if isin in STABLECOINS:
+            return (on_date, Decimal(1), "USD")
+        if dates and _days(on_date, dates[0]) <= SOON_DAYS:
+            return self.prices[isin][0]
+        j = bisect.bisect_right(self._paid_dates.get(isin, []), on_date)
+        return self.paid[isin][j - 1] if j else None
 
     def worth(self, isin: str, quantity: Decimal, on_date: str) -> int | None:
         """Ce que valent `quantity` parts au dernier cours connu, en centimes de la devise de

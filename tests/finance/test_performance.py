@@ -13,7 +13,14 @@ from sqlalchemy import Connection, text
 
 from hub.core.context import HubContext
 from hub.domains.finance.domain import FinanceDomain
-from hub.domains.finance.patrimoine.app import assets, debts, perf_lines, performance, valuation
+from hub.domains.finance.patrimoine.app import (
+    assets,
+    debts,
+    market_data,
+    perf_lines,
+    performance,
+    valuation,
+)
 from hub.domains.finance.registre.app import catalog, ledger
 from hub.platform.db import begin_immediate
 from tests.finance.conftest import add_account, open_account
@@ -264,16 +271,35 @@ def test_currency_moves_are_market(fin: FinanceDomain) -> None:
 def test_first_price_is_a_flow_and_marked(fin: FinanceDomain) -> None:
     acc = ref(fin, "test:titres2", "securities")
     with begin_immediate(fin.engine()) as conn:
-        trade(conn, acc, "2026-04-01", "5", 50_000)
-        price(conn, "2026-04-05", "100")
-    out = run(fin, "2026-04-10")
+        trade(conn, acc, "2026-04-01", "5", 0)  # parts reçues sans prix (aucun prix d'opération)
+        price(conn, "2026-04-15", "100")
+    out = run(fin, "2026-04-20")
     s = out["summary"]
-    # sans cours du 1er au 4 avril, le compte est porté au registre (aucune écriture : 0) ;
+    # sans cours du 1er au 14 avril, le compte est porté au registre (aucune écriture : 0) ;
     # son premier cours n'est pas un gain
     assert chf(s["gain"]) == 0
     assert chf(s["end"]) == 50_000
     assert s["complete"] is False
     assert out["missing"] == [f"{acc.id}|cash"]
+
+
+def test_before_the_first_price_other_real_prices_stand_in(fin: FinanceDomain) -> None:
+    """Avant le premier cours : le premier cours s'il arrive dans la semaine, sinon le prix de
+    la dernière opération ; la courbe n'est plus « estimée » pour autant."""
+    soon = ref(fin, "test:titres-soon", "securities")
+    paid = ref(fin, "test:titres-paid", "securities")
+    with begin_immediate(fin.engine()) as conn:
+        trade(conn, soon, "2026-04-01", "5", 0)
+        trade(conn, paid, "2026-04-01", "2", 16_000)  # 80 la part
+        price(conn, "2026-04-20", "100")
+    with fin.engine().connect() as conn:
+        p = market_data.Positions(conn)
+        assert p.price(FUND, "2026-04-15") == ("2026-04-20", Decimal(100), "CHF")
+        assert p.price(FUND, "2026-04-02") == ("2026-04-01", Decimal(80), "CHF")
+        assert p.price(FUND, "2026-03-20") is None
+        assert p.price("CRYPTO:USDT", "2021-06-01") == ("2021-06-01", Decimal(1), "USD")
+    out = run(fin, "2026-04-25")
+    assert out["summary"]["complete"] is True
 
 
 def test_income_without_exchange_rate_is_marked_not_zeroed(fin: FinanceDomain) -> None:
