@@ -274,9 +274,13 @@ def test_policy_tiers_and_digest(
 
     h = bearer(make_token("demo:propose"))
     body = {"domain": "demo", "kind": "add_item", "params": {"name": "auto"}}
-    # un modèle sans déclaration reste au palier human
+    # un modèle sans déclaration reste au palier human, et sa déclaration seule ne suffit pas
     r = client.post("/api/proposals", json=body, headers=h).json()
     assert (r["tier"], r["status"]) == ("human", "pending")
+    said = body | {"params": {"name": "dit"}, "external_text": False}
+    r = client.post("/api/proposals", json=said, headers=h).json()
+    assert (r["tier"], r["status"]) == ("human", "pending")
+    h = bearer(make_token("demo:propose", "core:auto"))
     r = client.post(
         "/api/proposals",
         json=body | {"params": {"name": "sûr"}, "external_text": False},
@@ -288,6 +292,14 @@ def test_policy_tiers_and_digest(
     assert [i["id"] for i in day["items"]] == [r["id"]]
     assert day["items"][0]["reversible"] is False
     assert client.get("/api/digest?day=2000-01-01").json()["items"] == []
+    # le jour est celui de l'instance : 00h30 à Zurich le 10 est rangé le 10, pas la veille (UTC)
+    with hub.core.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE proposals SET decided_at = '2026-11-09T23:30:00.000Z' WHERE id = :i"),
+            {"i": r["id"]},
+        )
+    assert [i["id"] for i in client.get("/api/digest?day=2026-11-10").json()["items"]] == [r["id"]]
+    assert client.get("/api/digest?day=2026-11-09").json()["items"] == []
     assert client.get("/api/digest", headers=h).status_code == 403
 
 

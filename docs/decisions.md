@@ -7,6 +7,19 @@ du [glossaire](glossaire.md).
 Format : **contexte** (pourquoi la question s'est posée), **décision**, **conséquence** (ce qui
 change ou ce qu'on s'interdit).
 
+## D-028 · Le palier automatique d'un jeton se donne, il ne se déclare pas (10.11.2026)
+
+- **Contexte** : second audit (A2). Un jeton restait à la carte tant qu'il ne déclarait pas
+  `external_text = false` ([D-023](decisions.md)) : la barrière contre un texte venu d'ailleurs
+  tenait à la parole de l'appelant, donc du modèle qu'elle doit contenir.
+- **Décision** : c'est le hub qui décide, d'après ce que la personne a donné au jeton. Seul un
+  jeton qui porte la portée `core:auto` peut suivre le palier d'un type (`auto`,
+  `auto_digest`), et seulement s'il déclare ne pas partir d'un texte externe. `core:auto` ne
+  se donne pas à un jeton qui lit des textes (`…:read`, `…:household`).
+- **Conséquence** : sans `core:auto`, tout ce qu'un programme propose passe par une carte, quoi
+  qu'il déclare. Aucun jeton en service ne l'a : rien ne change aujourd'hui. L'app (session
+  passkey) suit les paliers comme avant.
+
 ## D-027 · L'intégrité bloque, les chiffres avertissent, et une nuit ratée se dit (10.11.2026)
 
 - **Contexte** : second audit (10.11.2026). `hub verify` mêlait l'intégrité et un recoupement

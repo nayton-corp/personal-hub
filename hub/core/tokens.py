@@ -4,7 +4,8 @@ Chaque jeton a une date de fin (chantier S8) : il ne s'utilise plus après, se r
 `rotate` (nouveau secret, mêmes portées, l'ancien révoqué) et la tâche de nuit prévient 14 jours
 avant. Le raccourci `brain` n'ouvre que les agrégats ; `brain=finance,agenda` ajoute la lecture
 et les propositions des domaines nommés. `<domaine>:household` ouvre ce que tout le foyer peut
-lire (les documents marqués « foyer », S12), ce que `…:read` ouvre aussi.
+lire (les documents marqués « foyer », S12), ce que `…:read` ouvre aussi. `core:auto` laisse un
+jeton appliquer sans carte ce qui est à un palier automatique (D-028).
 """
 
 from __future__ import annotations
@@ -34,7 +35,10 @@ DOMAIN_SCOPE = re.compile(
     r"^(?P<domain>[a-z][a-z0-9_-]*|\*):(?P<verb>read|propose|aggregates|household)$"
 )
 DOMAIN_NAME = re.compile(r"^[a-z][a-z0-9_-]*$")
-CORE_SCOPES = frozenset({"core:collector"})
+# `core:auto` : la personne laisse ce jeton appliquer sans carte ce qu'elle a mis à un palier
+# automatique. Jamais avec une portée qui lit des textes (audit du 10/11, A2, D-028).
+AUTO_SCOPE = "core:auto"
+CORE_SCOPES = frozenset({"core:collector", AUTO_SCOPE})
 DEFAULT_DAYS = 90
 MAX_DAYS = 366
 WARN_DAYS = 14
@@ -58,6 +62,8 @@ def expand_scopes(requested: list[str]) -> list[str]:
             out.add(scope)
     if not out:
         raise ScopeError("au moins une portée est requise")
+    if AUTO_SCOPE in out and any(s.endswith((":read", ":household")) for s in out):
+        raise ScopeError(f"{AUTO_SCOPE} ne va pas avec une portée qui lit des textes")
     return sorted(out)
 
 

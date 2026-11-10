@@ -2,7 +2,7 @@
 défaut) ne sert qu'au jour civil des chiffres et aux horaires."""
 
 import os
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 DEFAULT_TZ = "Europe/Zurich"
@@ -33,3 +33,10 @@ def local_tz() -> ZoneInfo:
 
 def local_today() -> date:
     return utcnow().astimezone(local_tz()).date()
+
+
+def local_day(day: str) -> tuple[str, str]:
+    """Début et fin (exclue) d'un jour civil de l'instance, en horodatages UTC : un effet de
+    00h30 à Zurich appartient à ce jour-là, pas à la veille."""
+    start = datetime.combine(date.fromisoformat(day), time.min, local_tz())
+    return iso(start), iso(start + timedelta(days=1))

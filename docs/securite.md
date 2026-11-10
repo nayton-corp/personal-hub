@@ -29,7 +29,8 @@ quittent pas sa machine, sauf les sauvegardes chiffrées qu'elle choisit d'envoy
   ([D-017](decisions.md)). Le jeton n'est montré qu'une fois et gardé par son empreinte ; un
   jeton fini est refusé, une alerte prévient 14 jours avant, `hub token rotate` le renouvelle.
   Portées : `<domaine>:read`, `<domaine>:aggregates`, `<domaine>:propose`, `core:collector`,
-  `core:propose` (proposer un lien, entre deux objets que le jeton lit) ;
+  `core:propose` (proposer un lien, entre deux objets que le jeton lit), `core:auto` (suivre un
+  palier automatique, jamais avec une portée qui lit des textes, [D-028](decisions.md)) ;
   la portée `app` n'existe que par une session passkey.
 
 ## Ce qu'un programme peut faire
@@ -39,12 +40,17 @@ quittent pas sa machine, sauf les sauvegardes chiffrées qu'elle choisit d'envoy
   lit jamais les transactions individuelles. Un jeton `documents:household` (celui de la
   bibliothèque de l'assistant, qui répond à tout le foyer) ne lit que les fiches d'objets et
   les documents marqués « foyer » ; un document reçu reste privé tant qu'on ne l'a pas marqué.
+  Limite connue (audit du 10/11, X3) : deux totaux lus à quelques minutes d'écart diffèrent du
+  montant de l'écriture arrivée entre les deux. Un jeton d'agrégats peut donc déduire un
+  montant isolé, sans son libellé ni sa contrepartie ; ce n'est pas une lecture d'écriture.
 - **Écrire** : jamais directement. Un outil de l'assistant crée une proposition ; l'effet
   n'a lieu qu'après validation dans l'app, un Face ID par lot, sur un défi qui porte
   l'empreinte du lot (le Double Sas, voir [architecture.md](architecture.md)). Une proposition
   qui a changé entre l'aperçu et la validation revient avec une nouvelle révision.
 - **Texte de tiers** : un libellé bancaire est une donnée, jamais une instruction ; les
-  réponses de l'assistant qui en contiennent le disent (`external_text`).
+  réponses de l'assistant qui en contiennent le disent (`external_text`). Ce qu'un programme
+  propose passe par une carte quoi qu'il déclare, sauf un jeton à qui la personne a donné
+  `core:auto` ([D-028](decisions.md)).
 
 ## Secrets
 
