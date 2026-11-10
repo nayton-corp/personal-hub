@@ -14,6 +14,7 @@ from hub.domains.finance.registre.app.kinds import (
     bad,
     fp,
 )
+from hub.kernel.money import exponent
 
 if TYPE_CHECKING:
     pass
@@ -86,14 +87,16 @@ class EditAccountHandler:
     def _row(self, conn: Connection, account_id: str) -> dict[str, Any]:
         row = conn.execute(
             text(
-                "SELECT institution, name, goal, availability, category, hidden, "
+                "SELECT institution, currency, name, goal, availability, category, hidden, "
                 "target_minor FROM accounts WHERE id = :a"
             ),
             {"a": account_id},
         ).first()
         if row is None:
             raise bad("compte inconnu")
-        return {"institution": row[0], **dict(zip(self.COLS, row[1:], strict=True))}
+        # le montant visé se saisit en unités de la devise du compte (100 centimes, 1 yen)
+        unit = 10 ** exponent(str(row[1]))
+        return {"institution": row[0], "unit": unit, **dict(zip(self.COLS, row[2:], strict=True))}
 
     def _changes(self, row: dict[str, Any], p: EditAccount) -> dict[str, Any]:
         wanted: dict[str, Any] = {
@@ -102,7 +105,7 @@ class EditAccountHandler:
             "availability": p.availability,
             "category": p.category,
             "hidden": None if p.hidden is None else int(p.hidden),
-            "target_minor": None if p.target is None else (p.target * 100 or "auto"),
+            "target_minor": None if p.target is None else (p.target * row["unit"] or "auto"),
         }
         out = {}
         for col, v in wanted.items():
@@ -118,7 +121,7 @@ class EditAccountHandler:
         return out
 
     @staticmethod
-    def _say(col: str, v: Any) -> str:
+    def _say(col: str, v: Any, unit: int = 100) -> str:
         if col == "name":
             return f"nom « {v} »"
         if col == "goal":
@@ -128,14 +131,14 @@ class EditAccountHandler:
         if col == "category":
             return f"catégorie {CATEGORY_LABEL[v].lower()}" if v else "catégorie déduite"
         if col == "target_minor":
-            return f"montant visé {v // 100:,}".replace(",", "'") if v else "sans montant visé"
+            return f"montant visé {v // unit:,}".replace(",", "'") if v else "sans montant visé"
         return "masqué" if v else "affiché"
 
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, EditAccount)  # noqa: S101
         row = self._row(conn, params.account_id)
         changes = self._changes(row, params)
-        said = ", ".join(self._say(c, v) for c, v in changes.items())
+        said = ", ".join(self._say(c, v, row["unit"]) for c, v in changes.items())
         return Preview(
             summary=f"Compte {row['institution']} « {row['name']} » : {said}",
             details={"account_id": params.account_id, "changes": changes},

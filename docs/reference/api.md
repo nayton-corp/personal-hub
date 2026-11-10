@@ -110,6 +110,7 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `GET` | `/api/finance/search` | Search |
 | `GET` | `/api/finance/settings` | Réglages du budget : jour où commence le mois en cours, mois en cours et ses dates, règles datées (`set_month_start` en pose une nouvelle). |
 | `GET` | `/api/finance/summary` | Summary |
+| `GET` | `/api/finance/todo` | Le nombre d'écritures à classer, seul : la pastille du Journal ne recalcule pas les chiffres clés (audit du 10/11, P1). |
 | `GET` | `/api/finance/trades` | Achats et ventes d'un actif (ordres), pour le journal d'un actif dans l'app. |
 | `GET` | `/api/finance/transfers` | Virements appariés par méthode et virements sans autre côté. Une lecture n'écrit pas : les instantanés se rafraîchissent après la réponse, en tâche de fond. |
 | `GET` | `/api/finance/trend` | Trend |

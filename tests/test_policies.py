@@ -10,7 +10,7 @@ from sqlalchemy import text
 from typer.testing import CliRunner
 
 from hub import cli
-from hub.core import policies, proposals
+from hub.core import policies, proposals, tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.domain import ProposalKind
@@ -47,8 +47,21 @@ def test_a_model_stays_at_the_card_unless_it_says_no_external_text(
 ) -> None:
     p, _ = proposals.create(hub, MODEL, "demo", "add_auto", {"name": "œufs"})
     assert (p.tier, p.status) == ("human", "pending")
+    # sa seule parole ne suffit pas (audit du 10/11, A2) : il faut la portée core:auto
     p, _ = proposals.create(hub, MODEL, "demo", "add_auto", {"name": "beurre"}, external_text=False)
+    assert (p.tier, p.status) == ("human", "pending")
+    trusted = Principal("token:t", frozenset({"demo:propose", "core:auto"}))
+    p, _ = proposals.create(hub, trusted, "demo", "add_auto", {"name": "sel"})
+    assert (p.tier, p.status) == ("human", "pending")
+    p, _ = proposals.create(hub, trusted, "demo", "add_auto", {"name": "riz"}, external_text=False)
     assert (p.tier, p.status) == ("auto", "applied")
+
+
+def test_the_auto_scope_never_goes_with_reading_texts() -> None:
+    assert tokens.expand_scopes(["demo:propose", "core:auto"]) == ["core:auto", "demo:propose"]
+    for reading in ("demo:read", "demo:household", "brain=demo"):
+        with pytest.raises(tokens.ScopeError, match="core:auto"):
+            tokens.expand_scopes([reading, "core:auto"])
 
 
 def test_the_person_overrides_and_resets_the_tier(hub: HubContext, auto: DemoDomain) -> None:

@@ -37,7 +37,7 @@ from hub.core import passkeys, profile, proposal_events, proposals
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal, require
 from hub.core.errors import Problem
 from hub.core.search import fuse
-from hub.kernel.clock import utcnow
+from hub.kernel.clock import local_today
 from hub.kernel.ids import Urn
 from hub.platform.logging import get_logger
 
@@ -248,7 +248,7 @@ def day_digest(
     day: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
 ) -> DigestOut:
     """Effets appliqués au palier auto_digest, avec leur inverse d'un geste."""
-    value = day or utcnow().date().isoformat()
+    value = day or local_today().isoformat()
     return DigestOut.model_validate({"day": value, "items": proposals.digest(hub_ctx, value)})
 
 

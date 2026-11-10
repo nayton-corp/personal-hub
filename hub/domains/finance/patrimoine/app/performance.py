@@ -50,9 +50,15 @@ from hub.domains.finance.patrimoine.model.returns import (
     mwr,
 )
 from hub.domains.finance.registre.model.amounts import money
+from hub.kernel.money import base_currency, exponent
 
 STEPS = ("day", "week", "month")
-MIN_BASE = 100  # un franc : en dessous, pas de rendement du jour
+
+
+def min_base() -> int:
+    """Une unité de la devise de base, en unités mineures (100 pour le franc, 1 pour le yen) : en
+    dessous, pas de rendement du jour (audit du 10/11, Q6)."""
+    return int(10 ** exponent(base_currency()))
 
 
 # --- construction ------------------------------------------------------------------------------
@@ -85,9 +91,10 @@ def _series(lines: Sequence[Line], ks: int, ke: int) -> Series:
     index = [ONE] * m
     positive = False
     x = ONE
+    floor = min_base()
     with localcontext(RATE_CONTEXT):
         for j in range(1, m):
-            if value[j - 1] >= MIN_BASE:
+            if value[j - 1] >= floor:
                 positive = True
                 x = x * (value[j] - flow[j]) / value[j - 1]
             index[j] = x
@@ -100,7 +107,8 @@ def _summary(days: Sequence[str], s: Series, ccy: str, *, with_mwr: bool = True)
     income, fees = sum(s.income), sum(s.fees)
     twr = s.index[-1] - 1 if s.positive else None
     # annualisé depuis le premier jour où il y a quelque chose à faire fructifier
-    first = next((j for j, v in enumerate(s.value) if v >= MIN_BASE), 0)
+    floor = min_base()
+    first = next((j for j, v in enumerate(s.value) if v >= floor), 0)
     span = _span(days[s.ks + first], days[s.ks + len(s.value) - 1])
     yearly = None
     if twr is not None and span >= 365 and twr > -1:

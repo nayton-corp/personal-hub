@@ -90,6 +90,20 @@ def test_recurring_increase(year: FinanceDomain) -> None:
     assert len(up) == 1
     assert up[0].key.startswith(f"recurring-up:{key}:")
     assert up[0].notice == "Un abonnement a augmenté"
+    # le paiement suivant, au même prix : la même alerte, pas une nouvelle (audit N2)
+    with begin_immediate(year.engine()) as conn:
+        conn.execute(
+            text("UPDATE recurring SET last_date = date(last_date, '+1 month') WHERE key = :k"),
+            {"k": key},
+        )
+        again = [a for a in sentinels.evaluate(conn, TODAY) if a.kind == "recurring_up"]
+        conn.execute(
+            text("UPDATE recurring SET last_minor = last_minor - 200 WHERE key = :k"), {"k": key}
+        )
+        higher = [a for a in sentinels.evaluate(conn, TODAY) if a.kind == "recurring_up"]
+    assert [a.key for a in again] == [up[0].key]
+    assert again[0].detail["last_date"] != up[0].detail["last_date"]
+    assert [a.key for a in higher] != [up[0].key]  # une nouvelle hausse prévient à nouveau
 
 
 def test_pillar3a_in_november(year: FinanceDomain) -> None:

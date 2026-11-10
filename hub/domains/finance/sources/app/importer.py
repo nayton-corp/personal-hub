@@ -324,6 +324,8 @@ class ImportService(Rework):
         for raw in files:
             try:
                 members = expand(raw.name, raw.data)
+                if not members:  # une archive sans relevé : le dire, pas l'avaler sans trace
+                    raise ImportRefused("import.invalid_schema", "archive zip sans relevé")
             except ImportRefused as exc:
                 members = []
                 report.files.append(FileOutcome(raw.name, None, "rejected", exc.code))

@@ -263,6 +263,9 @@ def test_foreign_currency_needs_a_rate(fin: FinanceDomain) -> None:
 def test_kpis(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:
     k = client.get("/api/finance/kpis?month=2026-10", headers=token(ctx, "aggregates")).json()
     assert k["as_of"] == "2026-10-27"
+    # la pastille du Journal : le même nombre, sans les chiffres clés (audit du 10/11, P1)
+    todo = client.get("/api/finance/todo", headers=token(ctx, "aggregates")).json()
+    assert todo == {"to_categorize": k["to_categorize"], "today": k["as_of"]}
     assert minor(k["net_worth"]) == 2_869_000
     assert minor(k["envelopes"]["cash"]) == 2_869_000
     assert minor(k["change_1m"]["amount"]) == 249_000

@@ -1193,6 +1193,11 @@ export interface TalkIn {
   confirm?: string | null;
 }
 
+export interface TodoOut {
+  to_categorize: number;
+  today: string;
+}
+
 export interface ToolCallOut {
   result: any;
 }

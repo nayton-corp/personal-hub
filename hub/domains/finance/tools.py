@@ -115,6 +115,7 @@ ROUTE_TOOLS: dict[str, str | None] = {
     "/flows": "finance_flows",
     "/trend": "finance_category_trend",
     "/review": "finance_to_review",
+    "/todo": "finance_to_review",  # le même nombre « à classer »
     "/rules/packs": "finance_rule_packs",
     "/recurring": "finance_recurring",
 }

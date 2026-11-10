@@ -2,6 +2,46 @@
 
 ## [Non publié]
 
+## [0.18.1] · 2026-11-10
+
+L'hygiène du second audit (10 novembre, lot E). Aucun chiffre ne change.
+
+### À la mise à jour
+
+- Une hausse d'abonnement déjà signalée peut l'être une dernière fois : la clé de l'alerte
+  change (l'abonnement et son nouveau prix, plus la date du paiement).
+- Une migration du cœur (`0010_event_retries`) : la file de renvoi des alertes.
+- Rien à faire sur la machine.
+
+### Cœur
+
+- Alertes (audit N1, N3) : une notification que ntfy n'a pas prise est renvoyée aux passages
+  suivants, pendant un jour, au lieu d'être perdue ; un événement dont le traitement échoue
+  n'arrête plus les cartes et les alertes de son domaine : il attend dans `event_retries`, et
+  après cinq essais il est mis de côté avec une alerte.
+- Paliers (audit A2, [D-028](docs/decisions.md)) : la déclaration `external_text = false` d'un
+  programme ne suffit plus pour éviter la carte. Il faut la portée `core:auto`, donnée par la
+  personne, et jamais à un jeton qui lit des textes. Aucun jeton en service ne l'a.
+- Le résumé du jour découpe la journée à l'heure de l'instance, plus en UTC.
+- Limite connue du jeton d'agrégats (audit X3) écrite dans [docs/securite.md](docs/securite.md).
+
+### Finance
+
+- Une hausse d'abonnement prévient une fois, pas à chaque paiement (audit N2).
+- La pastille « à classer » du Journal lit une route légère (`/finance/todo`) au lieu de
+  recalculer les chiffres clés (audit P1).
+- Le prix de revient des positions se lit en une fois, plus une requête par position (audit Q4).
+- Le seuil sous lequel un jour n'a pas de rendement est une unité de la devise de base, plus
+  100 centimes fixes (audit Q6). Le montant visé d'un compte suit la devise du compte.
+- Une archive zip sans relevé est refusée avec une trace, au lieu d'être avalée.
+
+### Qualité et chaîne de publication
+
+- Les actions GitHub et l'image gitleaks sont épinglées par empreinte (audit S3) ; Dependabot
+  les suit.
+- Deux plafonds qui ne peuvent que baisser (audit Q1, Q2) : les `Any` de `hub/` et les lignes
+  de plus de 200 caractères de l'app (`tests/test_code_ceilings.py`).
+
 ## [0.18.0] · 2026-11-10
 
 La courbe, la répartition et le budget du second audit (10 novembre), tels que validés sur la page

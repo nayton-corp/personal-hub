@@ -3,8 +3,10 @@ résumé du jour avec son inverse), `auto` (appliqué sans rien dire).
 
 Le domaine déclare le palier par défaut de chaque type (`ProposalKind.tier`, `human` sauf
 mention) ; la personne le change par `hub proposals policy` (`approval_policies`). Un jeton (un
-modèle) reste au palier `human` tant qu'il ne déclare pas `external_text = False` : une
-proposition tirée d'un texte externe passe toujours par une carte.
+modèle) reste au palier `human` : une proposition tirée d'un texte externe passe toujours par une
+carte. C'est le hub qui en décide, pas l'appelant (audit du 10/11, A2, D-028) : seul un jeton à qui
+la personne a donné la portée `core:auto`, qui ne va avec aucune portée de lecture de textes,
+peut déclarer `external_text = False` et suivre le palier du type.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from sqlalchemy import Connection, text
 
 from hub.core.auth import Principal
 from hub.core.domain import Tier
+from hub.core.tokens import AUTO_SCOPE
 
 TIERS: tuple[str, ...] = get_args(Tier)
 
@@ -35,7 +38,7 @@ def tier_for(
     default: str,
     external_text: bool | None,
 ) -> str:
-    if not principal.is_app and external_text is not False:
+    if not principal.is_app and not (external_text is False and AUTO_SCOPE in principal.scopes):
         return "human"
     return tier(conn, domain, kind, default)
 

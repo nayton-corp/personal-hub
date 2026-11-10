@@ -93,3 +93,11 @@ def test_account_target(client: TestClient, ctx: HubContext, fin: FinanceDomain)
     assert gone["target"] is None
     with pytest.raises(Problem):
         create(ctx, "edit_account", {"account_id": a.id, "target": -5})
+    # le montant visé est en unités de la devise du compte : un yen n'a pas de centimes
+    with begin_immediate(fin.engine()) as conn:
+        yen = catalog.add_account(
+            conn, institution="Banque", name="Yens", currency="JPY", external_ref="yens"
+        )
+    y = create(ctx, "edit_account", {"account_id": yen.id, "target": 15_000})
+    assert y.preview["details"]["changes"] == {"target_minor": 15_000}
+    assert y.preview["summary"].endswith(": montant visé 15'000")

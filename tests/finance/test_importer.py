@@ -185,6 +185,9 @@ def test_zip_with_several_statements_in_any_order(finance: FinanceDomain) -> Non
 def test_bad_zip_and_invalid_file_are_rejected(finance: FinanceDomain) -> None:
     report = finance.importer.process([Incoming("a.zip", b"not a zip")])
     assert report.files[0].reason == "import.invalid_schema"
+    # une archive sans aucun relevé laisse une trace, elle aussi (audit du 10/11)
+    report = finance.importer.process([Incoming("vide.zip", zipped({"lisez-moi.txt": b"rien"}))])
+    assert [(f.name, f.status) for f in report.files] == [("vide.zip", "rejected")]
     report = finance.importer.process([Incoming("b.xml", b"<Document/>")])
     assert report.files[0].status == "rejected"
     assert statuses(finance) == ["rejected"]

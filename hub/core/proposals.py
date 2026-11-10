@@ -24,7 +24,7 @@ from hub.core.domain import ExternalHandler, LocalHandler, Preview, ProposalKind
 from hub.core.errors import Problem
 from hub.core.links import Owner, owner
 from hub.kernel import canonical
-from hub.kernel.clock import iso, now_iso, parse_iso, utcnow
+from hub.kernel.clock import iso, local_day, now_iso, parse_iso, utcnow
 from hub.kernel.ids import new_id, urn
 from hub.platform.db import DatabaseBusy, begin_immediate
 from hub.platform.logging import get_logger
@@ -613,14 +613,14 @@ def expire(conn: Connection) -> int:
 
 
 def digest(hub: HubContext, day: str) -> list[dict[str, Any]]:
-    """Effets appliqués au palier `auto_digest` ce jour (UTC), avec leur inverse éventuel."""
+    """Effets appliqués au palier `auto_digest` ce jour (fuseau de l'instance) et leur inverse."""
     with hub.core.engine.connect() as conn:
         rows = conn.execute(
             text(
                 "SELECT * FROM proposals WHERE tier = 'auto_digest' AND status = 'applied' "
-                "AND substr(decided_at, 1, 10) = :d ORDER BY decided_at"
+                "AND decided_at >= :a AND decided_at < :b ORDER BY decided_at"
             ),
-            {"d": day},
+            {"a": local_day(day)[0], "b": local_day(day)[1]},
         ).fetchall()
     out = []
     for r in rows:
