@@ -83,7 +83,17 @@ fi
 if [ "$first_deploy" = 0 ]; then
   say "Vérification avant migration"
   # l'image en place : la nouvelle voit un schéma « pas à jour » tant que la migration n'a pas eu lieu
-  once "${PREV:-$TAG}" hub verify || { echo "verify échoue AVANT migration : arrêt, rien n'a changé"; exit 1; }
+  # Un échec de l'image en place peut venir de son propre calcul (un contrôle des chiffres que la
+  # nouvelle version corrige) : la nouvelle refait alors le même verify, en lecture, sur les mêmes
+  # bases. S'il passe, on continue (copie, second verify après migration, retour arrière restent) ;
+  # sinon (données abîmées, ou schéma qu'elle ne lit pas encore), arrêt.
+  if ! once "${PREV:-$TAG}" hub verify; then
+    if [ -n "$PREV" ] && [ "$PREV" != "$TAG" ] && once "$TAG" hub verify; then
+      echo "verify de $PREV en échec, mais $TAG le passe sur les mêmes bases : on continue"
+    else
+      echo "verify échoue AVANT migration : arrêt, rien n'a changé"; exit 1
+    fi
+  fi
   say "Arrêt des services qui écrivent, puis copie des bases ($STAMP)"
   compose "${PREV:-$TAG}" stop api importer scheduler litestream 2>/dev/null || true
   once "${PREV:-$TAG}" hub backup --stamp "$STAMP"

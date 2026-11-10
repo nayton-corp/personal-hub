@@ -2,6 +2,13 @@
 
 ## [Non publié]
 
+### Exploitation
+
+- Mise à jour : quand le `verify` d'avant migration échoue avec l'image en place, la nouvelle
+  image le refait sur les mêmes bases et la mise à jour continue si elle le passe. Sans cela,
+  une version qui corrige un contrôle des chiffres (0.16.8) ne pouvait jamais s'installer : le
+  Pi restait en 0.16.6, dont le calcul faisait échouer son propre contrôle.
+
 ## [0.16.8] · 2026-11-10
 
 ### Finance
