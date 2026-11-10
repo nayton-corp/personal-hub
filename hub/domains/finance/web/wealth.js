@@ -3,12 +3,13 @@
 // ou des actifs. Toucher un compte ou un actif ouvre sa page (wpages.js), avec retour et chemin ;
 // la barre de contexte dit toujours ce que l'écran montre. État et lignes : wstate.js ; courbe :
 // wmodel.js et wchart.js ; haut de l'écran : whero.js ; panneaux : wsheets.js.
-import { BY, FILTERS, FOLD, LOOK, PRESETS, S, SORTS, TABS, accLabel, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
-import { amount, announce, closeSheet, cv, esc, fill, ic, money, n0, openSheet, setPref, share, skel, toast } from "../../ui.js";
+import { BY, FILTERS, FOLD, PRESETS, S, SORTS, TABS, accLabel, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
+import { amount, announce, closeSheet, esc, fill, ic, money, n0, openSheet, setPref, skel, toast } from "../../ui.js";
 import { accountPage, assetPage } from "./wpages.js";
+import { allocSection } from "./walloc.js";
 import { chartSVG, flagHTML, gutter, legendHTML, nearest, rulerHTML } from "./wchart.js";
 import { cmpBtn, drawLand, drawTop, heroHTML, periodsHTML, toolbarHTML } from "./whero.js";
-import { facetColor, facetMark, assetMark, lookMark } from "./meta.js";
+import { facetMark, assetMark } from "./meta.js";
 import { gainSpan, perfSection, perfSummary, rate, signedMoney, units } from "./perf.js";
 import { kindFor, model } from "./wmodel.js";
 import { DEBT_KIND, debtMark } from "./debts.js";
@@ -136,66 +137,6 @@ export function render() {
 
 // --- patrimoine : répartition, performance, comptes et actifs --------------------------------
 
-const look = () => LOOK.some(([k]) => k === S.by);
-function allocRows(sel, all) {
-  if (!look()) {
-    const g = {};
-    for (const l of sel) if (l[S.by] != null) g[l[S.by]] = (g[l[S.by]] || 0) + l.value;
-    const rank = Object.keys(g);
-    return { rows: Object.entries(g).filter(([, v]) => Math.abs(v) >= 0.5).sort((a, b) => b[1] - a[1]).map(([k, v], i) => ({ k, v, name: fName(S.by, k), c: S.by === "acc" || S.by === "asset" ? cv(i) : facetColor(S.by, k), rank })) };
-  }
-  const e = store.use(`/finance/lookthrough?dimension=${S.by}`);
-  if (e.status === "error") return { error: e.error.message };
-  if (!e.data) return { loading: true };
-  const items = e.data.items.map((x) => ({ k: x.bucket, v: units(x.value), code: x.code }));
-  if (S.by === "currency") {
-    for (const l of all) {
-      if (!l.asset.startsWith("ccy:") || l.kind === "debt" || l.value <= 0) continue;
-      const it = items.find((x) => x.k === l.unit) || items[items.push({ k: l.unit, v: 0 }) - 1];
-      it.v += l.value;
-    }
-  }
-  return { rows: items.filter((x) => x.v >= 0.5).sort((a, b) => b.v - a.v).map((x, i) => ({ ...x, name: x.k, c: cv(i) })), fund: true };
-}
-
-function layout(rows, x, y, w, h, out = []) {
-  if (!rows.length) return out;
-  if (rows.length === 1) { out.push({ r: rows[0], x, y, w, h }); return out; }
-  const tot = rows.reduce((t, r) => t + r.v, 0);
-  let acc = 0, k = 0;
-  while (k < rows.length - 1 && acc + rows[k].v <= tot / 2) acc += rows[k++].v;
-  if (!k) { acc = rows[0].v; k = 1; }
-  const f = acc / tot;
-  if (w >= h) { layout(rows.slice(0, k), x, y, w * f, h, out); layout(rows.slice(k), x + w * f, y, w * (1 - f), h, out); }
-  else { layout(rows.slice(0, k), x, y, w, h * f, out); layout(rows.slice(k), x, y + h * f, w, h * (1 - f), out); }
-  return out;
-}
-
-function allocSection(sel, all) {
-  const a = allocRows(sel, all);
-  const head = `<div class="section-head"><h2 class="section-title" id="t-alloc">Répartition</h2><button class="by-btn" type="button" data-a="w-byopen" aria-haspopup="dialog">par ${esc(byLabel(S.by).toLowerCase())}${ic("down")}</button></div>`;
-  if (a.error || a.loading) return `<section class="section" aria-labelledby="t-alloc">${head}${a.error ? `<div class="err-box" role="alert">Composition indisponible : ${esc(a.error)}</div>` : skel("block")}</section>`;
-  const rows = a.rows.filter((r) => r.v > 0), owed = a.rows.filter((r) => r.v < 0).reduce((t, r) => t + r.v, 0);
-  const total = rows.reduce((t, r) => t + r.v, 0);
-  if (!rows.length || total <= 0) return `<section class="section" aria-labelledby="t-alloc">${head}<div class="empty">${a.fund ? "Aucune composition de fonds connue pour l'instant." : "Rien à répartir avec ces filtres."}</div></section>`;
-  const mark = (r) => (a.fund ? lookMark(S.by, r.k, r.c, "sm", r.code) : S.by === "asset" ? assetMark((lines() || []).find((l) => l.asset === r.k) || { name: r.name, cat: "funds" }, "sm") : S.by === "acc" ? facetMark("inst", ((lines() || []).find((l) => l.acc === r.k) || {}).inst || r.name) : facetMark(S.by, r.k));
-  const act = (r) => (a.fund ? `data-a="w-bucket" data-v="${esc(r.k)}"` : `data-a="w-alloc" data-v="${esc(r.k)}"`);
-  const on = (r) => !a.fund && S.filters[S.by].has(r.k);
-  const tm = layout(rows, 0, 0, 340, 170).map(({ r, x, y, w, h }) => {
-    const big = w > 70 && h > 38, mid = w > 38 && h > 20;
-    return `<g class="tm-cell${on(r) ? " on" : ""}" ${act(r)}><rect x="${(x + 1.5).toFixed(1)}" y="${(y + 1.5).toFixed(1)}" width="${Math.max(0, w - 3).toFixed(1)}" height="${Math.max(0, h - 3).toFixed(1)}" rx="6" data-css="--c:${r.c}"/>
-      ${big ? `<text class="tm-n" x="${(x + 9).toFixed(1)}" y="${(y + 19).toFixed(1)}">${esc(r.name.length > w / 7.5 ? `${r.name.slice(0, Math.max(3, Math.floor(w / 7.5) - 1))}…` : r.name)}</text><text class="tm-v" x="${(x + 9).toFixed(1)}" y="${(y + 35).toFixed(1)}">${Math.round((r.v / total) * 100)} %</text>`
-        : mid ? `<text class="tm-v" x="${(x + 6).toFixed(1)}" y="${(y + h / 2 + 4).toFixed(1)}">${Math.round((r.v / total) * 100)} %</text>` : ""}</g>`;
-  }).join("");
-  const hint = a.fund ? `Ce que contiennent tes fonds${S.by === "currency" ? ", plus tes liquidités" : ""}, sur tous tes placements : lecture seule, les filtres ne s'y appliquent pas. Toucher un bloc montre les actifs qui y contribuent.`
-    : `${activeCount() ? "De la sélection filtrée." : "De tout le patrimoine."} Toucher un bloc ou une ligne filtre l'écran.`;
-  return `<section class="section" aria-labelledby="t-alloc">${head}<p class="hint">${hint}</p>
-    <svg class="chart tm" viewBox="0 0 340 170" aria-hidden="true">${tm}</svg>
-    <div class="alloc-list">${rows.map((r) => `<button class="alloc-row" type="button" ${act(r)} ${a.fund ? 'aria-haspopup="dialog"' : `aria-pressed="${on(r)}"`} aria-label="${esc(r.name)}, ${share(r.v / total)}, ${a.fund ? "voir les actifs" : on(r) ? "retirer ce filtre" : "filtrer l'écran sur cette valeur"}">
-      ${mark(r)}<span class="alloc-name">${esc(r.name)}</span><span class="alloc-pct num">${share(r.v / total)}</span><span class="alloc-val">${amount(r.v)}</span><span class="fic">${ic(a.fund ? "chev" : on(r) ? "close" : "filter")}</span></button>`).join("")}
-    ${owed < 0 ? `<div class="alloc-row static">${facetMark("cat", "debt")}<span class="alloc-name">Dettes, retranchées</span><span class="alloc-pct"></span><span class="alloc-val">${amount(owed)}</span><span></span></div>` : ""}</div></section>`;
-}
-
 function perfBlock(all) {
   const ctx = {
     S, n: activeCount(), per: { label: range().label }, perf: M.perf, src: { status: M.status, error: M.error }, all, sel: M.sel, pts: M.pts,
@@ -242,7 +183,7 @@ function listSection(sel) {
 
 function homeSections(all) {
   const sel = scopeLines(all, { t: "home" });
-  return allocSection(sel, all) + perfBlock(all) + listSection(sel);
+  return allocSection(sel) + perfBlock(all) + listSection(sel);
 }
 
 // --- actions ----------------------------------------------------------------------------------

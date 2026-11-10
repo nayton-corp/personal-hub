@@ -51,7 +51,15 @@
 .alloc-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; min-height: 46px; padding: 4px 6px; margin: 0 -6px; border-radius: 10px; text-align: left; }
 .alloc-row:hover { background: var(--surface-2); }
 .alloc-row[aria-pressed="true"] { background: var(--accent-soft); }
-.alloc-name { font-size: .824rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alloc-name { font-size: .824rem; font-weight: 500; overflow: hidden; line-height: 1.25; }
+.alloc-name small { display: block; font-size: .676rem; font-weight: 400; color: var(--muted); }
+.alloc-meta { display: flex; align-items: center; gap: 10px; font-size: .735rem; color: var(--muted); margin: 6px 0 -4px; }
+.alloc-meta b { color: var(--ink); font-weight: 600; }
+.est-key { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.est-key i { width: 16px; height: 10px; border-radius: 3px; border: 1.2px dashed var(--muted); }
+.alloc-check { display: flex; align-items: center; gap: 6px; font-size: .735rem; color: var(--muted); margin: 10px 0 0; }
+.alloc-check .ic { width: 15px; height: 15px; color: var(--pos); flex: none; } .alloc-check b { color: var(--ink); font-weight: 600; }
+.alloc-check.off .ic { color: var(--warn); }
 .alloc-pct { font-size: .824rem; font-weight: 600; width: 52px; text-align: right; }
 .alloc-val { font-size: .765rem; color: var(--muted); width: 96px; text-align: right; }
 
@@ -109,15 +117,26 @@
 .crow-top .t { font-size: .735rem; color: var(--muted); white-space: nowrap; }
 .crow-st { font-size: .676rem; margin-top: 3px; display: block; }
 .crow-st.bad { color: var(--neg); font-weight: 600; } .crow-st.warn { color: var(--warn); font-weight: 600; } .crow-st.ok { color: var(--muted); }
+.crow-st .ic { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }
+.crow-sub { padding-left: 14px; border-left: 2px solid var(--line); margin-left: 14px; }
+/* barres du budget à la même échelle : la piste a la longueur de la cible, le dépassement suit en rouge */
+.card .pbar.sc { background: none; }
+.pbar.sc .trk { display: block; height: 100%; min-width: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.pbar.sc .trk > i { display: block; height: 100%; border-radius: 5px; background: var(--accent); }
+.pbar.sc.over .trk { border-radius: 5px 0 0 5px; } .pbar.sc.over .trk > i { border-radius: 0; }
+.pbar.sc > i.ov { position: absolute; top: 0; height: 100%; background: var(--neg); border-radius: 0 5px 5px 0; box-shadow: -2px 0 0 var(--surface); }
 .months { display: flex; gap: 8px; align-items: flex-end; height: 150px; margin-top: 6px; }
 .mcol { flex: 1; display: flex; flex-direction: column; align-items: stretch; gap: 4px; height: 100%; justify-content: flex-end; border-radius: 8px; padding: 4px 2px; }
 .mcol[aria-pressed="true"] { background: var(--accent-soft); }
+.mcol .stack { position: relative; flex: none; height: calc(100% - 23px); display: flex; flex-direction: column; justify-content: flex-end; }
 .mcol .bars { display: flex; flex-direction: column-reverse; gap: 1px; border-radius: 4px; overflow: hidden; height: var(--h, 0%); }
+.mcol .goal-line { position: absolute; left: -6px; right: -6px; height: 0; border-top: 1.5px dashed var(--ink); pointer-events: none; }
 .mcol .bars i { display: block; flex: var(--f, 1); background: var(--c); }
-.mcol span { font-size: .647rem; color: var(--muted); text-align: center; font-weight: 600; }
+.mcol > span:last-child { height: 17px; line-height: 17px; font-size: .647rem; color: var(--muted); text-align: center; font-weight: 600; }
 .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: .706rem; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; background: var(--c); }
+.legend i.dashk { background: none; border-radius: 0; height: 0; width: 14px; border-top: 1.5px dashed var(--ink); }
 .mini-months { display: flex; align-items: flex-end; gap: 6px; height: 96px; position: relative; margin-top: 10px; }
 .mini-months div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
 .mini-months i { display: block; width: 100%; border-radius: 4px 4px 0 0; height: var(--h, 0px); background: var(--c); }
@@ -272,6 +291,7 @@
 .chart.tm { margin-top: 12px; }
 .tm-cell { cursor: pointer; }
 .tm-cell rect { fill: color-mix(in srgb, var(--c) 26%, var(--surface)); stroke: var(--c); stroke-width: 1.2; }
+.tm-cell.est rect { stroke-dasharray: 4 3; fill: color-mix(in srgb, var(--c) 12%, var(--surface)); }
 .tm-cell.on rect { fill: color-mix(in srgb, var(--c) 48%, var(--surface)); stroke-width: 2.4; }
 .tm-cell:active rect { fill: color-mix(in srgb, var(--c) 40%, var(--surface)); }
 .chart .tm-n { fill: var(--ink); font-weight: 600; font-size: 12px; }
@@ -280,7 +300,7 @@
 .crow-top b .pill { font-size: .618rem; padding: 1px 7px; margin-left: 6px; vertical-align: 1px; }
 .grp-btn { width: 100%; align-items: center; min-height: 44px; border-top: 1px solid var(--line); margin-top: 8px; }
 .grp-btn > span:first-child { text-transform: uppercase; }
-.grp-st { display: inline-flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; color: var(--pos); }
+.grp-st { display: inline-flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; color: var(--muted); }
 .grp-st .ic { width: 15px; height: 15px; }
 .grp-st .ic:last-child { color: var(--muted); }
 .card.folded .sec-sum { display: flex; }
@@ -363,7 +383,7 @@
 .chart .bench { fill: none; stroke: var(--s3); stroke-width: 1.6; stroke-dasharray: 5 3; }
 .chart .assets { stroke: var(--s2); stroke-width: 1.2; }
 .chart .pru { stroke: var(--s4); stroke-width: 1.2; stroke-dasharray: 3 3; }
-.chart .zpos { fill: var(--pos); fill-opacity: .13; } .chart .zneg { fill: var(--neg); fill-opacity: .12; }
+.chart .zpos { fill: var(--pos); fill-opacity: .2; } .chart .zneg { fill: var(--neg); fill-opacity: .2; }
 .chart .zl { stroke: var(--faint); stroke-width: .8; }
 .chart .dot2 { fill: var(--muted); stroke: var(--surface); stroke-width: 2; }
 .chart .dot3 { fill: var(--s3); stroke: var(--surface); stroke-width: 2; }
@@ -397,6 +417,7 @@
 .lg { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 8px; border-radius: 8px; flex: none; white-space: nowrap; }
 .lg i { width: 14px; height: 2px; border-radius: 1px; background: var(--c); display: inline-block; }
 .lg i.box { height: 9px; width: 11px; border-radius: 2px; }
+.lg i.zk { opacity: .3; }
 .lg i.dot { width: 8px; height: 8px; border-radius: 50%; background: none; border: 1.4px solid var(--c); }
 button.lg { border: 1px solid var(--line); border-radius: 999px; min-height: 32px; }
 button.lg[aria-pressed="false"] i { display: none; }

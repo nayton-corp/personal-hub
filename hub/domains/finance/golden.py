@@ -313,11 +313,14 @@ class Check:
 
 def check(engine: Engine, golden: Golden) -> Check:
     """Les mêmes agrégats, recalculés à la date de l'étalon ; une table apparue depuis n'est
-    pas un écart."""
+    pas un écart, un chiffre de performance apparu depuis (le plus haut de la courbe) non plus."""
     now = build(engine, date.fromisoformat(golden.as_of))
     known = golden.sections.get("counts", {})
     current = {
         **now.sections,
         "counts": {k: v for k, v in now.sections["counts"].items() if k in known},
     }
+    was, perf = golden.sections.get("performance"), now.sections.get("performance")
+    if isinstance(was, dict) and isinstance(perf, dict):
+        current["performance"] = {k: v for k, v in perf.items() if k in was}
     return Check(golden, now, diff(golden.sections, current))

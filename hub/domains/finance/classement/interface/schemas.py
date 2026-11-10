@@ -57,6 +57,8 @@ class BudgetLineOut(Out):
     projected: MoneyOut | None = None
     state: str | None = None
     yearly: YearlyOut | None = None
+    paid_on: str | None = None  # charge fixe : son dernier paiement de la période
+    expected_on: str | None = None  # charge fixe du mois en cours : le jour habituel
 
 
 class BudgetStateOut(Out):
@@ -114,6 +116,9 @@ class MonthTotalsOut(Out):
     savings: MoneyOut
     invested: MoneyOut
     rate: str | None
+    budget: MoneyOut | None = None  # le budget du mois (hors catégories suivies à l'année)
+    budgeted_expenses: MoneyOut | None = None  # ce qui en a été dépensé
+    over: MoneyOut | None = None  # le dépassement, 0 sinon
 
 
 class BudgetMonthsOut(Out):

@@ -86,22 +86,42 @@ def _rate(x: Decimal | None) -> str | None:
     return str(x.quantize(RATE_STEP, context=DECIMAL_CONTEXT))
 
 
+def _weeks(days: Sequence[str], ks: int, ke: int) -> list[int]:
+    return [k for k in range(ks, ke) if date.fromisoformat(days[k]).weekday() == 6] + [ke]
+
+
+def _months(days: Sequence[str], ks: int, ke: int) -> list[int]:
+    return [k for k in range(ks, ke) if days[k][5:7] != days[k + 1][5:7]] + [ke]
+
+
 def _sample(days: Sequence[str], ks: int, ke: int, step: str) -> list[int]:
-    """Indices des points de la courbe : le départ, chaque pas, la fin."""
-    if step == "day":
-        idx = list(range(ks, ke + 1))
-    elif step == "week":
-        idx = list(range(ke, ks - 1, -7))[::-1]
-    else:
-        idx = [k for k in range(ks, ke) if days[k][5:7] != days[k + 1][5:7]] + [ke]
-    if idx[0] != ks:
-        idx.insert(0, ks)
-    if len(idx) > MAX_POINTS:  # au plus MAX_POINTS, la fin toujours comprise
-        stride = -(-len(idx) // MAX_POINTS)
-        idx = idx[::-1][::stride][::-1]
+    """Indices des points de la courbe : le départ, chaque pas, la fin. Les pas sont calés sur le
+    calendrier (chaque dimanche, chaque fin de mois) : la courbe d'une période ne change pas de
+    forme selon le jour où on la regarde. Au-delà de MAX_POINTS, le pas s'élargit (jour, puis
+    semaine, puis mois) au lieu de garder un jour sur N."""
+    ladder = {"day": 0, "week": 1}.get(step, 2)
+    idx: list[int] = []
+    for rung in range(ladder, 3):
+        if rung == 0:
+            idx = list(range(ks, ke + 1))
+        else:
+            idx = _weeks(days, ks, ke) if rung == 1 else _months(days, ks, ke)
         if idx[0] != ks:
             idx.insert(0, ks)
+        if len(idx) <= MAX_POINTS:
+            break
     return idx
+
+
+def extremes(days: Sequence[str], s: Series, ccy: str) -> dict[str, Any]:
+    """Le plus haut et le plus bas de la période, jour par jour : ceux de tous les jours, pas
+    ceux des seuls points gardés par la courbe."""
+    hi = max(range(len(s.value)), key=lambda j: (s.value[j], -j))
+    lo = min(range(len(s.value)), key=lambda j: (s.value[j], j))
+    return {
+        "high": {"on_date": days[s.ks + hi], "value": money(s.value[hi], ccy)},
+        "low": {"on_date": days[s.ks + lo], "value": money(s.value[lo], ccy)},
+    }
 
 
 def _periods(days: Sequence[str], s: Series, width: int) -> list[dict[str, Any]]:

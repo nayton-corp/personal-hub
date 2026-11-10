@@ -43,7 +43,7 @@ Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hu
 | `finance_networth_history` | `finance:aggregates` | `from`?, `to`? | Le patrimoine mois par mois : valeur, versements cumulés, valeur par enveloppe. |
 | `finance_holdings` | `finance:aggregates` | `on`? | Positions des comptes de titres et des cryptos à une date (aujourd'hui par défaut) : parts, cours, valeur, prix de revient, gain, et le résultat crypto. |
 | `finance_performance` | `finance:aggregates` | `from`?, `to`?, `step`? | Performance des placements entre deux dates : gain, apports nets, rendement pondéré dans le temps, revenus, frais, par compte et par actif, par mois et par année, risque, et les événements de la courbe. |
-| `finance_lookthrough` | `finance:aggregates` | `dimension`? | Positions ventilées par région, secteur, devise, ou les plus grosses lignes sous-jacentes des fonds. |
+| `finance_lookthrough` | `finance:aggregates` | `dimension`? | Le patrimoine réparti par région, secteur ou devise, liquidités comprises (part sûre, estimée, non répartie, inconnue), ou les plus grosses lignes sous-jacentes des fonds. |
 | `finance_prices` | `finance:aggregates` | `isin`, `from`?, `to`? | Cours connus d'un actif (ISIN ou symbole) entre deux dates, dans sa devise. |
 | `finance_breaks` | `finance:aggregates` | — | Rapprochement d'aujourd'hui : les soldes non expliqués (compte, actif, parts, valeur, cause, gestes possibles), leur total, la part des placements expliquée. |
 | `finance_debts` | `finance:aggregates` | — | Dettes et leur solde aujourd'hui : départ, paiements et intérêts depuis, mensualité habituelle, fin projetée. |

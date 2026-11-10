@@ -11,8 +11,8 @@ from hub.core.errors import Problem
 from hub.domains.finance.packs import CountryPack
 from hub.domains.finance.patrimoine.app import (
     account_list,
+    allocation,
     debts,
-    lookthrough,
     perf_lines,
     performance,
     price_history,
@@ -100,12 +100,15 @@ def build_router(host: Host) -> APIRouter:
         _p: AnyReader,
         dimension: Annotated[str, Query(pattern=DIMENSION)] = "region",
         on: Annotated[str | None, Query(pattern=DATE)] = None,
+        line: Annotated[list[str] | None, Query(max_length=300)] = None,
     ) -> dict[str, Any]:
-        """Positions ventilées par région, secteur, devise, ou les dix plus grosses lignes
-        sous-jacentes (transparence des fonds)."""
+        """Le patrimoine réparti par région, secteur ou devise, liquidités comprises, ou les dix
+        plus grosses lignes sous-jacentes des fonds. `line` : la sélection de l'écran, comme
+        pour `/performance` (par défaut, les lignes de l'app). La somme des cases (`total`),
+        dettes à part (`owed`), est la valeur de la sélection. Des agrégats seulement."""
         with engine.connect() as conn:
-            return lookthrough.breakdown(
-                conn, dimension, on or host.today().isoformat(), host.pack()
+            return allocation.breakdown(
+                conn, dimension, on or host.today().isoformat(), host.pack(), line
             )
 
     @r.get("/transfers", response_model=TransfersOut, response_model_exclude_unset=True)
@@ -151,7 +154,9 @@ def build_router(host: Host) -> APIRouter:
         `debt:<id>` ; par défaut, celles de l'app) : courbe de la valeur, des apports nets, du
         gain et du rendement pondéré dans le temps ; résumé (gain, revenus, frais, rendement,
         rendement personnel annuel) ; le même par compte, par actif, par ligne ; par mois et par
-        année ; risque. Des agrégats seulement."""
+        année ; risque. Les points tombent sur le calendrier (chaque jour, chaque dimanche, chaque
+        fin de mois) ; au-delà de 400, le pas s'élargit. `extremes` : le plus haut et le plus bas
+        de tous les jours de la période. Des agrégats seulement."""
         if line is not None and len(line) > 500:
             raise Problem("validation.params", "trop de lignes")
         with engine.connect() as conn:

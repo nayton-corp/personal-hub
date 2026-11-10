@@ -117,7 +117,8 @@ export interface BreaksOut {
 }
 
 export interface BucketAssetOut {
-  isin: string;
+  isin: string | null;
+  account_id?: string | null;
   name: string;
   value: MoneyOut;
 }
@@ -125,8 +126,11 @@ export interface BucketAssetOut {
 export interface BucketOut {
   bucket: string;
   code: string | null;
+  kind: string;
+  estimated: boolean;
   value: MoneyOut;
   weight: string;
+  count: number;
   assets: BucketAssetOut[];
 }
 
@@ -143,6 +147,8 @@ export interface BudgetLineOut {
   projected?: MoneyOut | null;
   state?: string | null;
   yearly?: YearlyOut | null;
+  paid_on?: string | null;
+  expected_on?: string | null;
 }
 
 export interface BudgetMonthsOut {
@@ -581,6 +587,16 @@ export interface EntrySearchOut {
   items: EntryOut[];
 }
 
+export interface ExtremeOut {
+  on_date: string;
+  value: MoneyOut;
+}
+
+export interface ExtremesOut {
+  high: ExtremeOut;
+  low: ExtremeOut;
+}
+
 export interface FlowGroupOut {
   group: string;
   total: MoneyOut;
@@ -762,9 +778,11 @@ export interface LookthroughOut {
   on_date: string;
   currency: string;
   total: MoneyOut;
+  owed: MoneyOut;
   covered: string | null;
   compositions_since: string | null;
   items: BucketOut[];
+  unpriced: UnpricedOut[];
 }
 
 export interface MissingFxOut {
@@ -793,6 +811,9 @@ export interface MonthTotalsOut {
   savings: MoneyOut;
   invested: MoneyOut;
   rate: string | null;
+  budget?: MoneyOut | null;
+  budgeted_expenses?: MoneyOut | null;
+  over?: MoneyOut | null;
 }
 
 export interface NetworthHistoryOut {
@@ -879,6 +900,7 @@ export interface PerformanceOut {
   first_day?: string | null;
   lines: number;
   items: PerformancePointOut[];
+  extremes?: ExtremesOut | null;
   summary: LineSummaryOut | null;
   by_account: Record<string, LineSummaryOut>;
   by_asset: Record<string, LineSummaryOut>;
@@ -1224,6 +1246,12 @@ export interface UnmatchedOut {
   account: string;
   date: string;
   amount: MoneyOut;
+}
+
+export interface UnpricedOut {
+  isin: string;
+  account_id: string;
+  name: string;
 }
 
 export interface UploadItemOut {

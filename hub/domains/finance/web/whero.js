@@ -98,7 +98,7 @@ export function heroHTML(m, all, r = here()) {
     label = at(what);
     big = `<span class="money">${nf(p.v)}</span><small>${base()}</small>`;
     if (m.onlyDebt) sub = `<div class="hero-delta"><span class="delta ${tone(p.v - p0.v)}"><span class="money">${sgnMoney(p.v - p0.v)}</span> ${base()}</span><span class="period-link">remboursés ${since}</span></div><div class="hero-sub">Intérêts <span class="money">${sgnMoney(p.g)}</span> ${base()}</div>`;
-    else sub = `<div class="hero-delta"><span class="delta ${tone(p.g)}"><span class="money">${sgnMoney(p.g)}</span> ${base()}${p.r == null ? "" : ` · ${pct(p.r)}`}</span><span class="period-link">de gain ${since}</span></div><div class="hero-sub">${r.t === "home" && !activeCount() ? "Épargne" : "Apports nets"} <span class="money">${sgnMoney(p.f)}</span> · variation totale <span class="money">${sgnMoney(p.v - p0.v)}</span></div>`;
+    else sub = `<div class="hero-delta"><span class="delta ${tone(p.g)}"><span class="money">${sgnMoney(p.g)}</span> ${base()}${p.r == null ? "" : ` · ${pct(p.r)}`}</span><span class="period-link">de gain ${since}</span></div><div class="hero-sub">Apports nets <span class="money">${sgnMoney(p.f)}</span> · variation totale <span class="money">${sgnMoney(p.v - p0.v)}</span></div>`;
   } else {
     const yr = yearly(p.r, days);
     label = at(`Performance ${m.label}`);

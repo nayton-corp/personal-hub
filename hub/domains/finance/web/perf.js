@@ -81,7 +81,7 @@ function heatCell(r, title) {
 }
 
 function tabRend(ctx) {
-  const { perf, n, S, all } = ctx;
+  const { perf, S, all } = ctx;
   const s = perf.summary;
   const twr = rate(s.twr), mwr = rate(s.mwr);
   const fees = units(s.end) > 0 ? -units(s.fees) / units(s.end) : 0;
@@ -109,13 +109,13 @@ function tabRend(ctx) {
   const ys = perf.by_year.slice(-5);
   const mx = Math.max(...ys.flatMap((y) => [Math.abs(units(y.net_flows)), Math.abs(units(y.gain))]), 1);
   const years = ys.length
-    ? `${h3(`${n ? "Tes apports" : "Ton épargne"} et le marché, par année`)}<div class="pbars">${ys.map((y) => {
+    ? `${h3(`Tes apports et le marché, par année`)}<div class="pbars">${ys.map((y) => {
       const d = units(y.net_flows), yg = units(y.gain);
       return `<div class="bar-row yr-row"><span class="nm">${y.period}</span>
         <span class="pair"><span class="track plain"><b class="dep" data-css="left:0;width:${pctw((Math.abs(d) / mx) * 100)}%"></b></span><span class="track plain"><b class="${tone(yg)}" data-css="left:0;width:${pctw((Math.abs(yg) / mx) * 100)}%"></b></span></span>
         <span class="vl"><span class="num">${signedMoney(d)}</span><span class="num ${tone(yg)}">${signedMoney(yg)}</span></span></div>`;
     }).join("")}</div>
-    <div class="leg2"><span><i class="dep"></i>${n ? "Apports nets" : "Épargne"} (1re ligne)</span><span><i class="pos"></i>Gain du marché (2e ligne)</span></div>`
+    <div class="leg2"><span><i class="dep"></i>Apports nets (1re ligne)</span><span><i class="pos"></i>Gain du marché (2e ligne)</span></div>`
     : "";
   return `
     <div class="tiles ptiles">

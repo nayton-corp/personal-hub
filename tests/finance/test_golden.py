@@ -106,6 +106,27 @@ def test_a_table_added_since_the_golden_is_not_a_difference(finance: FinanceDoma
     assert golden.check(finance.engine(), older).ok
 
 
+def test_a_performance_figure_added_since_the_golden_is_not_a_difference(
+    finance: FinanceDomain,
+) -> None:
+    """Une photo prise avant le plus haut et le plus bas de la courbe (0.18.0) reste comparable,
+    et un chiffre qu'elle connaît reste surveillé."""
+    dataset(finance)
+    found = golden.build(finance.engine(), AS_OF)
+    perf = found.sections["performance"]
+    assert perf["extremes"]["high"]["value"] >= perf["extremes"]["low"]["value"]
+    before = {k: v for k, v in perf.items() if k != "extremes"}
+    older = golden.Golden(
+        found.as_of, found.created_at, "0.17.0", {**found.sections, "performance": before}
+    )
+    assert golden.check(finance.engine(), older).ok
+    moved = {**before, "contributions": {"moved": True}}
+    changed = golden.Golden(
+        found.as_of, found.created_at, "0.17.0", {**found.sections, "performance": moved}
+    )
+    assert not golden.check(finance.engine(), changed).ok
+
+
 def test_load_refuses_a_foreign_or_tampered_file(finance: FinanceDomain, tmp_path: Path) -> None:
     foreign = tmp_path / "x.json"
     foreign.write_text("{}")

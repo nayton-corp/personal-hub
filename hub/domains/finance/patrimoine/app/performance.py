@@ -46,6 +46,7 @@ from hub.domains.finance.patrimoine.model.returns import (
     _risk,
     _sample,
     _span,
+    extremes,
     mwr,
 )
 from hub.domains.finance.registre.model.amounts import money
@@ -183,6 +184,7 @@ def report(
         "lines": len(chosen),
         "summary": _summary(days, s, ccy),
         "items": points,
+        "extremes": extremes(days, s, ccy),
         "by_account": _group(days, chosen, "account_id", ks, ke, ccy),
         "by_asset": _group(days, chosen, "asset", ks, ke, ccy),
         "by_line": {
@@ -206,6 +208,7 @@ def empty(ccy: str) -> dict[str, Any]:
         "lines": 0,
         "summary": None,
         "items": [],
+        "extremes": None,
         "by_account": {},
         "by_asset": {},
         "by_line": {},

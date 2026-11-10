@@ -38,17 +38,17 @@ par module (`make web`).
 |---|---|
 | `kpis?month=` | patrimoine net et variations (1 mois, depuis le 31 décembre), revenus, dépenses, épargne, reste à vivre, jours restants, liquidités, mois couverts, taux d'épargne 3 mois, comptes périmés, à catégoriser, marge 3a |
 | `networth/history?from=&to=&step=` | instantanés : patrimoine, versements cumulés, valeur par enveloppe et par compte ; `step=day\|week` calcule un point par jour ou par semaine à la demande (400 points au plus, `from` requis) |
-| `performance?from=&to=&step=&line=` | performance d'une sélection de lignes (`compte\|ISIN`, `compte\|cash`, `debt:…` ; celles de l'app par défaut) : valeur, apports nets, gain, rendement pondéré dans le temps, rendement personnel (TRI, dès un an), revenus, frais, par compte, par actif, par ligne, par mois et par année, baisse maximale et volatilité, et les événements de la courbe (`events` : gros versements et retraits, revenus, un agrégat par jour ; jamais sur des comptes bancaires seuls). Les virements entre mes comptes s'annulent sur le total ; une ligne qui reçoit son premier cours y entre comme un versement |
+| `performance?from=&to=&step=&line=` | performance d'une sélection de lignes (`compte\|ISIN`, `compte\|cash`, `debt:…` ; celles de l'app par défaut) : valeur, apports nets, gain, rendement pondéré dans le temps, rendement personnel (TRI, dès un an), revenus, frais, par compte, par actif, par ligne, par mois et par année, baisse maximale et volatilité, le plus haut et le plus bas de tous les jours (`extremes`), et les événements de la courbe (`events` : gros versements et retraits, revenus, un agrégat par jour ; jamais sur des comptes bancaires seuls). Les points tombent sur le calendrier (chaque jour, chaque dimanche, chaque fin de mois) ; au-delà de 400 le pas s'élargit, jamais « un jour sur N ». Les virements entre mes comptes s'annulent sur le total ; une ligne qui reçoit son premier cours y entre comme un versement |
 | `prices?isin=&from=&to=` | cours d'un actif, un par jour (la dernière source l'emporte), 400 points au plus : la courbe de la page d'un actif et le repère de la performance en % |
 | `flows?month=&period=m\|q` | revenus → fixe, variable, épargne → catégories, et le reste sur compte |
 | `accounts` | comptes, solde, valeur, disponibilité (`immediate`, `days`, `locked`, déduite du type) et objectif (`current`, `safety`, `projects`, `long_term`, `retirement`, déduit du type tant qu'il n'est pas choisi) et montant visé (`target`, réglé dans le compte ; 0 le retire) |
 | `entries?account=&category=&from=&to=&direction=in\|out&min_minor=&max_minor=&q=&sort=date\|amount` | le journal filtré : compte, catégorie, dates, sens, montant absolu en centimes, texte (3 lettres au moins) ; tri par date ou par plus gros montant |
 | `review` | écritures sans catégorie groupées par contrepartie : nombre, total, sens, comptes, première et dernière date, plus petit et plus gros montant, libellés, communications, codes bancaires et les 10 dernières écritures |
-| `budget` (suite) | une catégorie suivie à l'année (`set_budget` avec `cadence: year`) porte `yearly` : cible annuelle, cumul depuis janvier ; elle sort de `budget`, `budgeted_expenses` et `rest_to_live` |
+| `budget` (suite) | une charge fixe porte `paid_on` (date de son dernier débit de la période) et, sur le mois en cours, `expected_on` (son jour habituel : la médiane des trois mois d'avant, ramenée au mois budgétaire ; `classement/app/due.py`) ; une catégorie suivie à l'année (`set_budget` avec `cadence: year`) porte `yearly` : cible annuelle, cumul depuis janvier ; elle sort de `budget`, `budgeted_expenses` et `rest_to_live` |
 | `settings` | `month_start_day` (1 à 28) du mois en cours, mois budgétaire en cours et ses dates, règles datées (`rules`) ; le jour se change par la proposition `set_month_start` |
 | `budget?month=&period=m\|q` | réel et cible par catégorie de dépense, dépassements, reste à vivre ; par ligne `state` (`untracked`, `over`, `likely_over`, `paid`, `ok`), `projected` (fin de période, en cours seulement) et `rest` ; sur la période `current`, `pace` (part écoulée), `expected` (part du budget attendue à ce jour), `projection`, `state` (`no_budget`, `closed_ok`, `closed_over`, `over`, `likely_over`, `on_pace`, avec `over_by`) : la règle de `classement/model/pace.py`, la même que les sentinelles, le front n'en calcule aucun ; `missing_fx` liste les écritures en devise sans change ce jour-là, laissées de côté |
 | `budget/totals?month=&period=m\|q` | revenus, dépenses fixes et variables, épargne, placements, taux |
-| `budget/months?month=&months=6` | les mêmes totaux, mois par mois (graphique Tendance) |
+| `budget/months?month=&months=6` | les mêmes totaux, mois par mois (graphique Tendance), et pour chaque mois `budget` (la somme des cibles), `budgeted_expenses` (les dépenses hors catégories suivies à l'année) et `over` (le dépassement, dans le périmètre du reste à vivre) |
 | `breaks` | soldes non expliqués d'aujourd'hui (rapprochement) : compte, actif, parts, valeur, cause, et leur total ; une fenêtre d'historique non lue (`source_gap`) donne `since` et `until` ; règle dans [finance-politique.md](finance-politique.md) |
 | `export.csv?from=&to=` | journal complet en CSV (session passkey seulement) |
 
@@ -399,13 +399,21 @@ Chaque couple (compte, date) est un relevé complet des positions ; le cours est
 (sinon le dernier cours connu). Le registre ne voit pas d'écriture : l'argent envoyé vers ce
 compte compte comme un versement s'il est catégorisé `transfer-titres`.
 
-**Transparence des fonds.** `GET /api/finance/lookthrough?dimension=region|sector|currency|holding`
-ventile les positions selon ce que les fonds détiennent. Deux fichiers sont reconnus : la liste
-des lignes publiée par l'émetteur (iShares, Vanguard… : le fichier doit avoir l'ISIN du fonds
-dans son nom, par ex. `IE00B3RBWM25_holdings.csv`), ou un CSV générique
-`isin,dimension,bucket,weight_pct,on_date`. Sans composition, un fonds est classé d'après
-lui-même (catégorie VIAC, crypto), sinon « Non ventilé ». Chaque poche liste aussi les actifs qui
-la composent et leur part (touche une case de la carte de répartition).
+**Répartition du patrimoine.** `GET /api/finance/lookthrough?dimension=region|sector|currency|holding`
+répartit le patrimoine affiché, liquidités comprises (`patrimoine/app/allocation.py`) : un seul
+calcul, côté serveur, sur les lignes de la courbe (comptes non masqués par défaut ; `line=` pour
+la sélection de l'écran, comme `/performance`). La somme des cases est `total` ; `total + owed`
+(dettes et soldes négatifs, à part) est la valeur de la sélection, au centime. Chaque franc
+arrive dans une case par un chemin connu : la composition publiée d'un fonds ; les liquidités
+d'un compte (« Liquidités », ou la devise du compte) ; une crypto ; sinon ce que l'on sait de
+l'instrument (sa classe, sa devise de cotation), dit `estimated`. La part qu'un fonds ne détaille
+pas va dans « Non réparti » (`kind: undetailed`), un actif sans fiche dans « Secteur inconnu »,
+« Région inconnue » ou « Devise inconnue » (`kind: unknown`). `covered` est la part sûre du
+total ; `unpriced` nomme les positions sans cours, hors de la répartition. Deux fichiers de
+composition sont reconnus : la liste des lignes publiée par l'émetteur (iShares, Vanguard… : le
+fichier doit avoir l'ISIN du fonds dans son nom, par ex. `IE00B3RBWM25_holdings.csv`), ou un CSV
+générique `isin,dimension,bucket,weight_pct,on_date`. Chaque case liste aussi les actifs qui la
+composent et leur part (touche une case de la carte de répartition).
 
 **Virements appariés.** Un débit et un crédit de mes comptes à 5 jours au plus s'apparient, par
 ordre de confiance : IBAN de contrepartie, référence commune, puis montant seul quand il est
@@ -438,4 +446,4 @@ fichier dans la boîte d'entrée.
 | `fin rebuild-fts` | index de recherche, après une restauration |
 | `fin viac add-portfolio N° --name …` · `fin viac import-history DOSSIER` | comptes et reprise VIAC |
 | `fin rebuild --out DOSSIER` · `fin compare BASE` | reconstruction par rejeu et comparaison |
-| `fin golden save [--as-of JOUR] [--out FICHIER]` · `fin golden check [FICHIER]` | étalon des agrégats (patrimoine, positions, performance, ruptures, budget, dettes) figé avant une mise à jour, vérifié après : code 1 au moindre écart, chaque écart nommé (section, clé, avant, après) ; rien que des chiffres et des identifiants dans le fichier |
+| `fin golden save [--as-of JOUR] [--out FICHIER]` · `fin golden check [FICHIER]` | étalon des agrégats (patrimoine, positions, performance, ruptures, budget, dettes) figé avant une mise à jour, vérifié après : code 1 au moindre écart, chaque écart nommé (section, clé, avant, après) ; une table ou un chiffre de performance apparus depuis la photo ne sont pas des écarts ; rien que des chiffres et des identifiants dans le fichier |

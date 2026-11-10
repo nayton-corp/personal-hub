@@ -2,7 +2,7 @@
 // Le budget en mots : l'état d'une période et de chaque catégorie, tels que le serveur les
 // calcule (/finance/budget : state, pace, expected, projection ; model/pace.py, la même règle que
 // les sentinelles, audit M3). Ici on lit et on met en mots, on ne calcule pas.
-import { base, ratio, units } from "../../format.js";
+import { MOIS, base, ratio, units } from "../../format.js";
 import { n0, n2, pf } from "../../ui.js";
 
 /** @typedef {import("../../api").BudgetOut} BudgetOut */
@@ -26,7 +26,8 @@ function periodState(kind, { rest, over, ratio, expected }) {
     case "closed_ok": return { k: "good", short: "Clos", color: "var(--accent)", icon: "check", text: `Période close avec ${n0(rest)} ${base()} d'avance sur le budget` };
     case "closed_over": return { k: "bad", short: "Dépassé", color: "var(--neg)", icon: "alert", text: `Période close avec un dépassement de ${n0(over)} ${base()}` };
     case "over": return { k: "bad", short: "Dépassé", color: "var(--neg)", icon: "alert", text: `Budget dépassé de ${n0(over)} ${base()}` };
-    case "likely_over": return { k: "warn", short: "Au-dessus du rythme", color: "var(--s3)", icon: "alert", text: `Au-dessus du rythme : ${pace}` };
+    // au-dessus du rythme n'est pas un dépassement : dit, sans couleur d'alerte
+    case "likely_over": return { k: "ok", short: "Au-dessus du rythme", color: "var(--accent)", icon: "info", text: `Au-dessus du rythme : ${pace}` };
     case "on_pace": return { k: "good", short: "Dans le rythme", color: "var(--accent)", icon: "check", text: expected != null ? `Dans le rythme : ${pace}` : pace };
     default: return { k: "ok", short: "Sans budget", color: "var(--accent)", icon: "info", text: "Pas encore de budget : fixe une cible par catégorie pour suivre le reste à vivre." };
   }
@@ -47,7 +48,7 @@ export function model(b) {
   const expected = ratio(b.expected);
   const state = periodState(b.state ? b.state.kind : "no_budget", { rest, over, ratio: r, expected });
   const projection = b.projection ? units(b.projection) : null;
-  return { lines, T, spent, rest, ratio: r, pace: ratio(b.pace), expected, state, projection, current: Boolean(b.current), daysLeft: b.days_left, missingFx: b.missing_fx || [] };
+  return { lines, T, spent, rest, ratio: r, pace: ratio(b.pace), expected, state, projection, current: Boolean(b.current), daysLeft: b.days_left, months: b.months.length || 1, missingFx: b.missing_fx || [] };
 }
 
 // un écart sous l'unité s'écrit avec ses décimales : « Dépassé de 0.35 », jamais « de 0 »
@@ -55,29 +56,45 @@ export function model(b) {
 const gap = (v) => (Math.abs(v) < 1 ? n2(v) : n0(v));
 
 // l'état d'une catégorie, en mots, d'après `state` du serveur (untracked, over, likely_over,
-// paid, ok)
+// paid, ok). Une seule couleur à l'écran : seul le dépassement (`k: "bad"`) passe en rouge.
 /** @param {Line} l */
 export function catState(l) {
   const t = l.t ?? 0;
   switch (l.state) {
-    case "over": return { k: "bad", col: "var(--neg)", txt: `Dépassé de ${gap(l.s - t)}` };
-    case "likely_over": return { k: "warn", col: "var(--s3)", txt: `Reste ${n0(t - l.s)}, au-dessus du rythme` };
-    case "paid": return { k: "ok", col: "var(--pos)", txt: "Payé" };
-    case "ok": return { k: "ok", col: "var(--pos)", txt: `Reste ${n0(t - l.s)}` };
-    default: return { k: "ok", col: "var(--faint)", txt: "Hors budget" };
+    case "over": return { k: "bad", txt: `Dépassé de ${gap(l.s - t)}` };
+    case "likely_over": return { k: "ok", txt: `Reste ${n0(t - l.s)} · au-dessus du rythme` };
+    case "paid": return { k: "ok", txt: "Payé" };
+    case "ok": return { k: "ok", txt: `Reste ${n0(t - l.s)}` };
+    default: return { k: "ok", txt: "Hors budget" };
   }
 }
 
+/** @param {string} d une date AAAA-MM-JJ → « 1 nov. » */
+const dayMonth = (d) => `${Number(d.slice(8, 10))} ${MOIS[Number(d.slice(5, 7)) - 1]}`;
+
+// une charge fixe est due en entier, un jour donné : payée (et quand), ou attendue vers son
+// jour habituel (`paid_on`, `expected_on` du serveur) ; payée en partie, il en reste
+/**
+ * @param {Line} l
+ * @param {string} today AAAA-MM-JJ
+ * @returns {{k: string, txt: string, done?: boolean}}
+ */
+export function fixedState(l, today) {
+  const s = catState(l);
+  if (l.state === "paid") return { k: "ok", done: true, txt: l.paid_on ? `Payé le ${dayMonth(l.paid_on)}` : "Payé" };
+  if (l.state !== "ok" || l.s > 0.5 || !l.expected_on) return s;
+  return { k: "ok", txt: `Attendu vers le ${dayMonth(l.expected_on)}${l.expected_on < today ? ", pas encore vu" : ""}` };
+}
 
 // catégorie suivie à l'année : le cumul depuis janvier face à la cible annuelle
 /** @param {Line} c */
 export function yearState(c) {
   const y = c.yearly;
-  if (!y) return { k: "ok", col: "var(--faint)", txt: "Sans cible annuelle" };
+  if (!y) return { k: "ok", txt: "Sans cible annuelle" };
   const done = u(y.spent), goal = y.target ? u(y.target) : null;
-  return goal == null ? { k: "ok", col: "var(--faint)", txt: "Sans cible annuelle" }
-    : c.state === "over" ? { k: "bad", col: "var(--neg)", txt: `Dépassé de ${gap(done - goal)} sur l'année` }
-    : { k: "ok", col: "var(--pos)", txt: `Reste ${n0(goal - done)} sur l'année` };
+  return goal == null ? { k: "ok", txt: "Sans cible annuelle" }
+    : c.state === "over" ? { k: "bad", txt: `Dépassé de ${gap(done - goal)} sur l'année` }
+    : { k: "ok", txt: `Reste ${n0(goal - done)} sur l'année` };
 }
 
 // gravité pour le tri : dépassé, puis au-dessus du rythme, puis le reste par part consommée
