@@ -361,7 +361,7 @@ SHEETS.cat = (id, sh) => {
       ${target != null ? '<p class="hint">Pointillés : la cible mensuelle.</p>' : ""}`;
   }
   const budgetable = group === "fixed" || group === "variable";
-  const changed = budgetable && sh.tmp > 0 && (sh.tmp !== shown || sh.cad !== was);
+  const removing = budgetable && !(sh.tmp > 0) && shown > 0, changed = removing || (budgetable && sh.tmp > 0 && (sh.tmp !== shown || sh.cad !== was)); // champ vidé : cible retirée
   const per = sh.cad === "year" ? "annuelle" : "mensuelle";
   return {
     title: `${catMark(id, group)}<span>${esc(name)}</span>`,
@@ -374,7 +374,7 @@ SHEETS.cat = (id, sh) => {
       ${sh.cad === "year" ? `<p class="hint">Pour les dépenses par à-coups (vacances, entretien) : comparée au cumul depuis janvier, sans peser sur le reste à vivre du mois.${line && line.yearly ? ` Dépensé depuis janvier : ${n0(u(line.yearly.spent))} ${base()}.` : ""}</p>` : ""}
       ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}` : '<p class="hint">Les cibles portent sur les dépenses fixes et variables.</p>'}
       ${line && line.count ? `<div class="stack-v"><button class="secondary" type="button" data-a="cat-tx" data-v="${esc(id)}">${ic("list")}${line.count > 1 ? `Voir les ${line.count} écritures` : "Voir l'écriture"}</button></div>` : ""}`,
-    foot: budgetable ? `<button class="primary" type="button" data-a="target-save" ${changed && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer la cible avec Face ID"}</button>` : "",
+    foot: budgetable ? `<button class="primary" type="button" data-a="target-save" ${changed && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : removing ? "Retirer la cible avec Face ID" : "Enregistrer la cible avec Face ID"}</button>` : "",
   };
 };
 
@@ -541,7 +541,7 @@ export const actions = {
       if (bad) SH.err = text;
       else {
         closeSheet();
-        toast(`Cible enregistrée : ${n0(value)} ${base()} par ${yearly ? "an" : "mois"}`);
+        toast(value > 0 ? `Cible enregistrée : ${n0(value)} ${base()} par ${yearly ? "an" : "mois"}` : "Cible retirée");
       }
     } catch (e) {
       SH.err = failure(e);

@@ -105,6 +105,12 @@ jamais tenu pour complet. Une fenêtre refusée par la plateforme n'est jamais t
 le curseur de ce flux (`stream_since`) reste au premier jour refusé, la fenêtre est redemandée
 au passage suivant et déposée avec le fichier (`gaps`), où elle devient une rupture du compte.
 
+Un explorateur public qui refuse l'accès (403 sans clé : Blockscout pour Base) met le réseau en
+« solde seul » : le solde reste lu chaque jour, l'historique n'est redemandé qu'une fois par
+semaine (`blocked`), et la connexion le dit à côté de son dernier passage. Ce n'est pas une ligne
+« À faire », faute de geste possible : un mouvement que l'historique aurait expliqué sort au
+rapprochement, en rupture du compte, comme tout solde venu de nulle part.
+
 ## Budget
 
 Les totaux par catégorie (`summary`, `budget`, `flows`, `trend`) sont dans la devise de base.
@@ -120,11 +126,19 @@ Le rythme, l'état et la projection d'une période se calculent une fois, côté
 7e jour (fixes au plus haut de payé et cible, variables au rythme), « au-dessus du rythme » à
 plus de 10 % au-delà de la cible. Le front met en mots, il ne calcule pas.
 
+Une charge fixe se juge à la tolérance près : une unité de la devise ou 1 % de la cible, le plus
+grand des deux. Une prime de 1'336.05 pour une cible de 1'336 est « payée », pas « dépassée de
+0 » ; au-delà de la tolérance elle est « dépassée », en deçà il « reste » à payer. Une dépense
+variable reste jugée au centime, et un écart sous l'unité s'affiche avec ses décimales. Une
+cible mise à zéro est retirée : la catégorie redevient « hors budget ».
+
 ## Contrôles
 
 `hub verify` contrôle aussi les chiffres : le gain depuis l'achat et la performance « Max »
 des cryptos s'accordent à la tolérance près (hors ruptures ouvertes et ce que le résultat montre à part : parts sans prix de revient, sorties que l'historique ne montre pas) ; les ruptures ouvertes
-sont comptées et chiffrées. Une fois par an, la valeur au 31 décembre se compare à la liste
+sont comptées et chiffrées. Un écart au-delà de la tolérance sort en avertissement
+(`figures.crypto_gap`) et t'arrive par ntfy : un des deux calculs se trompe, c'est un bug à
+corriger, pas une raison de bloquer une mise à jour ([D-027](decisions.md)). Une fois par an, la valeur au 31 décembre se compare à la liste
 des cours de l'AFC (déclaration d'impôt).
 
 ## État de départ (2 novembre 2026, agrégats)

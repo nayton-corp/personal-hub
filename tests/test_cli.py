@@ -95,3 +95,42 @@ def test_backup_restore_roundtrip(tmp_path: Path) -> None:
     assert "lost" not in listed
     assert secret not in listed
     assert run("restore", "nope")[0] == 1
+
+
+def test_verify_notify_reports_itself_and_health_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from hub.core.notify import Notifier
+    from hub.platform.cron import REPORTED
+
+    sent: list[str] = []
+
+    def send(_self: Notifier, msg: object) -> bool:
+        sent.append(getattr(msg, "title", ""))
+        return True
+
+    monkeypatch.setattr(Notifier, "send", send)
+    assert run("verify", "--notify")[0] == REPORTED  # base absente : alerte détaillée
+    assert sent == ["Contrôle d'intégrité en échec"]
+    monkeypatch.setattr(Notifier, "send", lambda _self, _msg: False)
+    assert run("verify", "--notify")[0] == 1  # alerte non partie : le planificateur prend le relais
+    run("db", "upgrade")
+    code, out = run("verify", "--notify")
+    assert code == 0
+    assert json.loads(out)["warnings"] == {}
+    code, out = run("ops", "health")
+    assert code == 0
+    assert json.loads(out)["ok"] is True
+    assert run("backup-check")[0] == 1  # pas de mot de passe restic : rien à contrôler
+
+
+def test_scheduler_alert_names_the_command_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    from hub import cli_ops
+    from hub.core.notify import Message, Notifier
+
+    sent: list[Message] = []
+    monkeypatch.setattr(Notifier, "send", lambda _self, msg: sent.append(msg) or True)
+    cli_ops.job_failed(("hub", "backup", "--restic", "--dest", "/x"), 1)
+    assert sent[0].title == "Tâche planifiée en échec"
+    assert sent[0].body.startswith("hub backup --restic : code de sortie 1")
+    assert sent[0].priority == "high"

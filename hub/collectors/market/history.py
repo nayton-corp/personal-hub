@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import urllib.parse
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -113,6 +113,24 @@ def transactions(account: str, moves: list[tuple[str, str, int, int]]) -> list[d
 
 Move = tuple[str, str, str, Decimal, Decimal, str]
 CHAIN_PAGES = 20  # pages de 100 (Blockscout) ou de 1000 signatures (Solana) au premier passage
+BLOCKED_DAYS = 7  # un explorateur qui refuse l'accès est redemandé une fois par semaine
+REFUSED = ("http_401", "http_403")
+
+
+def _blocked(env: Env, label: str) -> bool:
+    """Ce réseau a été refusé par son explorateur sans clé il y a moins d'une semaine (mémoire
+    `chain_blocked`) : inutile de le redemander à chaque passage, le solde reste lu."""
+    since = env.memory.get("chain_blocked", {}).get(label)
+    return isinstance(since, str) and (env.today - date.fromisoformat(since)).days < BLOCKED_DAYS
+
+
+def _block(env: Env, label: str, blocked: bool) -> None:
+    known = dict(env.memory.get("chain_blocked", {}))
+    if blocked:
+        known[label] = env.today.isoformat()
+    elif known.pop(label, None) is None:
+        return
+    env.memory.put("chain_blocked", known)
 
 
 def _scan(env: Env, http: Http, net: Network, action: str, address: str, page: int) -> list[Any]:
@@ -155,8 +173,9 @@ def eth_moves(
     staking (comptés comme la crypto mise en jeu). Chaque réseau est relu en entier la
     première fois (mémoire `chain_txs` : `<compte>` pour Ethereum, `<compte>@<réseau>`
     sinon), ensuite la page la plus récente de chaque liste. Un réseau sans clé Etherscan est
-    signalé (`needs_key`) et relu en entier quand elle arrive. Rend (transactions, réseaux
-    relus en entier → premier jour, à signaler)."""
+    signalé (`needs_key`) et relu en entier quand elle arrive ; un explorateur sans clé qui
+    refuse l'accès (403) l'est aussi (`blocked`) : solde seul, nouvel essai chaque semaine.
+    Rend (transactions, réseaux relus en entier → premier jour, à signaler)."""
     account, addresses = str(w["account"]), w["addresses"]
     mine = {a.lower() for a in addresses}
     staking = env.cfg.market.staking_tokens
@@ -179,6 +198,9 @@ def eth_moves(
             label = account if network.name == "ethereum" else f"{account}@{network.name}"
             if network.scan == env.cfg.market.etherscan_url and not network.params:
                 notes.append(f"history.{wallet}.{network.name}:needs_key")
+                continue
+            if _blocked(env, label):
+                notes.append(f"history.{wallet}.{network.name}:blocked")
                 continue
             full = label not in chained
             tokens = {**network.tokens, **staking} if network.name == "ethereum" else network.tokens
@@ -230,6 +252,9 @@ def eth_moves(
             except Failure as f:
                 # un réseau en erreur est signalé avec sa cause ; les autres continuent
                 cause = f.detail.rpartition(":")[2] if ":" in f.detail else f.outcome
+                if cause in REFUSED:  # avec une clé, c'est elle ; sans, l'explorateur est fermé
+                    cause = "key" if network.params else "blocked"
+                    _block(env, label, cause == "blocked")
                 notes.append(f"history.{wallet}.{network.name}:{cause}")
                 for k in set(days) - before[0]:
                     del days[k]
@@ -238,6 +263,7 @@ def eth_moves(
                 for k in set(fees) - before[2]:
                     del fees[k]
                 continue
+            _block(env, label, False)
             if network.name in cut:  # dit, et relu en entier au prochain passage (audit M8)
                 notes.append(f"history.{wallet}.{network.name}:truncated")
             elif full:

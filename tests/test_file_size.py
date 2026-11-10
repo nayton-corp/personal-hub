@@ -15,7 +15,6 @@ LIMIT = 400
 # chemin relatif au dépôt → taille maximale tolérée, en attendant le découpage (S5, S6)
 TOO_LONG: dict[str, int] = {
     "hub/core/collectors.py": 460,
-    "hub/cli.py": 445,
     "hub/collectors/exchanges/binance_history.py": 478,
     "hub/domains/finance/web/budget.js": 560,
     "hub/domains/finance/web/journal.js": 662,

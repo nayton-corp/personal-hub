@@ -1,11 +1,13 @@
 """Relecture des imports depuis l'archive chiffrée (section 4) : un relevé en attente se rejoue
 après un compte ajouté ou une ouverture, se force après validation d'une carte `apply_import`,
-et les documents d'une source se réappliquent après une évolution de son importeur.
+les documents d'une source se réappliquent après une évolution de son importeur, et un import
+resté « staged » (processus arrêté entre la mise en attente et l'application) est repris.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from datetime import timedelta
 
 from sqlalchemy import Connection, Engine, text
 
@@ -32,13 +34,29 @@ from hub.domains.finance.sources.infra import camt as parser
 from hub.domains.finance.sources.infra import revolut
 from hub.domains.finance.sources.infra.files import Archiver
 from hub.domains.finance.sources.infra.viac import ViacError
+from hub.kernel.clock import iso, now_iso, utcnow
 from hub.platform import secrets
+from hub.platform.db import begin_immediate
 from hub.platform.logging import get_logger
 
 log = get_logger("hub.finance.import")
 
 
 Staged = ParsedFile | ViacDoc | documents.Doc
+# un import « staged » depuis plus longtemps n'est plus en cours d'application : son processus
+# s'est arrêté (redémarrage, base occupée) et personne ne le reprendra sans nous
+STALE_STAGED = timedelta(minutes=10)
+STUCK_AFTER = timedelta(hours=1)  # au-delà, la reprise n'a pas abouti : la santé le signale
+
+
+def stuck(conn: Connection) -> int:
+    """Imports encore « staged » bien après leur réception (compteur seul)."""
+    return int(
+        conn.execute(
+            text("SELECT count(*) FROM imports WHERE status = 'staged' AND received_at <= :c"),
+            {"c": iso(utcnow() - STUCK_AFTER)},
+        ).scalar_one()
+    )
 
 
 class Rework:
@@ -49,6 +67,79 @@ class Rework:
     archiver: Archiver
     pdf_text: Callable[[bytes], str]
     apply_all: Callable[..., list[StatementOutcome]]
+    _finish: Callable[[str], None]
+    stale_staged: timedelta = STALE_STAGED
+
+    def _claim_staged(self, stale: timedelta) -> list[tuple[str, str, str]]:
+        """Les imports « staged » assez anciens, réservés pour ce passage : leur horodatage
+        est avancé dans la même transaction, un autre processus attendra donc à son tour."""
+        cutoff = iso(utcnow() - stale)
+        with begin_immediate(self.engine) as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, archive_path, source FROM imports WHERE status = 'staged' "
+                    "AND updated_at <= :c AND archive_path IS NOT NULL ORDER BY received_at"
+                ),
+                {"c": cutoff},
+            ).fetchall()
+            for r in rows:
+                conn.execute(
+                    text("UPDATE imports SET updated_at = :at WHERE id = :i"),
+                    {"at": now_iso(), "i": r[0]},
+                )
+        return [(str(r[0]), str(r[1]), str(r[2])) for r in rows]
+
+    def resume_staged(self, stale: timedelta | None = None) -> list[StatementOutcome]:
+        """Reprend les imports interrompus entre la mise en attente et l'application (audit du
+        10/11, I1). Relus depuis l'archive chiffrée : les relevés encore « pending » d'un fichier
+        de banque, le document entier sinon (ce qui est déjà au registre est un doublon)."""
+        files: dict[str, Staged] = {}
+        docs: dict[str, Staged] = {}
+        only: set[tuple[str, int]] = set()
+        claimed = self._claim_staged(self.stale_staged if stale is None else stale)
+        for import_id, archive_path, source in claimed:
+            try:
+                staged = self.reread(source, self.archiver.load(archive_path))
+            except (
+                ImportRefused,
+                secrets.SecretsError,
+                OSError,
+                ViacError,
+                DocumentError,
+                parser.CamtError,
+                revolut.RevolutError,
+            ) as exc:
+                # reste « staged » : le contrôle de santé le compte et alerte
+                log.warning(
+                    "import.resume_unavailable", import_id=import_id, error=type(exc).__name__
+                )
+                continue
+            if not isinstance(staged, ParsedFile):
+                docs[import_id] = staged
+                continue
+            with self.engine.connect() as conn:
+                pending = set(
+                    conn.execute(
+                        text(
+                            "SELECT stmt_index FROM import_statements WHERE import_id = :i "
+                            "AND status = 'pending'"
+                        ),
+                        {"i": import_id},
+                    ).scalars()
+                )
+            if pending:
+                files[import_id] = staged
+                only |= {(import_id, x) for x in pending}
+            else:  # arrêté après le dernier relevé : il ne manque que le statut
+                self._finish(import_id)
+        outcomes: list[StatementOutcome] = []
+        if files:
+            outcomes += self.apply_all(files, only)
+        if docs:
+            outcomes += self.apply_all(docs)
+        if files or docs:
+            log.info("import.resumed", imports=len(files) + len(docs), statements=len(outcomes))
+        return outcomes
 
     def parsed(self, conn: Connection, import_id: str) -> ParsedFile:
         """Relit un import (camt.053 ou Revolut) depuis son archive chiffrée."""

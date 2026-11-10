@@ -7,6 +7,11 @@
 # - seule la clé age vit sur le Mac, passée en secret Docker.
 name: hub
 
+# journaux bornés : sans limite, ceux de Docker grossissent jusqu'à remplir le disque
+x-logging: &logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+
 x-hardening: &hardening
   user: "10001:10001"
   read_only: true
@@ -14,6 +19,7 @@ x-hardening: &hardening
   security_opt: ["no-new-privileges:true"]
   tmpfs: [/tmp]
   restart: unless-stopped
+  logging: *logging
 
 x-hub-env: &hub-env
   HUB_SERVER__PUBLIC_ORIGIN: ${HUB_PUBLIC_ORIGIN:?HUB_PUBLIC_ORIGIN manquant dans deploy/.env}
@@ -23,6 +29,8 @@ x-hub-env: &hub-env
   HUB_COUNTRY: ${HUB_COUNTRY:-CH}
   HUB_LOCALE: ${HUB_LOCALE:-fr-CH}
   HUB_DOMAINS: ${HUB_DOMAINS:-*}   # domaines montés : * tous, ou finance,agenda
+  # échéances à rappeler (jeton du registre d'images…) : « nom=AAAA-MM-JJ », séparées par « ; »
+  HUB_MONITORING__EXPIRIES: ${HUB_EXPIRIES:-}
   HUB_AUTH__TOKEN_PROPOSALS_PER_HOUR: ${HUB_PROPOSALS_PER_HOUR:-60}   # cartes par heure et par jeton
   # l'assistant et le pont Rappels/Calendrier tournent sur le Mac : sur le Pi, son nom Tailscale
   HUB_ASSISTANT__URL: ${HUB_ASSISTANT_URL:-http://host.docker.internal:8770}
@@ -74,7 +82,7 @@ services:
     secrets: [age_key]
     networks: [hub]
 
-  scheduler:                             # verify 02:15, sauvegarde 02:30, nuit 03:00
+  scheduler:                             # verify 02:15, sauvegarde 02:30, nuit 03:00, santé chaque heure
     <<: *hardening
     image: hub:${HUB_TAG:-dev}
     command: ["hub", "scheduler", "/srv/hub/app/deploy/crontab"]
@@ -86,6 +94,9 @@ services:
       - ${HUB_REPLICA:?HUB_REPLICA manquant}:/replica:ro
       - ${HUB_RESTIC_LOCAL:?HUB_RESTIC_LOCAL manquant}:/restic
       - ${HUB_SECRETS}:/srv/hub/config/secrets.enc.yaml:ro
+      # la configuration part avec la sauvegarde restic (chiffrée) : sans elle, rien ne se relance
+      - ${HUB_COLLECTOR_SECRETS:-./collector-secrets}:/srv/hub/config/collectors:ro
+      - ${HUB_ENV_FILE:-./.env}:/srv/hub/config/deploy.env:ro
     secrets: [age_key]
     networks: [hub]
 
@@ -126,6 +137,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     networks: [hub]
     restart: unless-stopped
+    logging: *logging
     depends_on: [web]
 
   # --- collecteurs, profil « collectors » (COMPOSE_PROFILES=collectors dans deploy/.env) ---

@@ -7,6 +7,9 @@ par le budget de l'app, l'outil de l'assistant et les sentinelles de nuit ; le f
   cible (le loyer restant tombera).
 - Une cible est « dépassée » quand le dépensé la passe, « probablement dépassée » quand la
   projection la passe de plus de 10 % ; une fixe atteinte est « payée ».
+- Une charge fixe se juge à la tolérance près (une unité de la devise ou 1 % de la cible, le
+  plus grand des deux) : une prime de 1 336.05 pour une cible de 1 336 est « payée », pas
+  « dépassée de 0 » (audit du 10/11, B1). Une dépense variable reste jugée au centime.
 - Un mois clos n'a ni rythme ni projection : il est « clos », avec ou sans avance.
 """
 
@@ -57,15 +60,27 @@ def projected(spent: int, group: str, target: int | None, c: Clock) -> int:
     return value
 
 
-def line_state(spent: int, group: str, target: int | None, c: Clock) -> str:
+FIXED_TOLERANCE_PCT = 1  # une charge fixe est « payée » à 1 % près, ou à une unité près
+
+
+def fixed_tolerance(target: int, unit: int) -> int:
+    """Écart toléré autour de la cible d'une charge fixe, en unités mineures ; `unit` est une
+    unité de la devise (100 centimes pour un franc)."""
+    return max(unit, target * FIXED_TOLERANCE_PCT // 100)
+
+
+def line_state(spent: int, group: str, target: int | None, c: Clock, unit: int = 1) -> str:
     """`untracked` (sans cible), `over`, `likely_over`, `paid` (fixe atteinte) ou `ok`."""
     if target is None:
         return "untracked"
     value = max(0, spent)
+    if group == "fixed":
+        slack = fixed_tolerance(target, unit)
+        if value > target + slack:
+            return "over"
+        return "paid" if value >= target - slack else "ok"
     if value > target:
         return "over"
-    if group == "fixed":
-        return "paid" if value >= target else "ok"
     if c.current and projected(value, group, target, c) * 100 > target * (100 + LIKELY_MARGIN_PCT):
         return "likely_over"
     return "ok"

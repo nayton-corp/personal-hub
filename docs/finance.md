@@ -144,7 +144,10 @@ fichier est désactivée ; les IBAN propres sont ignorés (les virements interne
 système). `fin rules list [--all]` montre les règles, `fin rules run` les rejoue.
 
 **Double Sas.** Rien ne change au registre sans une proposition validée. L'app montre
-« À valider » sur l'Accueil : coche, puis un seul Face ID valide tout le lot. Le défi signé
+« À valider » sur l'Accueil : coche, puis un seul Face ID valide le lot. Il ne signe que ce
+qui est à l'écran et coché : la carte de l'Accueil signe ses trois lignes, « Tout voir » porte
+les autres. Une carte proposée par un assistant, ou qui a changé depuis sa lecture, n'est jamais
+cochée d'avance (`hub/web/picks.js`). Le défi signé
 porte la révision et l'empreinte de chaque proposition ; si un import change ce qu'une
 proposition toucherait entre l'aperçu et la validation, elle revient avec une nouvelle
 révision (409) et rien n'est appliqué. Dans le Journal, le filtre « À catégoriser » groupe

@@ -11,8 +11,8 @@ from typing import Annotated, Any
 import typer
 import yaml
 
-from hub import cli_inbox, cli_ops, cli_proposals, cli_tokens
-from hub.core import connections, connectors, profile, proposal_reconcile, sessions, tokens
+from hub import cli_inbox, cli_maintenance, cli_ops, cli_proposals, cli_tokens
+from hub.core import connections, connectors, profile, sessions, tokens
 from hub.core.auth import Principal
 from hub.core.context import HubContext
 from hub.core.errors import Problem
@@ -358,75 +358,7 @@ def init(
     typer.echo(f"clé publique age : {report.public_key}")
 
 
-@app.command()
-def nightly() -> None:
-    """Expiration des propositions, purges, réconciliation, tâches de nuit des domaines."""
-    from hub.core.maintenance import nightly as run
-
-    typer.echo(json.dumps(run(_ready())))
-
-
-@app.command()
-def reconcile() -> None:
-    """Recale les statuts des propositions sur `applied_proposals` (après une restauration)."""
-    hub = _ready()
-    report = proposal_reconcile.reconcile(hub)
-    typer.echo(json.dumps({"applied": report.marked_applied, "released": report.released}))
-
-
-@app.command()
-def verify() -> None:
-    """Intégrité de chaque base et santé des domaines ; code de sortie 1 au moindre écart."""
-    from hub.core.maintenance import verify as run
-
-    report = run(_ctx())
-    typer.echo(json.dumps({"ok": report.ok, "checks": report.checks}))
-    if not report.ok:
-        raise typer.Exit(1)
-
-
-@app.command()
-def backup(
-    dest: Annotated[Path | None, typer.Option(help="Dossier cible (défaut : paths.backup)")] = None,
-    stamp: Annotated[str | None, typer.Option(help="Suffixe des fichiers (défaut : date)")] = None,
-    restic: Annotated[bool, typer.Option(help="Puis restic vers chaque dépôt.")] = False,
-) -> None:
-    """Copie `.backup` cohérente de chaque base, vérifiée par `integrity_check`."""
-    from hub.core.maintenance import backup_all, prune_local_copies, restic_backup
-
-    hub = _ctx()
-    target = dest or hub.settings.paths.backup
-    files = backup_all(hub, target, stamp)
-    out: dict[str, object] = {"files": [f.name for f in files]}
-    if restic:
-        out["pruned"] = prune_local_copies(target, hub.settings.backup.keep_local_days)
-        out["restic"] = len(restic_backup(hub))
-    typer.echo(json.dumps(out))
-
-
-@app.command()
-def restore(
-    stamp: Annotated[str, typer.Argument(help="Suffixe des copies, ex. predeploy-v0.2.0")],
-    source: Annotated[Path | None, typer.Option(help="Dossier des copies")] = None,
-) -> None:
-    """Remet les bases depuis une copie de `hub backup` (services arrêtés), puis réconcilie."""
-    from hub.core.maintenance import restore as run
-
-    try:
-        restored = run(_ctx(), stamp, source)
-    except (FileNotFoundError, RuntimeError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(1) from exc
-    typer.echo(json.dumps({"restored": restored}))
-
-
-@app.command()
-def scheduler(crontab: Path, state: Path | None = None) -> None:
-    """Exécute la crontab du dépôt (conteneur `scheduler`) ; `state` : dernière minute servie."""
-    from hub.platform.cron import run_forever
-
-    hub_logging.configure(get_settings().log_level)
-    run_forever(crontab, state=state or get_settings().paths.data / "scheduler.last")
+cli_maintenance.register(app, _ctx, _ready)
 
 
 def main() -> None:

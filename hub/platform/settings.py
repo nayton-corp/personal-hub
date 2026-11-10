@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import json
 import os
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import (
     BaseSettings,
+    NoDecode,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
     TomlConfigSettingsSource,
@@ -91,6 +94,44 @@ class Backup(BaseModel):
     restic_local: Path | None = Path("/restic")  # dépôt restic sur le disque externe
     replica: Path | None = Path("/replica")  # réplique Litestream, sauvegardée elle aussi
     keep_local_days: int = Field(default=7, ge=1)
+    # ce que restic emporte en plus des bases, de l'archive et des secrets chiffrés : la
+    # configuration de l'installation, montée en lecture seule dans le conteneur `scheduler`
+    extra: tuple[Path, ...] = (Path("/srv/hub/config"),)
+
+
+class Monitoring(BaseModel):
+    """Seuils du contrôle de santé (`hub ops health`, chaque heure). L'adresse du signal de vie
+    vaut un secret : elle vit dans `secrets.enc.yaml` (section `monitoring`, `heartbeat_url`)."""
+
+    disk_percent: int = Field(default=85, ge=1, le=100)  # alerte à partir de ce remplissage
+    backup_hours: int = Field(default=36, ge=1)  # âge maximal de la dernière sauvegarde
+    replica_hours: int = Field(default=6, ge=1)  # retard maximal de la réplique sur la base
+    remind_hours: int = Field(default=24, ge=1)  # rappel d'une alerte qui dure
+    # échéances que le hub ne peut pas lire lui-même (jeton du registre d'images, clé d'une
+    # plateforme) : nom → date ; rappel 14 jours avant, puis chaque semaine. Dans deploy/.env :
+    # HUB_EXPIRIES=jeton GHCR du Pi=2027-11-01;clé KuCoin=2027-05-01
+    expiries: Annotated[dict[str, date], NoDecode] = Field(default_factory=dict)
+
+    @field_validator("expiries", mode="before")
+    @classmethod
+    def _expiries(cls, v: object) -> object:
+        """Accepte la forme courte d'une variable d'environnement : `nom=date;nom=date`. Une
+        date illisible ne doit pas empêcher le hub de démarrer : elle devient une échéance
+        dépassée, que le contrôle de santé signale aussitôt."""
+        if not isinstance(v, str):
+            return v
+        if v.lstrip().startswith("{"):
+            return json.loads(v)
+        out: dict[str, date] = {}
+        for part in (p.strip() for p in v.split(";")):
+            if not part:
+                continue
+            name, _, day = part.rpartition("=")
+            try:
+                out[name.strip() or part] = date.fromisoformat(day.strip())
+            except ValueError:
+                out[name.strip() or part] = date.min
+        return out
 
 
 class Assistant(BaseModel):
@@ -117,6 +158,7 @@ class Settings(BaseSettings):
     notify: Notify = Notify()
     secrets: Secrets = Secrets()
     backup: Backup = Backup()
+    monitoring: Monitoring = Monitoring()
     assistant: Assistant = Assistant()
     log_level: str = "INFO"
     domains: str = "*"  # HUB_DOMAINS : « * » tous, sinon « finance,agenda » ; vide : aucun

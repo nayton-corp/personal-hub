@@ -116,3 +116,35 @@ def test_the_home_and_its_approvals_belong_to_the_shell(page: Any) -> None:
     sheet.locator('[data-a="prop-reject"]').click()
     page.wait_for_selector('#accueil [data-lists] [data-a="props"]', state="detached")
     assert page.problems == []
+
+
+def test_the_home_face_id_signs_only_the_cards_it_shows(page: Any) -> None:
+    """Audit du 10/11, W1 : la carte de l'accueil montre trois propositions ; son Face ID ne
+    signe qu'elles, et le dit. Le panneau « Tout voir » porte les autres."""
+    page.click('#tabs button[data-v="accueil"]')
+    for name in ("un", "deux", "trois", "quatre"):
+        page.evaluate(
+            """name => fetch('/api/proposals', {method: 'POST',
+               headers: {'Content-Type': 'application/json'},
+               body: JSON.stringify({domain: 'demo', kind: 'add_item', params: {name}})})""",
+            name,
+        )
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    head = page.locator("#accueil [data-lists] .card").first
+    head.locator('[data-a="props-ok"][data-v="home"]').wait_for()
+    page.wait_for_function(
+        "document.querySelector('#accueil [data-lists] .card').innerText.includes('Tout voir (4)')"
+    )
+    assert "Valider 3 avec Face ID" in head.inner_text()
+    assert "1 autre dans « Tout voir » : ce Face ID ne la signe pas." in head.inner_text()
+    head.locator('input[type="checkbox"]').first.uncheck()
+    assert "Valider 2 avec Face ID" in head.inner_text()
+    head.locator('[data-a="props"]').click()
+    sheet = page.locator("#sheet")
+    sheet.wait_for()
+    assert "Valider 3 avec Face ID" in sheet.inner_text()  # les quatre, moins la décochée
+    for _ in range(4):
+        sheet.locator('[data-a="prop-reject"]').first.click()
+        page.wait_for_timeout(150)
+    page.wait_for_selector('#accueil [data-lists] [data-a="props"]', state="detached")
+    assert page.problems == []

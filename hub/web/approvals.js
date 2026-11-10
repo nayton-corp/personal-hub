@@ -4,6 +4,7 @@
 // une nouvelle révision, jamais appliquée.
 // Le module de cartes d'un domaine (manifeste `cards`) peut exporter detail(p) (ce qui se déplie
 // sous la carte) et prepare(ids) (remplace des cartes retouchées avant le Face ID).
+import { chosen, tick, ticked } from "./picks.js";
 import { api, store } from "./store.js";
 import { SHEETS, closeSheet, esc, failure, ic, openSheet, toast } from "./ui.js";
 import { credentialJSON, requestOptions } from "./webauthn.js";
@@ -13,7 +14,7 @@ const BATCH = 50; // plafond de /approvals/challenge
 export const pendingPath = "/proposals?status=pending";
 
 const CARDS = new Map(); // domaine → son module de cartes
-const unchecked = new Set(); // propositions décochées dans le panneau « À valider »
+const choices = new Map(); // coches posées ou retirées à la main (picks.js)
 let busy = false;
 
 export function addCards(domain, module) {
@@ -56,9 +57,12 @@ export function outcome(results) {
 
 function by(principal) {
   if (principal.startsWith("system")) return "proposée par le hub";
-  if (principal.startsWith("token:")) return "proposée par un assistant";
+  if (principal.startsWith("token:")) return "proposée par un assistant · à cocher toi-même";
   return "proposée depuis l'app";
 }
+
+const pending = () => store.data(pendingPath)?.items ?? [];
+const sign = (ids) => `${ic("faceid")}${busy ? "Validation…" : ids.length ? `Valider ${ids.length} avec Face ID` : "Rien de coché"}`;
 
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -68,44 +72,44 @@ function detail(p) {
 }
 
 SHEETS.props = () => {
-  const pe = store.data(pendingPath);
-  const list = pe ? pe.items : [];
+  const list = pending();
   if (!list.length && !busy) return null;
-  const ids = list.filter((p) => !unchecked.has(p.id)).map((p) => p.id);
+  const ids = chosen(list, choices);
   const several = new Set(list.map((p) => p.domain)).size > 1;
   return {
     title: "À valider",
-    body: `<p class="hint">Rien ne change sans ton Face ID. Décoche ce que tu veux garder pour plus tard.</p>` + list.map((p) => `
-      <div class="prop"><input type="checkbox" id="prop-${esc(p.id)}" data-prop="${esc(p.id)}" ${unchecked.has(p.id) ? "" : "checked"}>
+    body: `<p class="hint">Rien ne change sans ton Face ID. Il signe ce qui est coché ici, rien d'autre.</p>` + list.map((p) => `
+      <div class="prop"><input type="checkbox" id="prop-${esc(p.id)}" data-prop="${esc(p.id)}" ${ticked(p, choices) ? "checked" : ""}>
         <label for="prop-${esc(p.id)}"><b>${esc(p.preview.summary)}</b><span><span>${several ? `${esc(capital(p.domain))} · ` : ""}${p.revision > 1 ? `révision ${p.revision} · a changé, relis-la` : by(p.created_by)}</span>${p.reason && p.created_by.startsWith("token:") ? `<span>« ${esc(p.reason)} »</span>` : ""}</span></label>
         <button class="reject" type="button" data-a="prop-reject" data-v="${esc(p.id)}">Refuser</button></div>${detail(p)}`).join(""),
-    foot: `<button class="primary" type="button" data-a="props-ok" ${ids.length && !busy ? "" : "disabled"}>${ic("faceid")}${busy ? "Validation…" : ids.length ? `Valider ${ids.length} avec Face ID` : "Rien de coché"}</button>`,
+    foot: `<button class="primary" type="button" data-a="props-ok" ${ids.length && !busy ? "" : "disabled"}>${sign(ids)}</button>`,
   };
 };
 
-// la carte « À valider » en tête de l'accueil : les premières propositions à cocher, et le
-// Face ID du lot sans ouvrir le panneau ; « Tout voir » l'ouvre (détails, refus)
+// la carte « À valider » en tête de l'accueil : les premières propositions à cocher, et un
+// Face ID qui ne signe qu'elles ; « Tout voir » ouvre le panneau (les autres, détails, refus)
 const INLINE = 3;
 export function card() {
-  const pe = store.data(pendingPath);
-  const list = pe ? pe.items : [];
+  const list = pending();
   if (!list.length) return "";
-  const ids = list.filter((p) => !unchecked.has(p.id)).map((p) => p.id);
+  const ids = chosen(list, choices, INLINE);
+  const rest = list.length - INLINE;
   const rows = list.slice(0, INLINE).map((p) => `
-      <div class="prop"><input type="checkbox" id="hp-${esc(p.id)}" data-prop="${esc(p.id)}" ${unchecked.has(p.id) ? "" : "checked"}>
+      <div class="prop"><input type="checkbox" id="hp-${esc(p.id)}" data-prop="${esc(p.id)}" ${ticked(p, choices) ? "checked" : ""}>
         <label for="hp-${esc(p.id)}"><b>${esc(p.preview.summary)}</b><span><span>${esc(capital(p.domain))} · ${p.revision > 1 ? "a changé, relis-la" : by(p.created_by)}</span></span></label></div>`).join("");
+  const others = rest > 0 ? `<p class="hint">${rest} autre${rest > 1 ? "s" : ""} dans « Tout voir » : ce Face ID ne ${rest > 1 ? "les" : "la"} signe pas.</p>` : "";
   const more = list.length > INLINE ? `<button class="link" type="button" data-a="props">Tout voir (${list.length})</button>` : `<button class="link" type="button" data-a="props">Détails</button>`;
   return `<section class="card" aria-labelledby="t-approve">
       <div class="section-head"><h2 class="section-title" id="t-approve">À valider</h2>${more}</div>${rows}
-      <button class="primary" type="button" data-a="props-ok" ${ids.length && !busy ? "" : "disabled"}>${ic("faceid")}${busy ? "Validation…" : ids.length ? `Valider ${ids.length} avec Face ID` : "Rien de coché"}</button>
+      <button class="primary" type="button" data-a="props-ok" data-v="home" ${ids.length && !busy ? "" : "disabled"}>${sign(ids)}</button>${others}
     </section>`;
 }
 
 document.addEventListener("change", (e) => {
   const id = e.target.dataset && e.target.dataset.prop;
   if (!id) return;
-  if (e.target.checked) unchecked.delete(id);
-  else unchecked.add(id);
+  const p = pending().find((x) => x.id === id);
+  if (p) tick(p, choices, e.target.checked);
   store.notify();
 });
 
@@ -128,9 +132,9 @@ async function validate(ids) {
 
 export const actions = {
   props: () => openSheet("props"),
-  "props-ok": () => {
-    const pe = store.data(pendingPath);
-    const ids = (pe ? pe.items : []).filter((p) => !unchecked.has(p.id)).map((p) => p.id);
+  // le bouton de l'accueil ne signe que ses lignes ; celui du panneau, tout ce qui y est coché
+  "props-ok": (where) => {
+    const ids = chosen(pending(), choices, where === "home" ? INLINE : undefined);
     if (ids.length) validate(ids);
   },
   "prop-reject": async (id) => {

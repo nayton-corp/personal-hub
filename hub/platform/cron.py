@@ -4,6 +4,10 @@ Même fichier sur le Mac et sur le Pi ; aucune dépendance à launchd ni à syst
 repris supercronic pour ne pas embarquer un binaire de plus dans l'image. Les jobs d'un même
 tour se suivent. La dernière minute servie est notée dans un fichier d'état : au redémarrage,
 chaque job manqué pendant l'arrêt (au plus un jour en arrière) est rejoué une fois (audit m18).
+
+Un job qui sort en erreur est signalé à `on_failure` (une alerte ntfy, posée par la CLI) : une
+nuit ratée ne reste plus dans les journaux du conteneur (audit du 10/11, O1). Le code de sortie
+`REPORTED` dit que la commande a déjà prévenu elle-même, avec ses détails.
 """
 
 from __future__ import annotations
@@ -94,7 +98,10 @@ def parse(text: str) -> list[Job]:
 
 
 Runner = Callable[[tuple[str, ...]], int]
+OnFailure = Callable[[tuple[str, ...], int], None]
 CATCH_UP = timedelta(days=1)  # un arrêt plus long ne rejoue pas plus loin
+REPORTED = 3  # échec que la commande a déjà signalé elle-même (`hub verify --notify`)
+NOT_FOUND = 127  # commande introuvable, comme le shell
 
 
 def missed(jobs: list[Job], since: datetime, until: datetime) -> list[Job]:
@@ -110,17 +117,30 @@ def missed(jobs: list[Job], since: datetime, until: datetime) -> list[Job]:
 
 
 def _run(command: tuple[str, ...]) -> int:
-    return subprocess.run(command, check=False).returncode  # noqa: S603 - crontab du dépôt
+    try:
+        return subprocess.run(command, check=False).returncode  # noqa: S603 - crontab du dépôt
+    except OSError:
+        return NOT_FOUND
 
 
-def tick(jobs: list[Job], at: datetime, runner: Runner = _run) -> list[tuple[str, int]]:
-    results: list[tuple[str, int]] = []
-    for job in jobs:
-        if job.due(at):
-            code = runner(job.command)
-            log.info("scheduler.job", command=job.command[0:3], exit_code=code)
-            results.append((job.line, code))
-    return results
+def serve(job: Job, event: str, runner: Runner = _run, on_failure: OnFailure | None = None) -> int:
+    """Lance un job, journalise son code de sortie et signale un échec."""
+    code = runner(job.command)
+    log.info(event, command=job.command[0:3], exit_code=code)
+    if code not in (0, REPORTED) and on_failure is not None:
+        try:
+            on_failure(job.command, code)
+        except Exception as exc:  # une alerte perdue n'arrête pas le planificateur
+            log.warning("scheduler.alert_failed", error=type(exc).__name__)
+    return code
+
+
+def tick(
+    jobs: list[Job], at: datetime, runner: Runner = _run, on_failure: OnFailure | None = None
+) -> list[tuple[str, int]]:
+    return [
+        (job.line, serve(job, "scheduler.job", runner, on_failure)) for job in jobs if job.due(at)
+    ]
 
 
 def _last_served(state: Path | None) -> datetime | None:
@@ -131,7 +151,10 @@ def _last_served(state: Path | None) -> datetime | None:
 
 
 def run_forever(
-    crontab: Path, tz: str | None = None, state: Path | None = None
+    crontab: Path,
+    tz: str | None = None,
+    state: Path | None = None,
+    on_failure: OnFailure | None = None,
 ) -> None:  # pragma: no cover - boucle
     """`state` : fichier de la dernière minute servie (rattrapage au redémarrage)."""
     jobs = parse(crontab.read_text())
@@ -144,9 +167,8 @@ def run_forever(
         time.sleep(max(timedelta(0), nxt - now).total_seconds())
         if last is not None:
             for job in missed(jobs, last, nxt):
-                code = _run(job.command)
-                log.info("scheduler.catch_up", command=job.command[0:3], exit_code=code)
-        tick(jobs, nxt)
+                serve(job, "scheduler.catch_up", on_failure=on_failure)
+        tick(jobs, nxt, on_failure=on_failure)
         last = nxt
         if state is not None:
             try:

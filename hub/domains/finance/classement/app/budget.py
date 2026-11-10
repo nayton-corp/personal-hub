@@ -36,7 +36,7 @@ from hub.domains.finance.registre.model.amounts import (
     span,
     year_months,
 )
-from hub.kernel.money import base_currency
+from hub.kernel.money import base_currency, exponent
 
 
 def flows(
@@ -103,6 +103,7 @@ def budget(
     groups = category_groups(conn)
     year = yearly(conn)
     clock = _clock(months, today)
+    unit = 10 ** exponent(base_currency())  # une unité de la devise, en unités mineures
     ytd: dict[str, int] = {}
     if year:
         for x in lines_for(conn, year_months(months[-1])):
@@ -147,13 +148,14 @@ def budget(
             projection += will
             if target is not None:
                 targets_by_group[group if group in targets_by_group else "variable"] += target
+            state = pace.line_state(minor, group, target, clock, unit)
             line |= {
                 "spent": in_base(minor),
                 "count": count,
                 "target": _money(target),
                 "ratio": ratio(minor, target) if target else None,
-                "over": target is not None and minor > target,
-                "state": pace.line_state(minor, group, target, clock),
+                "over": state == "over",
+                "state": state,
                 "projected": in_base(will) if clock.current else None,
                 "rest": _money(target - minor if target is not None else None),
             }
@@ -167,7 +169,7 @@ def budget(
     used = monthly_expenses(lines, year)
     rest = total_budget - used if total_budget is not None else None
     expected = pace.expected_share(targets_by_group["fixed"], targets_by_group["variable"], clock)
-    state = pace.period_state(total_budget, rest, projection if clock.current else None, clock)
+    whole = pace.period_state(total_budget, rest, projection if clock.current else None, clock)
     return {
         "month": month,
         "period": period,
@@ -190,7 +192,7 @@ def budget(
         "expected": ratio(*expected) if expected else None,
         "projection": in_base(projection) if clock.current else None,
         "state": {
-            "kind": state,
+            "kind": whole,
             "over_by": _money(-rest if rest is not None and rest < 0 else None),
         },
         "missing_fx": [m.public() for m in report.missing_fx],

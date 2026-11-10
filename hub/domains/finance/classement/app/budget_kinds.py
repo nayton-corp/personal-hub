@@ -58,13 +58,15 @@ def _budget_row(conn: Connection, category_id: str) -> Any:
 
 
 def _current(conn: Connection, category_id: str) -> tuple[int, Target | None]:
-    """(seq de la dernière ligne, sa cible) ; (0, None) sans budget."""
+    """(seq de la dernière ligne, sa cible) ; la cible est None sans budget, ou retirée (une
+    dernière ligne à zéro)."""
     row = _budget_row(conn, category_id)
     if row is None:
         return 0, None
-    return int(row.seq), target_of(
+    target = target_of(
         row.monthly_minor, row.amount_minor, row.cadence, _cadence(conn, category_id)
     )
+    return int(row.seq), target if target.amount > 0 else None
 
 
 def _said(t: Target, currency: str) -> str:
@@ -90,9 +92,10 @@ class SetBudgetHandler:
         seq, before = _current(conn, params.category_id)
         target = self._target(conn, params)
         then = f" (avant {_said(before, params.currency)})" if before is not None else ""
+        # zéro retire la cible : la catégorie redevient « hors budget » (audit du 10/11, B3)
+        said = _said(target, params.currency) if target.amount > 0 else "cible retirée"
         return Preview(
-            summary=f"Budget {name} : {_said(target, params.currency)}{then}, dès "
-            f"{self._from(params)[:7]}",
+            summary=f"Budget {name} : {said}{then}, dès {self._from(params)[:7]}",
             details={
                 "category_id": params.category_id,
                 "amount": Money(target.amount, params.currency).to_api(),

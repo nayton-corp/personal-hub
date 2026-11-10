@@ -343,6 +343,9 @@ class ImportService(Rework):
         if self._history_running():
             log.info("import.paused", reason="history")
             return total
+        # d'abord ce qu'un arrêt a laissé en plan : le fichier resté dans la boîte est alors
+        # un doublon de son import repris, plus un import perdu
+        total.statements += self.resume_staged()
         while paths := self.ready_files():
             incoming = [Incoming(p.name, p.read_bytes()) for p in paths]
             batch = self.process(incoming)

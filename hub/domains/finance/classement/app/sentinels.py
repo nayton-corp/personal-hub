@@ -30,6 +30,7 @@ from hub.domains.finance.registre.model.amounts import money
 from hub.kernel import canonical
 from hub.kernel.clock import now_iso
 from hub.kernel.ids import urn
+from hub.kernel.money import base_currency, exponent
 
 MIN_DAY_FOR_PROJECTION = pace.MIN_DAY_FOR_PROJECTION  # la règle est dans model/pace.py
 LIKELY_MARGIN_PCT = pace.LIKELY_MARGIN_PCT
@@ -64,6 +65,7 @@ def budget_projection(conn: Connection, month: str, today: date) -> list[Project
             spent[x.category] = spent.get(x.category, 0) - x.minor
     start, after = period.bounds(month)
     clock = pace.clock(start, after, today)
+    unit = 10 ** exponent(base_currency())
     out = []
     for cat, t in sorted(goal.items()):
         group = groups.get(cat)
@@ -71,7 +73,7 @@ def budget_projection(conn: Connection, month: str, today: date) -> list[Project
         if group not in insights.EXPENSE_GROUPS or target <= 0 or cat in year:
             continue  # une catégorie suivie à l'année n'a pas de cible du mois (voir _yearly)
         value = max(0, spent.get(cat, 0))
-        state = pace.line_state(value, group, target, clock)
+        state = pace.line_state(value, group, target, clock, unit)
         projected = pace.projected(value, group, target, clock)
         out.append(
             Projection(
