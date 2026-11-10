@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.16.8] · 2026-11-10
+
 ### Finance
 
 - Cryptos, résultat depuis l'achat : il s'accorde de nouveau avec la courbe « Max ». Le prix
