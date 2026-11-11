@@ -80,6 +80,26 @@ def mwr(days: Sequence[str], s: Series) -> Decimal | None:
         return (lo + hi) / 2
 
 
+def dietz(s: Series, j: int, flows: int, weighted: int, floor: int) -> Decimal | None:
+    """Rendement de l'argent engagé du départ au jour `j` : le gain rapporté au capital moyen,
+    chaque flux compté depuis son jour (en fin de journée, comme le rendement pondéré). C'est le
+    pourcentage qui va avec le gain en francs. `flows` = Σ flux, `weighted` = Σ flux × jour ; None
+    sans capital à faire fructifier."""
+    if j <= 0:
+        return None
+    with localcontext(RATE_CONTEXT):
+        capital = Decimal(s.value[0] + flows) - Decimal(weighted) / j
+        if capital < floor:
+            return None
+        return Decimal(s.value[j] - s.value[0] - flows) / capital
+
+
+def personal(s: Series, floor: int) -> Decimal | None:
+    """Le rendement de l'argent engagé sur toute la période (`dietz` au dernier jour)."""
+    weighted = sum(j * f for j, f in enumerate(s.flow))
+    return dietz(s, len(s.value) - 1, sum(s.flow), weighted, floor)
+
+
 def _rate(x: Decimal | None) -> str | None:
     if x is None or not x.is_finite():
         return None

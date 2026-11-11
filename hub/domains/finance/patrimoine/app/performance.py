@@ -23,6 +23,8 @@ de l'extérieur ou en sort (salaire, dépenses).
 Rendement pondéré dans le temps : produit des rendements journaliers (V(t) − F(t)) / V(t − 1),
 le flux étant placé en fin de journée ; un jour sans base positive est sauté. Rendement personnel :
 taux annuel qui égalise valeur de départ, flux datés et valeur de fin, donné à partir d'un an.
+Rendement de l'argent engagé (`personal`) : le gain rapporté au capital moyen, chaque flux compté
+depuis son jour ; c'est le pourcentage que l'écran met à côté du gain en francs, à toute durée.
 
 Le calcul complet est gardé en mémoire tant que le registre, les cours, le change et les dettes
 n'ont pas changé (empreinte relue à chaque demande). Seuls des agrégats en sortent.
@@ -46,8 +48,10 @@ from hub.domains.finance.patrimoine.model.returns import (
     _risk,
     _sample,
     _span,
+    dietz,
     extremes,
     mwr,
+    personal,
 )
 from hub.domains.finance.registre.model.amounts import money
 from hub.kernel.money import base_currency, exponent
@@ -126,6 +130,7 @@ def _summary(days: Sequence[str], s: Series, ccy: str, *, with_mwr: bool = True)
         "twr": _rate(twr),
         "twr_yearly": _rate(yearly),
         "mwr": _rate(mwr(days, s)) if with_mwr else None,
+        "personal": _rate(personal(s, floor)),
         "complete": not any(s.missing),
     }
 
@@ -164,10 +169,13 @@ def report(
     for x in s.index:
         top = max(top, x)
         peaks.append(top)
-    cum, run = [], 0
-    for f in s.flow:
+    cum, timed, run, weighted = [], [], 0, 0  # Σ flux, Σ flux × jour
+    for j, f in enumerate(s.flow):
         run += f
+        weighted += j * f
         cum.append(run)
+        timed.append(weighted)
+    floor = min_base()
     points = []
     for k in _sample(days, ks, ke, step):
         j = k - ks
@@ -179,11 +187,18 @@ def report(
                 "net_flows": money(flows, ccy),
                 "gain": money(s.value[j] - s.value[0] - flows, ccy),
                 "twr": _rate(s.index[j] - 1) if s.positive else None,
+                "personal": _rate(dietz(s, j, flows, timed[j], floor)),
                 "drawdown": _rate(s.index[j] / peaks[j] - 1) if s.positive else None,
                 "complete": not s.missing[j],
             }
         )
     risk = _risk(days, s)
+    # un crédit dans la sélection : le résumé des seuls avoirs, celui que l'écran met à côté du
+    # gain (un crédit à la consommation n'est pas un levier de placement)
+    assets = [ln for ln in chosen if ln.kind != "debt"]
+    owned = None
+    if assets and len(assets) < len(chosen):
+        owned = _summary(days, _series(assets, ks, ke), ccy)
     return {
         "currency": ccy,
         "from": days[ks],
@@ -191,6 +206,7 @@ def report(
         "first_day": days[0],
         "lines": len(chosen),
         "summary": _summary(days, s, ccy),
+        "owned": owned,
         "items": points,
         "extremes": extremes(days, s, ccy),
         "by_account": _group(days, chosen, "account_id", ks, ke, ccy),
@@ -215,6 +231,7 @@ def empty(ccy: str) -> dict[str, Any]:
         "first_day": None,
         "lines": 0,
         "summary": None,
+        "owned": None,
         "items": [],
         "extremes": None,
         "by_account": {},

@@ -40,3 +40,14 @@ export function perfSel(sel, every, narrow = false) {
   const q = (k, xs) => [...xs].sort().map((x) => `&${k}=${encodeURIComponent(x)}`).join("");
   return q("account", accounts) + q("line", ids);
 }
+
+// Le pourcentage à côté d'un gain en francs : le rendement de l'argent engagé, jamais le rendement
+// pondéré dans le temps, qui ignore les montants et contredit les francs. Jusqu'à un an : celui de
+// la période (`personal` du serveur : le gain rapporté au capital moyen, chaque apport compté
+// depuis son jour). Au-delà : le taux annuel exact (`mwr` du résumé), que le serveur ne calcule
+// que pour la période entière ; sans lui (une ligne de la liste, le doigt sur la courbe), les
+// francs seuls plutôt qu'un taux approché.
+export function moneyRate(period, days, yearly = null) {
+  if (days <= 366) return period == null ? null : { v: period, yr: false };
+  return yearly == null ? null : { v: yearly, yr: true };
+}

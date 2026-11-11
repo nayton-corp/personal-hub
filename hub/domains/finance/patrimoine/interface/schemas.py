@@ -295,6 +295,7 @@ class LineSummaryOut(Out):
     twr: str | None
     twr_yearly: str | None
     mwr: str | None
+    personal: str | None = None
     complete: bool
 
 
@@ -304,6 +305,7 @@ class PerformancePointOut(Out):
     net_flows: MoneyOut
     gain: MoneyOut
     twr: str | None
+    personal: str | None = None
     drawdown: str | None
     complete: bool
 
@@ -350,6 +352,7 @@ class PerformanceOut(Out):
     items: list[PerformancePointOut]
     extremes: ExtremesOut | None = None
     summary: LineSummaryOut | None
+    owned: LineSummaryOut | None = None
     by_account: dict[str, LineSummaryOut]
     by_asset: dict[str, LineSummaryOut]
     by_line: dict[str, LineSummaryOut]

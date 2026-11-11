@@ -753,6 +753,7 @@ export interface LineSummaryOut {
   twr: string | null;
   twr_yearly: string | null;
   mwr: string | null;
+  personal?: string | null;
   complete: boolean;
 }
 
@@ -902,6 +903,7 @@ export interface PerformanceOut {
   items: PerformancePointOut[];
   extremes?: ExtremesOut | null;
   summary: LineSummaryOut | null;
+  owned?: LineSummaryOut | null;
   by_account: Record<string, LineSummaryOut>;
   by_asset: Record<string, LineSummaryOut>;
   by_line: Record<string, LineSummaryOut>;
@@ -918,6 +920,7 @@ export interface PerformancePointOut {
   net_flows: MoneyOut;
   gain: MoneyOut;
   twr: string | null;
+  personal?: string | null;
   drawdown: string | null;
   complete: boolean;
 }

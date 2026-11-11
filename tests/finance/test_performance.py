@@ -179,6 +179,28 @@ def test_time_weighted_return_ignores_deposits(fin: FinanceDomain, fund: catalog
     assert chf(asset["gain"]) == -12_000
 
 
+def test_the_return_on_the_money_put_in_goes_with_the_gain(
+    fin: FinanceDomain, fund: catalog.Account
+) -> None:
+    """Le pourcentage à côté des francs (audit du 10/11) : le gain rapporté au capital moyen
+    engagé, chaque apport compté depuis son jour. Le rendement pondéré dans le temps, lui, ne
+    dépend pas des montants : +10 % sur 1000 puis −10 % sur 2200 font −1 % pour −120 francs."""
+    out = run(fin, "2026-03-31")
+    s = out["summary"]
+    assert chf(s["gain"]) == -12_000
+    # 1000 engagés 30 jours, 1100 de plus pendant les 21 derniers
+    capital = 100_000 + 110_000 * 21 / 30
+    assert rate(s["personal"]) == pytest.approx(-12_000 / capital, abs=1e-6)
+    assert rate(s["personal"]) < rate(s["twr"])
+    points = {p["on_date"]: p for p in out["items"]}
+    assert points["2026-03-01"]["personal"] is None  # le départ : rien à mesurer encore
+    assert rate(points["2026-03-09"]["personal"]) == pytest.approx(0.0, abs=1e-6)
+    assert points["2026-03-31"]["personal"] == s["personal"]
+    # le jour du second achat : +10 % sur les 1000 du départ, l'apport du jour ne pèse pas
+    assert rate(points["2026-03-10"]["personal"]) == pytest.approx(0.10, abs=1e-6)
+    assert out["by_line"][f"{fund.id}|{FUND}"]["personal"] == s["personal"]
+
+
 def test_fees_of_a_positions_account_split_the_gain(
     fin: FinanceDomain, fund: catalog.Account
 ) -> None:
@@ -356,6 +378,12 @@ def test_debt_interest_is_a_loss_and_payments_cancel(
     s = out["summary"]
     assert chf(s["net_flows"]) == 0  # le paiement passe d'une ligne à l'autre
     assert chf(s["gain"]) == chf(debt["gain"])
+    # les seuls avoirs, pour le pourcentage de l'écran : le crédit n'est pas dans leur base
+    owned = out["owned"]
+    assert chf(owned["start"]) == 1_000_000
+    assert chf(owned["net_flows"]) == -100_000
+    assert chf(owned["gain"]) == 0
+    assert run(fin, "2026-01-21", [f"{bcf.id}|cash"])["owned"] is None  # sans crédit : rien
 
 
 # --- rendement personnel, risque, périodes -------------------------------------------------------

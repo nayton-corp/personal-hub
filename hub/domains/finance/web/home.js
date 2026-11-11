@@ -130,8 +130,10 @@ export function render(box) {
   const sum30 = se && se.data ? se.data.summary : null;
   const vals = sum30 ? se.data.items.map((i) => units(i.value)) : [];
   const net = hidden.size && vals.length ? vals[vals.length - 1] : units(k.net_worth);
-  const p30 = sum30 && sum30.twr != null ? Number(sum30.twr) : null;
-  const g30 = sum30 ? units(sum30.gain) : null;
+  // gain et rendement de l'argent engagé, des seuls avoirs quand un crédit est dans le total
+  const own30 = (se && se.data && se.data.owned) || sum30;
+  const p30 = own30 && own30.personal != null ? Number(own30.personal) : null;
+  const g30 = own30 ? units(own30.gain) : null;
   const m = be.data ? model(be.data) : null;
   let budgetTile;
   if (!m) budgetTile = `<span class="tile-lbl">${ic("wallet")}Reste à vivre</span>${skel("block")}`;
