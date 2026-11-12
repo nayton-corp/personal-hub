@@ -16,7 +16,7 @@ from fastapi import APIRouter
 from sqlalchemy import Connection, Engine, event, text
 
 from hub.core import inbox, integrity, profile
-from hub.core.domain import Event, Health, Hit, McpTool, ProposalKind, Ref
+from hub.core.domain import Event, Health, Hit, McpTool, Needs, ProposalKind, Ref
 from hub.core.manifest import Manifest, Observation, Severity
 from hub.core.search import excerpt
 from hub.domains.finance import manifest
@@ -25,7 +25,13 @@ from hub.domains.finance.classement.app import packs, recurring, sentinels
 from hub.domains.finance.cli import build_cli
 from hub.domains.finance.handlers import build_kinds
 from hub.domains.finance.packs import CountryPack, instance
-from hub.domains.finance.patrimoine.app import checks, crypto_pairing, snapshots, transfers
+from hub.domains.finance.patrimoine.app import (
+    checks,
+    crypto_pairing,
+    fund_needs,
+    snapshots,
+    transfers,
+)
 from hub.domains.finance.registre.app import ledger, reads
 from hub.domains.finance.registre.model import period
 from hub.domains.finance.sources.app import rework, statements
@@ -128,6 +134,14 @@ class FinanceDomain:
 
     def engine(self) -> Engine:
         return self._engine
+
+    def collector_needs(self, connector: str) -> Needs:
+        """Les fonds détenus dont le collecteur « market » cherche la composition (ISIN, date de
+        la dernière connue) : jamais une quantité ni un montant."""
+        if connector != "market":
+            return {}
+        with self._engine.connect() as conn:
+            return {"funds": fund_needs.needs(conn, self.today().isoformat())}
 
     def migrate(self, *, seed: bool = True) -> None:
         """Migre ; une base neuve reçoit les packs de règles `base` et celui du pays du profil

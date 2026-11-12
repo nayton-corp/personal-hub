@@ -300,6 +300,20 @@ CoinGecko) et, pour un titre qui n'a pas d'autre source de cours, `quotes = { "<
 "<symbole Yahoo>" }`. Le premier passage reprend un an d'historique (la limite gratuite de
 CoinGecko) ; les suivants une semaine, pour combler un jour manqué.
 
+**Compositions des fonds.** Une fois par jour au plus, le passage demande au hub les fonds
+détenus (`GET /api/collectors/market/needs` : l'ISIN et la date de la dernière composition
+connue, jamais une quantité) et, pour chacun dont la composition a au moins
+`funds_refresh_days` jours (7 par défaut), dépose la liste des lignes publiée par l'émetteur sous
+le nom `<ISIN>.csv`. Le domaine Finance la lit comme un fichier déposé à la main. Un lecteur par
+émetteur, pas par fonds : aujourd'hui iShares (recherche du site par ISIN, un seul résultat
+exigé, puis `latest-holdings.csv`). Un fonds qu'aucun lecteur ne connaît (HSBC, Vanguard, fonds
+non cotés) lit la composition d'un ETF qui suit **le même indice** : réglage `funds`
+(« Fonds répliqués » dans l'app), `{"<ISIN détenu>": "<ISIN de l'ETF iShares>"}`. Sinon il garde
+la composition déposée à la main. Un fonds entièrement dans une seule case par dimension (or,
+immobilier suisse) est stable : il n'est plus cherché. Un site en panne laisse le manque
+`funds:<issue>` sur le passage, et le fonds est redemandé au passage suivant. Seuls des ISIN
+quittent la machine.
+
 Les portefeuilles se règlent dans l'app (« Régler » sur « Cours et cryptos ») : un compte
 `crypto:<nom>`, la crypto, et les adresses ou la clé publique étendue, une par ligne. Ce sont des
 réglages de la connexion, visibles dans l'app : des adresses publiques et des clés publiques,

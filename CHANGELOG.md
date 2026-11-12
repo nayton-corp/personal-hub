@@ -2,6 +2,30 @@
 
 ## [Non publié]
 
+## [0.19.0] · 2026-11-12
+
+### À la mise à jour
+
+- Rien à faire sur la machine. Au premier passage du collecteur « Cours et cryptos », le hub
+  reçoit la composition des fonds iShares détenus. Pour un fonds sans fichier lisible, règle
+  « Fonds répliqués » dans « Cours et cryptos » : l'ISIN du fonds, puis celui d'un ETF iShares
+  qui suit le même indice.
+
+### Finance
+
+- Compositions des fonds mises à jour seules : une fois par jour au plus, le collecteur
+  « market » demande au hub ses fonds détenus (un ETF rangé parmi les actions compris) et
+  dépose, pour chacun dont la composition a au moins 7 jours, la liste des lignes publiée par
+  iShares. Un fonds d'un autre émetteur lit l'ETF du même indice (réglage `funds`). Un fonds dans
+  une seule case (or, immobilier suisse) n'est plus cherché. Seuls des ISIN quittent la machine.
+- Une liste de lignes iShares lit sa date (« 10/Nov/2026 ») ; ses liquidités et dérivés sans
+  pays vont dans « Non réparti » plutôt que dans « Autres ».
+
+### Cœur
+
+- `GET /collectors/<connexion>/needs` : un domaine peut dire à un collecteur ce qu'il doit
+  chercher à son passage (`CollectorNeeds`, facultatif). Réservé au service collecteur.
+
 ## [0.18.3] · 2026-11-10
 
 À côté d'un gain en francs, le rendement de ton argent.

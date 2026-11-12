@@ -1,19 +1,18 @@
 """Collecteur « market » (lot 6) : cours de change, cours quotidiens et soldes crypto, par des
 API publiques et sans identifiant bancaire.
 
-- change : la BCE par Frankfurter (1 devise = x dans la devise de base `HUB_CURRENCY`,
-  l'inverse du cours publié dans cette base) ;
+- change : la BCE par Frankfurter (1 devise = x dans la devise de base `HUB_CURRENCY`) ;
 - cryptos : CoinGecko, un an d'historique au premier run (limite de l'offre gratuite) ;
-- titres cotés (facultatif) : le graphique quotidien de Yahoo Finance, pour les lignes qui
-  n'ont pas d'autre source de cours (titres Revolut par exemple) ;
-- portefeuilles : le solde des adresses publiques, lues dans les secrets de la
-  connexion (champ `wallets`) : BTC par mempool.space (adresses, ou xpub d'un Ledger
-  dont les adresses sont dérivées ici), ETH et ses jetons USDC/USDT par un nœud RPC public, SOL
-  et ses jetons par le RPC public de Solana.
+- titres cotés (facultatif) : le cours quotidien de Yahoo Finance, pour les lignes sans autre
+  source de cours (titres Revolut par exemple) ;
+- portefeuilles : le solde des adresses publiques des secrets (`wallets`) : BTC par
+  mempool.space (adresses, ou xpub d'un Ledger), ETH et ses jetons par un nœud RPC public, SOL
+  et ses jetons par le RPC public de Solana ;
+- compositions des fonds détenus, une fois par jour (funds.py), en fichiers à part.
 
-Tout est déposé dans un seul fichier `hub.market.v1` ; seul le domaine Finance le lit. Une source
-facultative en panne n'empêche pas le dépôt du reste (le détail du run la nomme). Aucun calcul
-en flottant : les nombres du JSON sont lus comme textes.
+Tout le reste est déposé dans un seul fichier `hub.market.v1` ; seul le domaine Finance le lit.
+Une source facultative en panne n'empêche pas le dépôt du reste (le détail du run la nomme).
+Aucun calcul en flottant : les nombres du JSON sont lus comme textes.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ from embit import bip32, script
 from hub.collectors.base import Failure, Kind, Result
 from hub.collectors.dropbox import is_market_json
 from hub.collectors.http import Http
-from hub.collectors.market import history, multiversx, net
+from hub.collectors.market import funds, history, multiversx, net
 from hub.collectors.market.cosmos import atom_wallet
 from hub.collectors.market.evm import networks
 from hub.collectors.market.history import (
@@ -588,5 +587,6 @@ def run(env: Env, kind: Kind, http: Http | None = None) -> Result:
         env.memory.put("last_run", env.today.isoformat())
     if since < env.today - timedelta(days=COINGECKO_MAX_DAYS):  # cours plus anciens jamais lus
         notes.append(f"prices.crypto:truncated={COINGECKO_MAX_DAYS}")
-    detail = "partial " + " ".join(failed + notes) if failed or notes else None
-    return Result("ok" if dropped else "nothing_new", int(dropped), detail)
+    got, gaps = funds.run(env, http)  # après `last_run` : une composition manquée attend demain
+    detail = "partial " + " ".join(failed + gaps + notes) if failed or gaps or notes else None
+    return Result("ok" if dropped or got else "nothing_new", int(dropped) + got, detail)

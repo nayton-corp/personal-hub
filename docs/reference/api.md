@@ -38,6 +38,7 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `POST` | `/api/collectors/{name}/links` | Register Link |
 | `GET` | `/api/collectors/{name}/links/{state}` | Le code de retour, rendu une seule fois ; `code` nul tant qu'il n'est pas arrivé. |
 | `POST` | `/api/collectors/{name}/mode` | Couper un collecteur, ou le remettre en marche après un contrôle réussi. |
+| `GET` | `/api/collectors/{name}/needs` | Ce que la connexion doit chercher pour le domaine qui a déclaré son connecteur : rien si le domaine n'en dit rien, ou s'il n'est pas monté sur cette instance. |
 | `POST` | `/api/collectors/{name}/notify` | Le bot attend une validation sur le téléphone, ou un consentement arrive à échéance. |
 | `POST` | `/api/collectors/{name}/refresh` | Actualiser maintenant : un run complet hors horaire, pris dans la minute par le service collecteur ; les limites de la source (synchros par jour) restent celles du flux. |
 | `GET` | `/api/collectors/{name}/runs` | List Runs |

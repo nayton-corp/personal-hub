@@ -490,3 +490,39 @@ def test_import_moves_wallets_out_of_secrets(tmp_path: Path, cli_env: Path) -> N
     assert out["kept"] == ["market"]
     market = json.loads(_cli("connections", "list")[1])
     assert (market["settings"]["wallets"], market["has_secrets"]) == (wallets, False)
+
+
+class _Holder(DemoDomain):
+    """Un domaine qui déclare le connecteur « market » et dit ce qu'il doit chercher."""
+
+    name = "finance"
+    scopes = frozenset({"finance:read"})
+
+    def collector_needs(self, connector: str) -> dict[str, list[dict[str, str | bool | None]]]:
+        return {"funds": [{"isin": "IE00B5BMR087", "since": None, "stable": False}]}
+
+
+def test_a_collector_asks_its_domain_what_to_fetch(keyed: Settings) -> None:
+    """`GET /collectors/<connexion>/needs` : pour le service collecteur seul, la réponse du
+    domaine qui a déclaré le connecteur ; rien si ce domaine n'est pas monté."""
+    for registry, expected in (
+        (
+            Registry([_Holder(keyed.paths.data)]),
+            {"funds": [{"isin": "IE00B5BMR087", "since": None, "stable": False}]},
+        ),
+        (Registry([DemoDomain(keyed.paths.data)]), {}),
+    ):
+        ctx = HubContext.build(keyed, registry)
+        ctx.migrate_all()
+        try:
+            with ctx.core.engine.begin() as conn:
+                if connections.get(conn, "market") is None:
+                    connections.create(conn, "market", "market", "system:test")
+            collector = bearer(_token(ctx, "collector"))
+            with TestClient(create_app(ctx), base_url="https://hub.example.ts.net") as c:
+                assert c.get("/api/collectors/market/needs").status_code in {401, 403}
+                r = c.get("/api/collectors/market/needs", headers=collector)
+                assert r.json() == {"needs": expected}
+                assert c.get("/api/collectors/autre/needs", headers=collector).status_code == 404
+        finally:
+            ctx.dispose()

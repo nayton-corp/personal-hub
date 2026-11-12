@@ -109,6 +109,12 @@ class MarketConfig(BaseModel):
     }
     yahoo_url: str = "https://query1.finance.yahoo.com/v8/finance/chart"
     quotes: dict[str, str] = {}  # ISIN ou symbole → symbole Yahoo (par ex. « VWRL.SW »)
+    # compositions des fonds détenus (la liste vient du hub) : le fichier des lignes publié par
+    # l'émetteur ; `funds` donne, pour un fonds sans fichier lisible, un ETF qui suit le même
+    # indice (ISIN détenu → ISIN de l'ETF dont on lit la composition)
+    funds: dict[str, str] = {}
+    ishares_url: str = "https://www.ishares.com"
+    funds_refresh_days: int = Field(default=7, ge=1, le=90)  # une composition plus jeune attend
     # portefeuilles réglés dans l'app (G5) ; ceux des secrets d'avant G5 s'y ajoutent
     wallets: list[dict[str, Any]] = []
     mempool_url: str = "https://mempool.space/api"

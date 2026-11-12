@@ -116,7 +116,7 @@ CATALOG: tuple[Connector, ...] = (
         (),  # portefeuilles publics et clé CoinGecko facultatifs
         "15 6-22/4 * * *",  # cours et portefeuilles toutes les 4 h, de 06:15 à 22:15
         ("market",),
-        ("currencies", "crypto", "quotes", "wallets"),
+        ("currencies", "crypto", "quotes", "funds", "wallets"),
         single=True,  # tous les portefeuilles crypto dans la même connexion
         clean=clean_market,
     ),

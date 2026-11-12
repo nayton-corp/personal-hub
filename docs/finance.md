@@ -413,7 +413,7 @@ pas va dans « Non réparti » (`kind: undetailed`), un actif sans fiche dans «
 total ; `unpriced` nomme les positions sans cours, hors de la répartition. Deux fichiers de
 composition sont reconnus : la liste des lignes publiée par l'émetteur (iShares, Vanguard… : le
 fichier doit avoir l'ISIN du fonds dans son nom, par ex. `IE00B3RBWM25_holdings.csv`), ou un CSV
-générique `isin,dimension,bucket,weight_pct,on_date`. Chaque case liste aussi les actifs qui la
+générique `isin,dimension,bucket,weight_pct,on_date`. Le collecteur `market` dépose seul la liste des lignes des fonds détenus (docs/collectors.md, « Compositions des fonds ») ; le hub lui donne leurs ISIN (`FinanceDomain.collector_needs`). Chaque case liste aussi les actifs qui la
 composent et leur part (touche une case de la carte de répartition).
 
 **Virements appariés.** Un débit et un crédit de mes comptes à 5 jours au plus s'apparient, par
