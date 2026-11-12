@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+## [0.19.1] · 2026-11-12
+
+### Finance
+
+- Compositions des fonds : le collecteur lit aussi le site suisse d'iShares, pour les ETF
+  domiciliés en Suisse (iShares SMI, SMIM, Core SPI…). Un fonds qui suit le SMI peut ainsi lire
+  la composition de l'iShares SMI ETF (CH) via « Fonds répliqués ».
+
 ## [0.19.0] · 2026-11-12
 
 ### À la mise à jour

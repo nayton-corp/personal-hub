@@ -306,7 +306,8 @@ connue, jamais une quantité) et, pour chacun dont la composition a au moins
 `funds_refresh_days` jours (7 par défaut), dépose la liste des lignes publiée par l'émetteur sous
 le nom `<ISIN>.csv`. Le domaine Finance la lit comme un fichier déposé à la main. Un lecteur par
 émetteur, pas par fonds : aujourd'hui iShares (recherche du site par ISIN, un seul résultat
-exigé, puis `latest-holdings.csv`). Un fonds qu'aucun lecteur ne connaît (HSBC, Vanguard, fonds
+exigé, puis la liste des lignes : site britannique `latest-holdings.csv`, puis site suisse pour
+les ETF domiciliés en Suisse, `1495092304805.ajax?fileType=csv&dataType=fund`). Un fonds qu'aucun lecteur ne connaît (HSBC, Vanguard, fonds
 non cotés) lit la composition d'un ETF qui suit **le même indice** : réglage `funds`
 (« Fonds répliqués » dans l'app), `{"<ISIN détenu>": "<ISIN de l'ETF iShares>"}`. Sinon il garde
 la composition déposée à la main. Un fonds entièrement dans une seule case par dimension (or,
