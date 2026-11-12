@@ -6,9 +6,10 @@ un fichier déposé à la main (patrimoine/infra/composition.py) et garde chaque
 
 Un lecteur par émetteur, pas par fonds : tous les fonds d'un émetteur publient le même fichier.
 
-- iShares : la recherche du site par ISIN donne l'identifiant du fonds, puis
-  `latest-holdings.csv` (ligne, secteur, pays, devise). La recherche ne rend pas l'ISIN : un seul
-  résultat est exigé, deux seraient une devinette.
+- iShares : la recherche du site par ISIN donne l'identifiant du fonds, puis la liste des lignes
+  (ligne, secteur, pays, devise). Le site britannique d'abord (`latest-holdings.csv`), puis le
+  site suisse pour les ETF domiciliés en Suisse (même fichier, sous une autre adresse). La
+  recherche ne rend pas l'ISIN : un seul résultat est exigé, deux seraient une devinette.
 
 Un fonds qu'aucun lecteur ne connaît (HSBC, Vanguard, fonds UBS non cotés…) peut lire la
 composition d'un ETF qui suit le même indice : réglage `funds` (ISIN détenu → ISIN de l'ETF).
@@ -28,8 +29,16 @@ from hub.collectors.http import Http
 from hub.collectors.runtime import Env
 
 DAY_KEY = "funds_day"  # dernier jour où toutes les compositions dues ont été demandées
-# sites iShares interrogés : (site de la recherche, langue, chemin des pages publiques)
-ISHARES_SITES = (("ishares-uk", "en-gb", "uk"),)
+# sites iShares interrogés : (site de la recherche, langue, adresse de la liste des lignes) ; le
+# segment après l'identifiant est libre (le nom du fonds sur le site)
+ISHARES_SITES = (
+    ("ishares-uk", "en-gb", "/uk/individual/en/products/{id}/fonds/latest-holdings.csv"),
+    (
+        "ishares-ch",
+        "en-ch",
+        "/ch/individual/en/products/{id}/fonds/1495092304805.ajax?fileType=csv&dataType=fund",
+    ),
+)
 HEADER_WORDS = (b"Weight (%)", b"Name")  # une liste de lignes que le hub sait lire
 
 Reader = Callable[[Env, Http, str], bytes | None]
@@ -38,7 +47,7 @@ Reader = Callable[[Env, Http, str], bytes | None]
 def ishares(env: Env, http: Http, isin: str) -> bytes | None:
     """La liste des lignes d'un fonds iShares, ou None si iShares ne le connaît pas."""
     base = env.cfg.market.ishares_url
-    for site, locale, path in ISHARES_SITES:
+    for site, locale, holdings in ISHARES_SITES:
         query = urllib.parse.urlencode(
             {
                 "site": site,
@@ -57,9 +66,7 @@ def ishares(env: Env, http: Http, isin: str) -> bytes | None:
         fund_id = str(results[0].get("portfolioId") or "")
         if not fund_id.isdigit():
             continue
-        # le segment après l'identifiant est libre (le nom du fonds sur le site)
-        csv_url = f"{base}/{path}/individual/en/products/{fund_id}/fonds/latest-holdings.csv"
-        return http.call(csv_url, "funds.ishares_holdings")
+        return http.call(base + holdings.format(id=fund_id), "funds.ishares_holdings")
     return None
 
 
@@ -88,7 +95,8 @@ def due(fund: dict[str, object], today: date, days: int) -> bool:
 def labelled(isin: str, source: str, data: bytes) -> bytes:
     """La liste, précédée du fonds pour lequel elle est lue : deux fonds qui lisent le même ETF
     déposent deux fichiers distincts (la boîte d'entrée écarte un contenu déjà vu)."""
-    return f"Composition pour,{isin},lue sur,{source}\n".encode() + data
+    head = f"Composition pour,{isin},lue sur,{source}\n".encode()
+    return head + data.removeprefix(b"\xef\xbb\xbf")  # le site suisse commence par un BOM
 
 
 def run(env: Env, http: Http) -> tuple[int, list[str]]:

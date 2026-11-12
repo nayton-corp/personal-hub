@@ -24,7 +24,10 @@ ISHARES_EM = "IE00B0M63177"  # iShares MSCI Emerging Markets
 HSBC_EM = "IE000KCS7J59"  # suit MSCI Emerging Markets, sans fichier lisible
 UBS_EM = "CH1600525138"  # même indice, fonds non coté
 VOO = "US9229083632"  # inconnu d'iShares, sans ETF répliqué réglé
+CSSMI = "CH0008899764"  # iShares SMI (CH) : connu du seul site suisse
+UBS_SMI = "CH0033782431"  # suit le SMI
 IDS = {CSPX: "253743", ISHARES_EM: "251857"}
+CH_IDS = {CSSMI: "261154"}
 # en-tête et lignes recopiés du fichier iShares réel (latest-holdings.csv), poids arrondis
 HOLDINGS = (
     'Fund Holdings as of,"10/Nov/2026"\n'
@@ -38,6 +41,17 @@ HOLDINGS = (
     '"ESZ6","S&P500 EMINI DEC 26","Cash and/or Derivatives","Futures","0.00","10.00",'
     '"1.00","1.00","1.00","-","-","USD"\n'
 )
+# le site suisse : BOM, ligne 2 faite d'une espace insécable, milliers « ’ » (SMIM, 12/11/2026)
+SWISS = (
+    '\ufeffFund Holdings as of,"10/Nov/2026"\n'
+    "\u00a0\n"
+    "Ticker,Name,Sector,Asset Class,Market Value,Weight (%),Notional Value,Shares,Price,"
+    "Location,Exchange,Market Currency\n"
+    '"DSFIR","DSM FIRMENICH AG","Materials","Equity","89’755’623.25","90.00","89’755’623.25",'
+    '"922’937.00","97.25","Netherlands","SIX Swiss Exchange","CHF"\n'
+    '"S1Z6","SWISS MID CAP DEC 26","Cash and/or Derivatives","Futures","0.00","10.00",'
+    '"1.00","1.00","1.00","-","Eurex Deutschland","CHF"\n'
+)
 
 
 def ishares_site(*, down: bool = False) -> Fake:
@@ -47,12 +61,18 @@ def ishares_site(*, down: bool = False) -> Fake:
         parts = urlsplit(url)
         if parts.path == "/varnish-api/core-search/search/products":
             q = parse_qs(parts.query)
-            assert (q["site"], q["locale"]) == (["ishares-uk"], ["en-gb"])
-            found = [{"portfolioId": IDS[q["query"][0]]}] if q["query"][0] in IDS else []
+            ids = {("ishares-uk", "en-gb"): IDS, ("ishares-ch", "en-ch"): CH_IDS}[
+                (q["site"][0], q["locale"][0])
+            ]
+            found = [{"portfolioId": ids[q["query"][0]]}] if q["query"][0] in ids else []
             return 200, json.dumps({"results": found, "totalResults": len(found)}).encode()
-        if parts.path.endswith("/latest-holdings.csv"):
+        if parts.path.startswith("/uk/") and parts.path.endswith("/latest-holdings.csv"):
             assert parts.path.split("/")[5] in IDS.values()
             return 200, HOLDINGS.encode()
+        if parts.path.startswith("/ch/") and parts.path.endswith(".ajax"):
+            assert parts.path.split("/")[5] in CH_IDS.values()
+            assert parse_qs(parts.query)["fileType"] == ["csv"]
+            return 200, SWISS.encode()
         return 404, b""
 
     return Fake(route)
@@ -112,6 +132,22 @@ def test_a_fund_reads_the_etf_that_follows_the_same_index(make_env: Any, fake_hu
     assert {parse_qs(urlsplit(u).query).get("query", [""])[0] for _m, u in site.calls} >= {
         ISHARES_EM
     }
+
+
+def test_a_swiss_etf_is_read_on_the_swiss_site(make_env: Any, fake_hub: FakeHub) -> None:
+    fake_hub.funds = held(UBS_SMI)
+    env = make_env("market", market={"funds": {UBS_SMI: CSSMI}})
+    site = ishares_site()
+    assert funds.run(env, Http(site)) == (1, [])
+    data = dropped(env)[UBS_SMI]
+    assert b"\xef\xbb\xbf" not in data
+    (comp,) = composition.parse(f"lookthrough:{UBS_SMI}", data, ch.PACK).compositions
+    assert (comp.isin, comp.on_date) == (UBS_SMI, "2026-11-10")
+    by = {(w.dimension, w.bucket): w.weight for w in comp.weights}
+    assert by[("sector", "Matériaux")] == Decimal("0.9")
+    assert by[("region", composition.UNKNOWN)] == Decimal("0.1")
+    sites = [parse_qs(urlsplit(u).query).get("site") for _m, u in site.calls]
+    assert sites[:2] == [["ishares-uk"], ["ishares-ch"]]  # le site britannique d'abord
 
 
 def test_a_recent_or_stable_composition_is_not_fetched_again() -> None:
