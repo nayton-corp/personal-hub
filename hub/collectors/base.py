@@ -113,7 +113,11 @@ class MarketConfig(BaseModel):
     # l'émetteur ; `funds` donne, pour un fonds sans fichier lisible, un ETF qui suit le même
     # indice (ISIN détenu → ISIN de l'ETF dont on lit la composition)
     funds: dict[str, str] = {}
+    # un fonds indiciel sans ETF du même indice lit la fiche mensuelle de son indice (secteurs,
+    # pays) : ISIN détenu → adresse de la fiche MSCI (https://www.msci.com/documents/…)
+    index_sheets: dict[str, str] = {}
     ishares_url: str = "https://www.ishares.com"
+    msci_url: str = "https://www.msci.com"
     funds_refresh_days: int = Field(default=7, ge=1, le=90)  # une composition plus jeune attend
     # portefeuilles réglés dans l'app (G5) ; ceux des secrets d'avant G5 s'y ajoutent
     wallets: list[dict[str, Any]] = []

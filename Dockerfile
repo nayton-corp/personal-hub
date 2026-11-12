@@ -78,7 +78,9 @@ COPY --from=webfiles /out /srv/web
 FROM ${PLAYWRIGHT_IMAGE} AS collector
 # le pip système de la base embarque son propre certifi, périmé (GHSA-6q48-6c7w-9gw2) ;
 # uv fait tout ici, pip n'a rien à faire dans l'image
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
+# pdftotext (poppler) lit les fiches mensuelles des indices MSCI (compositions des fonds)
+RUN apt-get update && apt-get upgrade -y \
+ && apt-get install --no-install-recommends -y poppler-utils && rm -rf /var/lib/apt/lists/* \
  && rm -rf /usr/local/lib/python3.12/dist-packages/pip /usr/local/lib/python3.12/dist-packages/pip-*.dist-info \
     /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12
 COPY --from=build /usr/local/bin/uv /usr/local/bin/uv
