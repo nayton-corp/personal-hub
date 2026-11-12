@@ -3,7 +3,7 @@
 // /finance/holdings et /finance/debts, valorisées au dernier point de /finance/networth/history.
 import { CCY_NAME, FACETS, assetMark, facetMark, facetName, instMark, setInstitutions } from "./meta.js";
 import { MOIS, MOIS_L, base, units } from "../../format.js";
-import { pref, setPref } from "../../ui.js";
+import { ic, pref, setPref } from "../../ui.js";
 import { store } from "../../store.js";
 import { lineId } from "./wcurve.js";
 
@@ -57,7 +57,17 @@ export const S = {
   rulerOn: false,
   full: false,
 };
-export const FOLD = { alloc: false, perf: true, ...pref("fold", {}) };
+// les sections du patrimoine s'ouvrent au toucher et repartent repliées à chaque ouverture de
+// l'app : l'écran reste court, la liste des comptes à portée de pouce
+export const FOLD = { alloc: true, perf: true, strat: true };
+// une section repliable : `sum` se lit repliée, `body()` n'est calculé que dépliée
+export function foldSection(k, title, extra, sum, body) {
+  const head = `<button class="fold-btn" type="button" data-a="w-fold" data-v="${k}" aria-expanded="${!FOLD[k]}" aria-controls="${k}-body">
+    <h2 class="section-title" id="t-${k}">${title}</h2>${ic("down", "fold-chev")}</button>`;
+  return `<section class="section${FOLD[k] ? " folded" : ""}" id="sec-${k}" aria-labelledby="t-${k}"><div class="section-head">${head}${extra}</div>
+    <button class="sec-sum" type="button" data-a="w-fold" data-v="${k}" aria-label="Déplier : ${title}">${sum}</button>
+    <div class="sec-body" id="${k}-body">${FOLD[k] ? "" : body()}</div></section>`;
+}
 
 export function remember() {
   const { by, period, pinned, mode, unit, cmp, view, sort, tab, gross } = S;

@@ -1174,6 +1174,61 @@ export interface StatementOut {
   duplicates: number;
 }
 
+export interface StrategiesOut {
+  items: StrategyOut[];
+  scopes: StrategyScopeOut[];
+}
+
+export interface StrategyKeptOut {
+  done: number;
+  skipped: number;
+}
+
+export interface StrategyOut {
+  id: string;
+  kind: string;
+  scope: string;
+  name: string;
+  phrase: string;
+  params: Record<string, any>;
+  note: string | null;
+  status: string;
+  state: string;
+  created_on: string;
+  level: Record<string, any>;
+  step: StrategyStepOut | null;
+  steps: StrategyStepOut[];
+  kept: StrategyKeptOut;
+}
+
+export interface StrategyRowOut {
+  key: string;
+  name: string;
+  value: MoneyOut;
+  cost: MoneyOut;
+  ratio_pct: string | null;
+}
+
+export interface StrategyScopeOut {
+  key: string;
+  name: string;
+  kind: string;
+  value: MoneyOut;
+}
+
+export interface StrategyStepOut {
+  id: string;
+  key: string;
+  state: string;
+  opened_on: string;
+  planned: MoneyOut | null;
+  done: MoneyOut;
+  detail: Record<string, any>;
+  closed_on: string | null;
+  closed_by: string | null;
+  rows?: StrategyRowOut[] | null;
+}
+
 export interface SummaryOut {
   month: string;
   currency: string;

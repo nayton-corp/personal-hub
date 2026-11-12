@@ -110,6 +110,7 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `GET` | `/api/finance/rules/packs` | Packs de règles livrés, version installée, ceux du pays de l'instance, et le nombre de règles actives hors système (parcours d'accueil). |
 | `GET` | `/api/finance/search` | Search |
 | `GET` | `/api/finance/settings` | Réglages du budget : jour où commence le mois en cours, mois en cours et ses dates, règles datées (`set_month_start` en pose une nouvelle). |
+| `GET` | `/api/finance/strategies` | Les stratégies (vendre par paliers, achat régulier, acheter une grosse baisse) : la phrase, où on en est aujourd'hui, l'étape atteinte qui attend une réponse, les étapes passées ; et `scopes`, sur quoi une stratégie peut porter. Le hub ne passe aucun ordre. Écrire : `save_strategy` ; répondre à une étape : `answer_strategy_step` (Double Sas). |
 | `GET` | `/api/finance/summary` | Summary |
 | `GET` | `/api/finance/todo` | Le nombre d'écritures à classer, seul : la pastille du Journal ne recalcule pas les chiffres clés (audit du 10/11, P1). |
 | `GET` | `/api/finance/trades` | Achats et ventes d'un actif (ordres), pour le journal d'un actif dans l'app. |

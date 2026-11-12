@@ -434,6 +434,31 @@ format ISO 20022) se lit comme celui de la BCF : déclare le compte avec son IBA
 `fin accounts add "Raiffeisen épargne" --iban CH… --institution Raiffeisen`, puis dépose le
 fichier dans la boîte d'entrée.
 
+## Stratégies
+
+Une stratégie est une décision écrite une fois, en une phrase : sur quoi, quand, le geste prévu
+(« Quand Altcoins revient à son prix d'achat, j'en vends 50 % »). **Le hub ne passe jamais
+d'ordre** : il prévient, la personne agit chez sa plateforme, le hub constate au journal.
+
+| Genre | Cible | Réglages | Étape atteinte quand |
+|---|---|---|---|
+| `ladder` vendre par paliers | une crypto, `crypto:alt` (tout sauf bitcoin et stablecoins), `crypto:all` | 1 à 4 paliers (niveau en % du prix d'achat, part à vendre), 10 points d'écart au moins | la valeur dont le prix d'achat est connu atteint le niveau ; un palier à la fois, dans l'ordre |
+| `recurring` achat régulier | un instrument tenu | chaque mois (jour 1 à 28) ou chaque semaine, montant | l'échéance arrive ; un achat déjà au journal (jusqu'à 3 jours avant) la coche sans alerte |
+| `dip` grosse baisse | un instrument coté | baisse (15 % au moins) sous le plus haut des 90 ou 365 derniers jours, montant | le dernier cours (5 jours au plus) est sous le seuil ; une alerte par baisse, il faut un nouveau plus haut pour la suivante |
+
+- Tables `strategies` et `strategy_steps` (migration 0027) ; règles pures dans
+  `patrimoine/model/strategy.py` : des réglages et des chiffres à une date, rien d'autre, pour
+  que le même calcul serve à un rejeu sur le passé.
+- La vérification tourne dans la tâche de nuit (`patrimoine/app/strategy_watch.py`) : elle
+  constate d'abord le journal sur l'étape en cours (close à 80 % du montant prévu), puis ouvre
+  l'étape atteinte et demande une notification (`notify.request`, texte générique, lien
+  `/#strategy=<étape>`). Un achat régulier pas encore vu reçoit un seul rappel, 3 jours après ;
+  il passe (`expired`) quand l'échéance suivante arrive.
+- Écrire, modifier, mettre en pause, terminer : proposition `save_strategy` ; répondre à une
+  étape (`done`, `later`, `skip`) : `answer_strategy_step`. Lecture : `GET /api/finance/strategies`
+  (les stratégies, où elles en sont, et `scopes` : sur quoi elles peuvent porter).
+- Le suivi compte des étapes tenues ou passées, jamais un rendement.
+
 ## Autres commandes
 
 | Commande | Rôle |

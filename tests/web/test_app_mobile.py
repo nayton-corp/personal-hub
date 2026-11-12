@@ -294,3 +294,28 @@ def test_an_account_opens_its_page_and_back_returns_home(page: Any) -> None:
     page.locator('#wland [data-a="w-full"][data-v="0"]').click()
     page.wait_for_selector("#wland", state="hidden")
     _screen_ok(page, "patrimoine")
+
+
+def test_wealth_sections_start_folded_and_strategies_open(page: Any) -> None:
+    """Répartition, Performance et Stratégies sont repliées à l'ouverture : une ligne chacune.
+    Dépliée, la section Stratégies mène à « Que veux-tu faire ? », la quatrième intention
+    annoncée sans être ouverte."""
+    page.reload()
+    page.wait_for_selector("#shell:not([hidden])")
+    open_tab(page, "patrimoine")
+    for key in ("alloc", "strat"):
+        assert page.locator(f"#sec-{key}.folded .sec-sum").is_visible()
+        assert page.locator(f"#{key}-body").inner_text().strip() == ""
+    assert page.locator("#perf.folded").count() == 1
+    page.locator("#sec-alloc .fold-btn").click()
+    page.wait_for_selector("#sec-alloc:not(.folded) .alloc-row")
+    page.locator("#sec-strat .fold-btn").click()
+    page.locator('#sec-strat [data-a="strat-new"]').click()
+    page.wait_for_selector('#sheet [data-a="strat-kind"]')
+    assert page.locator('#sheet [data-a="strat-kind"]').count() == 3
+    assert "Bientôt" in page.locator("#sheet button[disabled]").inner_text()
+    page.locator('#sheet [data-a="strat-kind"][data-v="recurring"]').click()
+    page.wait_for_selector("#sf-amount")
+    assert page.locator('#sheet [data-a="strat-save"]').count() == 1
+    page.locator('#sheet [data-a="sheet-close"]').click()
+    _screen_ok(page, "patrimoine", shot="patrimoine-strategies")

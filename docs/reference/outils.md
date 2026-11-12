@@ -47,6 +47,7 @@ Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hu
 | `finance_prices` | `finance:aggregates` | `isin`, `from`?, `to`? | Cours connus d'un actif (ISIN ou symbole) entre deux dates, dans sa devise. |
 | `finance_breaks` | `finance:aggregates` | — | Rapprochement d'aujourd'hui : les soldes non expliqués (compte, actif, parts, valeur, cause, gestes possibles), leur total, la part des placements expliquée. |
 | `finance_debts` | `finance:aggregates` | — | Dettes et leur solde aujourd'hui : départ, paiements et intérêts depuis, mensualité habituelle, fin projetée. |
+| `finance_strategies` | `finance:aggregates` | — | Les stratégies écrites (vendre par paliers, achat régulier, acheter une grosse baisse) : la phrase, où on en est aujourd'hui, l'étape qui attend une réponse. Le hub ne passe aucun ordre, il prévient. |
 | `finance_transfers` | `finance:aggregates` | — | Virements appariés entre mes comptes, par méthode, et le nombre de virements sans autre côté (leur liste avec la lecture complète). |
 | `finance_recurring` | `finance:read` | — | Abonnements et paiements réguliers : montant, cadence, prochaine échéance. |
 | `finance_to_review` | `finance:read` | `limit`?, `offset`? | Écritures sans catégorie, groupées par commerçant ; known_merchant dit si ce commerçant a déjà été catégorisé. |
@@ -62,6 +63,7 @@ Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hu
 | `finance_propose_budget` | `finance:propose` | `category`, `amount`, `cadence`?, `reason`? | Propose une cible, dans la devise de base, pour une catégorie de dépense : mensuelle, ou annuelle (cadence year, suivie en cumul depuis janvier) pour les dépenses par à-coups ; rien n'est appliqué. |
 | `finance_propose_note` | `finance:propose` | `entry_id`, `note` | Propose une note libre sur une écriture (un paiement entre particuliers…) ; rien n'est appliqué. |
 | `finance_proposal_status` | `finance:propose` | `proposal_id` | Dit si une proposition est en attente, acceptée, refusée ou expirée. |
+| `finance_propose_answer_strategy_step` | `finance:propose` | `step_id`, `answer`, `reason`? | Propose la réponse à une étape atteinte d'une stratégie : c'est fait, plus tard, je passe. |
 | `finance_propose_categorize_rest` | `finance:propose` | `before`, `direction`?, `category_id`, `reason`? | Propose la même catégorie pour tout ce qui reste à classer d'un commerçant. |
 | `finance_propose_correct_entry` | `finance:propose` | `entry_id`, `amount_minor`?, `booking_date`?, `account_id`?, `reason` | Propose de corriger le montant, la date ou le compte d'une écriture (une annulation puis une remplaçante, l'original reste). |
 | `finance_propose_create_account` | `finance:propose` | `institution`, `name`, `kind`?, `currency`?, `iban`?, `external_ref`?, `liquid`?, `budget_account`?, `reason`? | Propose d'ouvrir un compte (finance_pending_accounts en liste à ouvrir). |
@@ -73,6 +75,7 @@ Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hu
 | `finance_propose_link_crypto_moves` | `finance:propose` | `entry_id`, `peer_id`, `kind`, `reason`? | Propose de relier deux mouvements crypto : virement entre mes comptes, ou mise et sortie de staking. |
 | `finance_propose_record_debt_balance` | `finance:propose` | `debt_id`, `on_date`, `amount_minor`, `reason`? | Propose un solde constaté d'une dette à une date. |
 | `finance_propose_save_debt` | `finance:propose` | `debt_id`?, `name`?, `lender`?, `kind`?, `currency`?, `original_minor`?, `rate_pct`?, `day_count`?, `payment_minor`?, `ends_on`?, `category_id`?, `account_id`?, `closed_on`?, `balance_minor`?, `balance_on`?, `opening_entry_id`?, `reason`? | Propose une dette ou sa mise à jour (nom, prêteur, départ, mensualité, taux). |
+| `finance_propose_save_strategy` | `finance:propose` | `strategy_id`?, `kind`?, `scope`?, `tiers`?, `cadence`?, `day`?, `amount_minor`?, `drop_pct`?, `window_days`?, `note`?, `status`?, `reason`? | Propose d'écrire ou de modifier une stratégie (finance_strategies) : vendre par paliers, achat régulier, acheter une grosse baisse. Jamais d'ordre : le hub prévient. |
 | `finance_propose_set_account_goal` | `finance:propose` | `account_id`, `goal`, `reason`? | Propose l'objectif d'un compte (current, safety, projects, long_term, retirement). |
 | `finance_propose_set_month_start` | `finance:propose` | `start_day`, `valid_from`?, `reason`? | Propose le jour où commence le mois budgétaire, dès un mois donné. |
 | `finance_propose_unlink_crypto_moves` | `finance:propose` | `entry_id`, `peer_id`, `kind`, `reason`? | Propose de défaire un lien entre deux mouvements crypto. |

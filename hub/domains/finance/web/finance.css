@@ -488,3 +488,21 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .land-open { overflow: hidden; }
 #evo .legend { width: 100%; }
 .lgrow { max-width: 100%; }
+/* stratégies */
+.strat-row { align-items: flex-start; }
+.strat-row .row-title { display: flex; align-items: center; gap: 8px; }
+.strat-row .go { align-self: center; }
+.strat-say { display: block; font-size: .794rem; line-height: 1.35; white-space: normal; margin-top: 2px; }
+.strat-say.big { font-size: .941rem; font-weight: 600; margin: 14px 0 8px; }
+.strat-now { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .765rem; color: var(--muted); margin: 0; }
+.strat-add { margin-top: 12px; }
+.strat-step { margin: 14px 0; padding: 12px; border-radius: 14px; background: var(--accent-soft); font-size: .824rem; }
+.strat-coins { margin-top: 6px; border-top: 1px solid var(--line); }
+.strat-coin { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; min-height: 36px; align-items: center; }
+.strat-coin { border-bottom: 1px solid var(--line); font-size: .765rem; }
+.strat-answers, .strat-foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.strat-answers .btn, .strat-foot .btn { flex: 1 1 auto; justify-content: center; }
+.strat-tier { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; gap: 8px; margin-top: 8px; align-items: center; }
+.strat-tier select { min-height: 46px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); padding: 0 10px; font-size: .853rem; }
+.strat-tpl { display: flex; flex-wrap: wrap; gap: 8px; }
+.strat-tier + .linkish { color: var(--accent); font-weight: 600; min-height: 44px; font-size: .824rem; }

@@ -4,7 +4,7 @@
 // la barre de contexte dit toujours ce que l'écran montre. État et lignes : wstate.js ; courbe :
 // wmodel.js et wchart.js ; haut de l'écran : whero.js ; panneaux : wsheets.js.
 import { BY, FILTERS, FOLD, PRESETS, S, SORTS, TABS, accLabel, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
-import { amount, announce, closeSheet, esc, fill, ic, money, n0, openSheet, setPref, skel, toast } from "../../ui.js";
+import { amount, announce, closeSheet, esc, fill, ic, money, n0, openSheet, skel, toast } from "../../ui.js";
 import { accountPage, assetPage } from "./wpages.js";
 import { allocSection } from "./walloc.js";
 import { chartSVG, flagHTML, gutter, legendHTML, nearest, rulerHTML } from "./wchart.js";
@@ -15,6 +15,7 @@ import { kindFor, model } from "./wmodel.js";
 import { moneyRate } from "./wcurve.js";
 import { DEBT_KIND, debtMark } from "./debts.js";
 import { byLabel } from "./wsheets.js";
+import { stratSection } from "./strategies.js";
 import * as place from "./wplace.js";
 import { base } from "../../format.js";
 import { go } from "../../shell.js";
@@ -186,7 +187,7 @@ function listSection(sel) {
 
 function homeSections(all) {
   const sel = scopeLines(all, { t: "home" });
-  return allocSection(sel) + perfBlock(all) + listSection(sel);
+  return allocSection(sel) + perfBlock(all) + stratSection() + listSection(sel);
 }
 
 // --- actions ----------------------------------------------------------------------------------
@@ -301,7 +302,7 @@ export const actions = {
   },
   "w-why": (v) => toast(v),
   "w-bucket": (k) => openSheet("bucket", k),
-  "w-fold": (k) => { FOLD[k] = !FOLD[k]; setPref("fold", FOLD); store.notify(); },
+  "w-fold": (k) => { FOLD[k] = !FOLD[k]; store.notify(); },
   // le journal filtré sur ce compte, cet actif ou les paiements de cette dette ; le retour revient ici
   "w-journal": (key) => {
     const ls = (lines() || []).filter((l) => (key.startsWith("a:") ? `a:${l.acc}` : `s:${l.asset}`) === key);

@@ -35,6 +35,7 @@ ORDER = (
     "finance_prices",
     "finance_breaks",
     "finance_debts",
+    "finance_strategies",
     "finance_transfers",
     "finance_recurring",
     "finance_to_review",
@@ -82,6 +83,10 @@ DESCRIPTIONS = {
     "install_pack": "Propose d'installer un pack de règles (finance_rule_packs).",
     "save_debt": "Propose une dette ou sa mise à jour (nom, prêteur, départ, mensualité, taux).",
     "record_debt_balance": "Propose un solde constaté d'une dette à une date.",
+    "save_strategy": "Propose d'écrire ou de modifier une stratégie (finance_strategies) : vendre "
+    "par paliers, achat régulier, acheter une grosse baisse. Jamais d'ordre : le hub prévient.",
+    "answer_strategy_step": "Propose la réponse à une étape atteinte d'une stratégie : c'est "
+    "fait, plus tard, je passe.",
     "set_month_start": "Propose le jour où commence le mois budgétaire, dès un mois donné.",
     "categorize_rest": "Propose la même catégorie pour tout ce qui reste à classer d'un "
     "commerçant.",
@@ -93,6 +98,7 @@ ROUTE_TOOLS: dict[str, str | None] = {
     "/kpis": "finance_networth",
     "/holdings": "finance_holdings",
     "/debts": "finance_debts",
+    "/strategies": "finance_strategies",
     "/breaks": "finance_breaks",
     "/lookthrough": "finance_lookthrough",
     "/transfers": "finance_transfers",

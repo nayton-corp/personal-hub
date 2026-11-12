@@ -21,6 +21,7 @@ from hub.domains.finance.patrimoine.app import (
     price_history,
     reconcile,
     snapshots,
+    strategies,
     transfers,
 )
 from hub.domains.finance.registre.interface import http
@@ -129,6 +130,11 @@ class PatrimoineTools(ToolBox):
                 conn, {"debts": text_out(debts.items(conn, self.host.today().isoformat()))}
             )
 
+    def strategies_list(self, _a: NoArgs, caller: ToolCaller) -> dict[str, object]:
+        with self.engine.connect() as conn:
+            found = strategies.items(conn, self.host.today())
+            return self._wrap(conn, {"strategies": text_out(found)})
+
     def holdings_list(self, a: OnArgs, caller: ToolCaller) -> dict[str, Any]:
         with self.engine.connect() as conn:
             out = holdings.holdings(conn, a.on or self.host.today().isoformat())
@@ -191,6 +197,16 @@ class PatrimoineTools(ToolBox):
                 AGGREGATES,
                 NoArgs,
                 self.debts_list,
+            ),
+            tool(
+                "finance_strategies",
+                "Les stratégies écrites (vendre par paliers, achat régulier, acheter une grosse "
+                "baisse) : la phrase, où on en est aujourd'hui, l'étape qui attend une réponse. "
+                "Le hub ne passe aucun ordre, il prévient.",
+                NONE,
+                AGGREGATES,
+                NoArgs,
+                self.strategies_list,
             ),
             tool(
                 "finance_holdings",

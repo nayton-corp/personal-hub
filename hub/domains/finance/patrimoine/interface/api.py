@@ -18,6 +18,7 @@ from hub.domains.finance.patrimoine.app import (
     price_history,
     reconcile,
     snapshots,
+    strategies,
     transfers,
 )
 from hub.domains.finance.patrimoine.app import holdings as positions
@@ -33,6 +34,7 @@ from hub.domains.finance.patrimoine.interface.schemas import (
     PricesOut,
     TransfersOut,
 )
+from hub.domains.finance.patrimoine.interface.strategy_schemas import StrategiesOut
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.http import (
     DATE,
@@ -86,6 +88,19 @@ def build_router(host: Host) -> APIRouter:
         """Dettes et leur solde aujourd'hui : départ, paiements et intérêts depuis, fin projetée."""
         with engine.connect() as conn:
             return {"items": debts.items(conn, host.today().isoformat())}
+
+    @r.get("/strategies", response_model=StrategiesOut)
+    def strategies_route(_p: AnyReader) -> dict[str, object]:
+        """Les stratégies (vendre par paliers, achat régulier, acheter une grosse baisse) : la
+        phrase, où on en est aujourd'hui, l'étape atteinte qui attend une réponse, les étapes
+        passées ; et `scopes`, sur quoi une stratégie peut porter. Le hub ne passe aucun ordre.
+        Écrire : `save_strategy` ; répondre à une étape : `answer_strategy_step` (Double Sas)."""
+        today = host.today()
+        with engine.connect() as conn:
+            return {
+                "items": strategies.items(conn, today),
+                "scopes": strategies.scopes(conn, today),
+            }
 
     @r.get("/breaks", response_model=BreaksOut)
     def breaks_route(_p: AnyReader) -> dict[str, Any]:

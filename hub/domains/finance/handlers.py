@@ -60,6 +60,12 @@ from hub.domains.finance.patrimoine.app.link_kinds import (
     UnlinkCryptoMovesHandler,
     link_inverse,
 )
+from hub.domains.finance.patrimoine.app.strategy_kinds import (
+    AnswerStrategyStep,
+    AnswerStrategyStepHandler,
+    SaveStrategy,
+    SaveStrategyHandler,
+)
 from hub.domains.finance.port import Finance
 from hub.domains.finance.registre.app.correct_kinds import (
     CorrectEntry,
@@ -124,6 +130,10 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
         "save_debt": ProposalKind(SaveDebt, SaveDebtHandler(domain), ai_allowed=True),
         "record_debt_balance": ProposalKind(
             RecordDebtBalance, RecordDebtBalanceHandler(domain), ai_allowed=True
+        ),
+        "save_strategy": ProposalKind(SaveStrategy, SaveStrategyHandler(domain), ai_allowed=True),
+        "answer_strategy_step": ProposalKind(
+            AnswerStrategyStep, AnswerStrategyStepHandler(domain), ai_allowed=True
         ),
         "decide_break": ProposalKind(
             DecideBreak,
