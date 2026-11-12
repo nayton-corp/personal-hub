@@ -13,9 +13,6 @@ Un lecteur par émetteur, pas par fonds : tous les fonds d'un émetteur publient
 
 Un fonds qu'aucun lecteur ne connaît (HSBC, Vanguard, fonds UBS non cotés…) peut lire la
 composition d'un ETF qui suit le même indice : réglage `funds` (ISIN détenu → ISIN de l'ETF).
-Un fonds indiciel sans ETF du même indice lit la fiche mensuelle de son indice MSCI : réglage
-`index_sheets` (ISIN détenu → adresse de la fiche), secteurs et pays seulement
-(index_sheet.py). Jamais d'ETF « proche » : seul le même indice donne la même composition.
 Sinon il reste sans composition, et le hub le signale. Un passage par jour au plus ; seuls des
 ISIN quittent la machine.
 """
@@ -27,7 +24,6 @@ from collections.abc import Callable
 from datetime import date
 
 from hub.collectors.base import Failure
-from hub.collectors.market import index_sheet
 from hub.collectors.client import HubUnavailable
 from hub.collectors.http import Http
 from hub.collectors.runtime import Env
@@ -81,10 +77,6 @@ def readable(data: bytes) -> bool:
     return all(w in data[:4000] for w in HEADER_WORDS)
 
 
-def generic(data: bytes) -> bool:
-    return data.startswith(b"isin,dimension,bucket,weight_pct,on_date\n")
-
-
 def due(fund: dict[str, object], today: date, days: int) -> bool:
     """Une composition à chercher : jamais lue, ou lue il y a au moins `days` jours. Un fonds
     entièrement dans une seule case (or, immobilier suisse) ne change pas : on ne le cherche
@@ -98,17 +90,6 @@ def due(fund: dict[str, object], today: date, days: int) -> bool:
         return (today - date.fromisoformat(since)).days >= days
     except ValueError:
         return True
-
-
-def from_index_sheet(env: Env, http: Http, isin: str, url: str) -> bytes | None:
-    """Le CSV générique d'un fonds tiré de la fiche de son indice ; None si l'adresse n'est pas
-    une fiche MSCI (le réglage ne fait pas sortir le collecteur vers un autre site)."""
-    if not url.startswith(f"{env.cfg.market.msci_url}/documents/"):
-        return None
-    try:
-        return index_sheet.to_csv(isin, http.call(url, "funds.index_sheet"))
-    except index_sheet.SheetError:
-        raise Failure("invalid_file", "funds.index_sheet:unreadable") from None
 
 
 def labelled(isin: str, source: str, data: bytes) -> bytes:
@@ -134,11 +115,6 @@ def run(env: Env, http: Http) -> tuple[int, list[str]]:
             continue
         source = m.funds.get(isin, isin)
         try:
-            if isin in m.index_sheets:
-                sheet = from_index_sheet(env, http, isin, m.index_sheets[isin])
-                if sheet is not None:
-                    dropped += env.inbox.drop(f"{isin}-index.csv", sheet, generic, step="funds.file")
-                continue
             data = next((d for read in READERS if (d := read(env, http, source)) is not None), None)
             if data is not None:
                 dropped += env.inbox.drop(

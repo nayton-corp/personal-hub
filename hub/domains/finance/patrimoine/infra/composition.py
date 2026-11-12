@@ -27,7 +27,6 @@ MAX_BYTES = 10 * 1024 * 1024
 TOP = 10
 ASSETS_PER_BUCKET = 5  # actifs nommés sous chaque case de la répartition
 UNKNOWN = "Non ventilé"
-REST = ("other", "others", "autres", "andere")  # le reste des pays d'une fiche d'indice
 CRYPTO = "Crypto"
 _ISIN_IN_NAME = re.compile(r"([A-Z]{2}[A-Z0-9]{9}\d)")
 NORTH_AMERICA = "Amérique du Nord"
@@ -67,7 +66,7 @@ for _region, _names in {
         "nouvelle-zelande|neuseeland|israel|macau|macao"
     ),
     EMERGING: (
-        "china|chine|hong kong sar china|taiwan|india|inde|indien|korea (south)|korea|south korea|coree du sud|"
+        "china|chine|taiwan|india|inde|indien|korea (south)|korea|south korea|coree du sud|"
         "sudkorea|brazil|bresil|brasilien|saudi arabia|arabie saoudite|south africa|"
         "afrique du sud|mexico|mexique|mexiko|indonesia|indonesie|thailand|thailande|malaysia|"
         "malaisie|united arab emirates|emirats arabes unis|qatar|poland|pologne|polen|turkey|"
@@ -248,22 +247,8 @@ def region_code(bucket: str, pack: CountryPack) -> str | None:
     return CODES.get(bucket)
 
 
-def _regions(countries: list[tuple[str, Decimal]], pack: CountryPack) -> list[Weight]:
-    """Les pays d'une fiche d'indice (les cinq premiers et « Other ») en régions : « Other »
-    rejoint la région des pays nommés quand ils sont tous d'une même région (un indice
-    européen reste européen), sinon il reste non ventilé."""
-    named = {region_of(c, pack) for c, _w in countries if _norm(c) not in REST}
-    rest = named.pop() if len(named) == 1 else UNKNOWN
-    sums: dict[str, Decimal] = defaultdict(Decimal)
-    with localcontext(DECIMAL_CONTEXT):
-        for c, w in countries:
-            sums[rest if _norm(c) in REST else region_of(c, pack)] += w
-    return [Weight("region", b, v) for b, v in sorted(sums.items())]
-
-
-def _parse_generic(data: bytes, pack: CountryPack) -> LookthroughFile:
+def _parse_generic(data: bytes) -> LookthroughFile:
     by_isin: dict[str, list[Weight]] = defaultdict(list)
-    countries: dict[str, list[tuple[str, Decimal]]] = defaultdict(list)
     dates: dict[str, str] = {}
     for n, raw in enumerate(csv.DictReader(io.StringIO(_text(data)))):
         row = {(k or "").strip().lower(): (v or "").strip() for k, v in raw.items()}
@@ -273,7 +258,7 @@ def _parse_generic(data: bytes, pack: CountryPack) -> LookthroughFile:
         if not instruments.ISIN.match(isin):
             raise LookthroughError(f"ligne {n + 2} : ISIN illisible")
         dim = row["dimension"].lower()
-        if dim not in (*DIMENSIONS, "country"):
+        if dim not in DIMENSIONS:
             raise LookthroughError(f"ligne {n + 2} : dimension inconnue ({dim})")
         pct = _pct(row["weight_pct"])
         if pct is None or not (0 <= pct <= 100) or not row["bucket"]:
@@ -282,15 +267,7 @@ def _parse_generic(data: bytes, pack: CountryPack) -> LookthroughFile:
         if on is None:
             raise LookthroughError(f"ligne {n + 2} : date illisible (AAAA-MM-JJ)")
         dates[isin] = max(dates.get(isin, on), on)
-        bucket = row["bucket"][:80]
-        if dim == "country":  # fiche d'indice : des pays, rangés en régions plus bas
-            countries[isin].append((bucket, _fraction(pct)))
-            continue
-        if dim == "sector":  # un nom GICS anglais (fiche d'indice) prend le nom du hub
-            bucket = SECTORS.get(_norm(bucket), bucket)
-        by_isin[isin].append(Weight(dim, bucket, _fraction(pct)))
-    for isin, found in countries.items():
-        by_isin[isin] += _regions(found, pack)
+        by_isin[isin].append(Weight(dim, row["bucket"][:80], _fraction(pct)))
     if not by_isin:
         raise LookthroughError("fichier vide")
     return LookthroughFile([Composition(i, dates[i], w) for i, w in sorted(by_isin.items())])
@@ -361,7 +338,7 @@ def parse(source: str, data: bytes, pack: CountryPack | None = None) -> Lookthro
     if len(data) > MAX_BYTES:
         raise LookthroughError("fichier trop volumineux")
     if source == SOURCE:
-        return _parse_generic(data, pack or packs.current())
+        return _parse_generic(data)
     isin = source.split(":", 1)[1] if ":" in source else ""
     if not instruments.ISIN.match(isin):
         raise LookthroughError("ISIN du fonds absent du nom de fichier")
