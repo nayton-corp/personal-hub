@@ -26,6 +26,8 @@ class FakeHub:
     code: str = "code-retour"
     link_requested: bool = False
     link_urls: list[str | None] = field(default_factory=list)
+    funds: list[dict[str, object]] = field(default_factory=list)  # fonds détenus (« needs »)
+    needs_asked: int = 0
 
     def state(self, name: str) -> dict[str, Any]:
         return {
@@ -35,6 +37,10 @@ class FakeHub:
             "run_requested": self.run_requested,
             "link_requested": self.link_requested,
         }
+
+    def needs(self, name: str) -> dict[str, list[dict[str, object]]]:
+        self.needs_asked += 1
+        return {"funds": self.funds}
 
     def set_link_url(self, name: str, url: str | None) -> None:
         self.link_urls.append(url)

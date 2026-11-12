@@ -213,6 +213,7 @@ def _date(value: str) -> str | None:
         "%d.%m.%Y",
         "%d/%m/%Y",
         "%m/%d/%Y",
+        "%d/%b/%Y",  # iShares : « 10/Nov/2026 »
         "%b %d, %Y",
         "%d %b %Y",
         "%B %d, %Y",
@@ -228,7 +229,7 @@ def _date(value: str) -> str | None:
 def region_of(country: str, pack: CountryPack) -> str:
     """La région d'un pays : la région domestique du pack si le pays en est, sinon la région
     générique, l'Europe sous l'étiquette du pack."""
-    if not country.strip():
+    if country.strip() in ("", "-", "--"):  # liquidités et dérivés d'un fonds : sans pays
         return UNKNOWN
     word = _norm(country)
     if pack.regions.home and word in pack.regions.home_words:

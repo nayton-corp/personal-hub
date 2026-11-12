@@ -86,6 +86,11 @@ class HubClient:
             },
         )
 
+    def needs(self, name: str) -> dict[str, list[dict[str, object]]]:
+        """Ce que le hub demande à la connexion de chercher (fonds détenus…), sans montant."""
+        found = self._call("GET", f"/{name}/needs")["needs"]
+        return found if isinstance(found, dict) else {}
+
     def notify(self, name: str, event: str) -> bool:
         try:
             return bool(self._call("POST", f"/{name}/notify", {"event": event})["sent"])

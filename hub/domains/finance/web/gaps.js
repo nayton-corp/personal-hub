@@ -20,6 +20,7 @@ export function gapText(g) {
   if (g.reason === "no_pair") return `${(parts[1] || "").toUpperCase()} sans cours`;
   if (g.reason.startsWith("skipped=")) return `${g.reason.slice(8)} période${g.reason.slice(8) === "1" ? "" : "s"} refusée${g.reason.slice(8) === "1" ? "" : "s"} par la source (${step})`;
   if (step === "prices" || step === "crypto" || step === "quotes" || step === "history_prices") return `Cours ${parts[1] ? `de ${parts[1].toUpperCase()} ` : ""}non lus, nouvel essai au prochain passage`;
+  if (step === "funds") return "Compositions des fonds non lues, nouvel essai demain";
   if (step === "wallet") return `Solde de ${parts[1]} non lu, nouvel essai au prochain passage`;
   if (step === "history") return `Historique ${parts[1] ? `de ${parts[1]} ` : ""}non lu, nouvel essai au prochain passage`;
   return `${g.scope} non lu (${g.reason})`;

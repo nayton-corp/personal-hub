@@ -54,9 +54,9 @@ export const FIELD_LABEL = {
   aspsp_name: "Banque (nom chez Enable Banking)", aspsp_country: "Pays de la banque (ISO)",
   psu_type: "Type de compte (personal ou business)", consent_days: "Durée du consentement (jours)",
   max_syncs_per_day: "Synchronisations par jour au plus", currencies: "Devises suivies",
-  crypto: "Cryptos suivies (symbole → id CoinGecko)", quotes: "Cours Yahoo (ISIN → symbole)",
+  crypto: "Cryptos suivies (symbole → id CoinGecko)", quotes: "Cours Yahoo (ISIN → symbole)", funds: "Fonds répliqués (ISIN → ETF du même indice)",
 };
-const JSON_SETTINGS = new Set(["currencies", "crypto", "quotes"]);
+const JSON_SETTINGS = new Set(["currencies", "crypto", "quotes", "funds"]);
 const NUMBER_SETTINGS = new Set(["consent_days", "max_syncs_per_day"]);
 const MULTILINE_SECRETS = new Set(["private_key"]);
 const POLL_MS = 4000;

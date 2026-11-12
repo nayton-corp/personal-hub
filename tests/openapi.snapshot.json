@@ -499,6 +499,38 @@
         "title": "CollectorModeIn",
         "type": "object"
       },
+      "CollectorNeedsOut": {
+        "properties": {
+          "needs": {
+            "additionalProperties": {
+              "items": {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "title": "Needs",
+            "type": "object"
+          }
+        },
+        "required": [
+          "needs"
+        ],
+        "title": "CollectorNeedsOut",
+        "type": "object"
+      },
       "CollectorNotifyIn": {
         "additionalProperties": false,
         "properties": {
@@ -3682,6 +3714,49 @@
           }
         },
         "summary": "Set Mode",
+        "tags": [
+          "collecteurs"
+        ]
+      }
+    },
+    "/api/collectors/{name}/needs": {
+      "get": {
+        "description": "Ce que la connexion doit chercher pour le domaine qui a déclaré son connecteur : rien si\nle domaine n'en dit rien, ou s'il n'est pas monté sur cette instance.",
+        "operationId": "collector_needs_api_collectors__name__needs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectorNeedsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Collector Needs",
         "tags": [
           "collecteurs"
         ]

@@ -289,6 +289,10 @@ export interface CollectorModeIn {
   mode: "enabled" | "disabled";
 }
 
+export interface CollectorNeedsOut {
+  needs: Record<string, (Record<string, string | boolean | null>)[]>;
+}
+
 export interface CollectorNotifyIn {
   event: "auth_pending" | "consent_expiring";
 }

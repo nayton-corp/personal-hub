@@ -283,6 +283,11 @@ class RunnerListOut(BaseModel):
     items: list[RunnerConnectionOut]
 
 
+class CollectorNeedsOut(BaseModel):
+    # par liste : des enregistrements courts (ISIN, date), jamais un montant
+    needs: dict[str, list[dict[str, str | bool | None]]]
+
+
 class CollectorRunsOut(BaseModel):
     items: list[CollectorRunOut]
 

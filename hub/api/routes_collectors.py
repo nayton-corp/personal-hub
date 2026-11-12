@@ -16,6 +16,7 @@ from hub.api.schemas import (
     CollectorLinkUrlIn,
     CollectorListOut,
     CollectorModeIn,
+    CollectorNeedsOut,
     CollectorNotifyIn,
     CollectorNotifyOut,
     CollectorOut,
@@ -32,6 +33,7 @@ from hub.api.schemas import (
 )
 from hub.core import collector_gaps, collectors, connections, connectors
 from hub.core.auth import AppSession, Ctx, CurrentPrincipal, Principal
+from hub.core.domain import CollectorNeeds
 from hub.core.errors import Problem
 from hub.core.notify import Message
 from hub.platform import secrets
@@ -157,6 +159,18 @@ def runner_connections(runner: str, hub_ctx: Ctx, _principal: Collector) -> Runn
     with hub_ctx.core.engine.connect() as conn:
         found = connections.for_runner(conn, runner)
     return RunnerListOut.model_validate({"items": [c.for_runner() for c in found]})
+
+
+@router.get("/{name}/needs", response_model=CollectorNeedsOut)
+def collector_needs(name: str, hub_ctx: Ctx, _principal: Collector) -> CollectorNeedsOut:
+    """Ce que la connexion doit chercher pour le domaine qui a déclaré son connecteur : rien si
+    le domaine n'en dit rien, ou s'il n'est pas monté sur cette instance."""
+    with hub_ctx.core.engine.connect() as conn:
+        spec = connections.require(conn, name).spec
+    domain = next((d for d in hub_ctx.registry if spec and d.name == spec.domain), None)
+    if spec is None or not isinstance(domain, CollectorNeeds):
+        return CollectorNeedsOut(needs={})
+    return CollectorNeedsOut(needs=domain.collector_needs(spec.name))
 
 
 @router.get("/{name}", response_model=CollectorOut)

@@ -43,6 +43,20 @@ class LocalHandler(Protocol):
         ...
 
 
+# ce qu'un collecteur doit aller chercher pour un domaine : listes de petits enregistrements
+# (identifiants publics, dates), jamais un montant
+Needs = dict[str, list[dict[str, str | bool | None]]]
+
+
+@runtime_checkable
+class CollectorNeeds(Protocol):
+    """Facultatif sur un domaine : ce qu'une connexion de l'un de ses connecteurs doit chercher
+    à son prochain run (par ex. la composition des fonds détenus). Demandé par le collecteur
+    (`GET /collectors/<connexion>/needs`), au moment du run seulement."""
+
+    def collector_needs(self, connector: str) -> Needs: ...
+
+
 class AfterCommit(Protocol):
     """Facultatif sur un handler local : suite hors transaction, une fois l'effet validé
     (recalculs, relances). Une erreur y est journalisée, jamais remontée."""
