@@ -3,7 +3,7 @@
 // vient du serveur (/finance/lookthrough), pour la même sélection que la courbe : liquidités
 // comprises, la part qu'un fonds ne détaille pas à part de l'actif sans fiche, une case tirée de
 // la classe dite « estimée », et un total égal au patrimoine affiché.
-import { LOOK, S, activeCount, fName, lines, lookPath, sum } from "./wstate.js";
+import { LOOK, S, activeCount, fName, foldSection, lines, lookPath, sum } from "./wstate.js";
 import { amount, cv, esc, ic, share, skel } from "../../ui.js";
 import { assetMark, facetColor, facetMark, lookMark } from "./meta.js";
 import { byLabel } from "./wsheets.js";
@@ -64,13 +64,27 @@ function checkLine(a, total) {
   return `${lost}<p class="alloc-check">${ic("check")}<span><b class="money">${amount(total)}</b> répartis, ${a.owed < 0 ? "le patrimoine affiché avant dettes" : "égal au patrimoine affiché"}</span></p>`;
 }
 
+// repliée, la répartition tient en une ligne : ses deux plus gros blocs
+function allocSummary(a) {
+  if (a.error) return "<span>Répartition indisponible</span>";
+  if (a.loading) return "<span>Chargement…</span>";
+  const total = a.rows.reduce((t, r) => t + r.v, 0);
+  if (!a.rows.length || total <= 0) return "<span>Rien à répartir avec ces filtres</span>";
+  const top = a.rows.slice(0, 2).map((r) => `${esc(r.name)} ${Math.round((r.v / total) * 100)} %`).join(" · ");
+  return `<span>${top}${a.rows.length > 2 ? ` · ${a.rows.length - 2} de plus` : ""}</span>`;
+}
+
 export function allocSection(sel) {
   const a = allocRows(sel);
-  const head = `<div class="section-head"><h2 class="section-title" id="t-alloc">Répartition</h2><button class="by-btn" type="button" data-a="w-byopen" aria-haspopup="dialog">par ${esc(byLabel(S.by).toLowerCase())}${ic("down")}</button></div>`;
-  if (a.error || a.loading) return `<section class="section" aria-labelledby="t-alloc">${head}${a.error ? `<div class="err-box" role="alert">Répartition indisponible : ${esc(a.error)}</div>` : skel("block")}</section>`;
+  const by = `<button class="by-btn head-extra" type="button" data-a="w-byopen" aria-haspopup="dialog">par ${esc(byLabel(S.by).toLowerCase())}${ic("down")}</button>`;
+  return foldSection("alloc", "Répartition", by, allocSummary(a), () => allocBody(a));
+}
+
+function allocBody(a) {
+  if (a.error || a.loading) return a.error ? `<div class="err-box" role="alert">Répartition indisponible : ${esc(a.error)}</div>` : skel("block");
   const rows = a.rows, owed = a.owed;
   const total = rows.reduce((t, r) => t + r.v, 0);
-  if (!rows.length || total <= 0) return `<section class="section" aria-labelledby="t-alloc">${head}<div class="empty">Rien à répartir avec ces filtres.</div></section>`;
+  if (!rows.length || total <= 0) return '<div class="empty">Rien à répartir avec ces filtres.</div>';
   const mark = (r) => (a.fund ? (r.kind === "cash" ? facetMark("cat", "cash") : r.tail ? lookMark("sector", "", r.c) : lookMark(S.by, r.k, r.c, "sm", r.code)) : S.by === "asset" ? assetMark((lines() || []).find((l) => l.asset === r.k) || { name: r.name, cat: "funds" }, "sm") : S.by === "acc" ? facetMark("inst", ((lines() || []).find((l) => l.acc === r.k) || {}).inst || r.name) : facetMark(S.by, r.k));
   const act = (r) => (a.fund ? `data-a="w-bucket" data-v="${esc(r.k)}"` : `data-a="w-alloc" data-v="${esc(r.k)}"`);
   const on = (r) => !a.fund && S.filters[S.by].has(r.k);
@@ -82,9 +96,9 @@ export function allocSection(sel) {
   }).join("");
   const scope = activeCount() ? "De la sélection filtrée" : "De tout le patrimoine";
   const hint = a.fund ? `${scope}, liquidités comprises. Toucher un bloc montre les actifs qui y contribuent.` : `${scope}. Toucher un bloc ou une ligne filtre l'écran.`;
-  return `<section class="section" aria-labelledby="t-alloc">${head}<p class="hint">${hint}</p>${metaLine(a)}
+  return `<p class="hint">${hint}</p>${metaLine(a)}
     <svg class="chart tm" viewBox="0 0 340 170" aria-hidden="true">${tm}</svg>
     <div class="alloc-list">${rows.map((r) => `<button class="alloc-row" type="button" ${act(r)} ${a.fund ? 'aria-haspopup="dialog"' : `aria-pressed="${on(r)}"`} aria-label="${esc(r.name)}, ${share(r.v / total)}${r.note ? `, ${esc(r.note)}` : ""}, ${a.fund ? "voir les actifs" : on(r) ? "retirer ce filtre" : "filtrer l'écran sur cette valeur"}">
       ${mark(r)}<span class="alloc-name">${esc(r.name)}${r.note ? `<small>${esc(r.note)}</small>` : ""}</span><span class="alloc-pct num">${share(r.v / total)}</span><span class="alloc-val">${amount(r.v)}</span><span class="fic">${ic(a.fund ? "chev" : on(r) ? "close" : "filter")}</span></button>`).join("")}
-    ${owed < 0 ? `<div class="alloc-row static">${facetMark("cat", "debt")}<span class="alloc-name">Dettes, retranchées</span><span class="alloc-pct"></span><span class="alloc-val">${amount(owed)}</span><span></span></div>` : ""}</div>${checkLine(a, total)}</section>`;
+    ${owed < 0 ? `<div class="alloc-row static">${facetMark("cat", "debt")}<span class="alloc-name">Dettes, retranchées</span><span class="alloc-pct"></span><span class="alloc-val">${amount(owed)}</span><span></span></div>` : ""}</div>${checkLine(a, total)}`;
 }

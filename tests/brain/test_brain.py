@@ -96,9 +96,9 @@ def test_single_domain_is_loaded_at_start(
     box = box_for(client, ctx, "brain=finance")
     names = [t["name"] for t in box.definitions()]
     assert names[:2] == [CAPABILITIES, LOAD]
-    assert len(names) == 49  # 2 outils de routage + 47 outils Finance (M11)
+    assert len(names) == 52  # 2 outils de routage + 50 outils Finance (M11)
     agg = box_for(client, ctx, "aggregates")
-    assert len(agg.definitions()) == 2 + 20  # routage + outils de totaux (M11)
+    assert len(agg.definitions()) == 2 + 21  # routage + outils de totaux (M11)
 
 
 def test_tools_load_on_demand(client: TestClient, ctx: HubContext, year: FinanceDomain) -> None:

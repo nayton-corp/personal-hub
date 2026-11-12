@@ -2,6 +2,28 @@
 
 ## [Non publié]
 
+## [0.20.0] · 2026-11-12
+
+### À la mise à jour
+
+- Rien à faire sur la machine. Les sections du patrimoine (Répartition, Performance,
+  Stratégies) sont repliées à chaque ouverture de l'app.
+
+### Finance
+
+- Stratégies : une décision écrite une fois, en une phrase, que le hub aide à tenir. Trois
+  genres : vendre par paliers (crypto, par rapport au prix d'achat : une pièce, les altcoins ou
+  toute la crypto), achat régulier (chaque mois ou chaque semaine), acheter une grosse baisse
+  (15 % au moins sous le plus haut des 3 ou 12 derniers mois). Le hub ne passe jamais d'ordre :
+  chaque nuit il regarde si une étape est atteinte, prévient une fois (notification sans actif
+  ni montant), puis coche l'étape quand l'opération apparaît au journal, ou prend la réponse
+  « C'est fait », « Plus tard », « Je passe ». Une étape à la fois, des seuils larges, un seul
+  rappel pour un achat régulier. Section « Stratégies » du patrimoine, ligne « À faire » sur
+  l'accueil, propositions `save_strategy` et `answer_strategy_step`, route
+  `/api/finance/strategies`, outil `finance_strategies` (migration finance 0027).
+- Patrimoine : Répartition, Performance et Stratégies se replient, et sont repliées par défaut ;
+  repliée, chacune tient en une ligne. La liste des comptes est à portée de pouce.
+
 ## [0.19.1] · 2026-11-12
 
 ### Finance

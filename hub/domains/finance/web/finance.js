@@ -13,11 +13,12 @@ import * as journal from "./journal.js";
 import { action, go } from "../../shell.js";
 import { api, store } from "../../store.js";
 import { toast } from "../../ui.js";
+import * as strategies from "./strategies.js";
 import { initWelcome } from "./welcome.js";
 
 export { markup } from "./markup.js";
 
-export const actions = { ...accounts.actions, ...correct.actions, ...debts.actions };
+export const actions = { ...accounts.actions, ...correct.actions, ...debts.actions, ...strategies.actions };
 
 // tx : all, todo, in, out ; txcat : { id, month } quand le journal suit une catégorie du budget ;
 // jf : filtres du journal (compte, catégorie, from, to, min, max en unités, tri)
@@ -52,12 +53,14 @@ export function after() {
   }
 }
 
-// liens des notifications ntfy : #sources, #alert=<id opaque> ; true quand le lien est suivi
+// liens des notifications ntfy : #sources, #alert=<id opaque>, #strategy=<étape> ; true quand le
+// lien est suivi
 export async function deeplink(h) {
   if (h === "sources") {
     go("sources", { rubric: "conn" });
     return true;
   }
+  if (h.startsWith("strategy=")) return strategies.deeplink(h.slice(9)).catch(() => false);
   if (!h.startsWith("alert=")) return false;
   const id = h.slice(6);
   try {

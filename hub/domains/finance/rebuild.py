@@ -50,6 +50,8 @@ REFERENCE_KINDS = frozenset(
         "disable_rule",
         "save_debt",
         "record_debt_balance",
+        "save_strategy",
+        "answer_strategy_step",
     }
 )
 
@@ -150,6 +152,8 @@ def copy_reference(src: Connection, dst: Connection) -> None:
         ("reconcile_decisions", "id"),
         ("reconcile_withdrawals", "decision_id"),
         ("budget_period_rules", "id"),
+        ("strategies", "id"),
+        ("strategy_steps", "id"),
     ):
         cols, rows = _rows(src, table, key)
         _upsert(dst, table, key, cols, rows)

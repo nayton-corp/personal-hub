@@ -30,6 +30,7 @@ from hub.domains.finance.patrimoine.app import (
     crypto_pairing,
     fund_needs,
     snapshots,
+    strategy_watch,
     transfers,
 )
 from hub.domains.finance.registre.app import ledger, reads
@@ -281,11 +282,19 @@ class FinanceDomain:
             log.info("sentinel.alert", kind=a.kind)
         return raised
 
+    def run_strategies(self) -> list[strategy_watch.Opened]:
+        with begin_immediate(self._engine) as conn:
+            opened = strategy_watch.run(conn, self.today())
+        for o in opened:
+            log.info("strategy.step", kind=o.kind, reminder=o.reminder)
+        return opened
+
     def nightly(self) -> None:
         refreshed = self.refresh_snapshots(force=True)
         log.info("snapshots.nightly", rows=refreshed.rows)
         log.info("imports.review_requested", count=self.request_reviews())
         log.info("sentinels.raised", count=len(self.run_sentinels()))
+        log.info("strategies.checked", opened=len(self.run_strategies()))
         result = self.verify_ledger()
         if result.ok:
             log.info("ledger.verified", links=result.links)
