@@ -2,6 +2,13 @@
 
 ## [Non publié]
 
+## [0.21.1] · 2026-11-13
+
+### Sécurité
+
+- opentelemetry-api 1.45.1 → 1.45.2 (CVE-2026-126360, signalée par l'audit des dépendances) :
+  la CI de la 0.21.0 échouait sur ce seul point, et la version n'était donc pas publiée.
+
 ## [0.21.0] · 2026-11-13
 
 ### À la mise à jour

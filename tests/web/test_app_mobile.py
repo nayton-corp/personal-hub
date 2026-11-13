@@ -173,6 +173,7 @@ def browse(origin: str, code: str) -> Iterator[Any]:
         pg.fill("#device", "Navigateur de test")
         pg.click("#form-bootstrap button[type=submit]")
         pg.wait_for_selector("#shell:not([hidden])", timeout=15_000)
+        pg.wait_for_selector("#tabs button")  # le shell paraît avant ses onglets
         yield pg
         browser.close()
 
@@ -203,11 +204,16 @@ def _screen_ok(pg: Any, name: str, shot: str | None = None) -> None:
 def go_home(pg: Any) -> None:
     """L'accueil du hub : dans la barre du bas, ou par le bouton d'espace quand la barre est
     celle d'un espace (depuis les réglages, on en sort d'abord)."""
-    if pg.locator('#tabs button[data-v="accueil"]').count():
+    for _ in range(3):  # d'une rubrique à la liste, puis hors des réglages (parfois l'accueil)
+        if not pg.locator("#sources:not([hidden])").count():
+            break
+        pg.locator('#sources [data-a="back"]').click()
+        pg.wait_for_timeout(150)
+    if pg.locator("#accueil:not([hidden])").count():
+        pass
+    elif pg.locator('#tabs button[data-v="accueil"]').count():
         pg.click('#tabs button[data-v="accueil"]')
     else:
-        if pg.locator("#sources:not([hidden])").count():
-            pg.locator('#sources [data-a="back"]').click()
         pg.locator('.view:not([hidden]) [data-a="spaces"]').click()
         pg.click('#sheet [data-a="hub"]')
     pg.wait_for_selector("#accueil:not([hidden])")
@@ -330,7 +336,7 @@ def test_wealth_cards_open_tall_sheets_and_strategies_unfold(page: Any) -> None:
     ouvrent leur détail dans un grand panneau ; Stratégies se déplie sur place et mène à
     « Que veux-tu faire ? », la quatrième intention annoncée sans être ouverte."""
     page.reload()
-    page.wait_for_selector("#shell:not([hidden])")
+    page.wait_for_selector("#tabs button")  # le shell paraît avant ses onglets
     open_tab(page, "patrimoine")
     page.wait_for_selector("#patrimoine .wcards .sumcard")
     assert page.locator("#patrimoine .wcards .sumcard").count() == 3

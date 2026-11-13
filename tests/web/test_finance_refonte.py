@@ -156,7 +156,7 @@ def test_the_fees_card_asks_for_the_missing_rates(page: Any) -> None:
     )
     assert status == 202
     page.reload()
-    page.wait_for_selector("#shell:not([hidden])")
+    page.wait_for_selector("#tabs button")  # le shell paraît avant ses onglets
     open_tab(page, "patrimoine")
     page.locator('#patrimoine [data-a="w-more"][data-v="fees"]').click()
     page.wait_for_selector('#sheet [data-a="fee-edit"]')
