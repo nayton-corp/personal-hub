@@ -120,12 +120,14 @@ def read(s: engine.Series, k: int) -> Valuation:
         if a.liquid:
             out.liquid += value
     for ln in s.lines.values():
-        if ln.kind != "debt" or ln.account_id in nofx or ln.value[k] == ABSENT:
+        if ln.kind not in ("debt", "good") or ln.account_id in nofx or ln.value[k] == ABSENT:
             continue
         value = ln.value[k]
         out.net_worth += value
         out.deposits += value
-        out.by_envelope["dettes"] += value
+        # « biens » n'apparaît qu'avec un bien : sans lui, les enveloppes restent celles d'avant
+        envelope = "dettes" if ln.kind == "debt" else "biens"
+        out.by_envelope[envelope] = out.by_envelope.get(envelope, 0) + value
         out.by_account[ln.account_id] = value
     out.missing_prices = sorted({isin for _acc, isin in s.unpriced.get(k, ())})
     return out

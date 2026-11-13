@@ -5,7 +5,9 @@
 import { MOIS, base, dayName, date, toMinor, units } from "../../format.js";
 import { GROUP_LABEL, catIc, catMark, txMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
-import { api, monthSpan, shiftMonth, store } from "../../store.js";
+import { PERIODS, periodOf } from "./jperiods.js";
+import * as sel from "./jselect.js";
+import { api, monthSpan, store } from "../../store.js";
 import { SHEETS, SH, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, n2, openSheet, qty, renderSheet, skel, toast } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -112,6 +114,11 @@ function filterChips(cats) {
 }
 
 export function render() {
+  draw();
+  sel.paint();
+}
+
+function draw() {
   const cats = catMap();
   store.use(accountsPath);
   store.use(todoPath);
@@ -388,16 +395,6 @@ SHEETS.catpick = (i) => {
 };
 
 // filtres : le panneau travaille sur une copie, appliquée d'un coup par « Afficher »
-const PERIODS = [["m0", "Ce mois"], ["m1", "Mois dernier"], ["m3", "3 derniers mois"], ["y", "Cette année"]];
-
-function periodOf(k) {
-  const m = store.today;
-  if (k === "m0") return monthSpan(m);
-  if (k === "m1") return monthSpan(shiftMonth(m, -1));
-  if (k === "m3") return [monthSpan(shiftMonth(m, -2))[0], monthSpan(m)[1]];
-  return [`${m.slice(0, 4)}-01-01`, `${m.slice(0, 4)}-12-31`];
-}
-
 SHEETS.rest = (_arg, sh) => {
   const cats = catMap();
   if (!sh.tmp) sh.tmp = { year: new Date().getFullYear() - 2, cat: cats[REST_DEFAULT] ? REST_DEFAULT : "" };
@@ -475,6 +472,7 @@ async function run(fn) {
 
 export function init() {
   fill($("search-ic"), ic("search"));
+  sel.init({ items: () => tx.items, grid, cats: catMap, reload: () => { tx.key = null; store.notify(); } });
   let typing;
   $("jq").addEventListener("input", (e) => {
     clearTimeout(typing);
@@ -487,6 +485,7 @@ export function init() {
 }
 
 export const actions = {
+  ...sel.actions,
   junlink: () => {
     unlink();
     announce("Filtre retiré");
@@ -555,6 +554,7 @@ export const actions = {
   },
   jmore: () => load(true),
   tx: (id) => {
+    if (sel.tap(id)) return;
     store.use(catsPath);
     openSheet("tx", id);
     SH.always = false;

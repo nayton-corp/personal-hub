@@ -601,6 +601,18 @@ export interface ExtremesOut {
   low: ExtremeOut;
 }
 
+export interface FeesOut {
+  on_date: string;
+  currency: string;
+  items: FundFeeOut[];
+  yearly_cost: MoneyOut;
+  covered_value: MoneyOut;
+  unknown_value: MoneyOut;
+  cost_over_years: MoneyOut;
+  years: number;
+  assumed_return_pct: string;
+}
+
 export interface FlowGroupOut {
   group: string;
   total: MoneyOut;
@@ -638,6 +650,33 @@ export interface FreshnessOut {
   last_data: string | null;
   last_clbd: ClbdOut | null;
   collector: string | null;
+}
+
+export interface FundFeeOut {
+  isin: string;
+  name: string;
+  value: MoneyOut;
+  ter_pct: string | null;
+  source: string | null;
+  yearly_cost: MoneyOut | null;
+}
+
+export interface GoodListOut {
+  items: GoodOut[];
+}
+
+export interface GoodOut {
+  id: string;
+  key: string;
+  name: string;
+  kind: string;
+  currency: string;
+  yearly_change_pct: string | null;
+  closed_on: string | null;
+  value: MoneyOut;
+  stated: MoneyOut | null;
+  stated_on: string | null;
+  values: BalanceRecordOut[];
 }
 
 export interface HTTPValidationError {

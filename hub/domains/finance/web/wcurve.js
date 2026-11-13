@@ -17,7 +17,9 @@ export function granLabel(pts) {
 }
 
 // identifiant d'une ligne pour /finance/performance : « compte|ISIN », « compte|cash », « debt:… »
-export const lineId = (l) => (l.kind === "debt" ? l.asset : l.asset.startsWith("isin:") ? `${l.acc}|${l.asset.slice(5)}` : `${l.acc}|cash`);
+// une dette ou un bien hors comptes : une ligne à elle seule, sans compte
+export const lone = (l) => l.kind === "debt" || l.kind === "good";
+export const lineId = (l) => (lone(l) ? l.asset : l.asset.startsWith("isin:") ? `${l.acc}|${l.asset.slice(5)}` : `${l.acc}|cash`);
 
 // Ce que l'écran demande à /finance/performance pour la sélection `sel`, parmi les lignes `every`
 // de l'app. L'app ne connaît que les lignes d'aujourd'hui : un compte dont elles sont toutes
@@ -27,13 +29,13 @@ export const lineId = (l) => (l.kind === "debt" ? l.asset : l.asset.startsWith("
 export function perfSel(sel, every, narrow = false) {
   const count = (ls) => {
     const m = new Map();
-    for (const l of ls) if (l.kind !== "debt") m.set(l.acc, (m.get(l.acc) || 0) + 1);
+    for (const l of ls) if (!lone(l)) m.set(l.acc, (m.get(l.acc) || 0) + 1);
     return m;
   };
   const have = count(every), got = count(sel);
   const accounts = new Set(), ids = new Set();
   for (const l of sel) {
-    if (l.kind === "debt") ids.add(l.asset);
+    if (lone(l)) ids.add(l.asset);
     else if (!narrow && got.get(l.acc) === have.get(l.acc)) accounts.add(l.acc);
     else ids.add(lineId(l)).add(`${l.acc}|cash`);
   }

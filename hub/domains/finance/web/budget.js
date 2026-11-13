@@ -75,7 +75,7 @@ export function render() {
     const d = m.projection - m.T;
     proj = `<div class="proj">${ic("trend")}<span>Projection fin ${P.period === "m" ? monthName(P.month).split(" ")[0] : "de période"} : <b class="num">${amount(m.projection)}</b>, ${d > 0 ? `<b>${n0(d)} au-dessus</b>` : `<span class="delta pos">${n0(-d)} sous</span>`} le budget</span></div>`;
   }
-  const hero = `<section class="card" aria-labelledby="t-bud">
+  const hero = `<section class="card bflat" aria-labelledby="t-bud">
       <div class="hero-label"><span id="t-bud">${m.T == null ? "Dépensé" : P.period === "m" ? "Reste à vivre" : "Reste sur 3 mois"}</span><span>${!m.current ? "clos" : m.daysLeft < 1 ? "Dernier jour du mois" : `${m.daysLeft} jour${m.daysLeft > 1 ? "s" : ""} restant${m.daysLeft > 1 ? "s" : ""}`}</span></div>
       <div class="hero-amount num${m.rest != null && m.rest < 0 ? " neg" : ""}"><span class="money">${nf(m.T == null ? m.spent : m.rest)}</span><small>${base()}</small></div>
       ${m.T == null ? `<button class="primary plan-cta" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}Créer mon budget</button>` : `<div class="hint">${amount(m.spent)} dépensés sur ${amount(m.T)} de budget${off >= 1 ? `, dont ${n0(off)} hors cible` : ""}</div>
@@ -91,7 +91,7 @@ export function render() {
     const sd = sankeyData(fe.data);
     if (B.sk && ![...sd.srcs, ...sd.mids, ...sd.mids.flatMap((x) => x.kids)].some((n) => n.id === B.sk)) B.sk = null;
     const spentF = sd.out - sd.S;
-    flow = `<section class="card" aria-labelledby="t-flow">
+    flow = `<section class="card bflat" aria-labelledby="t-flow">
       <div class="section-head"><h2 class="section-title" id="t-flow">Où va l'argent</h2></div>
       <p class="hint">Entré ${amount(sd.I)} · dépensé ${amount(spentF)} · épargné ${amount(sd.S)}</p>
       ${sd.tot > 1 ? `<div class="skcols" aria-hidden="true"><span>Revenus</span><span>Usage</span><span>Postes</span></div>${sankeySvg(sd, B.sk)}${sankeyInfo(sd, B.sk)}` : '<div class="empty">Aucun mouvement sur la période.</div>'}

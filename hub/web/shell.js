@@ -2,7 +2,9 @@
 // Elle ne connaît aucun domaine : /api/domains lui donne les manifestes, et chaque module nommé
 // (fichier du dossier web/ du domaine) est chargé puis monté.
 // La barre du bas porte l'accueil du hub puis un espace par domaine qui a des onglets (`label`,
-// `icon` du manifeste) ; dans un espace, ses onglets sont des sous-onglets en haut de l'écran.
+// `icon` du manifeste). Un espace à plusieurs onglets a sa propre barre du bas : dès qu'on y
+// entre, ses onglets remplacent ceux du hub, et le bouton d'espace (en haut à gauche) ramène
+// au hub ou mène à un autre espace.
 //   - onglet (`tabs[].module`) : render(), actions ; facultatifs todoCount(), todoLabel,
 //     unlink(lien) quand l'historique quitte un lien suivi ;
 //   - accueil (`home`) : render(box), actions ; facultatif rows() (accueil.js) ; il
@@ -22,24 +24,25 @@ import * as sources from "./sources.js";
 import { setBase, setLocale } from "./format.js";
 import { api, setPacks, setTimeZone, store } from "./store.js";
 import {
-  SH, announce, applyTheme, closeSheet, esc, fill, ic, initSheetSwipe, initToast, pref, renderSheet, setPref, sheetEntryOpen, sheetPop,
+  SH, SHEETS, announce, applyTheme, closeSheet, esc, fill, ibox, ic, initSheetSwipe, initToast, openSheet, pref, renderSheet, setPref, sheetEntryOpen, sheetPop,
 } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 const P = store.params;
 const CACHED = "hub.domains"; // les manifestes du dernier lancement, pour démarrer hors ligne
 const TABS = []; // [id, libellé, icône] de la barre du bas : l'accueil, puis les espaces
-const SPACES = {}; // domaine → { label, views: [[écran, libellé]] }
+const SPACES = {}; // domaine → { label, icon, views: [[écran, libellé, icône]] }
 const SPACE_OF = {}; // écran → son espace
 const LAST = {}; // espace → dernier écran ouvert
 const VIEWS = { accueil: accueil.render, assistant: assistant.render, sources: sources.render };
-const LABEL = { accueil: "Accueil", assistant: "Assistant", sources: "Sources et réglages" };
+const LABEL = { accueil: "Accueil", assistant: "Assistant", sources: "Réglages" };
 const ACTIONS = { ...sources.actions, ...approvals.actions, ...assistant.actions };
 const MODULES = []; // modules de domaine (champ `module`), dans l'ordre des domaines
 const TODO = {}; // onglet → module qui compte ce qui reste à faire
 const LINKED = []; // modules qui savent rendre les filtres d'un lien suivi
 const scrolls = {};
 let back = "accueil";
+let ctx = null; // l'espace dont la barre du bas est affichée ; null : celle du hub
 let drawn = null;
 let depth = 0; // entrées ajoutées par l'app depuis son ouverture
 
@@ -65,25 +68,30 @@ function viewFor(tab) {
   s.innerHTML = `<header class="topbar"><div class="topbar-row">
     <h1 class="topbar-title" id="t-${esc(tab.id)}">${esc(tab.label)}</h1>
     <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
-    <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+    <button class="icon-btn" type="button" data-a="settings" aria-label="Réglages"></button>
   </div></header><div id="${esc(tab.id)}-body"></div>`;
   $("sources").before(s);
 }
 
-// l'espace d'un domaine : ses onglets, sous une seule entrée de la barre du bas. Avec plusieurs
-// onglets, le sélecteur des sous-onglets devient la barre du haut de chacun d'eux : le titre ne
-// reste que pour les lecteurs d'écran (la barre du bas dit déjà où l'on est)
+// l'espace d'un domaine : ses onglets, sous une seule entrée de la barre du hub. Avec plusieurs
+// onglets, l'espace a sa barre du bas ; chaque écran dit son espace au-dessus de son titre et
+// porte le bouton d'espace
+const multi = (name) => Boolean(SPACES[name]) && SPACES[name].views.length > 1;
+sources.context(() => ({ scope: ctx, spaces: Object.fromEntries(Object.entries(SPACES).filter(([k]) => multi(k))) }));
+const spaceBtn = () => `<button class="icon-btn space-btn" type="button" data-a="spaces" aria-label="Changer d'espace">${ic("grid")}</button>`;
+
 function spaceFor(d, label, tabs) {
   if (!tabs.length) return;
-  const views = tabs.map((t) => [t.id, t.label]);
-  SPACES[d.name] = { label, views };
+  const views = tabs.map((t) => [t.id, t.label, t.icon || "cube"]);
+  SPACES[d.name] = { label, icon: d.app.icon || "cube", views };
   for (const [id] of views) SPACE_OF[id] = d.name;
   TABS.push([d.name, label, d.app.icon || "cube"]);
   if (views.length < 2) return;
   for (const [id] of views) {
     const top = $(id).querySelector(".topbar");
     top.classList.add("spaced");
-    top.querySelector(".topbar-title").insertAdjacentHTML("afterend", `<nav class="subtabs" data-space="${esc(d.name)}" aria-label="${esc(label)}"></nav>`);
+    top.querySelector(".topbar-row").insertAdjacentHTML("afterbegin", spaceBtn());
+    top.querySelector(".topbar-title").insertAdjacentHTML("afterbegin", `<span class="topbar-space">${esc(label)}</span>`);
   }
 }
 
@@ -200,7 +208,11 @@ function openSpace(name) {
 Object.assign(ACTIONS, {
   tab: (v) => go(v, { top: v === P.tab }),
   space: openSpace,
+  spaces: () => openSheet("spaces"),
+  hub: () => go("accueil", { top: P.tab === "accueil" }),
   settings: () => go("sources"),
+  // passer des réglages d'un espace à ceux du hub, et retour : la barre du bas suit
+  "set-scope": (v) => { ctx = v && multi(v) ? v : null; window.scrollTo({ top: 0 }); store.notify(); },
   rubric: (v) => go("sources", { rubric: v }),
   back: () => {
     if (depth > 0) history.back();
@@ -238,30 +250,49 @@ function chrome() {
   }
   for (const b of document.querySelectorAll('[data-a="settings"]')) if (!b.firstChild) b.innerHTML = ic("gear");
   for (const b of document.querySelectorAll('[data-a="back"]')) if (!b.firstChild) b.innerHTML = ic("back");
+  for (const b of document.querySelectorAll('[data-a="spaces"]')) {
+    if (!b.firstChild) b.innerHTML = ic("grid");
+    b.hidden = TABS.length < 2; // sans espace, rien à changer
+  }
   const here = SPACE_OF[P.tab] || (P.tab === "accueil" ? "accueil" : null);
   const count = (k) => (TODO[k] ? TODO[k].todoCount() || 0 : 0);
   if (P.tab === "assistant") $("orb").setAttribute("aria-current", "page");
   else $("orb").removeAttribute("aria-current");
-  const buttons = TABS.map(([k, l, i]) => {
-    const views = k === "accueil" ? ["accueil"] : SPACES[k].views.map(([v]) => v);
-    const n = views.reduce((sum, v) => sum + count(v), 0);
-    const what = (views.length === 1 && TODO[k] && TODO[k].todoLabel) || "à traiter";
-    const act = k === "accueil" ? 'data-a="tab" data-v="accueil"' : `data-a="space" data-v="${k}"`;
-    return `<button type="button" ${act} ${here === k ? 'aria-current="page"' : ""} aria-label="${l}${n ? `, ${n} ${what}` : ""}">${ic(i)}${l}${n ? `<span class="badge" aria-hidden="true">${n > 99 ? "99+" : n}</span>` : ""}</button>`;
-  });
-  // l'accueil à gauche de l'orbe, les espaces à droite
-  fill($("tabs-start"), buttons[0]);
-  fill($("tabs-end"), buttons.slice(1).join(""));
-  if (here && SPACES[here]) {
-    LAST[here] = P.tab;
-    for (const nav of document.querySelectorAll(`#${CSS.escape(P.tab)} .subtabs`)) {
-      fill(nav, SPACES[here].views.map(([v, l]) => {
-        const n = count(v);
-        return `<button type="button" data-a="tab" data-v="${v}" ${v === P.tab ? 'aria-current="page"' : ""}>${esc(l)}${n ? `<span class="count">${n > 99 ? "99+" : n}</span>` : ""}</button>`;
-      }).join(""));
-    }
+  // la barre suit l'espace où l'on est ; l'assistant et les réglages gardent celle d'où l'on vient
+  if (here) ctx = multi(here) ? here : null;
+  const badge = (n) => (n ? `<span class="badge" aria-hidden="true">${n > 99 ? "99+" : n}</span>` : "");
+  let buttons;
+  if (ctx) {
+    LAST[ctx] = SPACE_OF[P.tab] === ctx ? P.tab : LAST[ctx];
+    buttons = SPACES[ctx].views.map(([v, l, i]) => {
+      const n = count(v);
+      const what = (TODO[v] && TODO[v].todoLabel) || "à traiter";
+      return `<button type="button" data-a="tab" data-v="${v}" ${v === P.tab ? 'aria-current="page"' : ""} aria-label="${esc(l)}${n ? `, ${n} ${what}` : ""}">${ic(i)}${esc(l)}${badge(n)}</button>`;
+    });
+  } else {
+    buttons = TABS.map(([k, l, i]) => {
+      const views = k === "accueil" ? ["accueil"] : SPACES[k].views.map(([v]) => v);
+      const n = views.reduce((sum, v) => sum + count(v), 0);
+      const what = (views.length === 1 && TODO[k] && TODO[k].todoLabel) || "à traiter";
+      const act = k === "accueil" ? 'data-a="tab" data-v="accueil"' : `data-a="space" data-v="${k}"`;
+      return `<button type="button" ${act} ${here === k ? 'aria-current="page"' : ""} aria-label="${l}${n ? `, ${n} ${what}` : ""}">${ic(i)}${l}${badge(n)}</button>`;
+    });
   }
+  // l'orbe au milieu : la moitié des entrées de chaque côté (l'accueil seul à gauche dans le hub)
+  const left = ctx ? Math.ceil(buttons.length / 2) : 1;
+  fill($("tabs-start"), buttons.slice(0, left).join(""));
+  fill($("tabs-end"), buttons.slice(left).join(""));
+  $("tabbar").setAttribute("aria-label", ctx ? `Navigation de ${SPACES[ctx].label}` : "Navigation principale");
 }
+
+// « Changer d'espace » : le hub, puis chaque espace ; celui où l'on est est coché
+SHEETS.spaces = () => {
+  const row = (act, v, icon, t, sub, on) => `<button class="trow" type="button" data-a="${act}" ${v ? `data-v="${esc(v)}"` : ""} ${on ? 'aria-current="true"' : ""}>
+      ${ibox(ic(icon), "var(--accent)")}<span class="row-main"><span class="row-title">${esc(t)}</span><span class="row-sub">${esc(sub)}</span></span>
+      <span class="chev-r">${ic(on ? "check" : "chev")}</span></button>`;
+  const spaces = TABS.filter(([k]) => k !== "accueil").map(([k, l, i]) => row("space", k, i, l, SPACES[k].views.map(([, x]) => x).join(" · "), ctx === k || SPACE_OF[P.tab] === k));
+  return { title: "Changer d'espace", body: `<div class="list">${row("hub", "", "home", "Hub", "Accueil, à valider, assistant", !ctx && !SPACE_OF[P.tab])}${spaces.join("")}</div>` };
+};
 
 export function draw() {
   if ($("shell").hidden) return; // déconnecté : l'écran de connexion reste affiché

@@ -95,8 +95,10 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `GET` | `/api/finance/entries` | Écritures filtrées ; montants en centimes, comparés en valeur absolue. |
 | `GET` | `/api/finance/entries/{entry_id}` | Entry |
 | `GET` | `/api/finance/export.csv` | Journal complet en CSV (UTF-8, séparateur virgule) : tout s'exporte. |
+| `GET` | `/api/finance/fees` | Frais courants des fonds détenus : TER, coût par an et sur trente ans (ordre de grandeur, au rendement supposé `assumed_return_pct`). Un fonds sans TER connu a `ter_pct` nul et reste hors des totaux. Saisir un TER : `set_fund_fee` (Double Sas). |
 | `GET` | `/api/finance/flows` | Revenus → groupes (fixe, variable, épargne) → catégories, et le reste sur compte. `period=q` : les trois mois complets avant `month`, comme le budget. |
 | `GET` | `/api/finance/freshness` | Freshness |
+| `GET` | `/api/finance/goods` | Biens hors comptes (logement, véhicule, objet, prêt accordé) et leur valeur aujourd'hui : la dernière valeur saisie, suivie de la variation annuelle du bien. Écrire : `save_good` (Double Sas). |
 | `GET` | `/api/finance/holdings` | Positions des comptes de titres (VIAC) à une date, aujourd'hui par défaut. |
 | `POST` | `/api/finance/imports` | Corps brut (XML, zip, PDF VIAC, JSON, CSV ou relevé SwissBorg .xlsx) ; même traitement que `inbox/`. |
 | `GET` | `/api/finance/imports/{import_id}` | Import Detail |

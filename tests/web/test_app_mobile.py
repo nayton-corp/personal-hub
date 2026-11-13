@@ -16,7 +16,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -41,7 +41,7 @@ demo_data = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(demo_data)
 
 WIDTH, HEIGHT = 375, 812
-TABS = ["accueil", "patrimoine", "budget", "journal"]
+TABS = ["accueil", "apercu", "patrimoine", "budget", "journal"]
 
 
 def _free_port() -> int:
@@ -84,7 +84,9 @@ def bootstrap(hub: HubContext) -> str:
 
 
 @pytest.fixture(scope="module")
-def instance(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, str]]:
+def instance(
+    tmp_path_factory: pytest.TempPathFactory, instance_extra: Callable[[dict[str, str]], None]
+) -> Iterator[tuple[str, str]]:
     """Une instance complète : bases migrées, deux comptes, un an de relevés, API servant l'app."""
     import pyrage
 
@@ -109,6 +111,7 @@ def instance(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, st
         iban, name, options = line.split("\t")
         _hub(env, "finance", "accounts", "add", name, "--iban", iban, *options.split())
     _hub(env, "finance", "import-history", str(demo))
+    instance_extra(env)
     _hub(env, "documents", "import-library", str(library(home / "Bibliothèque")))
 
     settings = Settings(
@@ -197,18 +200,40 @@ def _screen_ok(pg: Any, name: str, shot: str | None = None) -> None:
     assert pg.problems == [], f"{name} : {pg.problems}"
 
 
-def open_tab(pg: Any, tab: str) -> None:
-    """L'accueil est dans la barre du bas ; les écrans de la finance, sous son espace."""
-    if tab == "accueil":
+def go_home(pg: Any) -> None:
+    """L'accueil du hub : dans la barre du bas, ou par le bouton d'espace quand la barre est
+    celle d'un espace (depuis les réglages, on en sort d'abord)."""
+    if pg.locator('#tabs button[data-v="accueil"]').count():
         pg.click('#tabs button[data-v="accueil"]')
     else:
-        # déjà dans l'espace, un toucher sur « Finance » ramènerait au premier onglet : on passe
-        # par l'accueil pour que la vue visible ne change plus sous le clic
-        pg.click('#tabs button[data-v="accueil"]')
-        pg.wait_for_selector("#accueil:not([hidden])")
-        pg.click('#tabs button[data-v="finance"]')
-        pg.wait_for_selector(".view:not([hidden]) .subtabs button[aria-current]")
-        pg.locator(f'.view:not([hidden]) .subtabs button[data-v="{tab}"]').click()
+        if pg.locator("#sources:not([hidden])").count():
+            pg.locator('#sources [data-a="back"]').click()
+        pg.locator('.view:not([hidden]) [data-a="spaces"]').click()
+        pg.click('#sheet [data-a="hub"]')
+    pg.wait_for_selector("#accueil:not([hidden])")
+
+
+def open_settings(pg: Any, space: str | None = None) -> None:
+    """Les réglages du hub (depuis l'accueil) ou ceux d'un espace (depuis sa roue)."""
+    if space is None:
+        go_home(pg)
+        pg.locator('#accueil [data-a="settings"]').click()
+    else:
+        open_tab(pg, "patrimoine")
+        pg.locator('#patrimoine [data-a="settings"]').click()
+    pg.wait_for_selector("#rubrics:not([hidden])")
+
+
+def open_tab(pg: Any, tab: str) -> None:
+    """L'accueil est dans la barre du hub ; les écrans de la finance, dans la barre de son
+    espace, qui remplace celle du hub dès qu'on y entre."""
+    if tab == "accueil":
+        go_home(pg)
+    else:
+        if not pg.locator(f'#tabs button[data-a="tab"][data-v="{tab}"]').count():
+            go_home(pg)
+            pg.click('#tabs button[data-v="finance"]')
+        pg.click(f'#tabs button[data-a="tab"][data-v="{tab}"]')
     pg.wait_for_selector(f"#{tab}:not([hidden])")
     if tab == "journal":  # ses écritures arrivent hors du store : « networkidle » peut les devancer
         pg.wait_for_selector("#journal .tx-row")
@@ -221,7 +246,7 @@ def test_each_tab_renders_at_375px(page: Any, tab: str) -> None:
 
 
 def test_sources_and_settings_render_at_375px(page: Any) -> None:
-    page.click('#tabs button[data-v="accueil"]')
+    go_home(page)
     page.locator('#accueil [data-a="settings"]').click()
     _screen_ok(page, "sources")
 
@@ -229,7 +254,7 @@ def test_sources_and_settings_render_at_375px(page: Any) -> None:
 def test_agenda_and_documents_only_surface_what_needs_attention(page: Any) -> None:
     """L'agenda et les documents n'ont plus de bloc à l'accueil : le rappel en retard et
     l'entretien dû remontent dans « À savoir », à pleine largeur, et ouvrent l'assistant."""
-    page.click('#tabs button[data-v="accueil"]')
+    go_home(page)
     page.wait_for_selector("#accueil [data-lists] #t-info")
     for d in ("agenda", "documents"):
         assert page.inner_text(f'#accueil [data-home="{d}"]') == "", d
@@ -254,6 +279,7 @@ def test_the_year_of_demo_data_reaches_the_screens(page: Any) -> None:
     assert "Employeur Fictif SA" in page.locator("#journal").inner_text()
 
 
+HUB_RUBRICS = {"display", "profile", "security", "health"}
 RUBRICS = [
     "conn",
     "accounts",
@@ -270,46 +296,51 @@ RUBRICS = [
 
 @pytest.mark.parametrize("rubric", RUBRICS)
 def test_each_settings_rubric_renders_at_375px(page: Any, rubric: str) -> None:
-    page.click('#tabs button[data-v="accueil"]')
-    page.locator('#accueil [data-a="settings"]').click()
+    open_settings(page, None if rubric in HUB_RUBRICS else "finance")
     page.locator(f'#rubrics [data-a="rubric"][data-v="{rubric}"]').click()
     page.wait_for_selector(f'#sources [data-rubric="{rubric}"]:not(.off-rubric)', state="attached")
     _screen_ok(page, "sources", shot=f"sources-{rubric}")
     page.locator('#sources [data-a="back"]').click()
 
 
-def test_an_account_opens_its_page_and_back_returns_home(page: Any) -> None:
-    """Un compte de la liste ouvre sa page ; le chemin dit où l'on est ; le retour du
-    navigateur ramène au patrimoine entier. La courbe passe en plein écran et en revient."""
+def test_an_account_filters_the_screen_and_back_returns_home(page: Any) -> None:
+    """Un compte de la liste filtre l'écran : la pilule porte son nom, sans chemin ni nouvelle
+    page ; le retour du navigateur ramène au patrimoine entier. Le plein écran est rangé dans
+    Affichage, et on en revient."""
     open_tab(page, "patrimoine")
     page.wait_for_load_state("networkidle")
     page.locator('#patrimoine [data-a="w-open"][data-v^="a:"]').first.click()
-    page.wait_for_selector("#patCrumbs:not([hidden])")
-    assert "Patrimoine" in page.inner_text("#patCrumbs")
+    page.wait_for_selector("#filterbar .scope.on")
+    assert page.locator("#patCrumbs").is_hidden()
+    assert page.locator('#filterbar [data-a="w-home"]').count() == 1
     _screen_ok(page, "patrimoine", shot="patrimoine-compte")
     page.go_back()
-    page.wait_for_selector("#patCrumbs", state="hidden")
-    page.locator('#patrimoine [data-a="w-full"][data-v="1"]').click()
+    page.wait_for_selector("#filterbar .scope:not(.on)")
+    assert page.locator("#patrimoine .toolbar").count() == 0  # plus de barre d'outils sur l'écran
+    page.locator('#patrimoine [data-a="w-display"]').click()
+    page.locator('#sheet [data-a="w-full"][data-v="1"]').click()
     page.wait_for_selector("#wland:not([hidden]) svg")
     page.locator('#wland [data-a="w-full"][data-v="0"]').click()
     page.wait_for_selector("#wland", state="hidden")
     _screen_ok(page, "patrimoine")
 
 
-def test_wealth_sections_start_folded_and_strategies_open(page: Any) -> None:
-    """Répartition, Performance et Stratégies sont repliées à l'ouverture : une ligne chacune.
-    Dépliée, la section Stratégies mène à « Que veux-tu faire ? », la quatrième intention
-    annoncée sans être ouverte."""
+def test_wealth_cards_open_tall_sheets_and_strategies_unfold(page: Any) -> None:
+    """Répartition, Rendement et Stratégies tiennent en trois cartes. Les deux premières
+    ouvrent leur détail dans un grand panneau ; Stratégies se déplie sur place et mène à
+    « Que veux-tu faire ? », la quatrième intention annoncée sans être ouverte."""
     page.reload()
     page.wait_for_selector("#shell:not([hidden])")
     open_tab(page, "patrimoine")
-    for key in ("alloc", "strat"):
-        assert page.locator(f"#sec-{key}.folded .sec-sum").is_visible()
-        assert page.locator(f"#{key}-body").inner_text().strip() == ""
-    assert page.locator("#perf.folded").count() == 1
-    page.locator("#sec-alloc .fold-btn").click()
-    page.wait_for_selector("#sec-alloc:not(.folded) .alloc-row")
-    page.locator("#sec-strat .fold-btn").click()
+    page.wait_for_selector("#patrimoine .wcards .sumcard")
+    assert page.locator("#patrimoine .wcards .sumcard").count() == 3
+    page.locator('#patrimoine [data-a="w-card"][data-v="alloc"]').click()
+    page.wait_for_selector("#sheet.tall .alloc-row")
+    page.locator('#sheet [data-a="sheet-close"]').click()
+    page.locator('#patrimoine [data-a="w-card"][data-v="rend"]').click()
+    page.wait_for_selector("#sheet.tall #tabSeg")
+    page.locator('#sheet [data-a="sheet-close"]').click()
+    page.locator('#patrimoine .sumcard[data-a="w-fold"][data-v="strat"]').click()
     page.locator('#sec-strat [data-a="strat-new"]').click()
     page.wait_for_selector('#sheet [data-a="strat-kind"]')
     assert page.locator('#sheet [data-a="strat-kind"]').count() == 3

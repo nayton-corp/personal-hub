@@ -20,7 +20,7 @@ const VIEWS = `
           <nav class="crumbs" id="patCrumbs" aria-label="Chemin" hidden></nav>
           <h1 class="topbar-title" id="t-patrimoine">Patrimoine<span class="topbar-sub" data-fresh></span><span class="topbar-mini num" id="miniTotal"></span></h1>
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
-          <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+          <button class="icon-btn" type="button" data-a="settings" aria-label="Réglages"></button>
         </div>
         <div class="filterbar" id="filterbar"></div>
       </header>
@@ -33,7 +33,7 @@ const VIEWS = `
         <div class="topbar-row">
           <h1 class="topbar-title" id="t-budget">Budget<span class="topbar-sub" data-fresh></span></h1>
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
-          <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+          <button class="icon-btn" type="button" data-a="settings" aria-label="Réglages"></button>
         </div>
         <div class="ctxbar" id="budCtx"></div>
       </header>
@@ -46,7 +46,7 @@ const VIEWS = `
         <div class="topbar-row">
           <h1 class="topbar-title" id="t-journal">Journal<span class="topbar-sub" data-fresh></span></h1>
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
-          <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+          <button class="icon-btn" type="button" data-a="settings" aria-label="Réglages"></button>
         </div>
         <div class="searchbox"><span id="search-ic"></span><input id="jq" type="search" placeholder="Contrepartie, libellé…" aria-label="Rechercher une écriture, 3 lettres au moins" autocomplete="off" enterkeyhint="search"></div>
         <div class="filterbar" id="jChips" role="group" aria-label="Filtrer le journal"></div>
@@ -82,6 +82,12 @@ const RUBRICS = `
       </section>
 
       <section class="card form" data-rubric="add-account" id="acct-editor" hidden></section>
+
+      <section class="card" data-rubric="accounts" aria-labelledby="t-goods">
+        <div class="head"><h2 id="t-goods">Biens</h2><button class="link" type="button" data-a="good-add">Ajouter</button></div>
+        <p class="note">Logement, voiture, objet de valeur, prêt accordé : ce qui n'est sur aucun compte. Tu saisis la valeur, elle compte dans le patrimoine, pas dans le rendement.</p>
+        <div id="good-list"></div>
+      </section>
 
       <section class="card" data-rubric="debts" aria-labelledby="t-debts">
         <div class="head"><h2 id="t-debts">Dettes</h2><button class="link" type="button" data-a="debt-add">Ajouter</button></div>

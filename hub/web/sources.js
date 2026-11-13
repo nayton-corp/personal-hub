@@ -1,4 +1,5 @@
-// Sources et réglages, page de la coquille (chantier S5) : la liste groupée des rubriques, puis
+// Réglages, page de la coquille (chantier S5). Ceux du hub (affichage, profil, sécurité, état) et
+// ceux d'un espace (ses rubriques seules) sont deux listes distinctes ; la liste des rubriques, puis
 // une page par rubrique (son entrée d'historique, le geste retour revient à la liste). Les
 // rubriques des domaines viennent de leurs manifestes et se dessinent dans leur module ; celles
 // de la coquille (affichage, profil, sécurité, état du hub) sont ici et dans app.js. Chaque
@@ -17,11 +18,9 @@ const OWN = [
   { id: "health", label: "État du hub", icon: "info", group: "Compte" },
 ];
 const RUBRICS = []; // { id, label, icon, group, domain, m } ; m absent : rubrique de la coquille
-let ordered = null;
 
 export function add(sections) {
   RUBRICS.push(...sections);
-  ordered = null;
 }
 
 // la section du hub (la coquille) d'abord, puis une section par domaine, dans leur ordre ; dans
@@ -29,16 +28,29 @@ export function add(sections) {
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const rank = (r) => (GROUPS.includes(r.group) ? GROUPS.indexOf(r.group) : GROUPS.length);
 
+// où l'on est, dit par la coquille : { scope, spaces } ; scope est l'espace d'où l'on vient
+// (sa barre du bas est affichée), spaces les espaces qui ont leurs propres réglages
+let where = () => ({ scope: null, spaces: {} });
+export function context(fn) { where = fn; }
+
+// réglages du hub : ceux de la coquille, puis les domaines sans espace à eux ; les espaces qui
+// ont leur barre du bas ont leurs propres réglages, ouverts depuis l'espace ou depuis ici
 function groups() {
-  if (ordered) return ordered;
+  const { scope, spaces } = where();
   const listed = RUBRICS.filter((r) => r.listed !== false); // les autres s'ouvrent depuis une rubrique
-  const all = [...OWN.map((r) => ({ ...r, sec: "Hub" })), ...listed.map((r) => ({ ...r, sec: capital(r.domain) }))];
-  ordered = [...new Set(all.map((r) => r.sec))].map((g) => [g, all.filter((r) => r.sec === g).sort((a, b) => rank(a) - rank(b))]);
-  return ordered;
+  if (scope && spaces[scope]) {
+    const mine = listed.filter((r) => r.domain === scope);
+    return [...new Set(mine.map((r) => r.group))].sort((a, b) => rank({ group: a }) - rank({ group: b })).map((g) => [g, mine.filter((r) => r.group === g)]);
+  }
+  const all = [...OWN.map((r) => ({ ...r, sec: "Hub" })), ...listed.filter((r) => !spaces[r.domain]).map((r) => ({ ...r, sec: capital(r.domain) }))];
+  return [...new Set(all.map((r) => r.sec))].map((g) => [g, all.filter((r) => r.sec === g).sort((a, b) => rank(a) - rank(b))]);
 }
 
 const find = (k) => RUBRICS.find((r) => r.id === k) || OWN.find((r) => r.id === k);
-export const rubricLabel = (k) => (find(k) || {}).label || "Sources et réglages";
+export const rubricLabel = (k) => {
+  const { scope, spaces } = where();
+  return (find(k) || {}).label || (scope && spaces[scope] ? `Réglages ${spaces[scope].label}` : "Réglages du hub");
+};
 
 // [texte, ton] de chaque rubrique ; null tant que la donnée n'est pas là
 function status(r) {
@@ -62,7 +74,19 @@ function rubrics() {
       const st = status(r);
       return `<button class="trow press" type="button" data-a="rubric" data-v="${esc(r.id)}">${ibox(ic(r.icon), "var(--accent)", "sm")}<span class="t">${esc(r.label)}</span>
         <span class="row-num">${st ? `<span class="pill ${st[1]}">${st[1] === "warn" ? ic("alert") : ""}${esc(st[0])}</span>` : ""}${ic("chev", "chev-r")}</span></button>`;
-    }).join("")}</section>`).join("") + `<section class="card"><button class="secondary danger" type="button" data-a="logout">Se déconnecter</button></section>`;
+    }).join("")}</section>`).join("") + other();
+}
+
+// sous les rubriques : les réglages des espaces (depuis le hub), ou ceux du hub (depuis un espace)
+function other() {
+  const { scope, spaces } = where();
+  const row = (v, icon, label) => `<button class="trow press" type="button" data-a="set-scope" data-v="${esc(v)}">${ibox(ic(icon),
+    "var(--muted)", "sm")}<span class="t">${esc(label)}</span><span class="row-num">${ic("chev", "chev-r")}</span></button>`;
+  if (scope && spaces[scope]) return `<section class="card rub">${row("", "home", "Réglages du hub")}</section>`;
+  const names = Object.keys(spaces).filter((k) => RUBRICS.some((r) => r.domain === k));
+  return `${names.length ? `<section class="card rub" aria-labelledby="rg-spaces"><h2 class="grp-title" id="rg-spaces">Espaces</h2>${names.map((k) =>
+    row(k, spaces[k].icon, `Réglages ${spaces[k].label}`)).join("")}</section>` : ""}
+    <section class="card"><button class="secondary danger" type="button" data-a="logout">Se déconnecter</button></section>`;
 }
 
 // une rubrique de domaine sans balisage dans index.html reçoit une carte vide, que son module

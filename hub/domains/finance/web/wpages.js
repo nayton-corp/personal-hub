@@ -10,6 +10,7 @@ import { assetMark, facetName, instMark } from "./meta.js";
 import { compact, pct, px, sgnMoney } from "./wchart.js";
 import { rate, units } from "./perf.js";
 import { DEBT_KIND, debtDetail } from "./debts.js";
+import { goodDetail } from "./goods.js";
 import { monthly } from "./wmodel.js";
 import { assetSince } from "./wcrypto.js";
 import { store } from "../../store.js";
@@ -76,6 +77,7 @@ export function accountPage(m, r) {
   if (!f) return '<div class="empty">Ce compte n\'est plus dans le patrimoine.</div>';
   const days = m.pts.length > 1 ? Math.round((day(m.pts[m.pts.length - 1].d) - day(m.pts[0].d)) / 864e5) : 0;
   const c = m.perf ? m.perf.summary : null;
+  if (f.kind === "good") return section("Bien hors comptes", "", goodDetail(f.good));
   if (f.kind === "debt") {
     return section(esc(DEBT_KIND[f.debtKind] || "Dette"), "", debtDetail(f.debt)) + section("Le compte", "", link("w-journal", `a:${f.acc}`, "list", "Voir les paiements dans le Journal"));
   }

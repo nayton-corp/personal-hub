@@ -1,7 +1,6 @@
 // Budget : les catégories et la tendance, telles que le serveur les donne (/finance/budget,
-// /finance/budget/months). Les barres des catégories sont toutes à la même échelle : la longueur
-// dit le montant, la plus grosse fait toute la largeur, et ce qui dépasse la cible continue en
-// rouge. Une seule couleur ; le rouge ne sert qu'au dépassement. Une charge fixe n'a pas de
+// /finance/budget/months). La barre d'une catégorie se lit en % de son budget, avec le trait du
+// rythme attendu à ce jour. Une seule couleur ; le rouge ne sert qu'au dépassement. Une charge fixe n'a pas de
 // barre : elle est payée, à telle date, ou attendue vers tel jour.
 import { GROUP_LABEL, catMark } from "./meta.js";
 import { MOIS, base, monthName, units } from "../../format.js";
@@ -23,23 +22,23 @@ export function foldHead(id, title, open, sum) {
 const isOff = (l) => (l.group === "variable" || l.group === "mixed") && l.t == null && !l.yearly && l.category !== UNCAT;
 export const offTarget = (m) => m.lines.filter(isOff).reduce((t, l) => t + l.s, 0);
 
-// la part d'année d'une catégorie suivie à l'année, ramenée à la période affichée
-const yearPart = (c, n) => (c.yearly.target ? (u(c.yearly.target) / 12) * n : 0);
 const yearDone = (c) => (c.yearly.target ? u(c.yearly.spent) / u(c.yearly.target) : 0);
 
-function scaled(t, s, scale) {
-  const pc = (v) => `${Math.max(0, (v / scale) * 100).toFixed(1)}%`;
-  const over = s > t;
-  return `<span class="pbar thin sc${over ? " over" : ""}"><span class="trk" data-css="width:${pc(t)}"><i data-css="width:${(Math.min(1, t ? s / t : 0) * 100).toFixed(1)}%"></i></span>${over ? `<i class="ov" data-css="left:${pc(t)};width:${pc(s - t)}"></i>` : ""}</span>`;
+// la barre d'une catégorie : toute la largeur vaut son budget ; le trait dit où l'on devrait
+// en être à ce jour ; au-delà du budget, elle passe au rouge
+function bar(ratio, pace) {
+  const over = ratio > 1;
+  return `<span class="pbar thin pc${over ? " over" : ""}"><i data-css="width:${(Math.min(1, Math.max(0, ratio)) * 100).toFixed(1)}%"></i>${pace != null && pace > 0 && pace < 1 ?
+    `<span class="pace" data-css="left:${(pace * 100).toFixed(1)}%"></span>` : ""}</span>`;
 }
 
 function yearRow(c, x) {
   const y = c.yearly, done = u(y.spent), goal = y.target ? u(y.target) : null;
-  const s = yearState(c), part = yearPart(c, x.n);
+  const s = yearState(c);
   const month = c.s ? ` · ${n0(c.s)} ce mois` : "";
   return `<button class="crow" type="button" data-a="cat" data-v="${esc(c.category)}" aria-label="${esc(c.name)}, ${n0(done)}${goal != null ? ` sur ${n0(goal)}` : ""} ${base()} depuis janvier, ${s.txt}">
     ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)} <span class="pill">par an</span></b><span class="t num">${money(done)}${goal != null ? ` / ${money(goal)}` : ""}</span></span>
-    ${goal != null ? scaled(part, part * yearDone(c), x.scale) : ""}
+    ${goal != null ? bar(yearDone(c), null) : ""}
     <span class="crow-st ${s.k}">${s.txt}${month}</span></span></button>`;
 }
 
@@ -50,8 +49,9 @@ function catRow(c, x) {
   const s = fixed ? fixedState(c, x.today) : catState(c);
   const tag = s.k === "bad" && !fixed ? '<span class="pill bad">Dépassé</span>' : "";
   return `<button class="crow" type="button" data-a="cat" data-v="${esc(c.category)}" aria-label="${esc(c.name)}, ${n0(c.s)}${c.t != null ? ` sur ${n0(c.t)}` : ""} ${base()}, ${s.txt}">
-    ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}${tag}</b><span class="t num">${money(c.s)}${c.t != null ? ` / ${money(c.t)}` : ""}</span></span>
-    ${fixed || c.t == null ? "" : scaled(c.t, c.s, x.scale)}
+    ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}${tag}</b><span class="t num">${money(c.s)}${c.t != null ? ` / ${money(c.t)}` : ""}${!fixed && c.t ?
+      `<small>${Math.round((c.s / c.t) * 100)} %</small>` : ""}</span></span>
+    ${fixed || c.t == null ? "" : bar(c.t ? c.s / c.t : 0, x.pace)}
     <span class="crow-st ${s.k}">${s.done ? ic("check") : ""}${s.txt}</span></span></button>`;
 }
 
@@ -60,7 +60,7 @@ export function categories(m, B, flows) {
   const uncl = m.lines.find((l) => l.category === UNCAT);
   const sum2 = (cs) => [cs.filter((c) => !c.yearly).reduce((t, c) => t + c.s, 0), cs.reduce((t, c) => t + (c.t || 0), 0)];
   const pick = (gs) => m.lines.filter((l) => gs.includes(l.group) && l.category !== UNCAT)
-    .sort((x, y) => rank(y) - rank(x) || (y.t ? y.s / y.t : 0) - (x.t ? x.s / x.t : 0) || y.s - x.s);
+    .sort((x, y) => (y.t ? y.s / y.t : -1) - (x.t ? x.s / x.t : -1) || rank(y) - rank(x) || y.s - x.s);
   if (B.bgroup === "savings" || B.bgroup === "rest") return savingsOrRest(B, flows);
   const vars = B.bgroup === "fixed" ? [] : pick(["variable", "mixed"]);
   const fixed = B.bgroup === "variable" ? [] : pick(["fixed"]);
@@ -70,7 +70,7 @@ export function categories(m, B, flows) {
   const openFixed = B.bgroup === "fixed" || pref("fixedOpen", false);
   const nOver = m.lines.filter((l) => l.over).length;
   const off = vars.filter(isOff), kept = vars.filter((c) => !isOff(c));
-  const x = { n: m.months, today: today(), scale: Math.max(1, ...kept.map((c) => (c.yearly ? yearPart(c, m.months) * Math.max(1, yearDone(c)) : Math.max(c.t || 0, c.s)))) };
+  const x = { n: m.months, today: today(), pace: m.current ? m.expected : null };
   const head = B.bgroup
     ? `<button class="chip" type="button" data-a="bgroupx" aria-label="Retirer le filtre ${GROUP_LABEL[B.bgroup]}">${GROUP_LABEL[B.bgroup]}${ic("close")}</button>`
     : `<span class="hint num">${money(vs + fs)}${vt + ft ? ` / ${money(vt + ft)}` : ""}</span>`;
@@ -82,7 +82,7 @@ export function categories(m, B, flows) {
   const fixedPart = fixed.length ? `<button class="grp grp-btn" type="button" data-a="bfixed" aria-expanded="${openFixed}" aria-controls="fixed-body"><span>Fixes · <span class="num">${money(fs)}${ft ? ` / ${money(ft)}` : ""}</span></span>
       <span class="grp-st">${due ? `${paid === due ? ic("check") : ""}${paid} sur ${due} payée${due > 1 ? "s" : ""}${left >= 1 ? ` · ${n0(left)} à venir` : ""}` : ""}${ic("down", openFixed ? "up" : "")}</span></button>
       <div id="fixed-body">${openFixed ? fixed.map((c) => catRow(c, x)).join("") : ""}</div>` : "";
-  return `<section class="card" id="budCats" aria-labelledby="t-cats">
+  return `<section class="card bflat" id="budCats" aria-labelledby="t-cats">
       <div class="section-head"><h2 class="section-title" id="t-cats">Catégories${nOver ? ` <span class="pill bad">${nOver} dépassée${nOver > 1 ? "s" : ""}</span>` : ""}</h2>${head}</div>
       ${unclRow}${varPart}${fixedPart || ""}${!vars.length && !fixed.length && !uncl ? '<div class="empty">Aucune dépense sur la période.</div>' : ""}
       ${B.bgroup || m.T == null ? "" : `<button class="secondary plan-btn" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}Préparer le budget</button>`}
@@ -92,9 +92,10 @@ export function categories(m, B, flows) {
 // le flux filtré sur l'épargne ou le reste : ses postes, sans budget
 function savingsOrRest(B, f) {
   const head = `<div class="section-head"><h2 class="section-title" id="t-cats">${B.bgroup === "savings" ? "Épargne" : "Reste"}</h2><button class="chip" type="button" data-a="bgroupx" aria-label="Retirer le filtre">${B.bgroup === "savings" ? "Épargne" : "Reste"}${ic("close")}</button></div>`;
-  if (B.bgroup === "rest") return `<section class="card" id="budCats" aria-labelledby="t-cats">${head}<div class="empty">Ni dépensé ni épargné pour l'instant.</div></section>`;
+  if (B.bgroup === "rest") return `<section class="card bflat" id="budCats" aria-labelledby="t-cats">${head}<div class="empty">Ni dépensé ni épargné pour l'instant.</div></section>`;
   const items = f ? (f.groups.find((x) => x.group === "savings")?.items || []) : [];
-  return `<section class="card" id="budCats" aria-labelledby="t-cats">${head}<div class="grp"><span>Épargne</span><span class="num">${amount(items.reduce((t, i) => t + u(i.total), 0))}</span></div>` +
+  return `<section class="card bflat" id="budCats" aria-labelledby="t-cats">${head}<div class="grp"><span>Épargne</span><span class="num">${amount(
+    items.reduce((t, i) => t + u(i.total), 0))}</span></div>` +
     items.map((i) => `<div class="crow">${catMark(i.category, "savings")}<span><span class="crow-top"><b>${esc(i.name)}</b><span class="t num">${amount(u(i.total))}</span></span><span class="crow-st ok">${f.income.minor ? `${pf(u(i.total) / u(f.income), 0)} % des revenus` : ""}</span></span></div>`).join("") + "</section>";
 }
 

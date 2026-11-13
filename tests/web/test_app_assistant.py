@@ -16,7 +16,7 @@ from hub.core.context import HubContext
 from hub.core.registry import Registry
 from hub.platform.settings import Paths, Secrets, Server, Settings
 from tests.support.demo_domain import DemoDomain
-from tests.web.test_app_mobile import ROOT, _free_port, bootstrap, browse, serve
+from tests.web.test_app_mobile import ROOT, _free_port, bootstrap, browse, go_home, serve
 
 HISTORY = [
     {
@@ -95,7 +95,7 @@ def test_an_answer_that_arrives_elsewhere_waits_in_a_glass_card(page: Any) -> No
     page.locator("#orb").click()
     page.wait_for_selector("#assistant:not([hidden])")
     page.locator('#suggest [data-v="Quoi de neuf ?"]').click()
-    page.click('#tabs button[data-v="accueil"]')
+    go_home(page)
     card = page.locator("#orbAnswer")
     card.wait_for(state="visible", timeout=10_000)
     assert "Tu as demandé : Quoi de neuf ?" in card.inner_text()

@@ -1,6 +1,6 @@
 [project]
 name = "personal-hub"
-version = "0.20.0"
+version = "0.21.0"
 description = "Personal Hub : registre financier personnel, auto-hébergé"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -104,6 +104,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # textes en français : apostrophes et 
 "hub/domains/finance/classement/app/totals.py" = ["S608"]
 "hub/domains/finance/patrimoine/app/account_kinds.py" = ["S608"]
 "hub/domains/finance/patrimoine/app/debt_kinds.py" = ["S608"]
+"hub/domains/finance/patrimoine/app/good_kinds.py" = ["S608"]
 "hub/domains/finance/patrimoine/app/holdings.py" = ["S608"]
 "hub/domains/finance/registre/app/reads.py" = ["S608"]
 "hub/domains/finance/sources/app/statements.py" = ["S608"]

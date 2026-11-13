@@ -14,7 +14,15 @@ from hub.core.registry import Registry
 from hub.domains.finance.domain import FinanceDomain
 from hub.platform.settings import Paths, Secrets, Server, Settings
 from tests.support.demo_domain import DemoDomain
-from tests.web.test_app_mobile import ROOT, _free_port, _screen_ok, bootstrap, browse, serve
+from tests.web.test_app_mobile import (
+    ROOT,
+    _free_port,
+    _screen_ok,
+    bootstrap,
+    browse,
+    go_home,
+    serve,
+)
 
 
 @pytest.fixture(scope="module")
@@ -56,31 +64,47 @@ def test_the_demo_tab_comes_from_its_manifest(page: Any) -> None:
     )
 
 
-def test_a_space_with_several_tabs_puts_them_at_the_top(page: Any) -> None:
-    """La finance est une seule entrée de la barre du bas ; ses onglets sont la barre du haut,
-    et l'espace rouvre le dernier onglet vu."""
+def test_a_space_with_several_tabs_has_its_own_bottom_bar(page: Any) -> None:
+    """La finance est une seule entrée de la barre du hub. Dès qu'on y entre, la barre du bas
+    devient la sienne : ses onglets autour de l'orbe. Le bouton d'espace ramène au hub, et
+    l'espace rouvre le dernier onglet vu."""
+    go_home(page)
     page.click('#tabs button[data-v="finance"]')
-    page.wait_for_selector('#tabs button[data-v="finance"][aria-current="page"]')
-    subs = page.locator("#patrimoine .subtabs button").all_text_contents()
-    assert subs == ["Patrimoine", "Budget", "Journal"]
-    page.click('#patrimoine .subtabs button[data-v="journal"]')
-    page.wait_for_selector('#journal .subtabs button[data-v="journal"][aria-current="page"]')
-    assert page.locator("#journal .topbar-title").bounding_box()["width"] <= 1  # lecteurs d'écran
-    page.click('#tabs button[data-v="accueil"]')
+    page.wait_for_selector("#apercu:not([hidden])")
+    bar = page.locator("#tabs button").evaluate_all("bs => bs.map(b => b.dataset.v)")
+    assert bar == ["apercu", "patrimoine", "assistant", "budget", "journal"]
+    assert page.inner_text("#apercu .topbar-space").strip().lower() == "finance"
+    page.click('#tabs button[data-v="journal"]')
+    page.wait_for_selector('#tabs button[data-v="journal"][aria-current="page"]')
+    page.locator('#journal [data-a="spaces"]').click()
+    assert page.locator("#sheet .trow").count() == 3  # le hub, la finance, la démo
+    page.click('#sheet [data-a="hub"]')
+    page.wait_for_selector("#accueil:not([hidden])")
+    bar = page.locator("#tabs button").evaluate_all("bs => bs.map(b => b.dataset.v)")
+    assert bar == ["accueil", "assistant", "finance", "demo"]
     page.click('#tabs button[data-v="finance"]')
     page.wait_for_selector("#journal:not([hidden])")
+    go_home(page)
     assert page.problems == []
 
 
 def test_the_demo_adds_a_home_block_and_a_rubric(page: Any) -> None:
-    page.click('#tabs button[data-v="accueil"]')
+    go_home(page)
     page.wait_for_load_state("networkidle")
     assert "Démo à l'accueil" in page.inner_text('#accueil [data-home="demo"]')
     page.locator('#accueil [data-a="settings"]').click()
     row = page.locator('#rubrics [data-a="rubric"][data-v="demo-prefs"]')
     assert "prête" in row.inner_text()
     groups = page.locator("#rubrics .grp-title").all_text_contents()
-    assert groups == ["Hub", "Finance", "Demo"]  # le hub, puis une section par domaine
+    # le hub, les domaines sans espace à eux, puis les espaces qui ont leurs propres réglages
+    assert groups == ["Hub", "Demo", "Espaces"]
+    assert page.locator('#rubrics [data-a="rubric"][data-v="budget"]').count() == 0
+    page.locator('#rubrics [data-a="set-scope"][data-v="finance"]').click()
+    page.wait_for_selector('#rubrics [data-a="rubric"][data-v="budget"]')
+    assert page.locator('#rubrics [data-a="rubric"][data-v="display"]').count() == 0
+    assert page.locator('#rubrics [data-a="rubric"]').first.get_attribute("data-v") == "add-account"
+    page.locator('#rubrics [data-a="set-scope"][data-v=""]').click()
+    row = page.locator('#rubrics [data-a="rubric"][data-v="demo-prefs"]')
     row.click()
     page.wait_for_selector('#sources [data-rubric="demo-prefs"]:not(.off-rubric)')
     assert "Une rubrique venue du manifeste" in page.inner_text("#sources")
@@ -91,7 +115,7 @@ def test_the_home_and_its_approvals_belong_to_the_shell(page: Any) -> None:
     """L'accueil et « À valider » sont au cœur : la carte d'un autre domaine que la finance s'y
     valide ; « À faire » passe avant les blocs de tous les domaines, finance comprise, et chaque
     ligne d'un domaine porte son nom."""
-    page.click('#tabs button[data-v="accueil"]')
+    go_home(page)
     page.evaluate(
         """fetch('/api/proposals', {method: 'POST', headers: {'Content-Type': 'application/json'},
            body: JSON.stringify({domain: 'demo', kind: 'add_item', params: {name: 'lampe'}})})"""
@@ -121,7 +145,7 @@ def test_the_home_and_its_approvals_belong_to_the_shell(page: Any) -> None:
 def test_the_home_face_id_signs_only_the_cards_it_shows(page: Any) -> None:
     """Audit du 10/11, W1 : la carte de l'accueil montre trois propositions ; son Face ID ne
     signe qu'elles, et le dit. Le panneau « Tout voir » porte les autres."""
-    page.click('#tabs button[data-v="accueil"]')
+    go_home(page)
     for name in ("un", "deux", "trois", "quatre"):
         page.evaluate(
             """name => fetch('/api/proposals', {method: 'POST',

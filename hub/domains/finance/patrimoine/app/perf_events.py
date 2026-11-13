@@ -33,7 +33,9 @@ def events(
     """Événements entre les jours `ks` et `ke` ; `value` : la valeur de la sélection, jour par
     jour depuis `ks`."""
     th = th or thresholds.current()
-    lines = [ln for ln in chosen if ln.kind != "debt" and ln.account_id not in eng.banks]
+    lines = [
+        ln for ln in chosen if ln.kind not in ("debt", "good") and ln.account_id not in eng.banks
+    ]
     found: list[tuple[int, int, str, int]] = []  # (poids, jour, sorte, montant)
     if not lines:
         return []

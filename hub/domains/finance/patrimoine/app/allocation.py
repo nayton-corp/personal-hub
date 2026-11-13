@@ -191,6 +191,9 @@ def breakdown(
                     b.put(CRYPTO, NAMED, Decimal(v), account=ln.account_id)
                 else:
                     b.put(CASH, CASH_KIND, Decimal(v), account=ln.account_id)
+            elif ln.kind == "good":  # un bien hors comptes : ni secteur ni région, sa case
+                if not holding:
+                    b.put("Biens", NAMED, Decimal(v), account=ln.account_id)
             elif (isin := ln.asset[5:]) in comps:
                 used.add(isin)
                 assigned = Decimal(0)

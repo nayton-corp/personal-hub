@@ -2,6 +2,47 @@
 
 ## [Non publié]
 
+## [0.21.0] · 2026-11-13
+
+### À la mise à jour
+
+- Rien à faire sur la machine (migrations finance 0028 et 0029, tables nouvelles et vides). Les
+  chiffres ne bougent pas tant qu'aucun bien n'est saisi. L'icône de l'écran d'accueil change :
+  sur iPhone, retirer puis rajouter l'app à l'écran d'accueil pour la voir.
+
+### Finance
+
+- Refonte de l'affichage, d'après le prototype validé. Finance a sa barre du bas (Aperçu,
+  Patrimoine, Budget, Journal) et ses réglages, ouverts par la roue : Ajouter un compte, Comptes
+  et biens, Dettes, État des sources, Budget, Impôts et 3a, Exporter. Les réglages du hub
+  (profil, affichage, sécurité, état, espaces) restent sur l'accueil.
+- Patrimoine : une seule pilule de filtre ; toucher un compte filtre l'écran. Les périodes sont
+  au-dessus de la courbe ; le bouton Affichage, à droite du total, range la vue, la légende, la
+  règle et le plein écran. Répartition et Rendement (Risque en vue Rendement) sont des cartes qui
+  ouvrent leur détail dans un grand panneau ; Stratégies se déplie sur place. Un cadre seulement
+  autour de ce qui se touche : la courbe et les listes sont à plat.
+- Budget : chaque barre est la part du budget de sa catégorie, en pourcentage, avec le trait du
+  rythme attendu à ce jour ; rouge quand le budget est dépassé.
+- Journal : un appui long sur une écriture ouvre la sélection ; plusieurs écritures se classent
+  d'un coup, sous une seule validation.
+- Biens hors comptes : logement, véhicule, objet de valeur, prêt accordé. Une valeur datée, une
+  variation par an facultative (−15 % proposé pour un véhicule). Un bien compte dans le
+  patrimoine et la répartition (« Biens »), jamais dans le rendement. Proposition `save_good`,
+  route `/api/finance/goods` (migration finance 0028).
+- Frais des fonds : la carte chiffre ce que coûtent les frais courants (TER) par an, et l'écart
+  sur 30 ans à 5 % par an avant frais. Le TER se saisit par fonds ; sans lui le fonds est noté
+  « frais inconnus », rien n'est deviné. Proposition `set_fund_fee`, route `/api/finance/fees`
+  (migration finance 0029). Carte Revenus : dividendes et intérêts reçus sur 12 mois.
+- Première visite : sans compte, l'Aperçu propose six étapes (premier compte, autres comptes,
+  biens et dettes, classement, budget, passkey de secours) ; ensuite une carte « Mise en route »
+  suit l'avancement, et se retire d'un geste.
+
+### Hub
+
+- Nouvelle icône (trait qui monte vers un point bleu, sur fond nuit), en SVG pour l'onglet du
+  navigateur et en PNG pour l'écran d'accueil.
+- Aucun écran ne dépasse en largeur à 320, 375 et 390 px : vérifié par les tests d'écran.
+
 ## [0.20.0] · 2026-11-12
 
 ### À la mise à jour

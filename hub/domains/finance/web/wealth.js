@@ -4,18 +4,20 @@
 // la barre de contexte dit toujours ce que l'écran montre. État et lignes : wstate.js ; courbe :
 // wmodel.js et wchart.js ; haut de l'écran : whero.js ; panneaux : wsheets.js.
 import { BY, FILTERS, FOLD, PRESETS, S, SORTS, TABS, accLabel, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
-import { amount, announce, closeSheet, esc, fill, ic, money, n0, openSheet, skel, toast } from "../../ui.js";
+import { SH, SHEETS, amount, announce, closeSheet, esc, fill, ic, money, n0, openSheet, skel, toast } from "../../ui.js";
 import { accountPage, assetPage } from "./wpages.js";
-import { allocSection } from "./walloc.js";
+import { allocBrief, allocDetail } from "./walloc.js";
 import { chartSVG, flagHTML, gutter, legendHTML, nearest, rulerHTML } from "./wchart.js";
-import { cmpBtn, drawLand, drawTop, heroHTML, periodsHTML, toolbarHTML } from "./whero.js";
+import { displayBody, drawLand, drawTop, heroHTML, periodsHTML } from "./whero.js";
 import { facetMark, assetMark } from "./meta.js";
-import { gainSpan, perfSection, perfSummary, rate, signedMoney, units } from "./perf.js";
+import { gainSpan, perfSection, rate, ratePct, signedMoney, units } from "./perf.js";
 import { kindFor, model } from "./wmodel.js";
 import { moneyRate } from "./wcurve.js";
 import { DEBT_KIND, debtMark } from "./debts.js";
+import { goodMark } from "./goods.js";
 import { byLabel } from "./wsheets.js";
-import { stratSection } from "./strategies.js";
+import { stratBrief, stratSection } from "./strategies.js";
+import * as more from "./wcards.js";
 import * as place from "./wplace.js";
 import { base } from "../../format.js";
 import { go } from "../../shell.js";
@@ -29,8 +31,8 @@ let shown = null; // page affichée au dernier rendu
 
 export function init() {
   fill($("patBody"), `
-    <div class="hero" id="evo"><div id="hero"></div><div id="wtools"></div><div id="wcmp"></div>
-      <div class="chart-wrap" data-chart="main" id="cw"></div><div class="legend" id="legend"></div><div id="wrul"></div><div id="wper"></div></div>
+    <div class="hero" id="evo"><div id="hero"></div><div id="wper"></div>
+      <div class="chart-wrap" data-chart="main" id="cw"></div><div class="legend" id="legend"></div><div id="wrul"></div></div>
     <div id="wsecs"></div><div class="endspace"></div>`);
   document.addEventListener("pointerdown", (e) => pointer(e, "down"));
   document.addEventListener("pointermove", (e) => pointer(e, "move"));
@@ -109,6 +111,7 @@ const emptyText = () => (M.status === "error" ? `Courbe indisponible : ${M.error
 export function render() {
   const ae = store.use(paths.accounts), he = store.use(paths.holdings), hi = store.use(paths.history), de = store.use(paths.debts);
   store.use(paths.fresh);
+  store.use(paths.goods);
   const err = [ae, he, hi, de].find((e) => e.status === "error");
   const all = lines();
   const key = JSON.stringify(trail());
@@ -120,16 +123,14 @@ export function render() {
   drawTop(all || []);
   if (err || !all) {
     fill($("hero"), err ? `<div class="err-box" role="alert">Impossible de charger le patrimoine : ${esc(err.error.message)}</div>` : skel());
-    for (const id of ["wtools", "wcmp", "cw", "legend", "wrul", "wper", "wsecs"]) fill($(id), "");
+    for (const id of ["cw", "legend", "wrul", "wper", "wsecs"]) fill($(id), "");
     return;
   }
   const r = here(), kind = kindFor(r);
   M = model(r);
   if (S.scrub != null && S.scrub >= M.pts.length) S.scrub = null;
-  fill($("wtools"), toolbarHTML(M, r, false));
-  fill($("wcmp"), kind === "pct" ? `<div class="toolbar">${cmpBtn(M)}</div>` : "");
   updateChart();
-  fill($("legend"), M.pts.length > 1 ? legendHTML(M, kind) : "");
+  fill($("legend"), M.pts.length > 1 ? legendHTML(M, kind, "line") : "");
   fill($("wper"), periodsHTML());
   fill($("wsecs"), r.t === "acc" ? accountPage(M, r) : r.t === "asset" ? assetPage(M, all, r) : homeSections(all));
   fill($("miniTotal"), `${r.t === "home" && activeCount() ? "Sélection · " : ""}${money(sum(M.sel))} ${base()}`);
@@ -139,16 +140,38 @@ export function render() {
 
 // --- patrimoine : répartition, performance, comptes et actifs --------------------------------
 
-function perfBlock(all) {
-  const ctx = {
-    S, n: activeCount(), per: { label: range().label }, perf: M.perf, src: { status: M.status, error: M.error }, all, sel: M.sel, pts: M.pts,
-    fmtDate: (d) => d.split("-").reverse().join("."),
-  };
-  return `<section class="section${FOLD.perf ? " folded" : ""}" id="perf" aria-labelledby="t-perf">
-    <div class="section-head"><button class="fold-btn" type="button" data-a="w-fold" data-v="perf" aria-expanded="${!FOLD.perf}" aria-controls="perf-body"><h2 class="section-title" id="t-perf">Performance</h2>${ic("down", "fold-chev")}</button><span class="sec-note">${esc(range().label)}</span></div>
-    <button class="sec-sum" type="button" data-a="w-fold" data-v="perf" aria-label="Déplier la performance">${perfSummary(M.perf, range().label)}</button>
-    <div class="sec-body" id="perf-body">${FOLD.perf ? "" : `<div class="scroll-x"><div class="seg small" id="tabSeg" role="group" aria-label="Thème">${TABS.map(([k, l]) => `<button type="button" data-a="w-tab" data-v="${k}" aria-pressed="${S.tab === k}">${l}</button>`).join("")}</div></div>${perfSection(ctx)}`}</div></section>`;
+const perfCtx = (all) => ({
+  S, n: activeCount(), per: { label: range().label }, perf: M.perf, src: { status: M.status, error: M.error }, all, sel: M.sel, pts: M.pts,
+  fmtDate: (d) => d.split("-").reverse().join("."),
+});
+
+// trois cartes résumé : leur détail s'ouvre dans un grand panneau ; Stratégies se déplie sur place
+function cards(sel) {
+  const a = allocBrief(sel), p = M.perf && M.perf.summary, st = stratBrief();
+  const card = (a2, v, l, val, sub, cls = "") => `<button class="sumcard${cls}" type="button" data-a="${a2}"${v ?
+    ` data-v="${v}"` : ""} aria-haspopup="dialog"><span class="l">${l}</span><span class="v">${val}</span><span class="s">${sub}</span></button>`;
+  let second;
+  if (S.mode === "perf") {
+    const k = M.perf && M.perf.risk, dd = k ? rate(k.max_drawdown) : null, vol = k ? rate(k.volatility) : null;
+    second = card("w-card", "risk", "Risque", dd == null ? "—" : dd < 0 ? `<span class="neg">${ratePct(dd)}</span>` : "Aucune baisse",
+      vol == null ? "pas assez de recul" : `volatilité ${ratePct(vol).replace("+", "")} par an`);
+  } else {
+    const g = p ? units(p.gain) : null, r = p ? rate(p.mwr) ?? rate(p.twr) : null;
+    second = card("w-card", "rend", "Rendement", g == null ? "—" : `<span class="${g >= 0 ? "pos" : "neg"}">${signedMoney(g)} ${base()}</span>`,
+      `${r == null ? "" : `${ratePct(r)} · `}${esc(range().label)}`);
+  }
+  return `<div class="sumcards wcards">${card("w-card", "alloc", "Répartition", a.v, a.s)}${second}${more.moreCards()}
+    ${FOLD.strat ? `<button class="sumcard wide" type="button" data-a="w-fold" data-v="strat" aria-expanded="false"><span class="l">Stratégies</span><span class="v">${st.v}${st.hot ?
+      ' <span class="pill info">à voir</span>' : ""}</span><span class="s">${st.s}</span></button>` : ""}</div>${FOLD.strat ? "" : stratSection()}`;
 }
+
+SHEETS.walloc = () => ({ title: "Répartition", tall: true, body: allocDetail(scopeLines(lines() || [], { t: "home" })) });
+SHEETS.wperf = () => ({
+  title: "Performance", tall: true,
+  body: `<div class="seg small" id="tabSeg" role="group" aria-label="Thème">${TABS.map(([k, l]) =>
+    `<button type="button" data-a="w-tab" data-v="${k}" aria-pressed="${S.tab === k}">${l}</button>`).join("")}</div><p class="hint">${esc(range().label)}</p>${perfSection(perfCtx(lines() || []))}`,
+});
+SHEETS.wdisplay = () => ({ title: "Affichage", body: displayBody(M, lines() || []) });
 
 function listSection(sel) {
   const groups = Object.groupBy(sel, (l) => (S.view === "acc" ? `a:${l.acc}` : `s:${l.asset}`));
@@ -157,6 +180,7 @@ function listSection(sel) {
     const f = ls[0];
     const c = f.kind === "debt" ? net && net.by_account[f.acc] : perf && (S.view === "acc" ? perf.by_account[f.acc] : perf.by_asset[f.asset]);
     if (f.kind === "debt") return { key, title: f.name, sub: `${esc(f.inst)} · ${DEBT_KIND[f.debtKind] || "Dette"}`, mark: debtMark({ kind: f.debtKind }, ""), value: sum(ls), c, debt: true };
+    if (f.kind === "good") return { key, title: f.name, sub: `Bien · ${esc(f.inst)}`, mark: goodMark({ kind: f.goodKind }, ""), value: sum(ls), c: null, cash: true };
     if (S.view === "acc") return { key, title: f.accName, sub: `${esc(f.inst)} · ${{ cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" }[f.kind] || ""}`, mark: facetMark("inst", f.inst, ""), value: sum(ls), c, cash: f.kind === "cash" };
     const q = ls.reduce((t, l) => t + Number(l.qty), 0), nAcc = new Set(ls.map((l) => l.acc)).size;
     return { key, title: f.name, sub: `<span class="money">${n0(q) === "0" ? q : n0(q)}</span> ${esc(f.unit)} · ${nAcc > 1 ? `${nAcc} comptes` : esc(accLabel(f))}`, mark: assetMark(f), value: sum(ls), c, cash: f.asset.startsWith("ccy:") };
@@ -182,12 +206,12 @@ function listSection(sel) {
       <span class="row-main"><span class="row-title">${esc(r.title)}</span><span class="row-sub">${r.sub}</span></span>
       <span class="row-num"><span class="row-val num">${amount(r.value)}</span><span class="row-delta">${delta(r)}</span></span><span class="go">${ic("chev")}</span></button>`).join("")
       : '<div class="empty">Aucun élément ne correspond à ces filtres.<br><button type="button" data-a="w-clear">Effacer les filtres</button></div>'}</div>
-    <p class="hint">Toucher une ligne ouvre sa page : la courbe et les chiffres se limitent à ce ${S.view === "acc" ? "compte" : "actif"}.</p></section>`;
+</section>`;
 }
 
 function homeSections(all) {
   const sel = scopeLines(all, { t: "home" });
-  return allocSection(sel) + perfBlock(all) + stratSection() + listSection(sel);
+  return cards(sel) + listSection(sel);
 }
 
 // --- actions ----------------------------------------------------------------------------------
@@ -219,14 +243,18 @@ export function only(key, v) {
 
 export const actions = {
   ...place.actions,
+  ...more.actions,
   filters: () => openSheet("filters"),
   "w-opt": (v) => { const i = v.indexOf("|"); toggle(v.slice(0, i), v.slice(i + 1)); store.notify(); announceSel(); },
   "w-clear": () => { for (const f of FILTERS) S.filters[f.key].clear(); store.notify(); announceSel(); },
   "w-byopen": () => openSheet("by"),
-  "w-by": (v) => { closeSheet(); set({ by: v }); },
+  "w-by": (v) => { if (SH.kind === "by") closeSheet(); set({ by: v }); },
+  "w-card": (v) => { if (v !== "alloc") S.tab = v; openSheet(v === "alloc" ? "walloc" : "wperf"); },
+  "w-display": () => openSheet("wdisplay"),
   "w-alloc": (v) => {
     const prev = { filters: Object.fromEntries(FILTERS.map((f) => [f.key, new Set(S.filters[f.key])])), by: S.by };
     const adding = !S.filters[S.by].has(v), name = fName(S.by, v);
+    closeSheet();
     toggle(S.by, v);
     const nb = adding ? autoBy() : null;
     remember();
@@ -292,9 +320,10 @@ export const actions = {
     else S.hidden.add(v);
     set({});
   },
-  "w-ruler": () => { Object.assign(S, { rulerOn: !(S.rulerOn || S.ruler), ruler: null, scrub: null }); render(); },
+  "w-ruler": () => { closeSheet(); Object.assign(S, { rulerOn: !(S.rulerOn || S.ruler), ruler: null, scrub: null }); render(); },
   "w-ruler-clear": () => { Object.assign(S, { rulerOn: false, ruler: null }); render(); },
   "w-full": (v) => {
+    closeSheet();
     Object.assign(S, { full: v === "1", scrub: null });
     render();
     if (S.full) { const l = $("lcw"); if (l) l.querySelector("svg").focus({ preventScroll: true }); }

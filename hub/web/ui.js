@@ -39,6 +39,10 @@ export const ICON = {
   swap: "M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7",
   help: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4v.3M12 17h.01",
   dots: "M5 12h.01M12 12h.01M19 12h.01",
+  grid: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
+  gauge: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 12l4-4M12 7v.01M7 12h.01M17 12h.01",
+  sliders: "M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4",
+  plus: "M12 5v14M5 12h14", house: "M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10",
   expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5", ruler: "M3 16.5L16.5 3 21 7.5 7.5 21zM7.5 12l2 2M10.5 9l2 2M13.5 6l2 2",
   pin: "M12 17v5M8 3h8l-1 6 3 4H6l3-4z", layers: "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5", edit: "M4 20h4L19 9l-4-4L4 16z",
   globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18",
@@ -157,7 +161,7 @@ export function failure(e) {
 }
 
 // --- panneau du bas ---------------------------------------------------------------------------
-// Chaque type de panneau est une fonction (arg, state) → { title, act?, body, foot? } ; le
+// Chaque type de panneau est une fonction (arg, state) → { title, act?, body, foot?, tall? } ; le
 // panneau est redessiné à chaque rendu tant qu'il est ouvert.
 export const SHEETS = {};
 export const SH = { kind: null, arg: null, opener: null, tmp: null };
@@ -228,6 +232,7 @@ export function renderSheet() {
   if (!SH.kind || !SHEETS[SH.kind]) return;
   const s = SHEETS[SH.kind](SH.arg, SH);
   if (!s) return closeSheet(true);
+  $("sheet").classList.toggle("tall", Boolean(s.tall)); // détail d'une carte : grand panneau
   fill($("sheet-title"), s.title);
   fill($("sheet-act"), `${s.act || ""}<button class="icon-btn" type="button" data-a="sheet-close" aria-label="Fermer">${ic("close")}</button>`);
   // la saisie en cours (champ actif) n'est pas écrasée

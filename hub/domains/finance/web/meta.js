@@ -148,7 +148,8 @@ export function catIc(id, groupName) {
 
 // --- patrimoine : facettes ------------------------------------------------------------------
 export const FACETS = [
-  { key: "cat", label: "Catégorie", values: ["cash", "funds", "crypto", "debt"], names: { cash: "Liquidités", funds: "Actions & fonds", crypto: "Crypto", debt: "Dettes" }, icons: { cash: "banknote", funds: "trend", crypto: "coin", debt: "landmark" } },
+  { key: "cat", label: "Catégorie", values: ["cash", "funds", "crypto", "debt", "goods"], names: { cash: "Liquidités", funds: "Actions & fonds", crypto: "Crypto", goods: "Biens", debt: "Dettes" },
+    icons: { cash: "banknote", funds: "trend", crypto: "coin", goods: "home", debt: "landmark" } },
   { key: "liq", label: "Disponibilité", values: ["immediate", "days", "locked"], names: { immediate: "Immédiate", days: "Sous quelques jours", locked: "Bloquée" }, icons: { immediate: "bolt", days: "clock", locked: "lockc" } },
   { key: "goal", label: "Objectif", values: ["current", "safety", "projects", "long_term", "retirement"], names: { current: "Courant", safety: "Réserve de sécurité", projects: "Projets", long_term: "Long terme", retirement: "Retraite" }, icons: { current: "wallet", safety: "shield", projects: "plane", long_term: "trend", retirement: "piggy" } },
   { key: "inst", label: "Institution", values: [], names: {} }, // rempli depuis les comptes

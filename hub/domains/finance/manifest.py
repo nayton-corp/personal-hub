@@ -50,7 +50,8 @@ MANIFEST = Manifest(
         label="Finance",
         icon="banknote",
         tabs=(
-            Tab("patrimoine", "Patrimoine", "trend", "wealth.js", order=20),
+            Tab("apercu", "Aperçu", "gauge", "overview.js", order=10),
+            Tab("patrimoine", "Patrimoine", "layers", "wealth.js", order=20),
             Tab("budget", "Budget", "wallet", "budget.js", order=30),
             Tab("journal", "Journal", "list", "journal.js", order=40),
         ),
@@ -60,15 +61,13 @@ MANIFEST = Manifest(
             HomeCard("budget", "Budget du mois", "/budget"),
         ),
         settings=(
-            SettingsSection("conn", "Connexions", "plug", "Données", "settings.js"),
-            SettingsSection("accounts", "Comptes", "wallet", "Données", "settings.js"),
-            SettingsSection(
-                "add-account", "Ajouter un compte", "wallet", "Données", "settings.js", listed=False
-            ),
+            SettingsSection("add-account", "Ajouter un compte", "plus", "Données", "settings.js"),
+            SettingsSection("accounts", "Comptes et biens", "wallet", "Données", "settings.js"),
             SettingsSection("debts", "Dettes", "landmark", "Données", "settings.js"),
-            SettingsSection("export", "Exporter", "download", "Données", "settings.js"),
+            SettingsSection("conn", "État des sources", "plug", "Données", "settings.js"),
             SettingsSection("budget", "Budget", "piggy", "Préférences", "settings.js"),
             SettingsSection("tax", "Impôts et 3a", "shield", "Préférences", "settings.js"),
+            SettingsSection("export", "Exporter", "download", "Préférences", "settings.js"),
         ),
         cards="proposals.js",
         home="home.js",

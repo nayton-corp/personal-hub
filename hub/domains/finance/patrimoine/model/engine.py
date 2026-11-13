@@ -80,6 +80,7 @@ class Inputs:
     positions: Positions
     liabilities: Sequence[Liability]
     crypto_flows: Flows  # (compte, clé) → jour → (parts expliquées, flux), crypto_cost.walk
+    goods: Sequence[Liability] = ()  # biens hors comptes : `balance` est leur valeur
 
 
 @dataclass(frozen=True)
@@ -87,7 +88,7 @@ class Line:
     id: str  # "<compte>|<instrument>", "<compte>|cash" ou "debt:<id>"
     account_id: str  # le compte, ou la clé de la dette
     asset: str  # "isin:<instrument>", "ccy:<devise>" ou "debt:<id>" (vue Actifs de l'app)
-    kind: str  # "position" | "cash" | "debt"
+    kind: str  # "position" | "cash" | "debt" | "good"
     hidden: bool
     value: Sequence[int]  # centimes ; ABSENT hors du patrimoine ce jour-là
     flow: Sequence[int]
@@ -193,6 +194,8 @@ def build(inp: Inputs) -> Series:
         b.account(a)
     for d in inp.liabilities:
         b.liability(d)
+    for g in inp.goods:
+        b.liability(g, good=True)
     return b.freeze()
 
 
@@ -337,8 +340,11 @@ class _Builder:
             sold.value[k] = 0
             sold.flow[k] = -sold.value[k - 1]
 
-    def liability(self, d: Liability) -> None:
-        ln = self.line(d.key, d.key, d.key, "debt", False)
+    def liability(self, d: Liability, good: bool = False) -> None:
+        """Une dette (retranchée, son paiement est un flux) ou un bien hors comptes (ajouté ;
+        toute variation de son estimation est un flux, jamais un effet marché)."""
+        ln = self.line(d.key, d.key, d.key, "good" if good else "debt", False)
+        prev = ABSENT
         for k, on in enumerate(self.inp.days):
             b = d.balance(on)
             if b is None:
@@ -348,7 +354,10 @@ class _Builder:
                 ln.missing[k] = 1
                 self.nofx.setdefault(k, []).append(d.key)
                 continue
-            ln.value[k] = -v
+            ln.value[k] = v if good else -v
+            if good and prev != ABSENT:
+                ln.flow[k] = v - prev
+            prev = v
             paid = d.paid(on)
             if paid is not None:
                 self.take(ln, k, "flow", self.fx.to_base(paid, d.currency, on))

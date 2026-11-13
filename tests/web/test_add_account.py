@@ -9,7 +9,12 @@ from typing import Any
 
 import pytest
 
-from tests.web.test_app_mobile import browse, instance  # noqa: F401 (fixture du module)
+from tests.web.test_app_mobile import (  # noqa: F401 (fixture du module)
+    browse,
+    go_home,
+    instance,
+    open_settings,
+)
 
 
 @pytest.fixture(scope="module")
@@ -23,8 +28,7 @@ def _get(page: Any, path: str) -> Any:
 
 
 def _start(page: Any) -> Any:
-    page.click('#tabs button[data-v="accueil"]')
-    page.locator('#accueil [data-a="settings"]').click()
+    open_settings(page, "finance")
     page.locator('#rubrics [data-a="rubric"][data-v="accounts"]').click()
     page.wait_for_selector('#sources [data-rubric="accounts"]:not(.off-rubric)', state="attached")
     page.click("#acct-add")
@@ -37,7 +41,7 @@ def _start(page: Any) -> Any:
 
 def _back_on_accounts(page: Any) -> None:
     page.wait_for_selector('#sources [data-rubric="accounts"]:not(.off-rubric)', state="attached")
-    assert page.inner_text("#t-sources") == "Comptes"
+    assert page.inner_text("#t-sources") == "Comptes et biens"
     assert page.locator("#acct-editor").is_hidden()
 
 

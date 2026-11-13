@@ -5,12 +5,13 @@ import { CCY_NAME, FACETS, assetMark, facetMark, facetName, instMark, setInstitu
 import { MOIS, MOIS_L, base, units } from "../../format.js";
 import { ic, pref, setPref } from "../../ui.js";
 import { store } from "../../store.js";
-import { lineId } from "./wcurve.js";
+import { lineId, lone } from "./wcurve.js";
 
 export { lineId };
 
-export const paths = { accounts: "/finance/accounts", holdings: "/finance/holdings", history: "/finance/networth/history", fresh: "/finance/freshness", debts: "/finance/debts" };
-export const KIND_LABEL = { cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto", debt: "Dette" };
+export const paths = { accounts: "/finance/accounts", holdings: "/finance/holdings", history: "/finance/networth/history", fresh: "/finance/freshness",
+  debts: "/finance/debts", goods: "/finance/goods" };
+export const KIND_LABEL = { cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto", debt: "Dette", good: "Bien" };
 
 // périodes : dix au choix, six épinglées sous la courbe ; une plage libre en plus
 export const PRESETS = [
@@ -90,8 +91,9 @@ function lastValues() {
 let cache = { key: null, lines: [] };
 export function lines() {
   const acc = store.data(paths.accounts), hold = store.data(paths.holdings), byAcc = lastValues(), owed = store.data(paths.debts);
-  if (!acc || !hold || !byAcc || !owed) return null;
-  const key = [acc, hold, byAcc, owed];
+  const own = store.data(paths.goods);
+  if (!acc || !hold || !byAcc || !owed || !own) return null;
+  const key = [acc, hold, byAcc, owed, own];
   if (cache.key && cache.key.every((x, i) => x === key[i])) return cache.lines;
   setInstitutions(acc.items.map((a) => a.institution));
   const out = [];
@@ -121,11 +123,19 @@ export function lines() {
     if (!v || !v.minor) continue;
     out.push({ acc: d.key, debt: d.id, accName: d.name, inst: d.lender, liq: null, goal: null, kind: "debt", debtKind: d.kind, asset: `debt:${d.id}`, name: d.name, symbol: null, cat: "debt", qty: units(v), unit: base(), value: units(v) });
   }
+  // un bien hors comptes : sa valeur du dernier point ; bloqué, sans objectif
+  for (const g of own.items) {
+    const v = byAcc[g.key];
+    if (!v || !v.minor) continue;
+    const kind = { home: "Logement", vehicle: "Véhicule", object: "Objet de valeur", loan: "Prêt accordé" }[g.kind] || "Bien";
+    out.push({ acc: g.key, good: g.id, accName: g.name, inst: kind, liq: "locked", goal: null, kind: "good",
+      goodKind: g.kind, asset: g.key, name: g.name, symbol: null, cat: "goods", qty: units(v), unit: base(), value: units(v) });
+  }
   // critères Compte et Actif : ce que les lignes contiennent
   ACC_F.values = [...new Set(out.map((l) => l.acc))];
   ACC_F.names = Object.fromEntries(out.map((l) => [l.acc, accLabel(l)]));
   ACC_F.lines = Object.fromEntries(out.map((l) => [l.acc, l]));
-  const assets = out.filter((l) => l.kind !== "debt");
+  const assets = out.filter((l) => l.kind !== "debt" && l.kind !== "good");
   ASSET_F.values = [...new Set(assets.map((l) => l.asset))];
   ASSET_F.names = Object.fromEntries(assets.map((l) => [l.asset, l.name]));
   ASSET_F.lines = Object.fromEntries(assets.map((l) => [l.asset, l]));
@@ -173,7 +183,7 @@ export const lookPath = (sel) => `/finance/lookthrough?dimension=${S.by}${active
 // « compte|cash » porte aussi les revenus et frais d'un compte à positions
 function selIds(sel) {
   const ids = new Set(sel.map(lineId));
-  for (const l of sel) if (l.kind !== "debt") ids.add(`${l.acc}|cash`);
+  for (const l of sel) if (!lone(l)) ids.add(`${l.acc}|cash`);
   return [...ids].sort();
 }
 
