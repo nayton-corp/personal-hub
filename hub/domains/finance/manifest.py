@@ -50,7 +50,8 @@ MANIFEST = Manifest(
         label="Finance",
         icon="banknote",
         tabs=(
-            Tab("patrimoine", "Patrimoine", "trend", "wealth.js", order=20),
+            Tab("apercu", "Aperçu", "gauge", "overview.js", order=10),
+            Tab("patrimoine", "Patrimoine", "layers", "wealth.js", order=20),
             Tab("budget", "Budget", "wallet", "budget.js", order=30),
             Tab("journal", "Journal", "list", "journal.js", order=40),
         ),

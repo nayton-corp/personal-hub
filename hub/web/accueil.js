@@ -51,7 +51,8 @@ export function todoCount() {
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const sub = (x) => (x.d ? `${capital(x.d)} · ${x.s}` : x.s);
 
-const row = (x) => `<button class="trow press" type="button" data-a="${x.a}" ${x.v ? `data-v="${esc(x.v)}"` : ""}>
+// une ligne « À faire » ou « À savoir » ; les écrans d'un domaine la reprennent (sans `d`)
+export const row = (x) => `<button class="trow press" type="button" data-a="${x.a}" ${x.v ? `data-v="${esc(x.v)}"` : ""}>
     ${x.mark || ibox(ic(x.ic), x.c)}
     <span class="row-main"><span class="row-title">${esc(x.t)}</span><span class="row-sub">${esc(sub(x))}</span></span>
     <span class="chev-r">${ic("chev")}</span></button>`;

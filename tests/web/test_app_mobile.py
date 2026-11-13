@@ -41,7 +41,7 @@ demo_data = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(demo_data)
 
 WIDTH, HEIGHT = 375, 812
-TABS = ["accueil", "patrimoine", "budget", "journal"]
+TABS = ["accueil", "apercu", "patrimoine", "budget", "journal"]
 
 
 def _free_port() -> int:
@@ -197,18 +197,29 @@ def _screen_ok(pg: Any, name: str, shot: str | None = None) -> None:
     assert pg.problems == [], f"{name} : {pg.problems}"
 
 
-def open_tab(pg: Any, tab: str) -> None:
-    """L'accueil est dans la barre du bas ; les écrans de la finance, sous son espace."""
-    if tab == "accueil":
+def go_home(pg: Any) -> None:
+    """L'accueil du hub : dans la barre du bas, ou par le bouton d'espace quand la barre est
+    celle d'un espace (depuis les réglages, on en sort d'abord)."""
+    if pg.locator('#tabs button[data-v="accueil"]').count():
         pg.click('#tabs button[data-v="accueil"]')
     else:
-        # déjà dans l'espace, un toucher sur « Finance » ramènerait au premier onglet : on passe
-        # par l'accueil pour que la vue visible ne change plus sous le clic
-        pg.click('#tabs button[data-v="accueil"]')
-        pg.wait_for_selector("#accueil:not([hidden])")
-        pg.click('#tabs button[data-v="finance"]')
-        pg.wait_for_selector(".view:not([hidden]) .subtabs button[aria-current]")
-        pg.locator(f'.view:not([hidden]) .subtabs button[data-v="{tab}"]').click()
+        if pg.locator("#sources:not([hidden])").count():
+            pg.locator('#sources [data-a="back"]').click()
+        pg.locator('.view:not([hidden]) [data-a="spaces"]').click()
+        pg.click('#sheet [data-a="hub"]')
+    pg.wait_for_selector("#accueil:not([hidden])")
+
+
+def open_tab(pg: Any, tab: str) -> None:
+    """L'accueil est dans la barre du hub ; les écrans de la finance, dans la barre de son
+    espace, qui remplace celle du hub dès qu'on y entre."""
+    if tab == "accueil":
+        go_home(pg)
+    else:
+        if not pg.locator(f'#tabs button[data-a="tab"][data-v="{tab}"]').count():
+            go_home(pg)
+            pg.click('#tabs button[data-v="finance"]')
+        pg.click(f'#tabs button[data-a="tab"][data-v="{tab}"]')
     pg.wait_for_selector(f"#{tab}:not([hidden])")
     if tab == "journal":  # ses écritures arrivent hors du store : « networkidle » peut les devancer
         pg.wait_for_selector("#journal .tx-row")
@@ -221,7 +232,7 @@ def test_each_tab_renders_at_375px(page: Any, tab: str) -> None:
 
 
 def test_sources_and_settings_render_at_375px(page: Any) -> None:
-    page.click('#tabs button[data-v="accueil"]')
+    go_home(page)
     page.locator('#accueil [data-a="settings"]').click()
     _screen_ok(page, "sources")
 
@@ -229,7 +240,7 @@ def test_sources_and_settings_render_at_375px(page: Any) -> None:
 def test_agenda_and_documents_only_surface_what_needs_attention(page: Any) -> None:
     """L'agenda et les documents n'ont plus de bloc à l'accueil : le rappel en retard et
     l'entretien dû remontent dans « À savoir », à pleine largeur, et ouvrent l'assistant."""
-    page.click('#tabs button[data-v="accueil"]')
+    go_home(page)
     page.wait_for_selector("#accueil [data-lists] #t-info")
     for d in ("agenda", "documents"):
         assert page.inner_text(f'#accueil [data-home="{d}"]') == "", d
@@ -270,7 +281,7 @@ RUBRICS = [
 
 @pytest.mark.parametrize("rubric", RUBRICS)
 def test_each_settings_rubric_renders_at_375px(page: Any, rubric: str) -> None:
-    page.click('#tabs button[data-v="accueil"]')
+    go_home(page)
     page.locator('#accueil [data-a="settings"]').click()
     page.locator(f'#rubrics [data-a="rubric"][data-v="{rubric}"]').click()
     page.wait_for_selector(f'#sources [data-rubric="{rubric}"]:not(.off-rubric)', state="attached")

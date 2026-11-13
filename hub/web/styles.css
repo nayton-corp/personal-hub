@@ -7,27 +7,6 @@
 @font-face { font-family: "IBM Plex Sans"; font-weight: 700; font-display: swap; src: url("/fonts/ibm-plex-sans-latin-700-normal.woff2") format("woff2"); }
 @font-face { font-family: "IBM Plex Mono"; font-weight: 500; font-display: swap; src: url("/fonts/ibm-plex-mono-latin-500-normal.woff2") format("woff2"); }
 
-:root {
-  --bg: #f5f6f9; --surface: #ffffff; --surface-2: #f5f6f9; --ink: #141821; --muted: #5b6372; --faint: #616978;
-  --line: #dde1e8; --accent: #2f4fd8; --accent-soft: #e6eafc; --pos: #17794a; --neg: #b3372d;
-  --s1: #3b5bdb; --s2: #0f9a86; --s3: #d9861a; --s4: #8b5cf6; --s5: #d0477b; --s6: #64748b; --s7: #3a9bd6;
-  --warn: #97590d;
-  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  --top: env(safe-area-inset-top, 0px); --bottom: env(safe-area-inset-bottom, 0px);
-  color-scheme: light;
-}
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0f1218; --surface: #171b23; --surface-2: #1e232d; --ink: #e8ebf1; --muted: #a2aab8; --faint: #8f98a8;
-  --line: #2a303b; --accent: #7d93ff; --accent-soft: #232c4d; --pos: #4cc58a; --neg: #f07b70;
-  --s1: #6f8cff; --s2: #2fc4ad; --s3: #f0a23d; --s4: #a98bff; --s5: #ec6f9d; --s6: #8e9bb0; --s7: #62b7ec;
-  --warn: #f0a23d; color-scheme: dark; } }
-:root[data-theme="dark"] {
-  --bg: #0f1218; --surface: #171b23; --surface-2: #1e232d; --ink: #e8ebf1; --muted: #a2aab8; --faint: #8f98a8;
-  --line: #2a303b; --accent: #7d93ff; --accent-soft: #232c4d; --pos: #4cc58a; --neg: #f07b70;
-  --s1: #6f8cff; --s2: #2fc4ad; --s3: #f0a23d; --s4: #a98bff; --s5: #ec6f9d; --s6: #8e9bb0; --s7: #62b7ec;
-  --warn: #f0a23d; color-scheme: dark; }
-
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; font-size: 17px; }
 /* iPhone : la taille de texte choisie dans Réglages > Luminosité et affichage (17 px par défaut)
@@ -57,17 +36,15 @@ button:disabled { cursor: default; }
 .topbar-mini { font-size: .765rem; font-weight: 600; color: var(--muted); height: 0; overflow: hidden; opacity: 0; transition: opacity .2s, height .2s; }
 .topbar.compact .topbar-mini { height: 17px; opacity: 1; }
 /* l'accueil n'a pas de barre : une ligne discrète (fraîcheur, œil, réglages) qui défile avec lui */
-.bare-bar { display: flex; align-items: center; gap: 2px; padding: calc(var(--top) + 4px) 8px 0 16px; }
+.bare-bar { display: flex; align-items: center; gap: 2px; padding: calc(var(--top) + 4px) 8px 0 10px; }
 .bare-bar .topbar-sub { flex: 1; min-width: 0; }
 .bare-bar .icon-btn, .topbar.spaced .icon-btn { width: 40px; height: 40px; }
-/* dans un espace à plusieurs onglets, les sous-onglets sont la barre du haut ; le titre reste
-   pour les lecteurs d'écran */
-.topbar.spaced .topbar-row { padding: 6px 8px 6px 16px; gap: 4px; }
-.topbar.spaced .topbar-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.subtabs { flex: 1; min-width: 0; display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface-2); }
-.subtabs button { position: relative; flex: 1; min-width: 0; min-height: 38px; border-radius: 8px; font-size: .735rem; font-weight: 600; color: var(--muted); white-space: nowrap; padding: 0 6px; }
-.subtabs button[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
-.subtabs .count { margin-left: 4px; color: var(--accent); font-variant-numeric: tabular-nums; }
+/* dans un espace à plusieurs onglets : le bouton d'espace à gauche, le nom de l'espace en
+   petit au-dessus du titre ; les onglets de l'espace sont dans la barre du bas */
+.topbar.spaced .topbar-row { padding: 6px 8px 6px 10px; gap: 6px; }
+.topbar-space { order: -1; font-size: .618rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.space-btn { border: 1px solid var(--line); background: var(--surface); color: var(--accent); }
+.bare-bar .space-btn { margin-right: 8px; }
 .icon-btn { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; color: var(--muted); flex: none; }
 .icon-btn:hover { background: var(--surface-2); }
 .icon-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
@@ -206,7 +183,7 @@ button:disabled { cursor: default; }
 .stack-v { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 
 /* panneau du bas */
-.backdrop { position: fixed; inset: 0; background: rgba(8, 12, 20, .42); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20; }
+.backdrop { position: fixed; inset: 0; background: var(--scrim); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20; }
 .sheet { position: fixed; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 34rem; max-height: 88vh; display: flex; flex-direction: column;
   background: var(--surface); border-radius: 22px 22px 0 0; transform: translateY(105%); transition: transform .28s cubic-bezier(.2, .8, .2, 1); z-index: 21;
   padding-bottom: var(--bottom); visibility: hidden; }
@@ -263,7 +240,7 @@ button:disabled { cursor: default; }
   border-radius: 14px; padding: 12px 14px; font-size: .794rem; display: flex; align-items: center; gap: 12px;
   transform: translateY(16px); opacity: 0; pointer-events: none; transition: transform .25s, opacity .25s; }
 .toast.show { transform: none; opacity: 1; pointer-events: auto; }
-.toast.error { background: var(--neg); color: #fff; }
+.toast.error { background: var(--neg); color: var(--on-accent); }
 .toast span { flex: 1; }
 .toast button { color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; min-height: 44px; }
 
@@ -370,3 +347,30 @@ button:not(:disabled):active, a.secondary:active, [role="button"]:active { trans
 .hint.center { text-align: center; padding: 8px 16px; }
 .topbar-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-foot .linkish { font-size: .824rem; }
+/* --- v4 : refonte (socle) --------------------------------------------------------------- */
+/* pastilles rondes cerclées : un anneau de la couleur de la ligne, un halo léger autour */
+.ibox, .av { border-radius: 50%; }
+.ibox.sm, .ibox.xs { border-radius: 50%; }
+.tint { background: color-mix(in srgb, var(--c, var(--accent)) 16%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c, var(--accent)) 70%, transparent), inset 0 0 0 4px color-mix(in srgb, var(--c, var(--accent)) 10%, transparent); }
+.tint.sm, .tint.xs { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c, var(--accent)) 70%, transparent); }
+.av { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 70%, transparent), inset 0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent); }
+.av.g { box-shadow: inset 0 0 0 1.5px var(--line); }
+/* aucune barre de défilement visible sur les rangées qui glissent de côté */
+.filterbar, .suggest, .hscroll { scrollbar-width: none; }
+.suggest::-webkit-scrollbar, .hscroll::-webkit-scrollbar { display: none; }
+.hscroll { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* cartes résumé : le seul bloc encadré d'un écran, il se touche et ouvre son détail */
+.sumcards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px 12px 0; }
+.sumcard { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; text-align: left; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r-card); padding: 12px; }
+.sumcard.wide { grid-column: 1 / -1; }
+.sumcard .l { display: flex; align-items: center; gap: 4px; width: 100%; font-size: .735rem; font-weight: 600; color: var(--muted); }
+.sumcard .l .ic { width: 14px; height: 14px; color: var(--faint); }
+.sumcard .v { font-family: var(--display); font-size: 1.25rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; margin-top: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sumcard .v small { font-size: .706rem; font-weight: 500; color: var(--muted); margin-left: 3px; letter-spacing: 0; }
+.sumcard .s { font-size: .706rem; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+.sumcard .pbar { width: 100%; margin-top: 9px; }
+/* grand panneau : le détail d'une carte monte presque jusqu'en haut */
+.sheet.tall { height: 92vh; max-height: calc(100vh - var(--top) - 20px); }
+.sheet.tall .sheet-body { flex: 1; }

@@ -1,0 +1,29 @@
+/* Thème : l'identité visuelle tient dans ce fichier. Couleurs, polices, arrondis et ombres passent
+   par ces variables ; aucun écran n'écrit une couleur en dur. Changer d'identité = changer ce
+   fichier (et l'icône, les polices servies). Les écrans vivent dans styles.css et les feuilles
+   des domaines. */
+:root {
+  --bg: #f5f6f9; --surface: #ffffff; --surface-2: #f5f6f9; --ink: #141821; --muted: #5b6372; --faint: #616978;
+  --line: #dde1e8; --accent: #2f4fd8; --accent-soft: #e6eafc; --pos: #17794a; --neg: #b3372d;
+  --s1: #3b5bdb; --s2: #0f9a86; --s3: #d9861a; --s4: #8b5cf6; --s5: #d0477b; --s6: #64748b; --s7: #3a9bd6;
+  --warn: #97590d;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --display: var(--font); /* titres et grands chiffres */
+  --on-accent: #ffffff; /* texte posé sur la couleur d'accent */
+  --r-card: 16px; --r-ctl: 12px; --r-pill: 999px; /* cartes, contrôles, pastilles */
+  --shadow-ctl: 0 1px 2px rgba(0, 0, 0, .12); --shadow-pop: 0 8px 24px -10px rgba(0, 0, 0, .35);
+  --scrim: rgba(8, 12, 20, .42);
+  --top: env(safe-area-inset-top, 0px); --bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1218; --surface: #171b23; --surface-2: #1e232d; --ink: #e8ebf1; --muted: #a2aab8; --faint: #8f98a8;
+  --line: #2a303b; --accent: #7d93ff; --accent-soft: #232c4d; --pos: #4cc58a; --neg: #f07b70;
+  --s1: #6f8cff; --s2: #2fc4ad; --s3: #f0a23d; --s4: #a98bff; --s5: #ec6f9d; --s6: #8e9bb0; --s7: #62b7ec;
+  --warn: #f0a23d; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f1218; --surface: #171b23; --surface-2: #1e232d; --ink: #e8ebf1; --muted: #a2aab8; --faint: #8f98a8;
+  --line: #2a303b; --accent: #7d93ff; --accent-soft: #232c4d; --pos: #4cc58a; --neg: #f07b70;
+  --s1: #6f8cff; --s2: #2fc4ad; --s3: #f0a23d; --s4: #a98bff; --s5: #ec6f9d; --s6: #8e9bb0; --s7: #62b7ec;
+  --warn: #f0a23d; color-scheme: dark; }

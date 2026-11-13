@@ -506,3 +506,23 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .strat-tier select { min-height: 46px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); padding: 0 10px; font-size: .853rem; }
 .strat-tpl { display: flex; flex-wrap: wrap; gap: 8px; }
 .strat-tier + .linkish { color: var(--accent); font-weight: 600; min-height: 44px; font-size: .824rem; }
+/* --- v4 : refonte ------------------------------------------------------------------------ */
+/* Aperçu : le patrimoine reste dans une carte (elle se touche et ouvre le patrimoine) */
+.ov-hero { display: block; width: calc(100% - 24px); margin: 12px 12px 0; padding: 14px 14px 10px; text-align: left; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.ov-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .735rem; font-weight: 600; color: var(--muted); }
+.ov-flag { color: var(--warn); white-space: nowrap; }
+.ov-flag::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--s3); margin-right: 5px; vertical-align: 1px; }
+.ov-amt { display: block; font-family: var(--display); font-size: 2.05rem; font-weight: 700; letter-spacing: -.025em; line-height: 1.1; margin-top: 2px; }
+.ov-amt small { font-size: .882rem; font-weight: 500; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+.ov-delta { display: block; font-size: .794rem; min-height: 1.2em; }
+.ov-per { color: var(--muted); }
+.ov-curve { display: block; width: 100%; height: 84px; margin-top: 8px; }
+.ov-curve .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.ov-curve .area { fill: var(--accent); opacity: .09; }
+.ov-curve circle { fill: var(--accent); }
+/* listes à plat : un titre, des lignes séparées par un filet, pas de cadre */
+.flat { padding: 0 16px 4px; margin-top: 18px; }
+.flat-title { font-size: 1rem; font-weight: 700; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.flat .trow:last-child, .flat .row:last-child { border-bottom: 0; }
+.sumcard .v.neg { color: var(--neg); }

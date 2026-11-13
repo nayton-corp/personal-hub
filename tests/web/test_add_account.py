@@ -9,7 +9,11 @@ from typing import Any
 
 import pytest
 
-from tests.web.test_app_mobile import browse, instance  # noqa: F401 (fixture du module)
+from tests.web.test_app_mobile import (  # noqa: F401 (fixture du module)
+    browse,
+    go_home,
+    instance,
+)
 
 
 @pytest.fixture(scope="module")
@@ -23,7 +27,7 @@ def _get(page: Any, path: str) -> Any:
 
 
 def _start(page: Any) -> Any:
-    page.click('#tabs button[data-v="accueil"]')
+    go_home(page)
     page.locator('#accueil [data-a="settings"]').click()
     page.locator('#rubrics [data-a="rubric"][data-v="accounts"]').click()
     page.wait_for_selector('#sources [data-rubric="accounts"]:not(.off-rubric)', state="attached")
