@@ -96,7 +96,15 @@ def test_the_demo_adds_a_home_block_and_a_rubric(page: Any) -> None:
     row = page.locator('#rubrics [data-a="rubric"][data-v="demo-prefs"]')
     assert "prête" in row.inner_text()
     groups = page.locator("#rubrics .grp-title").all_text_contents()
-    assert groups == ["Hub", "Finance", "Demo"]  # le hub, puis une section par domaine
+    # le hub, les domaines sans espace à eux, puis les espaces qui ont leurs propres réglages
+    assert groups == ["Hub", "Demo", "Espaces"]
+    assert page.locator('#rubrics [data-a="rubric"][data-v="budget"]').count() == 0
+    page.locator('#rubrics [data-a="set-scope"][data-v="finance"]').click()
+    page.wait_for_selector('#rubrics [data-a="rubric"][data-v="budget"]')
+    assert page.locator('#rubrics [data-a="rubric"][data-v="display"]').count() == 0
+    assert page.locator('#rubrics [data-a="rubric"]').first.get_attribute("data-v") == "add-account"
+    page.locator('#rubrics [data-a="set-scope"][data-v=""]').click()
+    row = page.locator('#rubrics [data-a="rubric"][data-v="demo-prefs"]')
     row.click()
     page.wait_for_selector('#sources [data-rubric="demo-prefs"]:not(.off-rubric)')
     assert "Une rubrique venue du manifeste" in page.inner_text("#sources")

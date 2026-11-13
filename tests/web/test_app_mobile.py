@@ -210,6 +210,17 @@ def go_home(pg: Any) -> None:
     pg.wait_for_selector("#accueil:not([hidden])")
 
 
+def open_settings(pg: Any, space: str | None = None) -> None:
+    """Les réglages du hub (depuis l'accueil) ou ceux d'un espace (depuis sa roue)."""
+    if space is None:
+        go_home(pg)
+        pg.locator('#accueil [data-a="settings"]').click()
+    else:
+        open_tab(pg, "patrimoine")
+        pg.locator('#patrimoine [data-a="settings"]').click()
+    pg.wait_for_selector("#rubrics:not([hidden])")
+
+
 def open_tab(pg: Any, tab: str) -> None:
     """L'accueil est dans la barre du hub ; les écrans de la finance, dans la barre de son
     espace, qui remplace celle du hub dès qu'on y entre."""
@@ -265,6 +276,7 @@ def test_the_year_of_demo_data_reaches_the_screens(page: Any) -> None:
     assert "Employeur Fictif SA" in page.locator("#journal").inner_text()
 
 
+HUB_RUBRICS = {"display", "profile", "security", "health"}
 RUBRICS = [
     "conn",
     "accounts",
@@ -281,8 +293,7 @@ RUBRICS = [
 
 @pytest.mark.parametrize("rubric", RUBRICS)
 def test_each_settings_rubric_renders_at_375px(page: Any, rubric: str) -> None:
-    go_home(page)
-    page.locator('#accueil [data-a="settings"]').click()
+    open_settings(page, None if rubric in HUB_RUBRICS else "finance")
     page.locator(f'#rubrics [data-a="rubric"][data-v="{rubric}"]').click()
     page.wait_for_selector(f'#sources [data-rubric="{rubric}"]:not(.off-rubric)', state="attached")
     _screen_ok(page, "sources", shot=f"sources-{rubric}")

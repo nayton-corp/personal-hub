@@ -20,7 +20,7 @@ const VIEWS = `
           <nav class="crumbs" id="patCrumbs" aria-label="Chemin" hidden></nav>
           <h1 class="topbar-title" id="t-patrimoine">Patrimoine<span class="topbar-sub" data-fresh></span><span class="topbar-mini num" id="miniTotal"></span></h1>
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
-          <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+          <button class="icon-btn" type="button" data-a="settings" aria-label="Réglages"></button>
         </div>
         <div class="filterbar" id="filterbar"></div>
       </header>
@@ -33,7 +33,7 @@ const VIEWS = `
         <div class="topbar-row">
           <h1 class="topbar-title" id="t-budget">Budget<span class="topbar-sub" data-fresh></span></h1>
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
-          <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+          <button class="icon-btn" type="button" data-a="settings" aria-label="Réglages"></button>
         </div>
         <div class="ctxbar" id="budCtx"></div>
       </header>
@@ -46,7 +46,7 @@ const VIEWS = `
         <div class="topbar-row">
           <h1 class="topbar-title" id="t-journal">Journal<span class="topbar-sub" data-fresh></span></h1>
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
-          <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+          <button class="icon-btn" type="button" data-a="settings" aria-label="Réglages"></button>
         </div>
         <div class="searchbox"><span id="search-ic"></span><input id="jq" type="search" placeholder="Contrepartie, libellé…" aria-label="Rechercher une écriture, 3 lettres au moins" autocomplete="off" enterkeyhint="search"></div>
         <div class="filterbar" id="jChips" role="group" aria-label="Filtrer le journal"></div>

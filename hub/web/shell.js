@@ -35,7 +35,7 @@ const SPACES = {}; // domaine → { label, icon, views: [[écran, libellé, icô
 const SPACE_OF = {}; // écran → son espace
 const LAST = {}; // espace → dernier écran ouvert
 const VIEWS = { accueil: accueil.render, assistant: assistant.render, sources: sources.render };
-const LABEL = { accueil: "Accueil", assistant: "Assistant", sources: "Sources et réglages" };
+const LABEL = { accueil: "Accueil", assistant: "Assistant", sources: "Réglages" };
 const ACTIONS = { ...sources.actions, ...approvals.actions, ...assistant.actions };
 const MODULES = []; // modules de domaine (champ `module`), dans l'ordre des domaines
 const TODO = {}; // onglet → module qui compte ce qui reste à faire
@@ -68,7 +68,7 @@ function viewFor(tab) {
   s.innerHTML = `<header class="topbar"><div class="topbar-row">
     <h1 class="topbar-title" id="t-${esc(tab.id)}">${esc(tab.label)}</h1>
     <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
-    <button class="icon-btn" type="button" data-a="settings" aria-label="Sources et réglages"></button>
+    <button class="icon-btn" type="button" data-a="settings" aria-label="Réglages"></button>
   </div></header><div id="${esc(tab.id)}-body"></div>`;
   $("sources").before(s);
 }
@@ -77,6 +77,7 @@ function viewFor(tab) {
 // onglets, l'espace a sa barre du bas ; chaque écran dit son espace au-dessus de son titre et
 // porte le bouton d'espace
 const multi = (name) => Boolean(SPACES[name]) && SPACES[name].views.length > 1;
+sources.context(() => ({ scope: ctx, spaces: Object.fromEntries(Object.entries(SPACES).filter(([k]) => multi(k))) }));
 const spaceBtn = () => `<button class="icon-btn space-btn" type="button" data-a="spaces" aria-label="Changer d'espace">${ic("grid")}</button>`;
 
 function spaceFor(d, label, tabs) {
@@ -210,6 +211,8 @@ Object.assign(ACTIONS, {
   spaces: () => openSheet("spaces"),
   hub: () => go("accueil", { top: P.tab === "accueil" }),
   settings: () => go("sources"),
+  // passer des réglages d'un espace à ceux du hub, et retour : la barre du bas suit
+  "set-scope": (v) => { ctx = v && multi(v) ? v : null; window.scrollTo({ top: 0 }); store.notify(); },
   rubric: (v) => go("sources", { rubric: v }),
   back: () => {
     if (depth > 0) history.back();
