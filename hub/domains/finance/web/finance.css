@@ -564,3 +564,12 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
   padding: 6px 8px 6px 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-pop); }
 .selbar b { flex: 1; min-width: 0; font-size: .853rem; }
 .selbar .primary.small { width: auto; flex: none; min-height: 40px; padding: 0 16px; margin: 0; }
+
+/* ---------- v4 : première visite ---------- */
+.fv { padding: 22px 16px 0; }
+.fv h2 { font-family: var(--display); font-size: 1.5rem; letter-spacing: -.02em; margin: 0 0 6px; }
+.fv > p { color: var(--muted); font-size: .853rem; line-height: 1.45; margin: 0 0 14px; }
+.fv .primary { margin-top: 18px; }
+.fv-row.done .row-title { color: var(--muted); text-decoration: line-through; }
+.fv-row { text-align: left; }
+.fv-card .v { margin-bottom: 2px; }

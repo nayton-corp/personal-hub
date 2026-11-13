@@ -1,4 +1,4 @@
-// Aperçu : la page d'entrée de l'espace Finance. Le patrimoine dans une carte (sa courbe sur un
+// Aperçu : la page d'entrée de l'espace Finance (et la première visite, firstvisit.js). Le patrimoine dans une carte (sa courbe sur un
 // an), deux cartes résumé (reste à vivre, épargné ce mois), puis « À faire » et « À savoir » :
 // les mêmes lignes que l'accueil du hub (home.js), sans le nom du domaine. Rien n'est calculé
 // ici : tout vient de /api/finance.
@@ -6,8 +6,10 @@ import { row } from "../../accueil.js";
 import { pendingCount, pendingPath } from "../../approvals.js";
 import { base, units } from "../../format.js";
 import { store } from "../../store.js";
-import { esc, fill, ic, n0, nf, pf, sgn, skel } from "../../ui.js";
+import { closeSheet, esc, fill, ic, n0, nf, openSheet, pf, setPref, sgn, skel } from "../../ui.js";
+import { go } from "../../shell.js";
 import { model } from "./bmodel.js";
+import { firstVisit } from "./firstvisit.js";
 import { budgetPath } from "./budget.js";
 import { rows } from "./home.js";
 import { STRATS } from "./strategies.js";
@@ -86,6 +88,8 @@ export function render() {
   for (const p of [...USES, breaksPath, STRATS, pendingPath]) store.use(p);
   const be = store.use(budgetPath(store.today, "m"));
   const fe = store.use(flowsPath());
+  const fv = firstVisit();
+  if (fv && fv.full) return fill(box, fv.full);
   if (ke.status === "error") {
     fill(box, `<div class="err-box" role="alert">Impossible de charger l'aperçu : ${esc(ke.error.message)}</div>`);
     return;
@@ -95,7 +99,12 @@ export function render() {
     return;
   }
   const pe = store.use(yearPath(k));
-  fill(box, `${hero(k, pe.data)}${cards(be.data, fe.data)}${lists()}<div class="endspace"></div>`);
+  fill(box, `${hero(k, pe.data)}${fv ? fv.card : ""}${cards(be.data, fe.data)}${lists()}<div class="endspace"></div>`);
 }
 
-export const actions = {};
+export const actions = {
+  "fv-open": () => openSheet("firstvisit"),
+  "fv-done": () => { setPref("fv.done", true); closeSheet(); store.notify(); },
+  // la passkey de secours est un réglage du hub, pas de Finance
+  "fv-hub": (v) => { closeSheet(); go("accueil"); go("sources", { rubric: v }); },
+};
