@@ -195,7 +195,7 @@ def report(
     risk = _risk(days, s)
     # un crédit dans la sélection : le résumé des seuls avoirs, celui que l'écran met à côté du
     # gain (un crédit à la consommation n'est pas un levier de placement)
-    assets = [ln for ln in chosen if ln.kind != "debt"]
+    assets = [ln for ln in chosen if ln.kind not in ("debt", "good")]
     owned = None
     if assets and len(assets) < len(chosen):
         owned = _summary(days, _series(assets, ks, ke), ccy)

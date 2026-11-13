@@ -6,6 +6,7 @@ import { accountsList } from "./accounts.js";
 import { accountsCard, enterAddAccount } from "./addaccount.js";
 import { connectionsCard } from "./connections.js";
 import { debtsList } from "./debts.js";
+import { goodsList } from "./goods.js";
 import { daysSince, locale, staleDays } from "../../format.js";
 import { TAX_RATES, taxRate } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
@@ -60,7 +61,7 @@ export function rubricStatus(k) {
 export function rubric(r) {
   if (r === "add-account") enterAddAccount();
   if (r === "conn") connectionsCard();
-  if (r === "accounts") { accountsList(); accountsCard(); }
+  if (r === "accounts") { accountsList(); accountsCard(); goodsList(); }
   if (r === "debts") debtsList();
   if (r === "budget") {
     const se = store.use(SETTINGS), day = se.data ? se.data.month_start_day : monthStartDay();

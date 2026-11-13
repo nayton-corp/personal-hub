@@ -192,6 +192,24 @@ class DebtListOut(Out):
     items: list[DebtOut]
 
 
+class GoodOut(Out):
+    id: str
+    key: str
+    name: str
+    kind: str
+    currency: str
+    yearly_change_pct: str | None
+    closed_on: str | None
+    value: MoneyOut
+    stated: MoneyOut | None
+    stated_on: str | None
+    values: list[BalanceRecordOut]
+
+
+class GoodListOut(Out):
+    items: list[GoodOut]
+
+
 class BreakOut(Out):
     id: str
     kind: str

@@ -53,6 +53,7 @@ from hub.domains.finance.patrimoine.app.debt_kinds import (
     SaveDebt,
     SaveDebtHandler,
 )
+from hub.domains.finance.patrimoine.app.good_kinds import SaveGood, SaveGoodHandler
 from hub.domains.finance.patrimoine.app.link_kinds import (
     LinkCryptoMoves,
     LinkCryptoMovesHandler,
@@ -128,6 +129,7 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
         "edit_account": ProposalKind(EditAccount, EditAccountHandler(), ai_allowed=True),
         "install_pack": ProposalKind(InstallPack, InstallPackHandler(), ai_allowed=True),
         "save_debt": ProposalKind(SaveDebt, SaveDebtHandler(domain), ai_allowed=True),
+        "save_good": ProposalKind(SaveGood, SaveGoodHandler(domain), ai_allowed=True),
         "record_debt_balance": ProposalKind(
             RecordDebtBalance, RecordDebtBalanceHandler(domain), ai_allowed=True
         ),

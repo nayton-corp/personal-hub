@@ -50,6 +50,7 @@ REFERENCE_KINDS = frozenset(
         "disable_rule",
         "save_debt",
         "record_debt_balance",
+        "save_good",
         "save_strategy",
         "answer_strategy_step",
     }
@@ -149,6 +150,8 @@ def copy_reference(src: Connection, dst: Connection) -> None:
         ("debts", "id"),
         ("debt_balances", "debt_id, on_date"),
         ("debt_balance_records", "id"),
+        ("goods", "id"),
+        ("good_value_records", "id"),
         ("reconcile_decisions", "id"),
         ("reconcile_withdrawals", "decision_id"),
         ("budget_period_rules", "id"),

@@ -7,6 +7,7 @@ import * as accounts from "./accounts.js";
 import { initAddAccount } from "./addaccount.js";
 import * as correct from "./correct.js";
 import * as debts from "./debts.js";
+import * as goods from "./goods.js";
 import { initConnections } from "./connections.js";
 import { freshLine, setStaleDays } from "../../format.js";
 import * as journal from "./journal.js";
@@ -18,7 +19,7 @@ import { initWelcome } from "./welcome.js";
 
 export { markup } from "./markup.js";
 
-export const actions = { ...accounts.actions, ...correct.actions, ...debts.actions, ...strategies.actions };
+export const actions = { ...accounts.actions, ...correct.actions, ...debts.actions, ...goods.actions, ...strategies.actions };
 
 // tx : all, todo, in, out ; txcat : { id, month } quand le journal suit une catégorie du budget ;
 // jf : filtres du journal (compte, catégorie, from, to, min, max en unités, tri)

@@ -13,6 +13,7 @@ from hub.domains.finance.patrimoine.app import (
     account_list,
     allocation,
     debts,
+    goods,
     perf_lines,
     performance,
     price_history,
@@ -26,6 +27,7 @@ from hub.domains.finance.patrimoine.interface.schemas import (
     AccountListOut,
     BreaksOut,
     DebtListOut,
+    GoodListOut,
     HoldingsOut,
     KpisOut,
     LookthroughOut,
@@ -88,6 +90,14 @@ def build_router(host: Host) -> APIRouter:
         """Dettes et leur solde aujourd'hui : départ, paiements et intérêts depuis, fin projetée."""
         with engine.connect() as conn:
             return {"items": debts.items(conn, host.today().isoformat())}
+
+    @r.get("/goods", response_model=GoodListOut)
+    def goods_route(_p: AnyReader) -> dict[str, object]:
+        """Biens hors comptes (logement, véhicule, objet, prêt accordé) et leur valeur
+        aujourd'hui : la dernière valeur saisie, suivie de la variation annuelle du bien.
+        Écrire : `save_good` (Double Sas)."""
+        with engine.connect() as conn:
+            return {"items": goods.items(conn, host.today().isoformat())}
 
     @r.get("/strategies", response_model=StrategiesOut)
     def strategies_route(_p: AnyReader) -> dict[str, object]:

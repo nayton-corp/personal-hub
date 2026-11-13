@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import Connection, text
 from sqlalchemy import Engine as SqlEngine
 
-from hub.domains.finance.patrimoine.app import crypto_cost, debts, decisions, ledger_sums
+from hub.domains.finance.patrimoine.app import crypto_cost, debts, decisions, goods, ledger_sums
 from hub.domains.finance.patrimoine.app.market_data import FxTable, Positions
 from hub.domains.finance.patrimoine.model import engine
 from hub.kernel.money import base_currency
@@ -38,6 +38,21 @@ class _Debt:
         return self._paid.get(on)
 
 
+class _Good:
+    """Un bien hors comptes vu par la série (engine.Liability) : `balance` est sa valeur."""
+
+    def __init__(self, book: goods.Book, good: goods.Good) -> None:
+        self.key = goods.key(good.id)
+        self.currency = good.currency
+        self._book, self._good = book, good
+
+    def balance(self, on: str) -> int | None:
+        return self._book.value(self._good, on)
+
+    def paid(self, on: str) -> int | None:
+        return None
+
+
 def _first_day(conn: Connection, as_of: str) -> str | None:
     days = []
     for table, col in (
@@ -45,6 +60,7 @@ def _first_day(conn: Connection, as_of: str) -> str | None:
         ("trades", "trade_date"),
         ("holdings", "on_date"),
         ("debt_balance_records", "on_date"),
+        ("good_value_records", "on_date"),
     ):
         d = conn.execute(text(f"SELECT min({col}) FROM {table}")).scalar_one()  # noqa: S608
         if d is None or d > as_of:
@@ -74,6 +90,7 @@ def inputs(conn: Connection, as_of: str) -> engine.Inputs | None:
     for on, acc, total, inc, fee, dep in conn.execute(text(ledger_sums.DAILY_SQL), {"d": as_of}):
         moves.setdefault(acc, {})[on] = (int(total), int(inc), int(fee), int(dep))
     book = debts.Book.read(conn)
+    owned = goods.Book.read(conn)
     # flux des cryptos tirés des opérations (politique de calcul) : coût, récompense sans apport
     flows: engine.Flows = {}
     if any(a.kind == "crypto" for a in accts):
@@ -86,6 +103,7 @@ def inputs(conn: Connection, as_of: str) -> engine.Inputs | None:
         positions,
         [_Debt(book, d) for d in book.debts],
         flows,
+        [_Good(owned, g) for g in owned.goods],
     )
 
 
@@ -106,6 +124,7 @@ _FINGERPRINT = (
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM prices), "
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM fx_rates), "
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM debt_balance_records), "
+    "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM good_value_records), "
     "(SELECT coalesce(max(seq), 0) FROM events), "
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM reconcile_decisions), "
     "(SELECT coalesce(max(rowid), 0) || '/' || count(*) FROM reconcile_withdrawals), "

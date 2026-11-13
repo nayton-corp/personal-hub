@@ -14,6 +14,7 @@ import { gainSpan, perfSection, rate, ratePct, signedMoney, units } from "./perf
 import { kindFor, model } from "./wmodel.js";
 import { moneyRate } from "./wcurve.js";
 import { DEBT_KIND, debtMark } from "./debts.js";
+import { goodMark } from "./goods.js";
 import { byLabel } from "./wsheets.js";
 import { stratBrief, stratSection } from "./strategies.js";
 import * as place from "./wplace.js";
@@ -109,6 +110,7 @@ const emptyText = () => (M.status === "error" ? `Courbe indisponible : ${M.error
 export function render() {
   const ae = store.use(paths.accounts), he = store.use(paths.holdings), hi = store.use(paths.history), de = store.use(paths.debts);
   store.use(paths.fresh);
+  store.use(paths.goods);
   const err = [ae, he, hi, de].find((e) => e.status === "error");
   const all = lines();
   const key = JSON.stringify(trail());
@@ -172,6 +174,7 @@ function listSection(sel) {
     const f = ls[0];
     const c = f.kind === "debt" ? net && net.by_account[f.acc] : perf && (S.view === "acc" ? perf.by_account[f.acc] : perf.by_asset[f.asset]);
     if (f.kind === "debt") return { key, title: f.name, sub: `${esc(f.inst)} · ${DEBT_KIND[f.debtKind] || "Dette"}`, mark: debtMark({ kind: f.debtKind }, ""), value: sum(ls), c, debt: true };
+    if (f.kind === "good") return { key, title: f.name, sub: `Bien · ${esc(f.inst)}`, mark: goodMark({ kind: f.goodKind }, ""), value: sum(ls), c: null, cash: true };
     if (S.view === "acc") return { key, title: f.accName, sub: `${esc(f.inst)} · ${{ cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" }[f.kind] || ""}`, mark: facetMark("inst", f.inst, ""), value: sum(ls), c, cash: f.kind === "cash" };
     const q = ls.reduce((t, l) => t + Number(l.qty), 0), nAcc = new Set(ls.map((l) => l.acc)).size;
     return { key, title: f.name, sub: `<span class="money">${n0(q) === "0" ? q : n0(q)}</span> ${esc(f.unit)} · ${nAcc > 1 ? `${nAcc} comptes` : esc(accLabel(f))}`, mark: assetMark(f), value: sum(ls), c, cash: f.asset.startsWith("ccy:") };

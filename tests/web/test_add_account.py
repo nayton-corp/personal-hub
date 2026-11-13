@@ -12,8 +12,8 @@ import pytest
 from tests.web.test_app_mobile import (  # noqa: F401 (fixture du module)
     browse,
     go_home,
-    open_settings,
     instance,
+    open_settings,
 )
 
 

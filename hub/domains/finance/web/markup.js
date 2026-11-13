@@ -83,6 +83,12 @@ const RUBRICS = `
 
       <section class="card form" data-rubric="add-account" id="acct-editor" hidden></section>
 
+      <section class="card" data-rubric="accounts" aria-labelledby="t-goods">
+        <div class="head"><h2 id="t-goods">Biens</h2><button class="link" type="button" data-a="good-add">Ajouter</button></div>
+        <p class="note">Logement, voiture, objet de valeur, prêt accordé : ce qui n'est sur aucun compte. Tu saisis la valeur, elle compte dans le patrimoine, pas dans le rendement.</p>
+        <div id="good-list"></div>
+      </section>
+
       <section class="card" data-rubric="debts" aria-labelledby="t-debts">
         <div class="head"><h2 id="t-debts">Dettes</h2><button class="link" type="button" data-a="debt-add">Ajouter</button></div>
         <p class="note">Crédit, hypothèque, leasing, prêt étudiant : le solde est retranché du patrimoine et baisse avec chaque paiement de sa catégorie.</p>
