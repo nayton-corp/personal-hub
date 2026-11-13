@@ -83,6 +83,7 @@ DESCRIPTIONS = {
     "install_pack": "Propose d'installer un pack de règles (finance_rule_packs).",
     "save_debt": "Propose une dette ou sa mise à jour (nom, prêteur, départ, mensualité, taux).",
     "record_debt_balance": "Propose un solde constaté d'une dette à une date.",
+    "set_fund_fee": "Propose les frais courants (TER, en % par an) d'un fonds détenu.",
     "save_good": "Propose un bien hors comptes (logement, véhicule, objet, prêt accordé), sa "
     "mise à jour ou une nouvelle valeur à une date.",
     "save_strategy": "Propose d'écrire ou de modifier une stratégie (finance_strategies) : vendre "
@@ -101,6 +102,7 @@ ROUTE_TOOLS: dict[str, str | None] = {
     "/holdings": "finance_holdings",
     "/debts": "finance_debts",
     "/goods": None,
+    "/fees": None,
     "/strategies": "finance_strategies",
     "/breaks": "finance_breaks",
     "/lookthrough": "finance_lookthrough",

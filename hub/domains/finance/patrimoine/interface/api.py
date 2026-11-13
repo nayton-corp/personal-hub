@@ -13,6 +13,7 @@ from hub.domains.finance.patrimoine.app import (
     account_list,
     allocation,
     debts,
+    fees,
     goods,
     perf_lines,
     performance,
@@ -27,6 +28,7 @@ from hub.domains.finance.patrimoine.interface.schemas import (
     AccountListOut,
     BreaksOut,
     DebtListOut,
+    FeesOut,
     GoodListOut,
     HoldingsOut,
     KpisOut,
@@ -98,6 +100,14 @@ def build_router(host: Host) -> APIRouter:
         Écrire : `save_good` (Double Sas)."""
         with engine.connect() as conn:
             return {"items": goods.items(conn, host.today().isoformat())}
+
+    @r.get("/fees", response_model=FeesOut)
+    def fees_route(_p: AnyReader) -> dict[str, object]:
+        """Frais courants des fonds détenus : TER, coût par an et sur trente ans (ordre de
+        grandeur, au rendement supposé `assumed_return_pct`). Un fonds sans TER connu a
+        `ter_pct` nul et reste hors des totaux. Saisir un TER : `set_fund_fee` (Double Sas)."""
+        with engine.connect() as conn:
+            return fees.summary(conn, host.today().isoformat())
 
     @r.get("/strategies", response_model=StrategiesOut)
     def strategies_route(_p: AnyReader) -> dict[str, object]:

@@ -210,6 +210,27 @@ class GoodListOut(Out):
     items: list[GoodOut]
 
 
+class FundFeeOut(Out):
+    isin: str
+    name: str
+    value: MoneyOut
+    ter_pct: str | None  # None : frais inconnus
+    source: str | None
+    yearly_cost: MoneyOut | None
+
+
+class FeesOut(Out):
+    on_date: str
+    currency: str
+    items: list[FundFeeOut]
+    yearly_cost: MoneyOut
+    covered_value: MoneyOut
+    unknown_value: MoneyOut
+    cost_over_years: MoneyOut
+    years: int
+    assumed_return_pct: str
+
+
 class BreakOut(Out):
     id: str
     kind: str
