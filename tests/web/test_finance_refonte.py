@@ -156,7 +156,7 @@ def test_the_fees_card_asks_for_the_missing_rates(page: Any) -> None:
     )
     assert status == 202
     page.reload()
-    page.wait_for_selector("#tabs button")  # le shell paraît avant ses onglets
+    page.wait_for_selector("#tabs-start button")  # onglets dessinés (l'orbe, elle, est fixe)
     open_tab(page, "patrimoine")
     page.locator('#patrimoine [data-a="w-more"][data-v="fees"]').click()
     page.wait_for_selector('#sheet [data-a="fee-edit"]')
@@ -175,8 +175,11 @@ def test_the_fees_card_asks_for_the_missing_rates(page: Any) -> None:
     if page.locator("#sheet").is_visible():
         page.locator('#sheet [data-a="sheet-close"]').click()
         page.wait_for_timeout(400)
-    card = page.locator('#patrimoine [data-a="w-more"][data-v="fees"]')
-    assert "par an" in card.inner_text()  # 0,20 % de 1 000 CHF : le coût est chiffré
+    # 0,20 % de 1 000 CHF : le coût est chiffré, une fois les frais relus par l'écran
+    page.wait_for_function(
+        '() => document.querySelector(\'#patrimoine [data-a="w-more"][data-v="fees"]\')'
+        "?.innerText.includes('par an')"
+    )
     # sans dividende ni intérêt reçu, la carte Revenus ne s'affiche pas
     assert page.locator('#patrimoine [data-a="w-more"][data-v="income"]').count() == 0
     assert page.problems == []

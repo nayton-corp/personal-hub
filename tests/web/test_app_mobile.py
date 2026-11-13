@@ -173,7 +173,7 @@ def browse(origin: str, code: str) -> Iterator[Any]:
         pg.fill("#device", "Navigateur de test")
         pg.click("#form-bootstrap button[type=submit]")
         pg.wait_for_selector("#shell:not([hidden])", timeout=15_000)
-        pg.wait_for_selector("#tabs button")  # le shell paraît avant ses onglets
+        pg.wait_for_selector("#tabs-start button")  # onglets dessinés (l'orbe, elle, est fixe)
         yield pg
         browser.close()
 
@@ -201,20 +201,39 @@ def _screen_ok(pg: Any, name: str, shot: str | None = None) -> None:
     assert pg.problems == [], f"{name} : {pg.problems}"
 
 
+def _where(pg: Any) -> str:
+    """L'état de l'écran, pour un échec qui dit où l'on était."""
+    return str(
+        pg.evaluate(
+            "({url: location.href, params: localStorage.getItem('hub.params'),"
+            " views: [...document.querySelectorAll('.view:not([hidden])')].map((v) => v.id),"
+            " bar: [...document.querySelectorAll('#tabs button')].map((b) => b.dataset.v),"
+            " sheet: document.documentElement.classList.contains('sheet-open')})"
+        )
+    )
+
+
 def go_home(pg: Any) -> None:
     """L'accueil du hub : dans la barre du bas, ou par le bouton d'espace quand la barre est
     celle d'un espace (depuis les réglages, on en sort d'abord)."""
+    pg.wait_for_selector(".view:not([hidden])")
+    if pg.evaluate("document.documentElement.classList.contains('sheet-open')"):
+        pg.locator("#sheet [data-a='sheet-close']").first.click()
     for _ in range(3):  # d'une rubrique à la liste, puis hors des réglages (parfois l'accueil)
         if not pg.locator("#sources:not([hidden])").count():
             break
         pg.locator('#sources [data-a="back"]').click()
         pg.wait_for_timeout(150)
     if pg.locator("#accueil:not([hidden])").count():
-        pass
-    elif pg.locator('#tabs button[data-v="accueil"]').count():
+        return
+    if pg.locator('#tabs button[data-v="accueil"]').count():
         pg.click('#tabs button[data-v="accueil"]')
     else:
-        pg.locator('.view:not([hidden]) [data-a="spaces"]').click()
+        spaces = pg.locator('.view:not([hidden]) [data-a="spaces"]')
+        try:
+            spaces.first.click(timeout=10_000)
+        except Exception as exc:  # l'échec doit dire où l'on était
+            raise AssertionError(f"aucun chemin vers l'accueil : {_where(pg)}") from exc
         pg.click('#sheet [data-a="hub"]')
     pg.wait_for_selector("#accueil:not([hidden])")
 
@@ -336,7 +355,7 @@ def test_wealth_cards_open_tall_sheets_and_strategies_unfold(page: Any) -> None:
     ouvrent leur détail dans un grand panneau ; Stratégies se déplie sur place et mène à
     « Que veux-tu faire ? », la quatrième intention annoncée sans être ouverte."""
     page.reload()
-    page.wait_for_selector("#tabs button")  # le shell paraît avant ses onglets
+    page.wait_for_selector("#tabs-start button")  # onglets dessinés (l'orbe, elle, est fixe)
     open_tab(page, "patrimoine")
     page.wait_for_selector("#patrimoine .wcards .sumcard")
     assert page.locator("#patrimoine .wcards .sumcard").count() == 3
