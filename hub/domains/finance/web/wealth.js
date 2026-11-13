@@ -148,23 +148,28 @@ const perfCtx = (all) => ({
 // trois cartes résumé : leur détail s'ouvre dans un grand panneau ; Stratégies se déplie sur place
 function cards(sel) {
   const a = allocBrief(sel), p = M.perf && M.perf.summary, st = stratBrief();
-  const card = (a2, v, l, val, sub, cls = "") => `<button class="sumcard${cls}" type="button" data-a="${a2}"${v ? ` data-v="${v}"` : ""} aria-haspopup="dialog"><span class="l">${l}</span><span class="v">${val}</span><span class="s">${sub}</span></button>`;
+  const card = (a2, v, l, val, sub, cls = "") => `<button class="sumcard${cls}" type="button" data-a="${a2}"${v ?
+    ` data-v="${v}"` : ""} aria-haspopup="dialog"><span class="l">${l}</span><span class="v">${val}</span><span class="s">${sub}</span></button>`;
   let second;
   if (S.mode === "perf") {
     const k = M.perf && M.perf.risk, dd = k ? rate(k.max_drawdown) : null, vol = k ? rate(k.volatility) : null;
-    second = card("w-card", "risk", "Risque", dd == null ? "—" : dd < 0 ? `<span class="neg">${ratePct(dd)}</span>` : "Aucune baisse", vol == null ? "pas assez de recul" : `volatilité ${ratePct(vol).replace("+", "")} par an`);
+    second = card("w-card", "risk", "Risque", dd == null ? "—" : dd < 0 ? `<span class="neg">${ratePct(dd)}</span>` : "Aucune baisse",
+      vol == null ? "pas assez de recul" : `volatilité ${ratePct(vol).replace("+", "")} par an`);
   } else {
     const g = p ? units(p.gain) : null, r = p ? rate(p.mwr) ?? rate(p.twr) : null;
-    second = card("w-card", "rend", "Rendement", g == null ? "—" : `<span class="${g >= 0 ? "pos" : "neg"}">${signedMoney(g)} ${base()}</span>`, `${r == null ? "" : `${ratePct(r)} · `}${esc(range().label)}`);
+    second = card("w-card", "rend", "Rendement", g == null ? "—" : `<span class="${g >= 0 ? "pos" : "neg"}">${signedMoney(g)} ${base()}</span>`,
+      `${r == null ? "" : `${ratePct(r)} · `}${esc(range().label)}`);
   }
   return `<div class="sumcards wcards">${card("w-card", "alloc", "Répartition", a.v, a.s)}${second}${more.moreCards()}
-    ${FOLD.strat ? `<button class="sumcard wide" type="button" data-a="w-fold" data-v="strat" aria-expanded="false"><span class="l">Stratégies</span><span class="v">${st.v}${st.hot ? ' <span class="pill info">à voir</span>' : ""}</span><span class="s">${st.s}</span></button>` : ""}</div>${FOLD.strat ? "" : stratSection()}`;
+    ${FOLD.strat ? `<button class="sumcard wide" type="button" data-a="w-fold" data-v="strat" aria-expanded="false"><span class="l">Stratégies</span><span class="v">${st.v}${st.hot ?
+      ' <span class="pill info">à voir</span>' : ""}</span><span class="s">${st.s}</span></button>` : ""}</div>${FOLD.strat ? "" : stratSection()}`;
 }
 
 SHEETS.walloc = () => ({ title: "Répartition", tall: true, body: allocDetail(scopeLines(lines() || [], { t: "home" })) });
 SHEETS.wperf = () => ({
   title: "Performance", tall: true,
-  body: `<div class="seg small" id="tabSeg" role="group" aria-label="Thème">${TABS.map(([k, l]) => `<button type="button" data-a="w-tab" data-v="${k}" aria-pressed="${S.tab === k}">${l}</button>`).join("")}</div><p class="hint">${esc(range().label)}</p>${perfSection(perfCtx(lines() || []))}`,
+  body: `<div class="seg small" id="tabSeg" role="group" aria-label="Thème">${TABS.map(([k, l]) =>
+    `<button type="button" data-a="w-tab" data-v="${k}" aria-pressed="${S.tab === k}">${l}</button>`).join("")}</div><p class="hint">${esc(range().label)}</p>${perfSection(perfCtx(lines() || []))}`,
 });
 SHEETS.wdisplay = () => ({ title: "Affichage", body: displayBody(M, lines() || []) });
 

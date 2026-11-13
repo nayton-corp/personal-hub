@@ -80,10 +80,12 @@ function rubrics() {
 // sous les rubriques : les réglages des espaces (depuis le hub), ou ceux du hub (depuis un espace)
 function other() {
   const { scope, spaces } = where();
-  const row = (v, icon, label) => `<button class="trow press" type="button" data-a="set-scope" data-v="${esc(v)}">${ibox(ic(icon), "var(--muted)", "sm")}<span class="t">${esc(label)}</span><span class="row-num">${ic("chev", "chev-r")}</span></button>`;
+  const row = (v, icon, label) => `<button class="trow press" type="button" data-a="set-scope" data-v="${esc(v)}">${ibox(ic(icon),
+    "var(--muted)", "sm")}<span class="t">${esc(label)}</span><span class="row-num">${ic("chev", "chev-r")}</span></button>`;
   if (scope && spaces[scope]) return `<section class="card rub">${row("", "home", "Réglages du hub")}</section>`;
   const names = Object.keys(spaces).filter((k) => RUBRICS.some((r) => r.domain === k));
-  return `${names.length ? `<section class="card rub" aria-labelledby="rg-spaces"><h2 class="grp-title" id="rg-spaces">Espaces</h2>${names.map((k) => row(k, spaces[k].icon, `Réglages ${spaces[k].label}`)).join("")}</section>` : ""}
+  return `${names.length ? `<section class="card rub" aria-labelledby="rg-spaces"><h2 class="grp-title" id="rg-spaces">Espaces</h2>${names.map((k) =>
+    row(k, spaces[k].icon, `Réglages ${spaces[k].label}`)).join("")}</section>` : ""}
     <section class="card"><button class="secondary danger" type="button" data-a="logout">Se déconnecter</button></section>`;
 }
 

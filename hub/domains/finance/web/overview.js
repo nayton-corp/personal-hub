@@ -33,7 +33,8 @@ function curve(vals, w = 320, h = 84) {
   const pts = vals.map((v, i) => [(i / (vals.length - 1)) * w, 4 + (h - 8) * (1 - (v - mn) / d)]);
   const line = pts.map((p) => p.map((x) => x.toFixed(1)).join(",")).join("L");
   const [lx, ly] = pts[pts.length - 1];
-  return `<svg class="ov-curve" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path class="area" d="M0,${h}L${line}L${w},${h}Z"/><path class="line" d="M${line}"/><circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3.5"/></svg>`;
+  return `<svg class="ov-curve" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path class="area" d="M0,${h}L${line}L${w},${h}Z"/><path class="line" d="M${line}"/><circle cx="${
+    lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3.5"/></svg>`;
 }
 
 function hero(k, perf) {
@@ -43,7 +44,8 @@ function hero(k, perf) {
   const p = sum && sum.personal != null ? Number(sum.personal) : null;
   const net = units(k.net_worth);
   const stale = k.stale_accounts > 0 ? `<span class="ov-flag">${k.stale_accounts} à actualiser</span>` : "";
-  const delta = gain == null ? "" : `<span class="delta ${Math.round(gain) === 0 ? "zero" : gain >= 0 ? "pos" : "neg"} num"><span class="money">${sgn(gain)}${n0(gain)}</span> ${base()}${p == null ? "" : ` · ${sgn(p)}${pf(Math.abs(p))} %`}</span> <span class="ov-per">sur 1 an</span>`;
+  const delta = gain == null ? "" : `<span class="delta ${Math.round(gain) === 0 ?
+    "zero" : gain >= 0 ? "pos" : "neg"} num"><span class="money">${sgn(gain)}${n0(gain)}</span> ${base()}${p == null ? "" : ` · ${sgn(p)}${pf(Math.abs(p))} %`}</span> <span class="ov-per">sur 1 an</span>`;
   return `<button class="ov-hero" type="button" data-a="tab" data-v="patrimoine" aria-label="Patrimoine net ${n0(net)} ${base()}. Ouvrir le patrimoine">
       <span class="ov-top"><span>Patrimoine net</span>${stale}</span>
       <span class="ov-amt num"><span class="money">${nf(net)}</span><small>${base()}</small></span>
@@ -59,15 +61,18 @@ function cards(b, f) {
   else if (m.T == null) rest = `<span class="l">Dépensé ce mois${ic("chev")}</span><span class="v num"><span class="money">${n0(m.spent)}</span></span><span class="s">Pas encore de budget</span>`;
   else {
     rest = `<span class="l">Reste à vivre${ic("chev")}</span><span class="v num${m.rest < 0 ? " neg" : ""}"><span class="money">${nf(m.rest)}</span></span>
-      <span class="pbar thin" data-css="--c:${m.state.color}"><i data-css="width:${Math.min(100, m.ratio * 100).toFixed(1)}%"></i>${m.expected != null ? `<span class="pace" data-css="left:${(m.expected * 100).toFixed(1)}%"></span>` : ""}</span>
+      <span class="pbar thin" data-css="--c:${m.state.color}"><i data-css="width:${Math.min(100, m.ratio * 100).toFixed(1)}%"></i>${m.expected != null ?
+        `<span class="pace" data-css="left:${(m.expected * 100).toFixed(1)}%"></span>` : ""}</span>
       <span class="s">${m.daysLeft != null ? `${m.daysLeft} jour${m.daysLeft > 1 ? "s" : ""} restant${m.daysLeft > 1 ? "s" : ""}` : esc(m.state.short)}</span>`;
   }
   let saved = `<span class="l">Épargné ce mois</span>${skel("block")}`;
   if (f) {
     const I = units(f.income) || 0, S = units(f.groups.find((x) => x.group === "savings")?.total) || 0;
-    saved = `<span class="l">Épargné ce mois${ic("chev")}</span><span class="v num"><span class="money">${n0(S)}</span></span><span class="s">${I > 0 ? `${pf(S / I, 0)} % des revenus` : "Aucun revenu reçu ce mois"}</span>`;
+    saved = `<span class="l">Épargné ce mois${ic("chev")}</span><span class="v num"><span class="money">${n0(S)}</span></span><span class="s">${I > 0 ?
+      `${pf(S / I, 0)} % des revenus` : "Aucun revenu reçu ce mois"}</span>`;
   }
-  return `<div class="sumcards"><button class="sumcard" type="button" data-a="tab" data-v="budget">${rest}</button><button class="sumcard" type="button" data-a="tab" data-v="budget">${saved}</button></div>`;
+  return `<div class="sumcards"><button class="sumcard" type="button" data-a="tab" data-v="budget">${
+    rest}</button><button class="sumcard" type="button" data-a="tab" data-v="budget">${saved}</button></div>`;
 }
 
 function lists() {

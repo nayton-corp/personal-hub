@@ -40,7 +40,9 @@ function ctxHTML(all, r) {
   if (r.t === "home") {
     // une seule pilule : elle dit ce que l'écran montre et ouvre tous les filtres
     const n = activeCount();
-    let h = `<button class="scope${n ? " on" : ""}" type="button" data-a="filters" aria-haspopup="dialog" aria-label="${n ? `Patrimoine filtré, ${n} filtre${n > 1 ? "s" : ""}` : "Tout le patrimoine"}, filtrer"><span class="ibox tint sm" data-css="--c:var(--accent)" aria-hidden="true">${ic(n ? "filter" : "layers")}</span><span class="t">${n ? `${n} filtre${n > 1 ? "s" : ""}` : "Tout le patrimoine"}</span>${ic("down", "chev")}</button>`;
+    let h = `<button class="scope${n ? " on" : ""}" type="button" data-a="filters" aria-haspopup="dialog" aria-label="${n ?
+      `Patrimoine filtré, ${n} filtre${n > 1 ? "s" : ""}` : "Tout le patrimoine"}, filtrer"><span class="ibox tint sm" data-css="--c:var(--accent)" aria-hidden="true">${ic(n ?
+        "filter" : "layers")}</span><span class="t">${n ? `${n} filtre${n > 1 ? "s" : ""}` : "Tout le patrimoine"}</span>${ic("down", "chev")}</button>`;
     if (n) h += `<button class="scope-x" type="button" data-a="w-clear" aria-label="Effacer les filtres">${ic("close")}</button>`;
     for (const f of FILTERS) for (const v of S.filters[f.key]) {
       h += `<button class="chip" type="button" data-a="w-opt" data-v="${f.key}|${esc(v)}" aria-label="Retirer le filtre ${esc(fName(f.key, v))}">${esc(fName(f.key, v))}${ic("close")}</button>`;
@@ -75,7 +77,8 @@ export function heroHTML(m, all, r = here()) {
   const what = r.t === "acc" ? (m.onlyDebt ? "Reste à rembourser" : "Valeur du compte") : activeCount() ? "Sélection filtrée" : S.gross ? "Patrimoine brut, sans les dettes" : "Patrimoine net";
   if (pts.length < 2) {
     const v = sum(m.sel || []);
-    return `<div class="hero-top"><span class="hero-label">${what}</span>${right}</div><div class="hero-amount num"><span><span class="money">${nf(v)}</span><small>${base()}</small></span>${disp}</div>`;
+    return `<div class="hero-top"><span class="hero-label">${what}</span>${right}</div><div class="hero-amount num"><span><span class="money">${nf(
+      v)}</span><small>${base()}</small></span>${disp}</div>`;
   }
   const k = S.scrub == null ? pts.length - 1 : Math.min(S.scrub, pts.length - 1), p = pts[k], p0 = pts[0];
   const scrub = S.scrub != null;
@@ -150,8 +153,10 @@ export function displayBody(m, all, r = here()) {
   if (r.t === "home" && all.some((l) => l.kind === "debt")) h += grp("Dettes dans le total", seg("Dettes dans le total", "w-gross", [["net", "Net", !S.gross], ["gross", "Brut", S.gross]]));
   if (m.pts.length > 1) h += grp("Sur la courbe", legendHTML(m, kind, "chips"));
   if (kind === "pct") h += grp("Repère", cmpBtn(m));
-  h += grp("Outils", `<div class="list"><button class="row" type="button" data-a="w-ruler">${ic("ruler")}<span class="row-main"><span class="row-title">Mesurer entre deux dates</span><span class="row-sub">glisse ensuite sur la courbe</span></span></button>
-    <button class="row" type="button" data-a="w-full" data-v="1">${ic("expand")}<span class="row-main"><span class="row-title">Plein écran</span><span class="row-sub">la courbe en paysage</span></span></button></div>`);
+  h += grp("Outils", `<div class="list"><button class="row" type="button" data-a="w-ruler">${ic(
+    "ruler")}<span class="row-main"><span class="row-title">Mesurer entre deux dates</span><span class="row-sub">glisse ensuite sur la courbe</span></span></button>
+    <button class="row" type="button" data-a="w-full" data-v="1">${ic(
+      "expand")}<span class="row-main"><span class="row-title">Plein écran</span><span class="row-sub">la courbe en paysage</span></span></button></div>`);
   return `<div class="disp-body">${h}</div>`;
 }
 

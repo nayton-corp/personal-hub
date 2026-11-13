@@ -27,7 +27,7 @@ alias fin='hubc run --rm --no-deps importer hub finance'
 
 ## L'app (lot 2)
 
-L'app (Accueil, Patrimoine, Budget, Journal, Sources) lit uniquement les routes de
+L'app (Aperçu, Patrimoine, Budget, Journal, et les réglages de Finance derrière la roue) lit uniquement les routes de
 `/api/finance` ; chaque chiffre est calculé côté serveur, en centimes. Chaque route déclare la
 forme de sa réponse (`<sous-contexte>/interface/schemas.py`, dans l'OpenAPI) ; un champ rendu
 sans être déclaré passe, et `tests/finance/test_api_contracts.py` le signale. L'app lit ces
@@ -458,6 +458,22 @@ d'ordre** : il prévient, la personne agit chez sa plateforme, le hub constate a
   étape (`done`, `later`, `skip`) : `answer_strategy_step`. Lecture : `GET /api/finance/strategies`
   (les stratégies, où elles en sont, et `scopes` : sur quoi elles peuvent porter).
 - Le suivi compte des étapes tenues ou passées, jamais un rendement.
+
+## Biens hors comptes et frais des fonds
+
+- **Biens.** Un logement, un véhicule, un objet de valeur ou un prêt accordé n'est sur aucun
+  compte : il se saisit dans Réglages > Comptes et biens. Tables `goods` et `good_value_records`
+  (migration 0028) : une valeur datée, et une variation par an facultative qui la fait évoluer
+  entre deux saisies (`patrimoine/app/goods.py`). Proposition `save_good` (créer, corriger la
+  valeur, sortir le bien) ; lecture `GET /api/finance/goods`.
+- Un bien entre dans le patrimoine net (enveloppe `biens`, présente seulement quand un bien
+  existe) et dans la répartition (« Biens »). Il n'entre jamais dans le rendement : une
+  estimation n'est ni un gain ni une perte.
+- **Frais des fonds.** Table `fund_fees` (migration 0029) : le TER d'un fonds, en % par an,
+  saisi par la proposition `set_fund_fee`. `GET /api/finance/fees` donne, pour les fonds détenus,
+  la valeur, le TER, le coût par an, la valeur couverte et non couverte, et l'écart de valeur
+  finale sur 30 ans à 5 % par an avant frais (`patrimoine/app/fees.py`). Un fonds sans TER
+  saisi reste « frais inconnus » : le hub n'en devine aucun et ne propose aucun autre fonds.
 
 ## Autres commandes
 

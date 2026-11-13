@@ -30,7 +30,8 @@ export function moreCards() {
   if (inc && inc.total >= 1) h += card("income", "Revenus", amount(inc.total), "dividendes et intérêts · 12 mois");
   if (f && f.items.length) {
     const known = f.items.filter((i) => i.ter_pct != null).length;
-    h += known ? card("fees", "Frais des fonds", `${amount(units(f.yearly_cost))}`, `par an${known < f.items.length ? ` · ${f.items.length - known} inconnu${f.items.length - known > 1 ? "s" : ""}` : ""}`)
+    h += known ? card("fees", "Frais des fonds", `${amount(units(f.yearly_cost))}`,
+      `par an${known < f.items.length ? ` · ${f.items.length - known} inconnu${f.items.length - known > 1 ? "s" : ""}` : ""}`)
       : card("fees", "Frais des fonds", "Inconnus", `${f.items.length} fonds à renseigner`);
   }
   return h;
@@ -52,16 +53,20 @@ SHEETS.wincome = () => {
 SHEETS.wfees = () => {
   const f = store.use(FEES).data;
   if (!f) return null;
-  const rows = f.items.map((i) => `<button class="row go-row" type="button" data-a="fee-edit" data-v="${esc(i.isin)}" aria-label="${esc(i.name)}, ${i.ter_pct == null ? "frais inconnus, saisir" : `${i.ter_pct} % par an, modifier`}">
-    ${ibox(ic("trend"), i.ter_pct == null ? "var(--warn)" : "var(--accent)")}<span class="row-main"><span class="row-title">${esc(i.name)}</span><span class="row-sub">${amount(units(i.value))} détenus</span></span>
-    <span class="row-num">${i.ter_pct == null ? '<span class="pill warn">Inconnus</span>' : `<span class="row-val num">${amount(units(i.yearly_cost))}</span><span class="row-delta">${esc(i.ter_pct)} % par an</span>`}</span>
+  const rows = f.items.map((i) => `<button class="row go-row" type="button" data-a="fee-edit" data-v="${esc(i.isin)}" aria-label="${esc(i.name)}, ${i.ter_pct == null ?
+    "frais inconnus, saisir" : `${i.ter_pct} % par an, modifier`}">
+    ${ibox(ic("trend"), i.ter_pct == null ? "var(--warn)" : "var(--accent)")}<span class="row-main"><span class="row-title">${esc(i.name)}</span><span class="row-sub">${amount(
+      units(i.value))} détenus</span></span>
+    <span class="row-num">${i.ter_pct == null ?
+      '<span class="pill warn">Inconnus</span>' : `<span class="row-val num">${amount(units(i.yearly_cost))}</span><span class="row-delta">${esc(i.ter_pct)} % par an</span>`}</span>
     <span class="go">${ic("chev")}</span></button>`).join("");
   const unknown = units(f.unknown_value);
   return {
     title: "Frais des fonds", tall: true,
     body: `<div class="sheet-big num">${amount(units(f.yearly_cost))} <small>par an</small></div>
       <dl class="dl"><dt>Sur ${f.years} ans, si rien ne change</dt><dd>${amount(units(f.cost_over_years))}</dd></dl>
-      <p class="hint">Les frais courants (TER) sont prélevés dans le cours du fonds : tu ne les vois sur aucun relevé. Sur ${f.years} ans : l'écart de valeur finale pour tes parts d'aujourd'hui, à ${esc(f.assumed_return_pct)} % par an avant frais. Un ordre de grandeur, pas une prévision.</p>
+      <p class="hint">Les frais courants (TER) sont prélevés dans le cours du fonds : tu ne les vois sur aucun relevé.
+        Sur ${f.years} ans : l'écart de valeur finale pour tes parts d'aujourd'hui, à ${esc(f.assumed_return_pct)} % par an avant frais. Un ordre de grandeur, pas une prévision.</p>
       ${unknown >= 1 ? `<p class="hint">${amount(unknown)} dans des fonds aux frais inconnus, hors de ces totaux. Le TER est sur la fiche du fonds (KID) : touche la ligne pour le saisir.</p>` : ""}
       <div class="list">${rows}</div>`,
   };

@@ -16,7 +16,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -84,7 +84,9 @@ def bootstrap(hub: HubContext) -> str:
 
 
 @pytest.fixture(scope="module")
-def instance(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, str]]:
+def instance(
+    tmp_path_factory: pytest.TempPathFactory, instance_extra: Callable[[dict[str, str]], None]
+) -> Iterator[tuple[str, str]]:
     """Une instance complète : bases migrées, deux comptes, un an de relevés, API servant l'app."""
     import pyrage
 
@@ -109,6 +111,7 @@ def instance(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, st
         iban, name, options = line.split("\t")
         _hub(env, "finance", "accounts", "add", name, "--iban", iban, *options.split())
     _hub(env, "finance", "import-history", str(demo))
+    instance_extra(env)
     _hub(env, "documents", "import-library", str(library(home / "Bibliothèque")))
 
     settings = Settings(

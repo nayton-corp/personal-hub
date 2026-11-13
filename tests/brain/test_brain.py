@@ -96,7 +96,7 @@ def test_single_domain_is_loaded_at_start(
     box = box_for(client, ctx, "brain=finance")
     names = [t["name"] for t in box.definitions()]
     assert names[:2] == [CAPABILITIES, LOAD]
-    assert len(names) == 52  # 2 outils de routage + 50 outils Finance (M11)
+    assert len(names) == 54  # 2 outils de routage + 52 outils Finance (M11, biens, frais)
     agg = box_for(client, ctx, "aggregates")
     assert len(agg.definitions()) == 2 + 21  # routage + outils de totaux (M11)
 

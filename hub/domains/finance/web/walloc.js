@@ -78,7 +78,8 @@ export function allocBrief(sel) {
 // le détail, dans le grand panneau : l'axe se choisit en haut, sans quitter le panneau
 export function allocDetail(sel) {
   const keys = [...BY, ...LOOK.map(([k]) => k)];
-  return `<div class="hscroll bychips" role="group" aria-label="Répartir par">${keys.map((k) => `<button class="pchip" type="button" data-a="w-by" data-v="${k}" aria-pressed="${S.by === k}">${esc(byLabel(k))}</button>`).join("")}</div>${allocBody(allocRows(sel))}`;
+  return `<div class="hscroll bychips" role="group" aria-label="Répartir par">${keys.map((k) =>
+    `<button class="pchip" type="button" data-a="w-by" data-v="${k}" aria-pressed="${S.by === k}">${esc(byLabel(k))}</button>`).join("")}</div>${allocBody(allocRows(sel))}`;
 }
 
 function allocBody(a) {

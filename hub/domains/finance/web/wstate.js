@@ -9,7 +9,8 @@ import { lineId, lone } from "./wcurve.js";
 
 export { lineId };
 
-export const paths = { accounts: "/finance/accounts", holdings: "/finance/holdings", history: "/finance/networth/history", fresh: "/finance/freshness", debts: "/finance/debts", goods: "/finance/goods" };
+export const paths = { accounts: "/finance/accounts", holdings: "/finance/holdings", history: "/finance/networth/history", fresh: "/finance/freshness",
+  debts: "/finance/debts", goods: "/finance/goods" };
 export const KIND_LABEL = { cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto", debt: "Dette", good: "Bien" };
 
 // périodes : dix au choix, six épinglées sous la courbe ; une plage libre en plus
@@ -127,7 +128,8 @@ export function lines() {
     const v = byAcc[g.key];
     if (!v || !v.minor) continue;
     const kind = { home: "Logement", vehicle: "Véhicule", object: "Objet de valeur", loan: "Prêt accordé" }[g.kind] || "Bien";
-    out.push({ acc: g.key, good: g.id, accName: g.name, inst: kind, liq: "locked", goal: null, kind: "good", goodKind: g.kind, asset: g.key, name: g.name, symbol: null, cat: "goods", qty: units(v), unit: base(), value: units(v) });
+    out.push({ acc: g.key, good: g.id, accName: g.name, inst: kind, liq: "locked", goal: null, kind: "good",
+      goodKind: g.kind, asset: g.key, name: g.name, symbol: null, cat: "goods", qty: units(v), unit: base(), value: units(v) });
   }
   // critères Compte et Actif : ce que les lignes contiennent
   ACC_F.values = [...new Set(out.map((l) => l.acc))];

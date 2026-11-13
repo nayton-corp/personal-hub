@@ -24,12 +24,11 @@ from hub.domains.finance.patrimoine.app import (
     transfers,
 )
 from hub.domains.finance.patrimoine.app import holdings as positions
+from hub.domains.finance.patrimoine.interface.goods_schemas import FeesOut, GoodListOut
 from hub.domains.finance.patrimoine.interface.schemas import (
     AccountListOut,
     BreaksOut,
     DebtListOut,
-    FeesOut,
-    GoodListOut,
     HoldingsOut,
     KpisOut,
     LookthroughOut,

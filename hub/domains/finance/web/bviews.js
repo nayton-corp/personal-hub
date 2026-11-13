@@ -28,7 +28,8 @@ const yearDone = (c) => (c.yearly.target ? u(c.yearly.spent) / u(c.yearly.target
 // en être à ce jour ; au-delà du budget, elle passe au rouge
 function bar(ratio, pace) {
   const over = ratio > 1;
-  return `<span class="pbar thin pc${over ? " over" : ""}"><i data-css="width:${(Math.min(1, Math.max(0, ratio)) * 100).toFixed(1)}%"></i>${pace != null && pace > 0 && pace < 1 ? `<span class="pace" data-css="left:${(pace * 100).toFixed(1)}%"></span>` : ""}</span>`;
+  return `<span class="pbar thin pc${over ? " over" : ""}"><i data-css="width:${(Math.min(1, Math.max(0, ratio)) * 100).toFixed(1)}%"></i>${pace != null && pace > 0 && pace < 1 ?
+    `<span class="pace" data-css="left:${(pace * 100).toFixed(1)}%"></span>` : ""}</span>`;
 }
 
 function yearRow(c, x) {
@@ -48,7 +49,8 @@ function catRow(c, x) {
   const s = fixed ? fixedState(c, x.today) : catState(c);
   const tag = s.k === "bad" && !fixed ? '<span class="pill bad">Dépassé</span>' : "";
   return `<button class="crow" type="button" data-a="cat" data-v="${esc(c.category)}" aria-label="${esc(c.name)}, ${n0(c.s)}${c.t != null ? ` sur ${n0(c.t)}` : ""} ${base()}, ${s.txt}">
-    ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}${tag}</b><span class="t num">${money(c.s)}${c.t != null ? ` / ${money(c.t)}` : ""}${!fixed && c.t ? `<small>${Math.round((c.s / c.t) * 100)} %</small>` : ""}</span></span>
+    ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}${tag}</b><span class="t num">${money(c.s)}${c.t != null ? ` / ${money(c.t)}` : ""}${!fixed && c.t ?
+      `<small>${Math.round((c.s / c.t) * 100)} %</small>` : ""}</span></span>
     ${fixed || c.t == null ? "" : bar(c.t ? c.s / c.t : 0, x.pace)}
     <span class="crow-st ${s.k}">${s.done ? ic("check") : ""}${s.txt}</span></span></button>`;
 }
@@ -92,7 +94,8 @@ function savingsOrRest(B, f) {
   const head = `<div class="section-head"><h2 class="section-title" id="t-cats">${B.bgroup === "savings" ? "Épargne" : "Reste"}</h2><button class="chip" type="button" data-a="bgroupx" aria-label="Retirer le filtre">${B.bgroup === "savings" ? "Épargne" : "Reste"}${ic("close")}</button></div>`;
   if (B.bgroup === "rest") return `<section class="card bflat" id="budCats" aria-labelledby="t-cats">${head}<div class="empty">Ni dépensé ni épargné pour l'instant.</div></section>`;
   const items = f ? (f.groups.find((x) => x.group === "savings")?.items || []) : [];
-  return `<section class="card bflat" id="budCats" aria-labelledby="t-cats">${head}<div class="grp"><span>Épargne</span><span class="num">${amount(items.reduce((t, i) => t + u(i.total), 0))}</span></div>` +
+  return `<section class="card bflat" id="budCats" aria-labelledby="t-cats">${head}<div class="grp"><span>Épargne</span><span class="num">${amount(
+    items.reduce((t, i) => t + u(i.total), 0))}</span></div>` +
     items.map((i) => `<div class="crow">${catMark(i.category, "savings")}<span><span class="crow-top"><b>${esc(i.name)}</b><span class="t num">${amount(u(i.total))}</span></span><span class="crow-st ok">${f.income.minor ? `${pf(u(i.total) / u(f.income), 0)} % des revenus` : ""}</span></span></div>`).join("") + "</section>";
 }
 

@@ -192,45 +192,6 @@ class DebtListOut(Out):
     items: list[DebtOut]
 
 
-class GoodOut(Out):
-    id: str
-    key: str
-    name: str
-    kind: str
-    currency: str
-    yearly_change_pct: str | None
-    closed_on: str | None
-    value: MoneyOut
-    stated: MoneyOut | None
-    stated_on: str | None
-    values: list[BalanceRecordOut]
-
-
-class GoodListOut(Out):
-    items: list[GoodOut]
-
-
-class FundFeeOut(Out):
-    isin: str
-    name: str
-    value: MoneyOut
-    ter_pct: str | None  # None : frais inconnus
-    source: str | None
-    yearly_cost: MoneyOut | None
-
-
-class FeesOut(Out):
-    on_date: str
-    currency: str
-    items: list[FundFeeOut]
-    yearly_cost: MoneyOut
-    covered_value: MoneyOut
-    unknown_value: MoneyOut
-    cost_over_years: MoneyOut
-    years: int
-    assumed_return_pct: str
-
-
 class BreakOut(Out):
     id: str
     kind: str
