@@ -120,11 +120,9 @@
 .crow-st .ic { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }
 .crow-sub { padding-left: 14px; border-left: 2px solid var(--line); margin-left: 14px; }
 /* barres du budget à la même échelle : la piste a la longueur de la cible, le dépassement suit en rouge */
-.card .pbar.sc { background: none; }
-.pbar.sc .trk { display: block; height: 100%; min-width: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
-.pbar.sc .trk > i { display: block; height: 100%; border-radius: 5px; background: var(--accent); }
-.pbar.sc.over .trk { border-radius: 5px 0 0 5px; } .pbar.sc.over .trk > i { border-radius: 0; }
-.pbar.sc > i.ov { position: absolute; top: 0; height: 100%; background: var(--neg); border-radius: 0 5px 5px 0; box-shadow: -2px 0 0 var(--surface); }
+.pbar.pc.over > i { background: var(--neg); }
+.crow-top .t small { display: inline-block; min-width: 3.1em; text-align: right; font-size: inherit; font-weight: 600; color: var(--ink); }
+.crow-top .t small:empty { display: none; }
 .months { display: flex; gap: 8px; align-items: flex-end; height: 150px; margin-top: 6px; }
 .mcol { flex: 1; display: flex; flex-direction: column; align-items: stretch; gap: 4px; height: 100%; justify-content: flex-end; border-radius: 8px; padding: 4px 2px; }
 .mcol[aria-pressed="true"] { background: var(--accent-soft); }
@@ -546,3 +544,23 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .disp-body .lg { border: 1px solid var(--line); min-height: 40px; padding: 0 12px; font-size: .765rem; }
 .disp-body .lg[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .disp-body .row > svg { width: 20px; height: 20px; color: var(--muted); flex: none; }
+
+/* ---------- v4 : Budget (à plat sur le fond ; cadre pour Abonnements et Tendance, qui s'ouvrent) ---------- */
+#budBody > .card.bflat { background: none; margin-top: 0; }
+#budBody > .card.bflat + .card.bflat { border-top: 1px solid var(--line); }
+#budBody > .card.folded { margin: 10px 12px 0; border: 1px solid var(--line); border-radius: var(--r-card); }
+#budBody > .card .pbar { background: var(--line); }
+#budBody .strip { background: var(--surface); }
+.ctxbar .seg { width: 124px; }
+.stepper b { font-size: .824rem; }
+@media (max-width: 350px) { .ctxbar .seg { width: 104px; } .stepper button { width: 36px; } }
+
+/* ---------- v4 : Journal (liste à plat, sélection multiple) ---------- */
+#jBody .list, #jBody > .card { background: none; }
+.tx-row { -webkit-touch-callout: none; user-select: none; }
+.tx-row.picked { background: var(--accent-soft); }
+.tx-row.picked .ibox, .tx-row.picked .av { box-shadow: 0 0 0 2px var(--accent); }
+.selbar { position: fixed; left: 12px; right: 12px; bottom: calc(78px + var(--bottom)); z-index: 7; display: flex; align-items: center; gap: 8px; max-width: 32rem; margin: 0 auto;
+  padding: 6px 8px 6px 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-pop); }
+.selbar b { flex: 1; min-width: 0; font-size: .853rem; }
+.selbar .primary.small { width: auto; flex: none; min-height: 40px; padding: 0 16px; margin: 0; }

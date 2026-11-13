@@ -5,6 +5,7 @@
 import { MOIS, base, dayName, date, toMinor, units } from "../../format.js";
 import { GROUP_LABEL, catIc, catMark, txMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
+import * as sel from "./jselect.js";
 import { api, monthSpan, shiftMonth, store } from "../../store.js";
 import { SHEETS, SH, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, n2, openSheet, qty, renderSheet, skel, toast } from "../../ui.js";
 
@@ -112,6 +113,11 @@ function filterChips(cats) {
 }
 
 export function render() {
+  draw();
+  sel.paint();
+}
+
+function draw() {
   const cats = catMap();
   store.use(accountsPath);
   store.use(todoPath);
@@ -475,6 +481,7 @@ async function run(fn) {
 
 export function init() {
   fill($("search-ic"), ic("search"));
+  sel.init({ items: () => tx.items, grid, cats: catMap, reload: () => { tx.key = null; store.notify(); } });
   let typing;
   $("jq").addEventListener("input", (e) => {
     clearTimeout(typing);
@@ -487,6 +494,7 @@ export function init() {
 }
 
 export const actions = {
+  ...sel.actions,
   junlink: () => {
     unlink();
     announce("Filtre retiré");
@@ -555,6 +563,7 @@ export const actions = {
   },
   jmore: () => load(true),
   tx: (id) => {
+    if (sel.tap(id)) return;
     store.use(catsPath);
     openSheet("tx", id);
     SH.always = false;
