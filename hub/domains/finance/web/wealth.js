@@ -17,6 +17,7 @@ import { DEBT_KIND, debtMark } from "./debts.js";
 import { goodMark } from "./goods.js";
 import { byLabel } from "./wsheets.js";
 import { stratBrief, stratSection } from "./strategies.js";
+import * as more from "./wcards.js";
 import * as place from "./wplace.js";
 import { base } from "../../format.js";
 import { go } from "../../shell.js";
@@ -156,7 +157,7 @@ function cards(sel) {
     const g = p ? units(p.gain) : null, r = p ? rate(p.mwr) ?? rate(p.twr) : null;
     second = card("w-card", "rend", "Rendement", g == null ? "—" : `<span class="${g >= 0 ? "pos" : "neg"}">${signedMoney(g)} ${base()}</span>`, `${r == null ? "" : `${ratePct(r)} · `}${esc(range().label)}`);
   }
-  return `<div class="sumcards wcards">${card("w-card", "alloc", "Répartition", a.v, a.s)}${second}
+  return `<div class="sumcards wcards">${card("w-card", "alloc", "Répartition", a.v, a.s)}${second}${more.moreCards()}
     ${FOLD.strat ? `<button class="sumcard wide" type="button" data-a="w-fold" data-v="strat" aria-expanded="false"><span class="l">Stratégies</span><span class="v">${st.v}${st.hot ? ' <span class="pill info">à voir</span>' : ""}</span><span class="s">${st.s}</span></button>` : ""}</div>${FOLD.strat ? "" : stratSection()}`;
 }
 
@@ -237,6 +238,7 @@ export function only(key, v) {
 
 export const actions = {
   ...place.actions,
+  ...more.actions,
   filters: () => openSheet("filters"),
   "w-opt": (v) => { const i = v.indexOf("|"); toggle(v.slice(0, i), v.slice(i + 1)); store.notify(); announceSel(); },
   "w-clear": () => { for (const f of FILTERS) S.filters[f.key].clear(); store.notify(); announceSel(); },
