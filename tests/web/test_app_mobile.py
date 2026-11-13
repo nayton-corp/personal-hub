@@ -204,11 +204,16 @@ def _screen_ok(pg: Any, name: str, shot: str | None = None) -> None:
 def go_home(pg: Any) -> None:
     """L'accueil du hub : dans la barre du bas, ou par le bouton d'espace quand la barre est
     celle d'un espace (depuis les réglages, on en sort d'abord)."""
-    if pg.locator('#tabs button[data-v="accueil"]').count():
+    for _ in range(3):  # d'une rubrique à la liste, puis hors des réglages (parfois l'accueil)
+        if not pg.locator("#sources:not([hidden])").count():
+            break
+        pg.locator('#sources [data-a="back"]').click()
+        pg.wait_for_timeout(150)
+    if pg.locator("#accueil:not([hidden])").count():
+        pass
+    elif pg.locator('#tabs button[data-v="accueil"]').count():
         pg.click('#tabs button[data-v="accueil"]')
     else:
-        if pg.locator("#sources:not([hidden])").count():
-            pg.locator('#sources [data-a="back"]').click()
         pg.locator('.view:not([hidden]) [data-a="spaces"]').click()
         pg.click('#sheet [data-a="hub"]')
     pg.wait_for_selector("#accueil:not([hidden])")
