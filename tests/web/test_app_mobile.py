@@ -173,7 +173,7 @@ def browse(origin: str, code: str) -> Iterator[Any]:
         pg.fill("#device", "Navigateur de test")
         pg.click("#form-bootstrap button[type=submit]")
         pg.wait_for_selector("#shell:not([hidden])", timeout=15_000)
-        pg.wait_for_selector("#tabs button")  # le shell paraît avant ses onglets
+        pg.wait_for_selector("#tabs-start button")  # onglets dessinés (l'orbe, elle, est fixe)
         yield pg
         browser.close()
 
@@ -355,7 +355,7 @@ def test_wealth_cards_open_tall_sheets_and_strategies_unfold(page: Any) -> None:
     ouvrent leur détail dans un grand panneau ; Stratégies se déplie sur place et mène à
     « Que veux-tu faire ? », la quatrième intention annoncée sans être ouverte."""
     page.reload()
-    page.wait_for_selector("#tabs button")  # le shell paraît avant ses onglets
+    page.wait_for_selector("#tabs-start button")  # onglets dessinés (l'orbe, elle, est fixe)
     open_tab(page, "patrimoine")
     page.wait_for_selector("#patrimoine .wcards .sumcard")
     assert page.locator("#patrimoine .wcards .sumcard").count() == 3
