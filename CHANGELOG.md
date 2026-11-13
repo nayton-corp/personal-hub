@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+## [0.21.2] · 2026-11-13
+
+### Tests
+
+- Tests d'écran : ils attendaient l'orbe (fixe dans la page) au lieu des onglets dessinés par
+  l'app, et partaient trop tôt après un rechargement. La CI de main échouait là, et ni la 0.21.0
+  ni la 0.21.1 n'ont été publiées : cette version les reprend.
+
 ## [0.21.1] · 2026-11-13
 
 ### Sécurité
