@@ -1,9 +1,9 @@
-// Patrimoine : la répartition. Par catégorie, disponibilité, objectif, institution, compte ou actif,
+// Patrimoine : la répartition (carte résumé, détail dans un grand panneau). Par catégorie, disponibilité, objectif, institution, compte ou actif,
 // elle se lit dans les lignes de l'écran et filtre au toucher. Par région, secteur ou devise, elle
 // vient du serveur (/finance/lookthrough), pour la même sélection que la courbe : liquidités
 // comprises, la part qu'un fonds ne détaille pas à part de l'actif sans fiche, une case tirée de
 // la classe dite « estimée », et un total égal au patrimoine affiché.
-import { LOOK, S, activeCount, fName, foldSection, lines, lookPath, sum } from "./wstate.js";
+import { BY, LOOK, S, activeCount, fName, lines, lookPath, sum } from "./wstate.js";
 import { amount, cv, esc, ic, share, skel } from "../../ui.js";
 import { assetMark, facetColor, facetMark, lookMark } from "./meta.js";
 import { byLabel } from "./wsheets.js";
@@ -64,20 +64,21 @@ function checkLine(a, total) {
   return `${lost}<p class="alloc-check">${ic("check")}<span><b class="money">${amount(total)}</b> répartis, ${a.owed < 0 ? "le patrimoine affiché avant dettes" : "égal au patrimoine affiché"}</span></p>`;
 }
 
-// repliée, la répartition tient en une ligne : ses deux plus gros blocs
-function allocSummary(a) {
-  if (a.error) return "<span>Répartition indisponible</span>";
-  if (a.loading) return "<span>Chargement…</span>";
+// la carte résumé : le plus gros bloc et sa part
+export function allocBrief(sel) {
+  const a = allocRows(sel);
+  if (a.error) return { v: "Indisponible", s: "" };
+  if (a.loading) return { v: "…", s: "" };
   const total = a.rows.reduce((t, r) => t + r.v, 0);
-  if (!a.rows.length || total <= 0) return "<span>Rien à répartir avec ces filtres</span>";
-  const top = a.rows.slice(0, 2).map((r) => `${esc(r.name)} ${Math.round((r.v / total) * 100)} %`).join(" · ");
-  return `<span>${top}${a.rows.length > 2 ? ` · ${a.rows.length - 2} de plus` : ""}</span>`;
+  if (!a.rows.length || total <= 0) return { v: "Rien à répartir", s: "" };
+  const r = a.rows[0];
+  return { v: `${Math.round((r.v / total) * 100)} %`, s: `${esc(r.name)} · ${plural(a.rows.length, "bloc")} par ${esc(byLabel(S.by).toLowerCase())}` };
 }
 
-export function allocSection(sel) {
-  const a = allocRows(sel);
-  const by = `<button class="by-btn head-extra" type="button" data-a="w-byopen" aria-haspopup="dialog">par ${esc(byLabel(S.by).toLowerCase())}${ic("down")}</button>`;
-  return foldSection("alloc", "Répartition", by, allocSummary(a), () => allocBody(a));
+// le détail, dans le grand panneau : l'axe se choisit en haut, sans quitter le panneau
+export function allocDetail(sel) {
+  const keys = [...BY, ...LOOK.map(([k]) => k)];
+  return `<div class="hscroll bychips" role="group" aria-label="Répartir par">${keys.map((k) => `<button class="pchip" type="button" data-a="w-by" data-v="${k}" aria-pressed="${S.by === k}">${esc(byLabel(k))}</button>`).join("")}</div>${allocBody(allocRows(sel))}`;
 }
 
 function allocBody(a) {

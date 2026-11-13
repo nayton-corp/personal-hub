@@ -23,10 +23,11 @@ const crumbName = (x) => (x.t === "acc" ? ACC_NAME(x.id) : ASSET_OF(x.id) ? ASSE
 
 export function drawTop(all) {
   const t = trail(), r = here();
-  $("pat-top").classList.toggle("paged", t.length > 0);
+  $("pat-top").classList.toggle("paged", t.length > 1 || r.t === "asset");
   const crumbs = $("patCrumbs");
-  crumbs.hidden = !t.length;
-  if (t.length) {
+  const paged = t.length > 1 || r.t === "asset"; // un compte seul est un filtre : pas de chemin
+  crumbs.hidden = !paged;
+  if (paged) {
     const path = [`<button type="button" data-a="w-crumb" data-v="0">Patrimoine</button>`, ...t.slice(0, -1).map((x, k) => `<button type="button" data-a="w-crumb" data-v="${k + 1}">${esc(crumbName(x))}</button>`)];
     fill(crumbs, `<button class="back-btn" type="button" data-a="back" aria-label="Retour">${ic("back")}</button>
       <span class="crumb-path">${path.join('<span class="sep">›</span>')}<span class="sep">›</span><span class="here">${r.t === "acc" ? "Compte" : "Actif"}</span></span>
@@ -37,13 +38,13 @@ export function drawTop(all) {
 
 function ctxHTML(all, r) {
   if (r.t === "home") {
+    // une seule pilule : elle dit ce que l'écran montre et ouvre tous les filtres
     const n = activeCount();
-    let h = `<button class="scope" type="button" data-a="w-switch" aria-haspopup="dialog" aria-label="${n ? "Patrimoine filtré" : "Tout le patrimoine"}, changer de compte"><span class="ibox tint sm" data-css="--c:var(--accent)" aria-hidden="true">${ic("layers")}</span><span class="t">${n ? "Patrimoine filtré" : "Tout le patrimoine"}</span>${ic("down", "chev")}</button>`;
-    h += `<button class="fbtn${n ? " active" : ""}" type="button" data-a="filters" aria-haspopup="dialog">${ic("filter")}Filtres${n ? `<span class="count" aria-label="${n} actifs">${n}</span>` : ""}</button>`;
+    let h = `<button class="scope${n ? " on" : ""}" type="button" data-a="filters" aria-haspopup="dialog" aria-label="${n ? `Patrimoine filtré, ${n} filtre${n > 1 ? "s" : ""}` : "Tout le patrimoine"}, filtrer"><span class="ibox tint sm" data-css="--c:var(--accent)" aria-hidden="true">${ic(n ? "filter" : "layers")}</span><span class="t">${n ? `${n} filtre${n > 1 ? "s" : ""}` : "Tout le patrimoine"}</span>${ic("down", "chev")}</button>`;
+    if (n) h += `<button class="scope-x" type="button" data-a="w-clear" aria-label="Effacer les filtres">${ic("close")}</button>`;
     for (const f of FILTERS) for (const v of S.filters[f.key]) {
       h += `<button class="chip" type="button" data-a="w-opt" data-v="${f.key}|${esc(v)}" aria-label="Retirer le filtre ${esc(fName(f.key, v))}">${esc(fName(f.key, v))}${ic("close")}</button>`;
     }
-    if (n > 1) h += '<button class="clear-link" type="button" data-a="w-clear">Tout effacer</button>';
     return h;
   }
   if (r.t === "acc") {
@@ -69,13 +70,12 @@ function whereSeg(all, r) {
 
 export function heroHTML(m, all, r = here()) {
   const pts = m.pts;
-  const anyDebt = r.t === "home" && all.some((l) => l.kind === "debt");
-  const ng = anyDebt ? `<span class="netgross">${seg("Dettes dans le total", "w-gross", [["net", "Net", !S.gross], ["gross", "Brut", S.gross]])}</span>` : "";
-  const right = r.t === "asset" ? whereSeg(all, r) : ng;
+  const right = r.t === "asset" ? whereSeg(all, r) : "";
+  const disp = `<button class="tool disp" type="button" data-a="w-display" aria-haspopup="dialog" aria-label="Affichage de la courbe" title="Affichage">${ic("sliders")}</button>`;
   const what = r.t === "acc" ? (m.onlyDebt ? "Reste à rembourser" : "Valeur du compte") : activeCount() ? "Sélection filtrée" : S.gross ? "Patrimoine brut, sans les dettes" : "Patrimoine net";
   if (pts.length < 2) {
     const v = sum(m.sel || []);
-    return `<div class="hero-top"><span class="hero-label">${what}</span>${right}</div><div class="hero-amount num"><span class="money">${nf(v)}</span><small>${base()}</small></div>`;
+    return `<div class="hero-top"><span class="hero-label">${what}</span>${right}</div><div class="hero-amount num"><span><span class="money">${nf(v)}</span><small>${base()}</small></span>${disp}</div>`;
   }
   const k = S.scrub == null ? pts.length - 1 : Math.min(S.scrub, pts.length - 1), p = pts[k], p0 = pts[0];
   const scrub = S.scrub != null;
@@ -114,7 +114,7 @@ export function heroHTML(m, all, r = here()) {
   }
   const late = (m.unc || []).find((u) => u.k1 >= pts.length - 1);
   if (late && !scrub) sub += `<button class="warnline" type="button" data-a="w-why" data-v="${esc(late.why)}">${ic("info")}<span>Fin de courbe estimée : ${late.stale ? `${esc(ACC_NAME(late.acc))}, aucun relevé depuis ${late.age} jours` : "cours ou change manquant"}</span></button>`;
-  return `<div class="hero-top"><span class="hero-label">${label}</span>${right}</div><div class="hero-amount num">${big}</div>${sub}`;
+  return `<div class="hero-top"><span class="hero-label">${label}</span>${right}</div><div class="hero-amount num"><span>${big}</span>${disp}</div>${sub}`;
 }
 
 // --- outils, périodes -------------------------------------------------------------------------
@@ -135,6 +135,24 @@ export function toolbarHTML(m, r, land) {
   h += land ? `<button class="tool" type="button" data-a="w-full" data-v="0" aria-label="Quitter le plein écran">${ic("close")}</button>`
     : `<button class="tool" type="button" data-a="w-full" data-v="1" aria-label="Courbe en plein écran" title="Plein écran">${ic("expand")}</button>`;
   return `<div class="toolbar">${h}</div>`;
+}
+
+// Affichage : tout ce qui règle la courbe, rangé derrière un seul bouton à droite du total
+export function displayBody(m, all, r = here()) {
+  const kind = kindFor(r), grp = (t, h) => (h ? `<h3 class="grp-title">${t}</h3>${h}` : "");
+  let h = "";
+  if (r.t === "asset") {
+    if (m.sel.some((l) => l.isin)) h += grp("Courbe", seg("Courbe", "w-amode", [["pos", "Ma position", S.amode === "pos"], ["price", "Cours", S.amode === "price"]]));
+  } else if (!m.onlyDebt) {
+    h += grp("Mesure", seg("Mesure", "w-mode", [["val", "Valeur", S.mode === "val"], ["perf", "Performance", S.mode === "perf"]]));
+    if (S.mode === "perf") h += grp("Unité", seg("Unité", "w-unit", [["money", base(), S.unit === "money"], ["pct", "%", S.unit === "pct"]]));
+  }
+  if (r.t === "home" && all.some((l) => l.kind === "debt")) h += grp("Dettes dans le total", seg("Dettes dans le total", "w-gross", [["net", "Net", !S.gross], ["gross", "Brut", S.gross]]));
+  if (m.pts.length > 1) h += grp("Sur la courbe", legendHTML(m, kind, "chips"));
+  if (kind === "pct") h += grp("Repère", cmpBtn(m));
+  h += grp("Outils", `<div class="list"><button class="row" type="button" data-a="w-ruler">${ic("ruler")}<span class="row-main"><span class="row-title">Mesurer entre deux dates</span><span class="row-sub">glisse ensuite sur la courbe</span></span></button>
+    <button class="row" type="button" data-a="w-full" data-v="1">${ic("expand")}<span class="row-main"><span class="row-title">Plein écran</span><span class="row-sub">la courbe en paysage</span></span></button></div>`);
+  return `<div class="disp-body">${h}</div>`;
 }
 
 export function periodsHTML() {

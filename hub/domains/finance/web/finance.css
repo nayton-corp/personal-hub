@@ -526,3 +526,23 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .flat-title { font-size: 1rem; font-weight: 700; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .flat .trow:last-child, .flat .row:last-child { border-bottom: 0; }
 .sumcard .v.neg { color: var(--neg); }
+
+/* ---------- v4 : Patrimoine (dosage C : cadre pour ce qui s'ouvre, le reste à plat) ---------- */
+#patrimoine .hero { background: none; padding-bottom: 6px; }
+#patrimoine .hero-amount { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#patrimoine .hero-amount > span:first-child { min-width: 0; }
+.tool.disp { width: 44px; height: 44px; border-radius: var(--r-ctl); background: var(--surface); border: 1px solid var(--line); color: var(--ink); }
+#wper .periods { margin: 12px 0 4px; }
+.wcards { padding: 6px 16px 0; }
+.wcards .sumcard .v .pos { color: var(--pos); } .wcards .sumcard .v .neg { color: var(--neg); }
+.wcards .sumcard .v .pill { vertical-align: middle; }
+#wsecs > .section { background: none; }
+#wsecs > .section .list { background: none; }
+#wsecs .detail-head { background: var(--bg); }
+.bychips { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px 10px; padding: 0 16px; }
+.bychips .pchip { flex: none; padding: 0 12px; }
+.disp-body .seg { width: 100%; }
+.disp-body .lgrow.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.disp-body .lg { border: 1px solid var(--line); min-height: 40px; padding: 0 12px; font-size: .765rem; }
+.disp-body .lg[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.disp-body .row > svg { width: 20px; height: 20px; color: var(--muted); flex: none; }

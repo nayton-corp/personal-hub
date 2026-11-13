@@ -20,13 +20,15 @@ const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
 
 // --- section du patrimoine --------------------------------------------------------------------
 
-function summary(e, live) {
-  if (e.status === "error") return "<span>Stratégies indisponibles</span>";
-  if (!e.data) return "<span>Chargement…</span>";
-  if (!live.length) return "<span>Aucune : écris ta première décision</span>";
+// la carte résumé du patrimoine
+export function stratBrief() {
+  const e = store.use(STRATS);
+  if (e.status === "error") return { v: "Indisponibles", s: "" };
+  if (!e.data) return { v: "…", s: "" };
+  const live = e.data.items.filter((s) => s.status !== "ended");
+  if (!live.length) return { v: "Aucune", s: "écris ta première décision" };
   const reached = live.filter((s) => s.step && s.step.state === "open").length;
-  const head = reached ? `<span class="pill info">${plural(reached, "étape atteinte", "étapes atteintes")}</span>` : "";
-  return `${head}<span>${plural(live.length, "stratégie", "stratégies")}</span>`;
+  return { v: plural(live.length, "stratégie", "stratégies"), s: reached ? plural(reached, "étape atteinte", "étapes atteintes") : "rien à faire pour l'instant", hot: reached > 0 };
 }
 
 function card(s) {
@@ -50,7 +52,7 @@ export function stratSection() {
     return `${list}<button class="secondary strat-add" type="button" data-a="strat-new">Nouvelle stratégie</button>${old}
       <p class="hint">Le hub ne passe aucun ordre : il te prévient, tu décides, il constate au journal.</p>`;
   };
-  return foldSection("strat", "Stratégies", "", summary(e, live), body);
+  return foldSection("strat", "Stratégies", "", "", body);
 }
 
 // les lignes « À faire » de l'accueil : une étape atteinte qui attend une réponse

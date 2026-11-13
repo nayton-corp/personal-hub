@@ -289,38 +289,44 @@ def test_each_settings_rubric_renders_at_375px(page: Any, rubric: str) -> None:
     page.locator('#sources [data-a="back"]').click()
 
 
-def test_an_account_opens_its_page_and_back_returns_home(page: Any) -> None:
-    """Un compte de la liste ouvre sa page ; le chemin dit où l'on est ; le retour du
-    navigateur ramène au patrimoine entier. La courbe passe en plein écran et en revient."""
+def test_an_account_filters_the_screen_and_back_returns_home(page: Any) -> None:
+    """Un compte de la liste filtre l'écran : la pilule porte son nom, sans chemin ni nouvelle
+    page ; le retour du navigateur ramène au patrimoine entier. Le plein écran est rangé dans
+    Affichage, et on en revient."""
     open_tab(page, "patrimoine")
     page.wait_for_load_state("networkidle")
     page.locator('#patrimoine [data-a="w-open"][data-v^="a:"]').first.click()
-    page.wait_for_selector("#patCrumbs:not([hidden])")
-    assert "Patrimoine" in page.inner_text("#patCrumbs")
+    page.wait_for_selector("#filterbar .scope.on")
+    assert page.locator("#patCrumbs").is_hidden()
+    assert page.locator('#filterbar [data-a="w-home"]').count() == 1
     _screen_ok(page, "patrimoine", shot="patrimoine-compte")
     page.go_back()
-    page.wait_for_selector("#patCrumbs", state="hidden")
-    page.locator('#patrimoine [data-a="w-full"][data-v="1"]').click()
+    page.wait_for_selector("#filterbar .scope:not(.on)")
+    assert page.locator("#patrimoine .toolbar").count() == 0  # plus de barre d'outils sur l'écran
+    page.locator('#patrimoine [data-a="w-display"]').click()
+    page.locator('#sheet [data-a="w-full"][data-v="1"]').click()
     page.wait_for_selector("#wland:not([hidden]) svg")
     page.locator('#wland [data-a="w-full"][data-v="0"]').click()
     page.wait_for_selector("#wland", state="hidden")
     _screen_ok(page, "patrimoine")
 
 
-def test_wealth_sections_start_folded_and_strategies_open(page: Any) -> None:
-    """Répartition, Performance et Stratégies sont repliées à l'ouverture : une ligne chacune.
-    Dépliée, la section Stratégies mène à « Que veux-tu faire ? », la quatrième intention
-    annoncée sans être ouverte."""
+def test_wealth_cards_open_tall_sheets_and_strategies_unfold(page: Any) -> None:
+    """Répartition, Rendement et Stratégies tiennent en trois cartes. Les deux premières
+    ouvrent leur détail dans un grand panneau ; Stratégies se déplie sur place et mène à
+    « Que veux-tu faire ? », la quatrième intention annoncée sans être ouverte."""
     page.reload()
     page.wait_for_selector("#shell:not([hidden])")
     open_tab(page, "patrimoine")
-    for key in ("alloc", "strat"):
-        assert page.locator(f"#sec-{key}.folded .sec-sum").is_visible()
-        assert page.locator(f"#{key}-body").inner_text().strip() == ""
-    assert page.locator("#perf.folded").count() == 1
-    page.locator("#sec-alloc .fold-btn").click()
-    page.wait_for_selector("#sec-alloc:not(.folded) .alloc-row")
-    page.locator("#sec-strat .fold-btn").click()
+    page.wait_for_selector("#patrimoine .wcards .sumcard")
+    assert page.locator("#patrimoine .wcards .sumcard").count() == 3
+    page.locator('#patrimoine [data-a="w-card"][data-v="alloc"]').click()
+    page.wait_for_selector("#sheet.tall .alloc-row")
+    page.locator('#sheet [data-a="sheet-close"]').click()
+    page.locator('#patrimoine [data-a="w-card"][data-v="rend"]').click()
+    page.wait_for_selector("#sheet.tall #tabSeg")
+    page.locator('#sheet [data-a="sheet-close"]').click()
+    page.locator('#patrimoine .sumcard[data-a="w-fold"][data-v="strat"]').click()
     page.locator('#sec-strat [data-a="strat-new"]').click()
     page.wait_for_selector('#sheet [data-a="strat-kind"]')
     assert page.locator('#sheet [data-a="strat-kind"]').count() == 3

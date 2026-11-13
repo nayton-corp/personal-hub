@@ -185,7 +185,8 @@ export function chartSVG(m, kind, w, h, opts = {}) {
 
 // --- légende, règle, repère du doigt ----------------------------------------------------------
 
-export function legendHTML(m, kind) {
+// `part` : "line" (ce que la courbe montre), "chips" (les séries à cocher, dans Affichage), ou les deux
+export function legendHTML(m, kind, part) {
   const it = [];
   const lg = (k, cls, c, label) => `<button class="lg" type="button" data-a="w-series" data-v="${k}" aria-pressed="${show(k)}"><i class="${cls}" data-css="--c:${c}"></i>${label}</button>`;
   const fixed = (cls, c, label) => `<span class="lg"><i class="${cls}" data-css="--c:${c}"></i>${label}</span>`;
@@ -214,7 +215,9 @@ export function legendHTML(m, kind) {
   // la zone entre la valeur et les apports : verte au-dessus (gain), rouge en dessous (perte)
   const zone = (kind === "val" || kind === "pos") && show("dep") && !m.onlyDebt && !(kind === "val" && m.hasDebt && !S.gross && show("assets"));
   const est = ((m.unc || []).length ? fixed("dash", "var(--warn)", "Estimé") : "") + (zone ? fixed("box zk", "var(--pos)", "Gain") + fixed("box zk", "var(--neg)", "Perte") : "");
-  return `<div class="lgrow">${it[0]}${est}<span class="gran">${granLabel(m.pts)}</span></div>${it.length > 1 ? `<div class="lgrow chips"><span class="lgl">Afficher</span>${it.slice(1).join("")}</div>` : ""}`;
+  const line = `<div class="lgrow">${it[0]}${est}<span class="gran">${granLabel(m.pts)}</span></div>`;
+  const chips = it.length > 1 ? `<div class="lgrow chips">${part ? "" : '<span class="lgl">Afficher</span>'}${it.slice(1).join("")}</div>` : "";
+  return part === "line" ? line : part === "chips" ? chips : line + chips;
 }
 
 export function rulerHTML(m, kind) {
