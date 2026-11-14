@@ -9,6 +9,7 @@ import {
   FIELD_LABEL, WALLET_ASSETS, button, field, input, instAv, link, networkChecks, open as openConnection, paths,
   readSetting, run, say, secretInput, settingInput, slug, walletOf,
 } from "./connections.js";
+import { instLook } from "./meta.js";
 import { approve, propose } from "./proposals.js";
 import { action, go } from "../../shell.js";
 import { api, store } from "../../store.js";
@@ -51,10 +52,12 @@ function close(to) {
   else action("back")();
 }
 
-function choices(box, items, pick) {
+function choices(box, items, pick, mark) {
   const grid = el("div", "catgrid");
   for (const [value, label] of items) {
     const b = button(label, "");
+    const av = mark && mark(value, label);
+    if (av) b.prepend(av);
     b.addEventListener("click", () => pick(value));
     grid.append(b);
   }
@@ -111,7 +114,7 @@ function pickPlatform(kind) {
         const spec = specs.find((c) => c.name === name);
         if (spec) connect(kind, spec, cs.items);
         else openAccount({ kind });
-      });
+      }, (name, label) => (name && instLook(name) ? instAv(name, label, "") : null));
     })
     .catch((e) => box.append(el("p", "message error", e.message)));
 }

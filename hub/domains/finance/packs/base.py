@@ -70,9 +70,13 @@ class CountryPack:
     person_payment: PersonPayment | None = None
     regions: Regions = field(default_factory=Regions)
     # pour l'app : commerçants du pays → pictogramme (motifs JavaScript, sur le nom en
-    # minuscules), établissements → (sigle, teinte), catégories du pack → (pictogramme, teinte)
+    # minuscules), établissements → (sigle, teinte), catégories du pack → (pictogramme, teinte) ;
+    # logos en couleur des commerçants (motif → logo) et des établissements (clé → logo), les
+    # logos étant des fichiers de l'app (`web/logos/<logo>.svg`)
     merchant_icons: tuple[tuple[str, str], ...] = ()
     institution_marks: Mapping[str, tuple[str, str]] = field(default_factory=dict)
+    merchant_logos: tuple[tuple[str, str], ...] = ()
+    institution_logos: Mapping[str, str] = field(default_factory=dict)
     category_icons: Mapping[str, tuple[str, int]] = field(default_factory=dict)
 
     def pension_cap(self, year: int) -> int | None:
@@ -97,6 +101,8 @@ class CountryPack:
                 "person_payment": self.person_payment.public() if self.person_payment else None,
                 "merchant_icons": [list(x) for x in self.merchant_icons],
                 "institution_marks": {k: list(v) for k, v in self.institution_marks.items()},
+                "merchant_logos": [list(x) for x in self.merchant_logos],
+                "institution_logos": dict(self.institution_logos),
                 "category_icons": {k: list(v) for k, v in self.category_icons.items()},
             },
         }

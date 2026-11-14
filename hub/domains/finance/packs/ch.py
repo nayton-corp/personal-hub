@@ -132,6 +132,18 @@ INSTITUTION_MARKS = {
     "bcge": ("BCGE", "neg"),
 }
 
+# logos en couleur (web/logos/) : commerçants et établissements suisses
+MERCHANT_LOGOS = (
+    (r"\bmigros\b(?!.*bank)", "migros"),
+    (r"\bcoop\b", "coop"),
+    (r"\b(sbb|cff|ffs)\b", "sbb"),
+    (r"swisscom", "swisscom"),
+    (r"twint", "twint"),
+    (r"swissborg", "swissborg"),
+    (r"\bviac\b", "viac"),
+)
+INSTITUTION_LOGOS = {"bcf": "bcf", "viac": "viac", "swissborg": "swissborg"}
+
 # catégories propres au pack de règles suisse : pictogramme et rang de teinte
 CATEGORY_ICONS = {"twint-particuliers": ("swap", 6)}
 
@@ -152,6 +164,8 @@ PACK = CountryPack(
     person_payment=PersonPayment(prefix="debit twint ", mark=",", category="twint-particuliers"),
     merchant_icons=MERCHANT_ICONS,
     institution_marks=INSTITUTION_MARKS,
+    merchant_logos=MERCHANT_LOGOS,
+    institution_logos=INSTITUTION_LOGOS,
     category_icons=CATEGORY_ICONS,
     regions=Regions(
         home="Suisse",

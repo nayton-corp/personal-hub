@@ -2,6 +2,23 @@
 
 ## [Non publié]
 
+## [0.23.0] · 2026-11-14
+
+### À la mise à jour
+
+- Rien à faire sur la machine : les logos sont des fichiers de l'app, rien n'est demandé à un
+  service tiers à l'affichage.
+
+### Finance
+
+- Vrais logos en couleur des comptes, des connexions et des commerçants : BCF, VIAC, IBKR,
+  Binance, Coinbase, Coinbase Wallet, KuCoin, SwissBorg, Ledger, MetaMask, Phantom, Trust Wallet,
+  MultiversX ; Migros, Coop, CFF, Swisscom, TWINT dans le journal. Partout où un compte s'affiche
+  (Comptes, Patrimoine, filtre par compte, répartition, page d'un actif), dans « Ajouter un
+  compte » (le choix de la plateforme) et dans les connexions. Un nom sans logo garde son sigle ou
+  ses initiales. Les commerçants et établissements suisses viennent du pack pays
+  (`merchant_logos`, `institution_logos`).
+
 ## [0.22.1] · 2026-11-14
 
 ### Corrigé
