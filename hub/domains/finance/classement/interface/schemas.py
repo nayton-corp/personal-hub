@@ -39,7 +39,7 @@ class YearlyOut(Out):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     from_: str | None = Field(default=None, alias="from")
-    target: MoneyOut
+    target: MoneyOut | None  # suivie à l'année sans cible en vigueur ce mois-là
     spent: MoneyOut
     ratio: str | None
 

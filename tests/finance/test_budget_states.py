@@ -12,6 +12,8 @@ from hub.domains.finance.classement.app import sentinels
 from hub.domains.finance.classement.app.budget_kinds import SetBudget, SetBudgetHandler
 from hub.domains.finance.classement.model import pace
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.registre.app import ledger
+from hub.platform.db import begin_immediate
 from tests.finance.test_app_reads import (  # noqa: F401  (fixtures)
     client,
     ctx,
@@ -87,3 +89,24 @@ def test_a_zero_target_removes_the_target(
         back = handler.preview(conn, SetBudget(category_id="logement", amount_minor=150_000))
         assert "avant" not in back.summary
         assert back.details["previous"] is None
+
+
+def test_a_month_before_the_first_budget_still_loads(
+    client: TestClient,  # noqa: F811
+    ctx: HubContext,  # noqa: F811
+    year: FinanceDomain,  # noqa: F811
+) -> None:
+    """Une catégorie suivie à l'année dont la cible n'existe qu'à partir de novembre : octobre se
+    lit quand même, sans cible annuelle (l'écran disait « Erreur interne »)."""
+    with begin_immediate(year.engine()) as conn:
+        ledger.append(conn, "budgets", {
+            "category_id": "restaurants", "monthly_minor": 0, "amount_minor": 300_000,
+            "cadence": "year", "currency": "CHF", "valid_from": "2026-11-01",
+            "proposal_id": None, "created_at": "x",
+        })  # fmt: skip
+    brain = token(ctx, "brain=finance")
+    r = client.get("/api/finance/budget?month=2026-10", headers=brain)
+    assert r.status_code == 200
+    line = {x["category"]: x for x in r.json()["lines"]}["restaurants"]
+    assert line["yearly"]["target"] is None
+    assert line["over"] is False
