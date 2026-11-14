@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import Engine
 
@@ -25,9 +25,11 @@ from hub.core import (
     proposals,
     ratelimit,
     sessions,
+    tasks,
     tokens,
 )
 from hub.core.context import HubContext
+from hub.core.domain import NightlyTasks
 from hub.core.health import RESTIC_MARK, VERIFY_STATE
 from hub.core.manifest import unguarded
 from hub.core.notify import Message
@@ -57,7 +59,9 @@ def warn_token(hub: HubContext, token: tokens.TokenInfo) -> bool:
     return hub.notifier.send(Message(title[:120], how, tags="key"))
 
 
-def nightly(hub: HubContext) -> dict[str, Any]:
+def housekeeping(hub: HubContext) -> dict[str, object]:
+    """Le ménage de la nuit : propositions expirées, purges, jetons qui finissent,
+    réconciliation, la nuit des domaines qui ne la découpent pas, puis les événements."""
     with hub.core.engine.begin() as conn:
         expired = proposals.expire(conn)
         purged = (
@@ -70,20 +74,32 @@ def nightly(hub: HubContext) -> dict[str, Any]:
     warned = sum(warn_token(hub, t) for t in ending)
     report = proposal_reconcile.reconcile(hub)
     for d in hub.registry:
-        d.nightly()
+        if not isinstance(d, NightlyTasks):
+            d.nightly()
     synced = proposal_events.sync_events(hub)
-    result = {
+    return {
         "expired": expired,
-        "requested": synced["requested"],
-        "obsoleted": synced["obsoleted"],
-        "notified": synced["notified"],
+        **synced,
         "purged": purged,
         "tokens_warned": warned,
         "reconciled_applied": report.marked_applied,
         "reconciled_released": report.released,
         "domains": hub.registry.names(),
     }
-    log.info("nightly.done", **result)
+
+
+def nightly(hub: HubContext) -> dict[str, object]:
+    """Le ménage, puis chaque morceau de la nuit des domaines (core.tasks), chacun noté ; un
+    morceau en échec n'empêche pas les suivants, la commande échoue à la fin."""
+    with tasks.recorded(hub.core.engine, tasks.HOUSEKEEPING):
+        result = housekeeping(hub)
+    failed = tasks.run_domain_tasks(hub)
+    synced = proposal_events.sync_events(hub)
+    for k, v in synced.items():
+        result[k] = cast(int, result[k]) + v
+    log.info("nightly.done", failed=failed, **result)
+    if failed:
+        raise RuntimeError(f"tâches de nuit en échec : {', '.join(failed)}")
     return result
 
 

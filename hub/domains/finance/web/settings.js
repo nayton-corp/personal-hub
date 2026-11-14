@@ -1,10 +1,11 @@
 // Rubriques de la finance dans Sources et réglages (la page est celle de la coquille, sources.js) :
-// connexions (connections.js), comptes avec leur fraîcheur et leurs réglages (accounts.js), ceux
+// connexions et calculs (connections.js, tasks.js), comptes avec leur fraîcheur et leurs réglages (accounts.js), ceux
 // que les relevés attendent et la page « Ajouter un compte » (addaccount.js), dettes (debts.js),
 // budget, impôts.
 import { accountsList } from "./accounts.js";
 import { accountsCard, enterAddAccount } from "./addaccount.js";
 import { connectionsCard } from "./connections.js";
+import { tasksCard } from "./tasks.js";
 import { debtsList } from "./debts.js";
 import { goodsList } from "./goods.js";
 import { daysSince, locale, staleDays } from "../../format.js";
@@ -60,7 +61,7 @@ export function rubricStatus(k) {
 
 export function rubric(r) {
   if (r === "add-account") enterAddAccount();
-  if (r === "conn") connectionsCard();
+  if (r === "conn") { connectionsCard(); tasksCard(); }
   if (r === "accounts") { accountsList(); accountsCard(); goodsList(); }
   if (r === "debts") debtsList();
   if (r === "budget") {

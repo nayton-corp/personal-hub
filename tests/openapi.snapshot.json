@@ -580,6 +580,11 @@
             "title": "Consecutive Failures",
             "type": "integer"
           },
+          "force_requested": {
+            "default": false,
+            "title": "Force Requested",
+            "type": "boolean"
+          },
           "gaps": {
             "default": [],
             "items": {
@@ -2495,6 +2500,118 @@
           "text"
         ],
         "title": "TalkIn",
+        "type": "object"
+      },
+      "TaskListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TaskOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "TaskListOut",
+        "type": "object"
+      },
+      "TaskOut": {
+        "properties": {
+          "after_sources": {
+            "title": "After Sources",
+            "type": "boolean"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "requested": {
+            "title": "Requested",
+            "type": "boolean"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "when": {
+            "title": "When",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "domain",
+          "label",
+          "when",
+          "requested",
+          "after_sources",
+          "running",
+          "available",
+          "started_at",
+          "ended_at",
+          "outcome",
+          "summary"
+        ],
+        "title": "TaskOut",
         "type": "object"
       },
       "ToolCallOut": {
@@ -4623,6 +4740,93 @@
         "summary": "Search",
         "tags": [
           "cœur"
+        ]
+      }
+    },
+    "/api/tasks": {
+      "get": {
+        "description": "Chaque tâche : son horaire, sa dernière demande, son dernier passage.",
+        "operationId": "list_tasks_api_tasks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Tasks",
+        "tags": [
+          "tâches"
+        ]
+      }
+    },
+    "/api/tasks/refresh": {
+      "post": {
+        "description": "« Tout actualiser » : chaque connexion active, puis les calculs des domaines quand elles\nont fini.",
+        "operationId": "refresh_all_api_tasks_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Refresh All",
+        "tags": [
+          "tâches"
+        ]
+      }
+    },
+    "/api/tasks/{name}/run": {
+      "post": {
+        "description": "Relancer une tâche maintenant : le planificateur la prend dans la minute.",
+        "operationId": "run_task_api_tasks__name__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Task",
+        "tags": [
+          "tâches"
         ]
       }
     },

@@ -187,6 +187,7 @@ class CollectorOut(BaseModel):
     since: str
     check_requested: bool
     run_requested: bool  # actualisation demandée depuis l'app, pas encore faite
+    force_requested: bool = False  # elle relit aussi ce que le flux garde pour plus tard
     last_run: CollectorRunOut | None
     last_success_at: str | None
     can_enable: bool

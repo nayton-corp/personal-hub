@@ -72,6 +72,7 @@ class State:
     link_url: str | None = None
     link_url_at: str | None = None
     run_requested_at: str | None = None
+    force_requested_at: str | None = None
 
     @property
     def open_link(self) -> str | None:
@@ -93,6 +94,7 @@ class State:
             "since": self.since,
             "check_requested": self.check_requested_at is not None,
             "run_requested": self.run_requested_at is not None,
+            "force_requested": self.force_requested_at is not None,
             "last_run": self.last_run,
             "last_success_at": self.last_success_at,
             "can_enable": self.mode != "enabled" and _clean(self.last_run),
@@ -162,11 +164,7 @@ def runs(conn: Connection, name: str, limit: int = 20) -> list[dict[str, Any]]:
 def get(conn: Connection, name: str) -> State:
     connection = _ensure(conn, name)
     row = conn.execute(
-        text(
-            "SELECT mode, consecutive_failures, since, check_requested_at, link_requested_at, "
-            "link_url, link_url_at, run_requested_at FROM collector_state WHERE collector = :c"
-        ),
-        {"c": name},
+        text("SELECT * FROM collector_state WHERE collector = :c"), {"c": name}
     ).one()
     recent = runs(conn, name, 1)
     success = conn.execute(
@@ -191,6 +189,7 @@ def get(conn: Connection, name: str) -> State:
         row.link_url,
         row.link_url_at,
         row.run_requested_at,
+        row.force_requested_at,
     )
 
 
@@ -284,7 +283,7 @@ def record(conn: Connection, name: str, run: Run, by: str) -> Recorded:
     if run.kind == "check":
         changes["check_requested_at"] = None
     else:
-        changes["run_requested_at"] = None
+        changes.update(run_requested_at=None, force_requested_at=None)
     alerts: list[Message] = []
     if run.outcome in SUCCESS:
         changes["consecutive_failures"] = 0

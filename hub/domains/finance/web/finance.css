@@ -606,3 +606,11 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .topbar.spaced .topbar-space { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .viewctl { padding-top: 12px; }
 .viewctl.filterbar:empty, .viewctl.ctxbar:empty { display: none; }
+
+/* État des sources : une connexion se touche pour se régler ; « Actualiser » et le chevron à droite */
+#coll-list .row { cursor: pointer; }
+#coll-list .row .go-btn { width: 28px; height: 28px; color: var(--faint); }
+#coll-list .row .go-btn svg { width: 14px; height: 14px; }
+#coll-list .row:hover .go-btn { color: var(--accent); }
+/* Calculs : la ligne dit l'horaire et le dernier passage, sur deux lignes au besoin */
+#task-list .row .n span { white-space: normal; }

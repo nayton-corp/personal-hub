@@ -311,6 +311,7 @@ export interface CollectorOut {
   since: string;
   check_requested: boolean;
   run_requested: boolean;
+  force_requested?: boolean;
   last_run: CollectorRunOut | null;
   last_success_at: string | null;
   can_enable: boolean;
@@ -1293,6 +1294,25 @@ export interface TabOut {
 export interface TalkIn {
   text: string;
   confirm?: string | null;
+}
+
+export interface TaskListOut {
+  items: TaskOut[];
+}
+
+export interface TaskOut {
+  name: string;
+  domain: string;
+  label: string;
+  when: string;
+  requested: boolean;
+  after_sources: boolean;
+  running: boolean;
+  available: boolean;
+  started_at: string | null;
+  ended_at: string | null;
+  outcome: string | null;
+  summary: string | null;
 }
 
 export interface TodoOut {

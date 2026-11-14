@@ -5,10 +5,11 @@
 // champs et les aides d'ici.
 // La liste se redessine à chaque réponse ; les formulaires, eux, ne sont construits qu'à
 // l'ouverture, pour ne jamais effacer une saisie en cours.
-import { ago, date, el, initials } from "../../format.js";
+import { ago, date, el } from "../../format.js";
 import { gapNote } from "./gaps.js";
-import { brandColors, brandSvg, instLook, logoImg } from "./meta.js";
+import { instAv } from "./instav.js";
 import { api, store } from "../../store.js";
+import { ic } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -20,22 +21,6 @@ export const paths = {
   pending: "/finance/accounts/pending",
 };
 
-// logo de l'institution, sinon son sigle et sa teinte quand on la connaît, sinon initiales
-export function instAv(key, label, cls = "av") {
-  const l = instLook(key) || instLook(label);
-  if (!l) return el("div", cls, initials(label));
-  if (l.logo || l.brand) {
-    const av = el("div", `ibox ${l.logo ? "logo" : "brand"}`, "");
-    if (!l.logo) for (const [k, v] of Object.entries(brandColors(l.brand))) av.style.setProperty(`--${k}`, v);
-    av.innerHTML = l.logo ? logoImg(l.logo) : brandSvg(l.brand); // fichiers et tracés embarqués, pas de donnée utilisateur
-    av.setAttribute("aria-hidden", "true");
-    return av;
-  }
-  const av = el("div", `ibox tint${l.t.length > 2 ? " wm-box" : ""}`, l.t);
-  av.style.setProperty("--c", l.c);
-  av.setAttribute("aria-hidden", "true");
-  return av;
-}
 const MODE_LABEL = { enabled: "actif", degraded: "suspendu", disabled: "désactivé" };
 const OUTCOME_LABEL = {
   ok: "réussi", nothing_new: "rien de nouveau", auth_pending_timeout: "validation non faite",
@@ -62,6 +47,7 @@ const STATES_POLL_MS = 10_000;
 const IMPORT_MS = 45_000;
 // détail d'un run qui dit plus que son issue
 const DETAIL_LABEL = { "quota.day": "quota du jour atteint" };
+const CHEV = ic("chev", "chev-r");
 
 let busy = false;
 let editing = null; // { id } de la connexion ouverte
@@ -135,7 +121,7 @@ function sub(c, s) {
   const last = s && s.last_run;
   const outcome = last && (DETAIL_LABEL[last.detail] || OUTCOME_LABEL[last.outcome] || last.outcome);
   let text = last ? `${outcome} ${ago(Date.parse(last.ended_at))}${gapNote(s)}` : "jamais lancé";
-  if (s && s.run_requested) text = `actualisation en cours · ${text}`;
+  if (s && s.run_requested) text = `${s.force_requested ? "relecture complète" : "actualisation"} en cours · ${text}`;
   if (s && s.check_requested) text += " · contrôle demandé";
   if (s && (s.link_requested || s.link_url)) text += " · liaison en cours";
   return text;
@@ -155,7 +141,6 @@ export function connectionsCard() {
   const states = byName(st.data.items);
   const waiting = st.data.items.some((s) => s.run_requested || s.check_requested);
   watchStates(waiting);
-  $("conn-refresh").disabled = busy || !st.data.items.some((s) => s.ready && s.mode === "enabled" && !s.run_requested);
   if (!cs.data.items.length) list.append(el("div", "empty", "Aucune connexion : « Ajouter » pour la première."));
   for (const c of cs.data.items) {
     const s = states[c.id];
@@ -163,31 +148,33 @@ export function connectionsCard() {
     const r = el("div", "row");
     const av = instAv(c.connector, c.label);
     const n = el("div", "n");
-    const line = el("span", !c.ready || mode !== "enabled" ? "warn" : "", sub(c, s));
+    const line = el("span", !c.ready || mode !== "enabled" ? "warn" : "", mode !== "enabled" && c.ready ? `${MODE_LABEL[mode] || mode} · ${sub(c, s)}` : sub(c, s));
     n.append(el("b", "", c.label), line);
     const v = el("div", "v");
-    v.append(el("b", mode === "enabled" && c.ready ? "muted" : "warn", c.ready ? MODE_LABEL[mode] || mode : "à régler"));
     const post = (what, body) => api(`/collectors/${c.id}/${what}`, body);
-    if (s && c.ready) {
-      if (mode === "enabled" && !s.run_requested) {
-        v.append(link("Actualiser", () => act("coll-msg", async () => { await post("refresh", {}); return refreshText(c); })));
-      }
-      if (mode === "enabled") {
-        v.append(link("Désactiver", () => act("coll-msg", async () => { await post("mode", { mode: "disabled" }); return `${c.label} désactivé.`; })));
-      } else if (s.can_enable) {
-        v.append(link("Réactiver", () => act("coll-msg", async () => { await post("mode", { mode: "enabled" }); return `${c.label} réactivé.`; })));
-      } else if (!s.check_requested) {
-        v.append(link("Contrôler", () => act("coll-msg", async () => { await post("check", {}); return "Contrôle demandé : le collecteur le lance dans la minute."; })));
-      }
+    if (!c.ready) v.append(el("b", "warn", "à régler"));
+    else if (s && mode === "enabled") {
+      if (s.run_requested) v.append(el("b", "muted", "en cours…"));
+      else v.append(link("Actualiser", () => act("coll-msg", async () => { await post("refresh", {}); return refreshText(c); })));
+    } else if (s && s.can_enable) {
+      v.append(link("Réactiver", () => act("coll-msg", async () => { await post("mode", { mode: "enabled" }); return `${c.label} réactivé.`; })));
+    } else if (s && !s.check_requested) {
+      v.append(link("Contrôler", () => act("coll-msg", async () => { await post("check", {}); return "Contrôle demandé : le collecteur le lance dans la minute."; })));
     }
-    v.append(link("Régler", () => open({ id: c.id })));
+    const go = el("button", "icon-btn go-btn", "");
+    go.type = "button";
+    go.innerHTML = CHEV; // tracé embarqué, pas de donnée utilisateur
+    go.setAttribute("aria-label", `Régler ${c.label}`);
+    go.addEventListener("click", () => open({ id: c.id }));
+    v.append(go);
+    r.addEventListener("click", (e) => { if (!e.target.closest("button")) open({ id: c.id }); });
     r.append(av, n, v);
     list.append(r);
   }
   linkStatus();
 }
 
-const refreshHints = async () => Object.fromEntries((await api(paths.catalog).catch(() => ({ items: [] }))).items.filter((x) => x.refresh_hint).map((x) => [x.name, x.refresh_hint]));
+export const refreshHints = async () => Object.fromEntries((await api(paths.catalog).catch(() => ({ items: [] }))).items.filter((x) => x.refresh_hint).map((x) => [x.name, x.refresh_hint]));
 async function refreshText(c) {
   const hint = (await refreshHints())[c.connector];
   return `${c.label} : actualisation demandée, le service la lance dans la minute.${hint ? ` ${hint}` : ""}`;
@@ -212,17 +199,6 @@ function watchStates(on) {
     setTimeout(() => store.invalidate(), 0);
     setTimeout(() => store.invalidate(), IMPORT_MS);
   }
-}
-
-async function refreshAll() {
-  await act("coll-msg", async () => {
-    const out = await api(`${paths.states}/refresh`, {});
-    const asked = out.items.filter((s) => s.run_requested);
-    if (!asked.length) return "Aucune connexion active à actualiser.";
-    const hints = await refreshHints();
-    const todo = [...new Set(asked.map((s) => hints[s.connector]).filter(Boolean))];
-    return `${asked.length} connexion${asked.length > 1 ? "s" : ""} à actualiser dans les minutes qui viennent.${todo.length ? ` ${todo.join(" ")}` : ""}`;
-  });
 }
 
 // --- formulaire d'une connexion -------------------------------------------------------------
@@ -353,6 +329,19 @@ function buildEdit(box, c, spec) {
       await api(`/collectors/${c.id}/link`, {});
       startPolling();
       return "Liaison demandée : le service prépare l'autorisation (une minute au plus).";
+    }));
+  }
+
+  // pause : la connexion ne tourne plus seule (la reprise se fait depuis la liste)
+  const st = (store.data(paths.states) || { items: [] }).items.find((x) => x.name === c.id);
+  if (st && st.mode === "enabled" && c.ready) {
+    box.append(el("h3", "", "Mettre en pause"));
+    box.append(el("p", "hint", "Elle ne tourne plus seule ni avec « Tout actualiser » ; « Réactiver » dans la liste la reprend."));
+    const off = button("Désactiver la connexion", "btn secondary");
+    box.append(off);
+    off.addEventListener("click", () => run(off, msg, async () => {
+      await api(`/collectors/${c.id}/mode`, { mode: "disabled" });
+      return `${c.label} désactivée.`;
     }));
   }
 
@@ -521,8 +510,4 @@ function startPolling() {
 function stopPolling() {
   if (poller) clearInterval(poller);
   poller = null;
-}
-
-export function initConnections() {
-  $("conn-refresh").addEventListener("click", refreshAll);
 }

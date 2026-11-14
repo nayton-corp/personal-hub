@@ -117,6 +117,20 @@ def test_an_ishares_fund_gets_the_issuer_list_once_a_day(make_env: Any, fake_hub
     assert fake_hub.needs_asked == 1
 
 
+def test_a_forced_refresh_reads_every_fund_again_the_same_day(
+    make_env: Any, fake_hub: FakeHub
+) -> None:
+    """« Actualiser » les compositions depuis l'app : chaque fonds est relu, même frais, même
+    déjà lu ce jour-là ; un fonds stable (or, immobilier) reste sans."""
+    env = make_env("market")
+    fake_hub.funds = held(CSPX, since=env.today.isoformat()) + held(ISHARES_EM, stable=True)
+    env.memory.put(funds.DAY_KEY, env.today.isoformat())
+    assert funds.run(env, Http(ishares_site())) == (0, [])
+    env.forced = True
+    assert funds.run(env, Http(ishares_site())) == (1, [])
+    assert list(dropped(env)) == [CSPX]
+
+
 def test_a_fund_reads_the_etf_that_follows_the_same_index(make_env: Any, fake_hub: FakeHub) -> None:
     fake_hub.funds = held(HSBC_EM, UBS_EM)
     env = make_env("market", market={"funds": {HSBC_EM: ISHARES_EM, UBS_EM: ISHARES_EM}})
