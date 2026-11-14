@@ -330,6 +330,12 @@
 .ibox.brand .ic.logo { width: 20px; height: 20px; }
 .ibox.brand.sm .ic.logo { width: 16px; height: 16px; }
 .ibox.brand.xs .ic.logo { width: 13px; height: 13px; }
+/* logos en couleur (logos/*.svg) : carrés pleins, rognés en rond par la pastille */
+.ibox.logo { background: #fff; overflow: hidden; padding: 0; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent); }
+.ibox.logo img { width: 100%; height: 100%; display: block; object-fit: cover; }
+/* halo d'un compte : la teinte de son groupe (catégorie, disponibilité, objectif) */
+.ibox.ring { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ring); }
+.catgrid button .ibox { width: 28px; height: 28px; font-size: .55rem; }
 /* journal : le jour reste sous la barre du haut pendant le défilement */
 .day { position: sticky; top: var(--topbar-h, 150px); z-index: 2; background: var(--surface-2); }
 

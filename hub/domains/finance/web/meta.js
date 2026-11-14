@@ -7,7 +7,7 @@ import { cv, esc, ibox, ic, monogram, pref } from "../../ui.js";
 
 // le pack pays de la finance, compilé une fois par profil lu
 let packSrc = null;
-let packLook = { merchants: [], institutions: {}, categories: {} };
+let packLook = { merchants: [], institutions: {}, categories: {}, merchantLogos: [], instLogos: {} };
 function countryLook() {
   const src = packs().finance || {};
   if (src !== packSrc) {
@@ -16,6 +16,8 @@ function countryLook() {
       merchants: (src.merchant_icons || []).map(([p, icon]) => [new RegExp(p, "i"), icon]),
       institutions: src.institution_marks || {},
       categories: src.category_icons || {},
+      merchantLogos: (src.merchant_logos || []).map(([p, logo]) => [new RegExp(p, "i"), logo]),
+      instLogos: src.institution_logos || {},
     };
   }
   return packLook;
@@ -79,6 +81,47 @@ export function brandMark(slug, size = "sm") {
   const { bg, fg } = brandColors(slug);
   return `<span class="ibox brand ${size}" data-css="--bg:${bg};--fg:${fg}" aria-hidden="true">${brandSvg(slug)}</span>`;
 }
+
+// logos en couleur, fichiers de l'app (logos/<nom>.svg, carrés, fond compris) : servis avec elle,
+// jamais demandés à un service tiers ; les établissements et commerçants du pays viennent du pack
+// pays. Un nom sans logo garde son sigle ou ses initiales.
+const LOGOS = new Set([
+  "binance", "coinbase", "coinbasewallet", "ibkr", "kucoin", "ledger", "metamask", "multiversx", "phantom", "swissborg", "trustwallet",
+]);
+// teinte d'un logo dans les graphiques (répartition par compte), quand l'établissement n'a pas de sigle
+const LOGO_TINT = {
+  binance: "#F0B90B", coinbase: "#0052FF", coinbasewallet: "#0052FF", ibkr: "#D81222", kucoin: "#01BC8D", ledger: "var(--ink)",
+  metamask: "#F6851B", multiversx: "#23F7DD", phantom: "#AB9FF2", swissborg: "#01C38D", trustwallet: "#0500FF",
+};
+export const logoUrl = (logo) => new URL(`./logos/${logo}.svg`, import.meta.url).href;
+export const logoImg = (logo) => `<img src="${logoUrl(logo)}" alt="" decoding="async">`;
+export const logoMark = (logo, size = "sm") => `<span class="ibox logo ${size}" aria-hidden="true">${logoImg(logo)}</span>`;
+// plateformes et portefeuilles connus partout (motifs sur le nom en minuscules, le plus précis d'abord)
+const INST_LOGOS = [
+  [/coinbase ?wallet/, "coinbasewallet"], [/\bcoinbase/, "coinbase"], [/\bbinance/, "binance"], [/\bkucoin/, "kucoin"],
+  [/\bledger\b/, "ledger"], [/meta ?mask/, "metamask"], [/\bphantom\b/, "phantom"], [/\btrust( ?wallet)?\b/, "trustwallet"],
+  [/multiversx|\begld\b|elrond|xportal/, "multiversx"], [/interactive ?brokers|\bibkr\b/, "ibkr"], [/swissborg/, "swissborg"],
+];
+const MERCHANT_LOGOS = [[/binance/, "binance"], [/coinbase/, "coinbase"], [/kucoin/, "kucoin"], [/interactive brokers|\bibkr\b/, "ibkr"]];
+// un logo connu : international (ci-dessus) ou nommé par le pack pays, ses fichiers étant dans logos/
+const known = (logo) => {
+  const pk = countryLook();
+  const ours = logo && (LOGOS.has(logo) || Object.values(pk.instLogos).includes(logo) || pk.merchantLogos.some(([, l]) => l === logo));
+  return ours ? logo : undefined;
+};
+// logo d'un établissement, d'une plateforme ou d'un portefeuille (nom libre : « Ledger BTC »)
+export function instLogo(v) {
+  const k = instKey(v);
+  if (!k) return undefined;
+  const own = countryLook().instLogos;
+  return known(own[k] || own[k.split(" ")[0]] || (INST_LOGOS.find(([re]) => re.test(k)) || [])[1]);
+}
+// logo d'un commerçant (libellé d'écriture)
+export function merchantLogo(name) {
+  const s = (name || "").toLowerCase();
+  if (!s) return undefined;
+  return known((countryLook().merchantLogos.find(([re]) => re.test(s)) || MERCHANT_LOGOS.find(([re]) => re.test(s)) || [])[1]);
+}
 const MERCHANT_BRANDS = [
   [/uber ?eats/, "ubereats"], [/\buber\b/, "uber"], [/netflix/, "netflix"], [/spotify/, "spotify"], [/apple music/, "applemusic"],
   [/icloud/, "icloud"], [/apple\.com|itunes|\bapple\b/, "apple"], [/youtube/, "youtube"], [/google/, "google"], [/galaxus/, "galaxus"],
@@ -134,6 +177,8 @@ export const merchantIcon = (name) => {
 };
 // pictogramme d'une écriture : celui du commerçant s'il est connu, sinon celui de la catégorie
 export function txMark(name, id, groupName, size = "sm") {
+  const logo = merchantLogo(name);
+  if (logo) return logoMark(logo, size);
   const b = merchantBrand(name);
   if (b) return brandMark(b, size);
   const m = merchantIcon(name);
@@ -176,13 +221,24 @@ export function instLook(v) {
   const inst = { ...INST_LOOK, ...countryLook().institutions };
   const l = inst[k] || inst[k.split(" ")[0]];
   const brand = INST_BRAND[k] || INST_BRAND[k.split(" ")[0]];
-  return l ? { t: l[0], c: brand ? BRANDS[brand][1] : `var(--${l[1]})`, brand } : null;
+  const logo = instLogo(v);
+  if (!l && !logo) return null;
+  const c = brand ? BRANDS[brand][1] : l ? `var(--${l[1]})` : LOGO_TINT[logo] || facetColor("inst", "");
+  return { t: l ? l[0] : monogram(v), c, brand, logo };
 }
 export function instMark(v, size = "sm") {
   const l = instLook(v);
+  if (l && l.logo) return logoMark(l.logo, size);
   if (l && l.brand) return brandMark(l.brand, size);
   const t = l ? l.t : monogram(v);
   return ibox(`<span class="${t.length > 2 ? "wm" : ""}">${esc(t)}</span>`, l ? l.c : facetColor("inst", v), size);
+}
+
+// halo d'un compte : la teinte de son groupe dans la répartition affichée, autour du logo
+export function ringed(mark, color) {
+  if (!color) return mark;
+  const m = mark.replace('class="ibox', 'class="ibox ring');
+  return m.includes('data-css="') ? m.replace('data-css="', `data-css="--ring:${color};`) : m.replace('class="ibox ring', `data-css="--ring:${color}" class="ibox ring`);
 }
 
 export const facetName = (key, v) => FACET[key].names[v] ?? v;

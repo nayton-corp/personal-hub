@@ -1,7 +1,7 @@
 // Patrimoine : l'état de l'écran (filtres, période, mesure, séries affichées), les lignes (un actif
 // dans un compte, une dette) et la page ouverte. Les lignes viennent de /finance/accounts,
 // /finance/holdings et /finance/debts, valorisées au dernier point de /finance/networth/history.
-import { CCY_NAME, FACETS, assetMark, facetMark, facetName, instMark, setInstitutions } from "./meta.js";
+import { CCY_NAME, FACETS, assetMark, facetColor, facetMark, facetName, instMark, ringed, setInstitutions } from "./meta.js";
 import { MOIS, MOIS_L, base, units } from "../../format.js";
 import { ic, pref, setPref } from "../../ui.js";
 import { store } from "../../store.js";
@@ -148,6 +148,12 @@ export const assetOf = (id) => ASSET_F.lines?.[id] || null;
 export const accName = (id) => ACC_F.names[id] ?? id;
 export const accLabel = (l) => (l.inst === l.accName ? l.accName : `${l.inst} · ${l.accName}`);
 export const fName = (key, v) => (key === "acc" ? ACC_F.names[v] ?? v : key === "asset" ? ASSET_F.names[v] ?? v : facetName(key, v));
+// marque d'un compte (ses lignes) : logo, et halo à la teinte de sa catégorie (celle de sa plus
+// grosse ligne), la même partout quel que soit le réglage de la répartition
+export function accMark(ls, size = "sm") {
+  const top = ls.reduce((a, b) => (Math.abs(b.value) > Math.abs(a.value) ? b : a));
+  return ringed(instMark(ls[0].inst, size), top.cat ? facetColor("cat", top.cat) : null);
+}
 export function fMark(key, v, size = "sm") {
   if (key === "acc") return instMark(ACC_F.lines[v] ? ACC_F.lines[v].inst : v, size);
   if (key === "asset") return ASSET_F.lines[v] ? assetMark(ASSET_F.lines[v], size) : facetMark("cat", "funds", size);

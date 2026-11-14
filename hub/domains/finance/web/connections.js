@@ -7,7 +7,7 @@
 // l'ouverture, pour ne jamais effacer une saisie en cours.
 import { ago, date, el, initials } from "../../format.js";
 import { gapNote } from "./gaps.js";
-import { brandColors, brandSvg, instLook } from "./meta.js";
+import { brandColors, brandSvg, instLook, logoImg } from "./meta.js";
 import { api, store } from "../../store.js";
 
 const $ = (id) => document.getElementById(id);
@@ -20,16 +20,14 @@ export const paths = {
   pending: "/finance/accounts/pending",
 };
 
-// sigle et teinte de l'institution quand on la connaît, sinon initiales
+// logo de l'institution, sinon son sigle et sa teinte quand on la connaît, sinon initiales
 export function instAv(key, label, cls = "av") {
   const l = instLook(key) || instLook(label);
   if (!l) return el("div", cls, initials(label));
-  if (l.brand) {
-    const av = el("div", "ibox brand", "");
-    const { bg, fg } = brandColors(l.brand);
-    av.style.setProperty("--bg", bg);
-    av.style.setProperty("--fg", fg);
-    av.innerHTML = brandSvg(l.brand); // tracé embarqué, pas de donnée utilisateur
+  if (l.logo || l.brand) {
+    const av = el("div", `ibox ${l.logo ? "logo" : "brand"}`, "");
+    if (!l.logo) for (const [k, v] of Object.entries(brandColors(l.brand))) av.style.setProperty(`--${k}`, v);
+    av.innerHTML = l.logo ? logoImg(l.logo) : brandSvg(l.brand); // fichiers et tracés embarqués, pas de donnée utilisateur
     av.setAttribute("aria-hidden", "true");
     return av;
   }
