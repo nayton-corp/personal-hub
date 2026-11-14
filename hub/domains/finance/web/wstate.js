@@ -60,7 +60,7 @@ export const S = {
 };
 // les sections du patrimoine s'ouvrent au toucher et repartent repliées à chaque ouverture de
 // l'app : l'écran reste court, la liste des comptes à portée de pouce
-export const FOLD = { alloc: true, perf: true, strat: true };
+export const FOLD = { alloc: true, perf: true };
 // une section repliable : `sum` se lit repliée, `body()` n'est calculé que dépliée
 export function foldSection(k, title, extra, sum, body) {
   const head = `<button class="fold-btn" type="button" data-a="w-fold" data-v="${k}" aria-expanded="${!FOLD[k]}" aria-controls="${k}-body">

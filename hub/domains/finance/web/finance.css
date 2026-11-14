@@ -435,12 +435,13 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .pchip.more svg { width: 20px; height: 20px; }
 .pchip.custom { flex: 2.6; font-size: .647rem; }
 .prow { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; border-bottom: 1px solid var(--line); }
-.prow-main { display: flex; align-items: center; gap: 8px; min-height: 48px; text-align: left; }
+.prow-main { display: flex; align-items: center; gap: 8px; min-height: 44px; text-align: left; }
 .prow-main b { width: 40px; font-weight: 700; }
 .prow-main span { flex: 1; color: var(--muted); font-size: .794rem; }
 .prow-main .ic { color: var(--accent); width: 18px; height: 18px; }
-.pin { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; color: var(--faint); }
-.pin[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.pin { width: 44px; height: 44px; display: grid; place-items: center; color: var(--faint); opacity: .55; }
+.pin[aria-pressed="true"] { color: var(--accent); opacity: 1; }
+.pcustom { width: 100%; margin-top: 10px; }
 .by-btn { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 10px; border-radius: 10px; background: var(--surface-2); font-size: .735rem; font-weight: 600; color: var(--accent); }
 .by-btn svg { width: 14px; height: 14px; }
 .alloc-row { grid-template-columns: 30px minmax(0, 1fr) auto auto 18px; width: calc(100% + 12px); }

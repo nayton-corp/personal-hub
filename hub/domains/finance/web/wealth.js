@@ -4,7 +4,7 @@
 // la barre de contexte dit toujours ce que l'écran montre. État et lignes : wstate.js ; courbe :
 // wmodel.js et wchart.js ; haut de l'écran : whero.js ; panneaux : wsheets.js.
 import { BY, FILTERS, FOLD, PRESETS, S, SORTS, TABS, accLabel, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
-import { SH, SHEETS, amount, announce, closeSheet, esc, fill, ic, money, n0, openSheet, skel, toast } from "../../ui.js";
+import { SH, SHEETS, amount, announce, closeSheet, esc, fill, ic, n0, openSheet, skel, toast } from "../../ui.js";
 import { accountPage, assetPage } from "./wpages.js";
 import { allocBrief, allocDetail } from "./walloc.js";
 import { chartSVG, flagHTML, gutter, legendHTML, nearest, rulerHTML } from "./wchart.js";
@@ -16,7 +16,7 @@ import { moneyRate } from "./wcurve.js";
 import { DEBT_KIND, debtMark } from "./debts.js";
 import { goodMark } from "./goods.js";
 import { byLabel } from "./wsheets.js";
-import { stratBrief, stratSection } from "./strategies.js";
+import { stratBrief } from "./strategies.js";
 import * as more from "./wcards.js";
 import * as place from "./wplace.js";
 import { base } from "../../format.js";
@@ -39,9 +39,18 @@ export function init() {
   document.addEventListener("pointerup", (e) => pointer(e, "up"));
   document.addEventListener("keydown", keys);
   window.addEventListener("resize", () => { if (store.params.tab === "patrimoine") render(); });
-  window.addEventListener("scroll", () => {
-    if (store.params.tab === "patrimoine") $("pat-top").classList.toggle("compact", window.scrollY > 110);
-  }, { passive: true });
+  // la barre du haut change de hauteur (chemin d'un compte ou d'un actif, police chargée) :
+  // les onglets Comptes / Actifs se collent toujours juste dessous, jamais à moitié cachés
+  new ResizeObserver(() => $("patrimoine").style.setProperty("--topbar-h", `${$("pat-top").offsetHeight}px`)).observe($("pat-top"));
+  // téléphone tourné en paysage sur le patrimoine : la courbe passe en plein écran ; revenu en
+  // portrait, elle en ressort, sauf si le plein écran avait été ouvert à la main
+  const turned = matchMedia("(orientation: landscape) and (max-height: 540px)");
+  let auto = false;
+  turned.addEventListener("change", (e) => {
+    if (store.params.tab !== "patrimoine" || $("patrimoine").hidden) return;
+    if (e.matches && !S.full) { auto = true; actions["w-full"]("1"); }
+    else if (!e.matches && auto && S.full) { auto = false; actions["w-full"]("0"); }
+  });
 }
 
 // --- doigt : lire une date, mesurer entre deux dates ------------------------------------------
@@ -133,9 +142,6 @@ export function render() {
   fill($("legend"), M.pts.length > 1 ? legendHTML(M, kind, "line") : "");
   fill($("wper"), periodsHTML());
   fill($("wsecs"), r.t === "acc" ? accountPage(M, r) : r.t === "asset" ? assetPage(M, all, r) : homeSections(all));
-  fill($("miniTotal"), `${r.t === "home" && activeCount() ? "Sélection · " : ""}${money(sum(M.sel))} ${base()}`);
-  const dh = $("detailHead");
-  if (dh) requestAnimationFrame(() => dh.style.setProperty("--topbar-h", `${$("pat-top").offsetHeight}px`));
 }
 
 // --- patrimoine : répartition, performance, comptes et actifs --------------------------------
@@ -145,7 +151,7 @@ const perfCtx = (all) => ({
   fmtDate: (d) => d.split("-").reverse().join("."),
 });
 
-// trois cartes résumé : leur détail s'ouvre dans un grand panneau ; Stratégies se déplie sur place
+// trois cartes résumé : leur détail s'ouvre dans un grand panneau, Stratégies compris
 function cards(sel) {
   const a = allocBrief(sel), p = M.perf && M.perf.summary, st = stratBrief();
   const card = (a2, v, l, val, sub, cls = "") => `<button class="sumcard${cls}" type="button" data-a="${a2}"${v ?
@@ -161,8 +167,7 @@ function cards(sel) {
       `${r == null ? "" : `${ratePct(r)} · `}${esc(range().label)}`);
   }
   return `<div class="sumcards wcards">${card("w-card", "alloc", "Répartition", a.v, a.s)}${second}${more.moreCards()}
-    ${FOLD.strat ? `<button class="sumcard wide" type="button" data-a="w-fold" data-v="strat" aria-expanded="false"><span class="l">Stratégies</span><span class="v">${st.v}${st.hot ?
-      ' <span class="pill info">à voir</span>' : ""}</span><span class="s">${st.s}</span></button>` : ""}</div>${FOLD.strat ? "" : stratSection()}`;
+    ${card("w-card", "strat", "Stratégies", `${st.v}${st.hot ? ' <span class="pill info">à voir</span>' : ""}`, st.s, " wide")}</div>`;
 }
 
 SHEETS.walloc = () => ({ title: "Répartition", tall: true, body: allocDetail(scopeLines(lines() || [], { t: "home" })) });
@@ -199,8 +204,8 @@ function listSection(sel) {
     return gainSpan(g, x ? x.v : null).replace(` ${base()}`, "");
   };
   return `<section class="section" aria-labelledby="t-detail"><div class="detail-head" id="detailHead">
-      <div class="seg" role="group" aria-label="Comptes ou actifs">${[["acc", "Comptes"], ["asset", "Actifs"]].map(([k, l]) => `<button type="button" data-a="w-view" data-v="${k}" aria-pressed="${S.view === k}">${l}</button>`).join("")}</div>
-      <div class="detail-meta"><span>${rows.length} ${S.view === "acc" ? "compte" : "actif"}${rows.length > 1 ? "s" : ""}</span><button class="sort-btn" type="button" data-a="w-sort" aria-label="Trier par ${so.label}, toucher pour changer">Trier : ${so.label}${ic("sort")}</button></div></div>
+      <div class="vtabs" role="group" aria-label="Comptes ou actifs">${[["acc", "Comptes"], ["asset", "Actifs"]].map(([k, l]) => `<button type="button" data-a="w-view" data-v="${k}" aria-pressed="${S.view === k}">${l}${S.view === k ? ` <b class="num">${rows.length}</b>` : ""}</button>`).join("")}</div>
+      <button class="sort-btn" type="button" data-a="w-sort" aria-label="Trier par ${so.label}, toucher pour changer">Trier : ${so.label}${ic("sort")}</button></div>
     <h2 class="sr" id="t-detail">Comptes et actifs</h2>
     <div class="list">${rows.length ? rows.map((r) => `<button class="row row2 go-row" type="button" data-a="w-open" data-v="${esc(r.key)}">${r.mark}
       <span class="row-main"><span class="row-title">${esc(r.title)}</span><span class="row-sub">${r.sub}</span></span>
@@ -249,7 +254,11 @@ export const actions = {
   "w-clear": () => { for (const f of FILTERS) S.filters[f.key].clear(); store.notify(); announceSel(); },
   "w-byopen": () => openSheet("by"),
   "w-by": (v) => { if (SH.kind === "by") closeSheet(); set({ by: v }); },
-  "w-card": (v) => { if (v !== "alloc") S.tab = v; openSheet(v === "alloc" ? "walloc" : "wperf"); },
+  "w-card": (v) => {
+    if (v === "alloc" || v === "strat") return openSheet(`w${v}`);
+    S.tab = v;
+    openSheet("wperf");
+  },
   "w-display": () => openSheet("wdisplay"),
   "w-alloc": (v) => {
     const prev = { filters: Object.fromEntries(FILTERS.map((f) => [f.key, new Set(S.filters[f.key])])), by: S.by };

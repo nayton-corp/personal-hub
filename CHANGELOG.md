@@ -2,6 +2,27 @@
 
 ## [Non publié]
 
+## [0.21.3] · 2026-11-14
+
+### Corrigé
+
+- Patrimoine : les onglets Comptes / Actifs se collaient sous la barre du haut à la hauteur
+  mesurée au premier rendu ; quand le total apparaît au défilement, la barre grandit et les
+  onglets passaient à moitié dessous. Ils suivent maintenant sa hauteur réelle.
+- Patrimoine : les onglets Comptes / Actifs étaient un sélecteur dont le fond se confondait avec
+  la page (un bouton blanc flottant et un mot gris). Ce sont maintenant des onglets soulignés, sur
+  une seule ligne avec « Trier », le nombre d'éléments à côté de l'onglet actif : l'en-tête collé
+  passe de 127 à 49 px.
+- Patrimoine : tourner le téléphone en paysage ouvre la courbe en plein écran, comme prévu par la
+  refonte ; revenu en portrait, elle se referme (sauf si le plein écran avait été ouvert à la main).
+- Patrimoine : plus de total dans la barre du haut. Il apparaissait et disparaissait au
+  défilement, et la barre changeait de hauteur à chaque fois.
+- Patrimoine : la carte Stratégies ouvre son détail dans le même grand panneau que Répartition et
+  Rendement, au lieu de se déplier sur la page.
+- Panneau Période : il tient sans défiler sur un grand téléphone. Lignes plus serrées, épingles
+  sans fond (bleues quand la période est dans la barre), et le bouton « Afficher cette plage » sous
+  les dates au lieu d'être collé en bas du panneau.
+
 ## [0.21.2] · 2026-11-13
 
 ### Tests
