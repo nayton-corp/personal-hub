@@ -2,13 +2,45 @@
 
 ## [Non publié]
 
-## [0.21.4] · 2026-11-14
+## [0.22.1] · 2026-11-14
 
 ### Corrigé
 
 - Budget : un mois d'avant le premier budget s'affichait « Erreur interne » dès qu'une catégorie
   était suivie à l'année : sa cible annuelle, absente ce mois-là, était exigée par la réponse.
   Elle peut maintenant manquer (« Sans cible annuelle »).
+
+## [0.22.0] · 2026-11-14
+
+### À la mise à jour
+
+- Rien à faire sur la machine (migration finance 0030 : une colonne ajoutée, vide). Dès la
+  première nuit, le hub peut proposer dans « À valider » les achats réguliers qu'il repère.
+
+### Finance
+
+- Stratégies repérées : chaque nuit, le hub cherche dans le journal des achats réguliers du même
+  actif (un DCA) et propose la stratégie dans « À valider », avec ce qu'il a vu (une barre par
+  échéance) et les garde-fous remplis. Garde-fous : au moins 4 achats d'affilée (6 chaque
+  semaine), rythme régulier, montants à ±15 %, série en cours, aucune vente pendant la série. Une
+  carte refusée ne revient pas, sauf si le montant ou le rythme change nettement.
+- Un 3a se lit au niveau du compte : le versement régulier, pas chaque fonds. Nouvelle cible
+  d'achat régulier `account:<id>` (« Le 25 du mois, je verse 600 CHF sur 3a VIAC »).
+- Une stratégie repérée et validée part du premier achat : les échéances passées sont posées
+  tenues ou passées d'après le journal, et la liste la marque « Repérée ».
+- La phrase d'un achat régulier dit « Le 1er du mois » et « 200 CHF » (au lieu de « Le 1 du
+  mois » et « 200.00 CHF »).
+
+### App
+
+- Les pastilles (« Active », « à voir »…) étaient hautes de 40 px partout : une règle des
+  boutons de l'assistant (`.pill`) s'appliquait à toute l'app et pouvait faire déborder une
+  ligne sur téléphone. Elle ne vaut plus que pour ses boutons.
+
+### Cœur
+
+- Une demande de carte d'un domaine (`proposal.request`) peut porter une `create_key` : une seule
+  carte pour cette clé, quel que soit son sort.
 
 ## [0.21.3] · 2026-11-14
 

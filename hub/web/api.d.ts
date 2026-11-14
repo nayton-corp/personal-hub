@@ -1234,6 +1234,7 @@ export interface StrategyOut {
   status: string;
   state: string;
   created_on: string;
+  origin?: string | null;
   level: Record<string, any>;
   step: StrategyStepOut | null;
   steps: StrategyStepOut[];

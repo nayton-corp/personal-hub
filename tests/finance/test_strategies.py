@@ -289,7 +289,7 @@ def test_recurring_reminds_once_and_ticks_from_the_journal(
     }
     p = create(ctx, "save_strategy", dca)
     assert p.preview["summary"] == (
-        "Nouvelle stratégie : Le 5 du mois, j'achète pour 200.00 CHF de Bitcoin."
+        "Nouvelle stratégie : Le 5 du mois, j'achète pour 200 CHF de Bitcoin."
     )
     accept(ctx, p)
     assert coins.run_strategies() == []  # l'échéance du 5 est d'avant la stratégie : rien de dû
@@ -363,7 +363,7 @@ def test_dip_needs_a_big_fall_and_a_fresh_price(
     p = create(ctx, "save_strategy", dip)
     assert p.preview["summary"] == (
         "Nouvelle stratégie : Si Bitcoin baisse de 20 % depuis son plus haut des 3 derniers "
-        "mois, j'en achète pour 500.00 CHF."
+        "mois, j'en achète pour 500 CHF."
     )
     accept(ctx, p)
     assert coins.run_strategies() == []  # un seul cours dans la fenêtre : pas de baisse

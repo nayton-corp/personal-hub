@@ -18,6 +18,19 @@ test("la phrase de chaque genre", () => {
   assert.equal(M.phrase("dip", "Bitcoin", { ...dip, amount_minor: 0 }, money), "");
 });
 
+test("le 1er du mois, un montant rond sans centimes, un versement sur un compte", () => {
+  const n0 = (v) => String(Math.round(v)), n2 = (v) => v.toFixed(2);
+  const round = (m) => M.roundMoney(m, 2, "CHF", n0, n2);
+  assert.equal(round(20000), "200 CHF");
+  assert.equal(round(21250), "212.50 CHF");
+  const dca = { cadence: "monthly", day: 1, amount_minor: 20000 };
+  assert.equal(M.phrase("recurring", "Bitcoin", dca, round), "Le 1er du mois, j'achète pour 200 CHF de Bitcoin.");
+  assert.equal(M.phrase("recurring", "3a VIAC", { ...dca, day: 25, amount_minor: 60000 }, round, true), "Le 25 du mois, je verse 600 CHF sur 3a VIAC.");
+  assert.ok(M.isAccount("account:01ABC"));
+  assert.ok(!M.isAccount("CRYPTO:BTC"));
+  assert.ok(M.isDetected({ origin: "detected" }));
+});
+
 test("des seuils larges : pas de petite baisse, pas de paliers serrés", () => {
   assert.ok(Math.min(...M.DROPS) >= 15);
   assert.equal(M.tiersProblem([{ at_pct: 100 }, { at_pct: 105 }]), "Au moins 10 points entre deux paliers");

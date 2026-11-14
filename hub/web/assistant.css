@@ -25,9 +25,9 @@
 .answer .said { font-size: .735rem; color: var(--muted); }
 @keyframes glass-in { 0% { opacity: 0; transform: translateY(32px) scale(.7); } 100% { opacity: 1; transform: none; } }
 .pills { display: flex; flex-wrap: wrap; gap: 8px; }
-.pill { min-height: 40px; padding: 0 16px; border-radius: 999px; font-size: .824rem; font-weight: 600; background: var(--surface-2); color: var(--ink); }
-.pill.p1 { background: var(--ink); color: var(--surface); }
-.pill.p3 { background: transparent; color: var(--muted); }
+.pills .pill { min-height: 40px; padding: 0 16px; border-radius: 999px; font-size: .824rem; font-weight: 600; background: var(--surface-2); color: var(--ink); }
+.pills .pill.p1 { background: var(--ink); color: var(--surface); }
+.pills .pill.p3 { background: transparent; color: var(--muted); }
 
 /* --- l'écoute ------------------------------------------------------------------------------ */
 .listen { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 24px calc(120px + var(--bottom)); background: color-mix(in srgb, var(--surface-2) 78%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
