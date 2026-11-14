@@ -9,7 +9,9 @@ un commerçant (usage nominatif), sans lien ni approbation de leur part.
 
 | Logo | Source du tracé |
 | --- | --- |
-| binance, coinbase, kucoin, swissborg (plateformes) ; ledger, metamask, phantom, trustwallet, coinbasewallet (portefeuilles) ; multiversx (réseau) | [web3icons](https://github.com/0xa3k5/web3icons) `@web3icons/core` 4.0.59, MIT, variante « background » |
+| cryptos (`coins/<symbole>.svg`, 92) ; binance, coinbase, kucoin, swissborg (plateformes) ; ledger, metamask, phantom, trustwallet, coinbasewallet (portefeuilles) ; multiversx (réseau) | [web3icons](https://github.com/0xa3k5/web3icons) `@web3icons/core` 4.0.59, MIT, variante « background » |
+| tao (Bittensor) | τ blanc sur noir, dessiné ici |
+| ishares, vanguard, ubs, xtrackers, invesco, fidelity, zkb (émetteurs de fonds, d'après le nom du fonds) | repris de SVG publics (selfh.st/icons, detain/svg-logos, imskr/northstar, dharunashokkumar/api.dharun.dev), la marque seule |
 | sbb (CFF) | signet du design system des CFF, [`@sbb-esta/lyne-elements`](https://github.com/sbb-design-systems/lyne-components) 5.13.2, MIT |
 | ibkr | [selfh.st/icons](https://github.com/selfhst/icons) `interactive-brokers.svg` |
 | migros | [migros/fotoobo](https://github.com/migros/fotoobo) `docs/source/migros.svg`, en blanc sur orange |

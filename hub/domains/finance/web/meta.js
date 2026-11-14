@@ -7,7 +7,7 @@ import { cv, esc, ibox, ic, monogram, pref } from "../../ui.js";
 
 // le pack pays de la finance, compilé une fois par profil lu
 let packSrc = null;
-let packLook = { merchants: [], institutions: {}, categories: {}, merchantLogos: [], instLogos: {} };
+let packLook = { merchants: [], institutions: {}, categories: {}, merchantLogos: [], instLogos: {}, fundLogos: [] };
 function countryLook() {
   const src = packs().finance || {};
   if (src !== packSrc) {
@@ -18,6 +18,7 @@ function countryLook() {
       categories: src.category_icons || {},
       merchantLogos: (src.merchant_logos || []).map(([p, logo]) => [new RegExp(p, "i"), logo]),
       instLogos: src.institution_logos || {},
+      fundLogos: (src.fund_logos || []).map(([p, logo]) => [new RegExp(p, "i"), logo]),
     };
   }
   return packLook;
@@ -86,6 +87,7 @@ export function brandMark(slug, size = "sm") {
 // jamais demandés à un service tiers ; les établissements et commerçants du pays viennent du pack
 // pays. Un nom sans logo garde son sigle ou ses initiales.
 const LOGOS = new Set([
+  "fidelity", "invesco", "ishares", "ubs", "vanguard", "xtrackers",
   "binance", "coinbase", "coinbasewallet", "ibkr", "kucoin", "ledger", "metamask", "multiversx", "phantom", "swissborg", "trustwallet",
 ]);
 // teinte d'un logo dans les graphiques (répartition par compte), quand l'établissement n'a pas de sigle
@@ -263,10 +265,38 @@ const CRYPTO_TINT = { BTC: "var(--s3)", ETH: "var(--s4)", USDT: "var(--s2)", USD
   XRP: "var(--s6)", LTC: "var(--s6)", ATOM: "var(--s6)", TRX: "var(--s5)", DAI: "var(--s3)", XMR: "var(--s3)" };
 const CCY_TINT = { CHF: "var(--neg)", EUR: "var(--s1)", USD: "var(--s2)", GBP: "var(--s4)", JPY: "var(--s5)" };
 
-const COIN_BRAND = { BTC: "bitcoin", ETH: "ethereum", USDT: "tether", SOL: "solana", ADA: "cardano", DOT: "polkadot", DOGE: "dogecoin",
-  LTC: "litecoin", XRP: "xrp", XMR: "monero", LINK: "chainlink", NEAR: "near", POL: "polygon", MATIC: "polygon", BNB: "bnbchain" };
+// logos des cryptos (logos/coins/<symbole>.svg, web3icons) et des émetteurs de fonds (d'après le
+// nom du fonds ; ceux du pays viennent du pack pays)
+const COINS = new Set([
+  "1inch", "aave", "ada", "algo", "apt", "ar", "arb", "atom", "avax", "axs", "bch", "bnb", "btc", "cake", "celo",
+  "chz", "comp", "cro", "crv", "dai", "dash", "doge", "dot", "egld", "eos", "etc", "eth", "ethw", "eurc", "fet",
+  "fil", "flow", "ftm", "gala", "grt", "hbar", "hnt", "icp", "icx", "imx", "jasmy", "jup", "kas", "kava", "kcs",
+  "ksm", "ldo", "link", "ltc", "luna", "lunc", "mana", "matic", "mina", "mkr", "near", "neo", "one", "op", "osmo",
+  "paxg", "pepe", "pol", "pyth", "qnt", "rndr", "rose", "rune", "sand", "sei", "shib", "snx", "sol", "stx", "sui",
+  "tao", "theta", "tia", "trx", "tusd", "uni", "usdc", "usdt", "ustc", "vet", "wbtc", "xlm", "xmr", "xrp", "xtz",
+  "zec", "zil"
+]);
+const COIN_ALIAS = { render: "rndr" };
+const FUND_LOGOS = [
+  [/\bishares\b|blackrock/, "ishares"], [/vanguard/, "vanguard"], [/x-?trackers/, "xtrackers"], [/invesco/, "invesco"],
+  [/fidelity/, "fidelity"], [/\bubs\b|\bcsif\b|credit suisse/, "ubs"],
+];
+const coinLogo = (sym) => {
+  const raw = (sym || "").toLowerCase().replace(/^crypto:/, "");
+  const k = COIN_ALIAS[raw] || raw;
+  return COINS.has(k) ? k : undefined;
+};
+export function fundLogo(name) {
+  const s = (name || "").toLowerCase();
+  if (!s) return undefined;
+  const found = countryLook().fundLogos.find(([re]) => re.test(s)) || FUND_LOGOS.find(([re]) => re.test(s));
+  return found ? found[1] : undefined;
+}
 export function assetMark(a, size = "") {
-  if (COIN_BRAND[a.symbol]) return brandMark(COIN_BRAND[a.symbol], size);
+  const coin = a.cat === "crypto" || a.symbol ? coinLogo(a.symbol) : undefined;
+  if (coin) return logoMark(`coins/${coin}`, size);
+  const fund = a.cat === "funds" ? fundLogo(a.name) : undefined;
+  if (fund) return logoMark(fund, size);
   const g = GLYPH[a.symbol] || monogram(a.name);
   const color = CRYPTO_TINT[a.symbol] || facetColor("cat", a.cat);
   return ibox(`<span class="${g.length === 1 ? "glyph" : ""}">${esc(g)}</span>`, color, size);

@@ -142,6 +142,7 @@ MERCHANT_LOGOS = (
     (r"swissborg", "swissborg"),
     (r"\bviac\b", "viac"),
 )
+FUND_LOGOS = ((r"\bzkb\b|z[uü]rcher kantonalbank", "zkb"),)
 INSTITUTION_LOGOS = {"bcf": "bcf", "viac": "viac", "swissborg": "swissborg"}
 
 # catégories propres au pack de règles suisse : pictogramme et rang de teinte
@@ -166,6 +167,7 @@ PACK = CountryPack(
     institution_marks=INSTITUTION_MARKS,
     merchant_logos=MERCHANT_LOGOS,
     institution_logos=INSTITUTION_LOGOS,
+    fund_logos=FUND_LOGOS,
     category_icons=CATEGORY_ICONS,
     regions=Regions(
         home="Suisse",

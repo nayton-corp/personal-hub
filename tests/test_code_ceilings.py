@@ -18,7 +18,7 @@ ANY = re.compile(r"\bAny\b")
 WIDE = 200
 SLACK = 10  # on ne retouche pas le plafond pour une ligne de moins
 
-CEILINGS = {"any": 955, "wide_lines": 290}
+CEILINGS = {"any": 955, "wide_lines": 269}
 
 
 def _any() -> int:
