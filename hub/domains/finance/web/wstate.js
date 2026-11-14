@@ -148,13 +148,11 @@ export const assetOf = (id) => ASSET_F.lines?.[id] || null;
 export const accName = (id) => ACC_F.names[id] ?? id;
 export const accLabel = (l) => (l.inst === l.accName ? l.accName : `${l.inst} · ${l.accName}`);
 export const fName = (key, v) => (key === "acc" ? ACC_F.names[v] ?? v : key === "asset" ? ASSET_F.names[v] ?? v : facetName(key, v));
-// marque d'un compte (ses lignes) : logo, et halo à la teinte de son groupe quand la répartition
-// est par catégorie, disponibilité ou objectif (le groupe de sa plus grosse ligne)
+// marque d'un compte (ses lignes) : logo, et halo à la teinte de sa catégorie (celle de sa plus
+// grosse ligne), la même partout quel que soit le réglage de la répartition
 export function accMark(ls, size = "sm") {
-  const mark = instMark(ls[0].inst, size);
-  if (!["cat", "liq", "goal"].includes(S.by)) return mark;
   const top = ls.reduce((a, b) => (Math.abs(b.value) > Math.abs(a.value) ? b : a));
-  return top[S.by] == null ? mark : ringed(mark, facetColor(S.by, top[S.by]));
+  return ringed(instMark(ls[0].inst, size), top.cat ? facetColor("cat", top.cat) : null);
 }
 export function fMark(key, v, size = "sm") {
   if (key === "acc") return instMark(ACC_F.lines[v] ? ACC_F.lines[v].inst : v, size);
