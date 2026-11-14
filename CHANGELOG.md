@@ -2,6 +2,25 @@
 
 ## [Non publié]
 
+## [0.26.0] · 2026-11-14
+
+### Finance
+
+- Patrimoine, liste Comptes / Actifs : chaque ligne montre sa valeur, son gain en francs et une
+  pastille du rendement (▲ vert, ▼ rouge, la flèche dit le sens sans la couleur), sur la période
+  choisie en haut. Au-delà d'un an, le pourcentage ne disparaît plus : c'est celui de toute la
+  période, écrit « en tout (pas par an) ». La période est rappelée au-dessus de la liste.
+- Vue Actifs : la quantité exacte (2.1 ETH au lieu de « 2 CRYPTO:ETH », 0.236 BTC, 380 parts) ;
+  le nom du compte quitte la ligne, « N comptes » s'affiche quand l'actif est à plusieurs
+  endroits. Les comptes bancaires n'affichent plus leurs « apports » à la place d'un gain.
+- Tri : un panneau « Trier et afficher » avec quatre critères (valeur, gain en francs, gain en %
+  nouveau, nom) et, pour chacun, l'ordre croissant ou décroissant ; le bouton dit le choix
+  (« Valeur ↓ »). Ce qui n'a pas de gain se range en bas. L'ancien tri « Gain » est repris.
+- Lignes masquées : l'œil masque n'importe quel compte ou actif, et les lignes à zéro (compte
+  vidé, actif vendu) se masquent d'elles-mêmes. Une ligne masquée n'apparaît plus du tout dans la
+  liste mais reste dans le total, la courbe, la répartition et le gain ; « N masqués, toujours
+  comptés · Gérer » sous la liste rouvre les yeux. Retenu sur l'appareil, comme le tri.
+
 ## [0.25.1] · 2026-11-14
 
 ### Finance

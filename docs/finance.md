@@ -43,7 +43,7 @@ par module (`make web`).
 |---|---|
 | `kpis?month=` | patrimoine net et variations (1 mois, depuis le 31 décembre), revenus, dépenses, épargne, reste à vivre, jours restants, liquidités, mois couverts, taux d'épargne 3 mois, comptes périmés, à catégoriser, marge 3a |
 | `networth/history?from=&to=&step=` | instantanés : patrimoine, versements cumulés, valeur par enveloppe et par compte ; `step=day\|week` calcule un point par jour ou par semaine à la demande (400 points au plus, `from` requis) |
-| `performance?from=&to=&step=&account=&line=` | performance d'une sélection : des comptes entiers (`account=`, avec les lignes d'une position vendue depuis : l'app, qui ne connaît que les lignes d'aujourd'hui, demande ainsi tout compte choisi en entier) et des lignes (`compte\|ISIN`, `compte\|cash`, `debt:…`) ; les lignes de l'app par défaut : valeur, apports nets, gain, rendement pondéré dans le temps, rendement personnel (TRI, dès un an), rendement de l'argent engagé (`personal`, à toute durée : le gain rapporté au capital moyen, chaque flux compté depuis son jour ; c'est lui que l'écran met à côté du gain en francs, le TRI au-delà d'un an), les mêmes chiffres pour les seuls avoirs quand un crédit est dans la sélection (`owned`), revenus, frais, par compte, par actif, par ligne, par mois et par année, baisse maximale et volatilité, le plus haut et le plus bas de tous les jours (`extremes`), et les événements de la courbe (`events` : gros versements et retraits, revenus, un agrégat par jour ; jamais sur des comptes bancaires seuls). Les points tombent sur le calendrier (chaque jour, chaque dimanche, chaque fin de mois) ; au-delà de 400 le pas s'élargit, jamais « un jour sur N ». Les virements entre mes comptes s'annulent sur le total ; une ligne qui reçoit son premier cours y entre comme un versement |
+| `performance?from=&to=&step=&account=&line=` | performance d'une sélection : des comptes entiers (`account=`, avec les lignes d'une position vendue depuis : l'app, qui ne connaît que les lignes d'aujourd'hui, demande ainsi tout compte choisi en entier) et des lignes (`compte\|ISIN`, `compte\|cash`, `debt:…`) ; les lignes de l'app par défaut : valeur, apports nets, gain, rendement pondéré dans le temps, rendement personnel (TRI, dès un an), rendement de l'argent engagé (`personal`, à toute durée : le gain rapporté au capital moyen, chaque flux compté depuis son jour ; c'est lui que l'écran met à côté du gain en francs, le TRI au-delà d'un an ; dans la liste Comptes / Actifs, toujours lui, total de la période), les mêmes chiffres pour les seuls avoirs quand un crédit est dans la sélection (`owned`), revenus, frais, par compte, par actif, par ligne, par mois et par année, baisse maximale et volatilité, le plus haut et le plus bas de tous les jours (`extremes`), et les événements de la courbe (`events` : gros versements et retraits, revenus, un agrégat par jour ; jamais sur des comptes bancaires seuls). Les points tombent sur le calendrier (chaque jour, chaque dimanche, chaque fin de mois) ; au-delà de 400 le pas s'élargit, jamais « un jour sur N ». Les virements entre mes comptes s'annulent sur le total ; une ligne qui reçoit son premier cours y entre comme un versement |
 | `prices?isin=&from=&to=` | cours d'un actif, un par jour (la dernière source l'emporte), 400 points au plus : la courbe de la page d'un actif et le repère de la performance en % |
 | `flows?month=&period=m\|q` | revenus → fixe, variable, épargne → catégories, et le reste sur compte |
 | `accounts` | comptes, solde, valeur, disponibilité (`immediate`, `days`, `locked`, déduite du type) et objectif (`current`, `safety`, `projects`, `long_term`, `retirement`, déduit du type tant qu'il n'est pas choisi) et montant visé (`target`, réglé dans le compte ; 0 le retire) |
@@ -267,6 +267,19 @@ comptes sans montant, `fin revolut add-account <ref> --name …` les ouvre et re
 Seul le solde comptabilisé (`CLBD`, `ITBD`) devient un point de contrôle ; les écritures en
 attente sont ignorées jusqu'à leur comptabilisation. Les doublons entre synchros et entre CSV
 et Enable Banking sont traités comme pour la BCF. Mise en place : [collectors.md](collectors.md).
+
+## Liste Comptes / Actifs (écran)
+
+Sous les cartes du patrimoine, chaque ligne montre sa valeur, son gain en devise de base et une
+pastille du rendement de l'argent engagé (`personal`, ▲ vert, ▼ rouge), sur la période choisie
+en haut ; au-delà d'un an, ce pourcentage est celui de toute la période, pas un taux annuel, et
+la liste le dit. Un actif montre sa quantité (« 0.236 BTC », « 380 parts ») et « N comptes »
+quand il est à plusieurs endroits. Le panneau « Trier et afficher » choisit un critère (valeur,
+gain en francs, gain en %, nom) et son ordre ; ce qui n'a pas de gain se range en bas. Une ligne
+se masque à la main (l'œil) ou d'elle-même quand elle vaut zéro : elle quitte la liste, sans
+trace, mais reste dans le total, la courbe, la répartition et le gain. Le tri et le masquage
+sont des préférences de l'appareil (`hub.wealth` : `sort`, `dir`, `zero`, `muted`), pas des
+données du hub : masquer sur le téléphone ne masque pas sur l'ordinateur.
 
 ## Patrimoine complet (lot 6)
 
