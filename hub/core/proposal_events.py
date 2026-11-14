@@ -1,5 +1,6 @@
 """Boîtes de sortie des domaines, côté cœur : `proposal.request` crée une carte, `proposal.obsolete`
 rend sans objet celle qui attend, `notify.request` envoie une notification. Une lecture à la fois.
+Une demande peut porter une `create_key` : une seule carte pour cette clé, quel que soit son sort.
 
 Rien ne se perd et rien ne bloque (audit du 10/11, N1 et N3) : une notification que ntfy n'a pas
 prise, ou un événement dont le traitement lève une erreur, passe dans la file de renvoi
@@ -219,11 +220,18 @@ def _requested(hub: HubContext, d: Domain, payload: dict[str, Any]) -> int:
             str(payload.get("kind")),
             dict(payload.get("params") or {}),
             reason=payload.get("reason"),
+            create_key=_key(payload.get("create_key")),
         )
     except Problem as exc:  # sans objet entre-temps (import déjà appliqué…)
         log.info("proposal.request_skipped", domain=d.name, type=exc.type)
         return 0
     return int(created)
+
+
+def _key(raw: object) -> str | None:
+    """Une clé de création posée par le domaine : la carte n'est créée qu'une fois pour elle,
+    même refusée ou expirée (une proposition devinée qu'on a refusée ne revient pas)."""
+    return raw[:200] if isinstance(raw, str) and raw else None
 
 
 def _obsolete(hub: HubContext, domain: str, payload: dict[str, Any]) -> int:

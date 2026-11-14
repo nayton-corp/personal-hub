@@ -42,6 +42,7 @@ class StrategyOut(Out):
     status: str
     state: str
     created_on: str
+    origin: str | None = None
     level: dict[str, object]
     step: StrategyStepOut | None
     steps: list[StrategyStepOut]

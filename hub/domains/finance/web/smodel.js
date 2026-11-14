@@ -26,8 +26,16 @@ export const TEMPLATES = [
 export const levelLabel = (at) => (at === 100 ? "au prix d'achat" : at > 100 ? `à +${at - 100} %` : `à −${100 - at} %`);
 const tierText = (at) => (at === 100 ? "revient à son prix d'achat" : at > 100 ? `dépasse son prix d'achat de ${at - 100} %` : `remonte à ${100 - at} % sous son prix d'achat`);
 
-// la stratégie en une phrase ; `money(centimes)` rend « 200.00 CHF »
-export function phrase(kind, name, p, money) {
+// « 200 CHF » pour un montant rond, « 212.50 CHF » sinon ; `n0`, `n2` : les nombres de l'app
+export const roundMoney = (minor, exp, ccy, n0, n2) => {
+  const v = minor / 10 ** exp;
+  return `${Number.isInteger(v) ? n0(v) : n2(v)} ${ccy}`;
+};
+export const dayLabel = (d) => (Number(d) === 1 ? "1er" : String(d));
+
+// la stratégie en une phrase ; `money(centimes)` rend « 200 CHF » ; `account` : une cible compte
+// (les versements sur un 3a), où l'on verse au lieu d'acheter
+export function phrase(kind, name, p, money, account = false) {
   if (kind === "ladder") {
     const tiers = [...p.tiers].sort((a, b) => a.at_pct - b.at_pct);
     if (!tiers.length) return "";
@@ -35,7 +43,10 @@ export function phrase(kind, name, p, money) {
     return `Quand ${name} ${tierText(first.at_pct)}, j'en vends ${first.sell_pct} %${rest.map((t) => ` ; ${levelLabel(t.at_pct)}, ${t.sell_pct} %`).join("")}.`;
   }
   if (!p.amount_minor) return "";
-  if (kind === "recurring") return `${p.cadence === "weekly" ? `Chaque ${WEEKDAYS[p.day]}` : `Le ${p.day} du mois`}, j'achète pour ${money(p.amount_minor)} de ${name}.`;
+  if (kind === "recurring") {
+    const when = p.cadence === "weekly" ? `Chaque ${WEEKDAYS[p.day]}` : `Le ${dayLabel(p.day)} du mois`;
+    return account ? `${when}, je verse ${money(p.amount_minor)} sur ${name}.` : `${when}, j'achète pour ${money(p.amount_minor)} de ${name}.`;
+  }
   const win = (WINDOWS.find(([d]) => d === p.window_days) || WINDOWS[0])[1];
   return `Si ${name} baisse de ${p.drop_pct} % depuis son plus haut ${win}, j'en achète pour ${money(p.amount_minor)}.`;
 }
@@ -125,6 +136,10 @@ export function stepLine(s, money) {
   if (s.kind === "recurring") return `Achat prévu le ${fr(st.detail.due || st.opened_on)} : ${planned}`;
   return `Baisse de ${String(st.detail.drop_pct).replace(".", ",")} % : achat prévu de ${planned}`;
 }
+
+// une stratégie repérée par le hub dans le journal, validée par la personne
+export const isDetected = (s) => s.origin === "detected";
+export const isAccount = (scope) => String(scope || "").startsWith("account:");
 
 // la tenue de la stratégie : des étapes tenues, pas un rendement
 export function keptLine(s) {

@@ -30,6 +30,7 @@ from hub.domains.finance.patrimoine.app import (
     crypto_pairing,
     fund_needs,
     snapshots,
+    strategy_detect,
     strategy_watch,
     transfers,
 )
@@ -289,12 +290,18 @@ class FinanceDomain:
             log.info("strategy.step", kind=o.kind, reminder=o.reminder)
         return opened
 
+    def detect_strategies(self) -> int:
+        """Les achats réguliers repérés dans le journal, demandés en cartes (strategy_detect.py)."""
+        with begin_immediate(self._engine) as conn:
+            return strategy_detect.request(conn, self.today())
+
     def nightly(self) -> None:
         refreshed = self.refresh_snapshots(force=True)
         log.info("snapshots.nightly", rows=refreshed.rows)
         log.info("imports.review_requested", count=self.request_reviews())
         log.info("sentinels.raised", count=len(self.run_sentinels()))
         log.info("strategies.checked", opened=len(self.run_strategies()))
+        log.info("strategies.detected", asked=self.detect_strategies())
         result = self.verify_ledger()
         if result.ok:
             log.info("ledger.verified", links=result.links)
