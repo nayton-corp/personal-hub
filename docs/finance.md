@@ -494,7 +494,14 @@ d'État des sources.
   montant à 15 % au plus de la médiane ; le dernier achat date de moins d'un écart maximal ; aucune
   vente (aucun retrait) pendant la série ; pas plus d'achats hors série que la moitié de la série.
   Plusieurs achats le même jour comptent pour un ; un ancien montant (avant une augmentation) sort
-  de la série. Une cible qui a déjà une stratégie d'achat régulier n'est pas proposée.
+  de la série. Une cible qui a déjà une stratégie d'achat régulier n'est pas proposée. La série
+  peut finir à n'importe quel achat du dernier écart maximal : un achat en plus après la dernière
+  échéance (un échange, un coup de cœur, un versement complémentaire) ne la cache pas. Côté 3a,
+  les achats de fonds (`VIAC/TRADE`, que le compte titres reçoit en entrée) ne sont pas des
+  versements.
+- **Rien trouvé ?** La ligne Stratégies d'État des sources dit la cible la plus proche, son nombre
+  d'achats d'affilée et ce qui lui manque ; `hub finance dca-explain` le dit pour chaque cible
+  (des compteurs et des raisons, jamais un montant ni une date).
 - **La carte.** Une demande `proposal.request` de `save_strategy` avec `since` (la première
   échéance de la série) et une `create_key` (`finance:strategy-detect:<cible>:<rythme>:<tranche>`,
   tranches de montant d'environ 30 %). Le cœur ne crée qu'une carte par clé : refusée ou expirée,

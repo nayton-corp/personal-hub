@@ -24,7 +24,7 @@ from datetime import date
 from sqlalchemy import Connection, text
 
 from hub.domains.finance.patrimoine.app import crypto_moves, strategy_history
-from hub.domains.finance.patrimoine.app.strategies import ACCOUNT, DEPOSITS_SQL, Today
+from hub.domains.finance.patrimoine.app.strategies import ACCOUNT, DEPOSITS_SQL, Today, scope_name
 from hub.domains.finance.patrimoine.model import regular_buys as rb
 from hub.domains.finance.patrimoine.model.instruments import crypto_key
 from hub.domains.finance.patrimoine.model.positions import STABLECOINS
@@ -117,22 +117,60 @@ def _pension(now: Today, since: str) -> dict[str, tuple[list[rb.Buy], list[date]
     return out
 
 
+@dataclass(frozen=True)
+class Tried:
+    """Une cible regardée sans série retenue : ses achats, la plus longue série essayée, ce qui
+    lui manque. Des compteurs et des raisons, jamais un montant ni une date."""
+
+    scope: str
+    name: str
+    buys: int
+    longest: int
+    why: tuple[str, ...]
+
+
+def _sources(now: Today, since: str) -> list[tuple[str, tuple[list[rb.Buy], list[date]]]]:
+    out: list[tuple[str, tuple[list[rb.Buy], list[date]]]] = []
+    for source in (_crypto, _securities, _pension):
+        out.extend(sorted(source(now, since).items()))
+    return out
+
+
+def explain(conn: Connection, today: date) -> list[Tried]:
+    """Pourquoi rien n'est proposé : chaque cible sans stratégie d'achat régulier, la plus proche
+    d'une série d'abord."""
+    now = Today(conn, today)
+    since = date.fromordinal(today.toordinal() - LOOKBACK_DAYS).isoformat()
+    taken = _taken(conn)
+    out = []
+    for scope, (buys, sold) in _sources(now, since):
+        if scope in taken or rb.detect(buys, sold, today) is not None:
+            continue
+        longest, why = rb.explain(buys, sold, today)
+        name = scope_name(conn, scope) or scope.removeprefix("CRYPTO:")
+        out.append(Tried(scope, name, len(rb.by_day(buys)), longest, tuple(why)))
+    return sorted(out, key=lambda t: (-t.longest, -t.buys, t.name))
+
+
+def _taken(conn: Connection) -> set[str]:
+    return set(
+        conn.execute(text("SELECT scope FROM strategies WHERE kind = 'recurring'")).scalars()
+    )
+
+
 def candidates(conn: Connection, today: date, only: str | None = None) -> list[Found]:
     """Les séries d'achats réguliers en cours, sur des cibles sans stratégie d'achat régulier
     (`only` : cette cible seulement, pour l'aperçu de la carte)."""
     now = Today(conn, today)
     since = date.fromordinal(today.toordinal() - LOOKBACK_DAYS).isoformat()
-    taken = set(
-        conn.execute(text("SELECT scope FROM strategies WHERE kind = 'recurring'")).scalars()
-    )
+    taken = _taken(conn)
     found: list[Found] = []
-    for source in (_crypto, _securities, _pension):
-        for scope, (buys, sold) in sorted(source(now, since).items()):
-            if scope in taken or (only is not None and scope != only):
-                continue
-            series = rb.detect(buys, sold, today)
-            if series is not None:
-                found.append(Found(scope, series))
+    for scope, (buys, sold) in _sources(now, since):
+        if scope in taken or (only is not None and scope != only):
+            continue
+        series = rb.detect(buys, sold, today)
+        if series is not None:
+            found.append(Found(scope, series))
     return found
 
 

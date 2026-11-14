@@ -140,25 +140,54 @@ def problems(
     return out
 
 
+def _attempts(
+    days: Sequence[Buy], sales: list[date], today: date
+) -> Iterable[tuple[Series, list[str]]]:
+    """Chaque série possible, rythme par rythme, finissant à chacun des achats encore récents :
+    un achat en plus après la dernière échéance (un coup de cœur, un échange) ne la cache pas."""
+    for cadence, (_lo, hi) in CADENCES.items():
+        for end in range(len(days) - 1, -1, -1):
+            if (today - days[end].on).days > hi:
+                break
+            chain = _trim(_chain(days[: end + 1], cadence))
+            s = Series(
+                cadence,
+                _day(cadence, chain),
+                round_amount(int(statistics.median(b.amount for b in chain))),
+                tuple(chain),
+            )
+            yield s, problems(s, sales, today, days)
+
+
+def _ready(buys: Iterable[Buy], today: date) -> list[Buy]:
+    return [b for b in by_day(buys) if b.on <= today]
+
+
 def detect(buys: Iterable[Buy], sold: Iterable[date], today: date) -> Series | None:
     """La série d'achats réguliers en cours, ou None. Chaque semaine avant chaque mois : des
     achats mensuels n'ont jamais l'air hebdomadaires, alors que quatre semaines d'achats
-    hebdomadaires ressemblent à un mois."""
-    days = [b for b in by_day(buys) if b.on <= today]
-    sales = list(sold)
+    hebdomadaires ressemblent à un mois. Pour un rythme, la plus longue série retenue."""
+    days, sales = _ready(buys, today), list(sold)
+    best: Series | None = None
+    for s, why in _attempts(days, sales, today):
+        if best is not None and s.cadence != best.cadence:
+            break
+        if not why and (best is None or len(s.buys) > len(best.buys)):
+            best = s
+    return best
+
+
+def explain(buys: Iterable[Buy], sold: Iterable[date], today: date) -> tuple[int, list[str]]:
+    """Pour dire pourquoi rien n'est retenu : la plus longue série essayée (nombre d'achats) et
+    ce qui lui manque. Jamais un montant ni une date."""
+    days, sales = _ready(buys, today), list(sold)
     if not days:
-        return None
-    for cadence in CADENCES:
-        chain = _trim(_chain(days, cadence))
-        s = Series(
-            cadence,
-            _day(cadence, chain),
-            round_amount(int(statistics.median(b.amount for b in chain))),
-            tuple(chain),
-        )
-        if not problems(s, sales, today, days):
-            return s
-    return None
+        return 0, ["aucun achat"]
+    tried = list(_attempts(days, sales, today))
+    if not tried:
+        return 0, ["série arrêtée"]
+    s, why = max(tried, key=lambda t: (not t[1], len(t[0].buys)))
+    return len(s.buys), why
 
 
 def amount_band(minor: int) -> int:

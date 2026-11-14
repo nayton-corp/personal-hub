@@ -28,7 +28,11 @@ from hub.domains.finance.registre.model import institutions
 from hub.domains.finance.registre.model.amounts import in_base
 
 PENDING = ("open", "later")
-NOT_DEPOSIT_CODES = institutions.like_any("e.bank_tx_code", NOT_DEPOSITS)
+# ni rendement ni frais, ni achat ou vente de fonds dans le compte (VIAC/TRADE : le côté titres
+# d'un 3a reçoit chaque achat du compte en entrée, ce n'est pas un versement)
+NOT_DEPOSIT_CODES = institutions.like_any(
+    "e.bank_tx_code", NOT_DEPOSITS + institutions.prefixes(internal=True)
+)
 INCOME_LIST = ", ".join(f"'{c}'" for c in INCOME_CATEGORIES)  # identifiants fixes
 STALE_PRICE_DAYS = 5  # un cours plus vieux ne déclenche pas une « grosse baisse »
 COLS = "id, kind, scope, name, params_json, note, status, created_on, origin"

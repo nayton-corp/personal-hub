@@ -266,3 +266,43 @@ def test_only_a_buy_can_start_from_the_journal(
     ):
         with pytest.raises(Problem):
             create(ctx, "save_strategy", bad)
+
+
+def test_a_buy_after_the_last_due_does_not_hide_the_series() -> None:
+    base = monthly(8, first=date(2026, 4, 1))  # dernier achat : début novembre
+    for extra in (date(2026, 11, 10), date(2026, 10, 20)):
+        s = rb.detect([*base, rb.Buy(extra, 3_000)], [], TODAY)
+        assert s is not None, extra
+        assert (s.cadence, s.amount, len(s.buys)) == ("monthly", 20_000, 8)
+
+
+def test_explain_says_what_is_missing_without_amounts() -> None:
+    assert rb.explain([], [], TODAY) == (0, ["aucun achat"])
+    assert rb.explain(monthly(3, first=date(2026, 9, 1)), [], TODAY) == (3, ["trop peu d'achats"])
+    assert rb.explain(monthly(6, first=date(2025, 6, 1)), [], TODAY) == (0, ["série arrêtée"])
+
+
+def test_fund_buys_on_the_pension_titles_side_are_not_deposits(
+    ctx: HubContext, fin: FinanceDomain, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    titles = add_ref(fin, "viac:3.1:titres", "pension", "3a VIAC titres")
+    with begin_immediate(fin.engine()) as conn:
+        d = date(2026, 1, 27)
+        for i in range(10):
+            ledger.append_entry(
+                conn,
+                ledger.NewEntry(
+                    titles.id, d.isoformat(), 59_000, "CHF", f"b|{i}", bank_tx_code="VIAC/TRADE/BUY"
+                ),
+            )
+            d = (d.replace(day=28) + timedelta(days=4)).replace(day=27)
+    at(fin, monkeypatch, "2026-11-14")
+    from hub.domains.finance.patrimoine.app import strategy_detect
+
+    with fin.engine().connect() as conn:
+        assert strategy_detect.candidates(conn, date(2026, 11, 14)) == []
+        (tried,) = strategy_detect.explain(conn, date(2026, 11, 14))
+    assert (tried.name, tried.buys, tried.why) == ("3a VIAC titres", 0, ("aucun achat",))
+    (task,) = [t for t in fin.tasks() if t.id == "strategies"]
+    assert task.run is not None
+    assert task.run() == "aucun DCA : aucun achat récent"
