@@ -152,10 +152,10 @@ export const fName = (key, v) => (key === "acc" ? ACC_F.names[v] ?? v : key === 
 // grosse ligne), la même partout quel que soit le réglage de la répartition
 export function accMark(ls, size = "sm") {
   const top = ls.reduce((a, b) => (Math.abs(b.value) > Math.abs(a.value) ? b : a));
-  return ringed(instMark(ls[0].inst, size), top.cat ? facetColor("cat", top.cat) : null);
+  return ringed(instMark(ls[0].inst, size, [ls[0].accName]), top.cat ? facetColor("cat", top.cat) : null);
 }
 export function fMark(key, v, size = "sm") {
-  if (key === "acc") return instMark(ACC_F.lines[v] ? ACC_F.lines[v].inst : v, size);
+  if (key === "acc") return ACC_F.lines[v] ? instMark(ACC_F.lines[v].inst, size, [ACC_F.lines[v].accName]) : instMark(v, size);
   if (key === "asset") return ASSET_F.lines[v] ? assetMark(ASSET_F.lines[v], size) : facetMark("cat", "funds", size);
   return facetMark(key, v, size);
 }

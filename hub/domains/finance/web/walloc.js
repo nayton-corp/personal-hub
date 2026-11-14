@@ -3,7 +3,7 @@
 // vient du serveur (/finance/lookthrough), pour la même sélection que la courbe : liquidités
 // comprises, la part qu'un fonds ne détaille pas à part de l'actif sans fiche, une case tirée de
 // la classe dite « estimée », et un total égal au patrimoine affiché.
-import { BY, LOOK, S, activeCount, fName, lines, lookPath, sum } from "./wstate.js";
+import { BY, LOOK, S, activeCount, fMark, fName, lines, lookPath, sum } from "./wstate.js";
 import { amount, cv, esc, ic, share, skel } from "../../ui.js";
 import { assetMark, facetColor, facetMark, lookMark } from "./meta.js";
 import { byLabel } from "./wsheets.js";
@@ -87,7 +87,7 @@ function allocBody(a) {
   const rows = a.rows, owed = a.owed;
   const total = rows.reduce((t, r) => t + r.v, 0);
   if (!rows.length || total <= 0) return '<div class="empty">Rien à répartir avec ces filtres.</div>';
-  const mark = (r) => (a.fund ? (r.kind === "cash" ? facetMark("cat", "cash") : r.tail ? lookMark("sector", "", r.c) : lookMark(S.by, r.k, r.c, "sm", r.code)) : S.by === "asset" ? assetMark((lines() || []).find((l) => l.asset === r.k) || { name: r.name, cat: "funds" }, "sm") : S.by === "acc" ? facetMark("inst", ((lines() || []).find((l) => l.acc === r.k) || {}).inst || r.name) : facetMark(S.by, r.k));
+  const mark = (r) => (a.fund ? (r.kind === "cash" ? facetMark("cat", "cash") : r.tail ? lookMark("sector", "", r.c) : lookMark(S.by, r.k, r.c, "sm", r.code)) : S.by === "asset" ? assetMark((lines() || []).find((l) => l.asset === r.k) || { name: r.name, cat: "funds" }, "sm") : S.by === "acc" ? fMark("acc", r.k) : facetMark(S.by, r.k));
   const act = (r) => (a.fund ? `data-a="w-bucket" data-v="${esc(r.k)}"` : `data-a="w-alloc" data-v="${esc(r.k)}"`);
   const on = (r) => !a.fund && S.filters[S.by].has(r.k);
   const tm = layout(rows, 0, 0, 340, 170).map(({ r, x, y, w, h }) => {

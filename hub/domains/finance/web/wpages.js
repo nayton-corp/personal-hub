@@ -141,7 +141,7 @@ export function assetPage(m, all, r) {
       ${cost == null ? `<p class="pnote">Prix de revient inconnu pour une partie des parts${pool ? ` (<span class="money">${n0(blind)}</span> ${base()} sans historique d'achat, hors du gain latent)` : ""}.</p>` : ""}`);
   }
   const held = all.filter((l) => l.asset === r.id), tot = sum(held);
-  h += section("Détenu dans", `${new Set(held.map((l) => l.acc)).size} compte(s) · ${amount(tot)}`, `<div class="list">${held.slice().sort((a, b) => b.value - a.value).map((l) => `<button class="row go-row" type="button" data-a="w-open" data-v="${esc(`a:${l.acc}`)}">${instMark(l.inst, "sm")}
+  h += section("Détenu dans", `${new Set(held.map((l) => l.acc)).size} compte(s) · ${amount(tot)}`, `<div class="list">${held.slice().sort((a, b) => b.value - a.value).map((l) => `<button class="row go-row" type="button" data-a="w-open" data-v="${esc(`a:${l.acc}`)}">${instMark(l.inst, "sm", [l.accName])}
       <span class="row-main"><span class="row-title">${esc(accLabel(l))}${l.acc === r.from ? ' <span class="sec-note">· ici</span>' : ""}</span><span class="row-sub"><span class="money">${qty(l.qty)}</span> ${esc(l.unit)} · ${esc(facetName("liq", l.liq))}</span>
         <span class="minibar"><i data-css="width:${Math.max(0, Math.min(100, (l.value / (tot || 1)) * 100)).toFixed(1)}%"></i></span></span>
       <span class="row-num"><span class="row-val num">${amount(l.value)}</span><span class="row-delta sec-note">${share(l.value / (tot || 1))} de l'actif</span></span><span class="go">${ic("chev")}</span></button>`).join("")}</div>`);

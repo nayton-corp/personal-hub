@@ -228,9 +228,13 @@ export function instLook(v) {
   const c = brand ? BRANDS[brand][1] : l ? `var(--${l[1]})` : LOGO_TINT[logo] || facetColor("inst", "");
   return { t: l ? l[0] : monogram(v), c, brand, logo };
 }
-export function instMark(v, size = "sm") {
+// `alts` : d'autres noms du compte (son nom, sa référence), quand l'établissement est générique
+// (« Crypto » pour un portefeuille ou une plateforme)
+export function instMark(v, size = "sm", alts = []) {
   const l = instLook(v);
   if (l && l.logo) return logoMark(l.logo, size);
+  const alt = alts.map((a) => instLogo(a)).find(Boolean);
+  if (alt) return logoMark(alt, size);
   if (l && l.brand) return brandMark(l.brand, size);
   const t = l ? l.t : monogram(v);
   return ibox(`<span class="${t.length > 2 ? "wm" : ""}">${esc(t)}</span>`, l ? l.c : facetColor("inst", v), size);

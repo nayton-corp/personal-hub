@@ -4,7 +4,7 @@
 import { ago, date, daysSince, staleDays, units } from "../../format.js";
 import { sourceOf } from "./addaccount.js";
 import { paths } from "./connections.js";
-import { FACET, GROUP_LABEL, facetMark, facetName, setInstitutions } from "./meta.js";
+import { FACET, GROUP_LABEL, facetMark, facetName, instMark, setInstitutions } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { api, store } from "../../store.js";
 import { SHEETS, SH, closeSheet, esc, failure, fill, ibox, ic, openSheet, renderSheet, toast } from "../../ui.js";
@@ -58,7 +58,7 @@ SHEETS.account = (id, sh) => {
   const facet = (key) => FACET[key].values.map((v) => [v, FACET[key].names[v], facetMark(key, v, "xs")]);
   const auto = (label) => ["auto", label, ibox(ic("refresh"), "var(--muted)", "xs")];
   return {
-    title: `${facetMark("inst", a.institution)}<span>${esc(a.name)}</span>`,
+    title: `${instMark(a.institution, "sm", [a.name, a.external_ref])}<span>${esc(a.name)}</span>`,
     body: `
       <label class="field" for="acc-name">Nom<input id="acc-name" maxlength="60" autocomplete="off" value="${esc(t.name)}"></label>
       <p class="hint">${esc(a.institution)} · ${esc(KIND[a.kind] || a.kind)}${a.iban ? ` · ${esc(a.iban)}` : ""}</p>
@@ -111,7 +111,7 @@ export function accountsList() {
       ? `données au ${date(f.last_data)}${f.last_import ? ` · importé le ${date(f.last_import.slice(0, 10))}` : ""}`
       : "aucune donnée importée";
     return `<button class="row" type="button" data-a="acc-edit" data-v="${esc(f.account_id)}" aria-label="${esc(f.name)}, ${esc(sub)}${f.hidden ? ", masqué" : ""}. Modifier">
-      ${facetMark("inst", f.institution || (a && a.institution) || "?")}
+      ${instMark(f.institution || (a && a.institution) || "?", "sm", a ? [a.name, a.external_ref] : [])}
       <span class="row-main"><span class="row-title">${esc(f.name)}</span><span class="row-sub">${esc(f.institution || "")} · ${esc(sub)}</span></span>
       <span class="row-num">${f.hidden ? '<span class="pill">masqué</span>' : ""}<span class="pill ${stale ? "warn" : "ok"}">${age == null ? "—" : `${age} j`}</span></span></button>`;
   }).join(""));

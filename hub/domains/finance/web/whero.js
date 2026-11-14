@@ -51,7 +51,7 @@ function ctxHTML(all, r) {
   }
   if (r.t === "acc") {
     const l = accOf(r.id);
-    return `<button class="scope on" type="button" data-a="w-switch" aria-haspopup="dialog" aria-label="Filtré sur ${esc(ACC_NAME(r.id))}, changer de compte">${l ? instMark(l.inst, "sm") : ""}<span class="t">${esc(ACC_NAME(r.id))}</span>${ic("down", "chev")}</button>
+    return `<button class="scope on" type="button" data-a="w-switch" aria-haspopup="dialog" aria-label="Filtré sur ${esc(ACC_NAME(r.id))}, changer de compte">${l ? instMark(l.inst, "sm", [l.accName]) : ""}<span class="t">${esc(ACC_NAME(r.id))}</span>${ic("down", "chev")}</button>
       <button class="scope-x" type="button" data-a="w-home" aria-label="Revenir à tout le patrimoine">${ic("close")}</button>
       ${activeCount() ? `<span class="chip-hint">Filtres du patrimoine gardés pour le retour (${activeCount()})</span>` : ""}`;
   }
