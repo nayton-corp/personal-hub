@@ -60,11 +60,16 @@ un compte » → portefeuille l'ajoute aux réglages de « Cours et cryptos » (
 portefeuille), crée son compte `crypto:<nom>` et lance la lecture. Ses réglages restent dans
 la section Portefeuilles de cette connexion, qui est unique.
 
-**Actualiser** : hors de son horaire, « Actualiser » sur une connexion (ou « Tout actualiser »
-en tête de la carte) demande un run complet que le service lance dans la minute (`POST
-/api/collectors/<id>/refresh`, `POST /api/collectors/refresh`). Seule une connexion prête et
-active s'actualise : une connexion suspendue passe d'abord par « Contrôler » puis
-« Réactiver ». La ligne affiche « actualisation en cours » jusqu'à ce que le run soit déclaré,
+**Actualiser** : hors de son horaire, « Actualiser » sur une connexion demande un run complet
+que le service lance dans la minute (`POST /api/collectors/<id>/refresh`). « Tout actualiser
+maintenant », en tête d'État des sources, actualise chaque connexion puis refait les calculs de
+la nuit quand elles ont fini (`POST /api/tasks/refresh`, voir
+[architecture.md](architecture.md#tâches-planifiées-relancées-à-la-main)). Seule une connexion
+prête et active s'actualise : une connexion suspendue passe d'abord par « Contrôler » puis
+« Réactiver » ; « Désactiver » est dans la fiche de la connexion (touche sa ligne). Une
+actualisation **forcée** (`force_requested`, demandée par une tâche comme « Compositions des
+fonds ») relit aussi ce que le flux garde d'habitude pour plus tard : le flux la voit dans
+`env.forced`. La ligne affiche « actualisation en cours » jusqu'à ce que le run soit déclaré,
 puis l'app relit ses chiffres, une fois tout de suite et une fois après l'import (la boîte
 d'entrée passe toutes les 30 secondes). Les limites de chaque source restent celles de son
 flux :

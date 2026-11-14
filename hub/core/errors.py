@@ -48,6 +48,8 @@ PROBLEM_TYPES: dict[str, tuple[int, str]] = {
     "collector.check_required": (409, "Un contrôle réussi est nécessaire avant la reprise"),
     "collector.not_enabled": (409, "Connexion suspendue ou désactivée : la réactiver d'abord"),
     "collector.link_unknown": (404, "Liaison inconnue ou expirée"),
+    "task.unknown": (404, "Tâche inconnue"),
+    "task.no_source": (409, "Aucune connexion active ne fait cette tâche"),
     "connection.exists": (409, "Connexion déjà présente"),
     "connection.single": (409, "Une seule connexion de ce type"),
     "rate_limited": (429, "Trop de tentatives"),

@@ -67,6 +67,7 @@ class Env:
     diagnose: bool = False
     today: date = field(default_factory=local_today)
     connector: str = ""
+    forced: bool = False  # actualisation forcée depuis l'app : relire aussi ce qui est encore frais
     memory: Memory = field(init=False)
     inbox: Inbox = field(init=False)
 
@@ -294,6 +295,7 @@ def tick(
         except Exception as exc:  # secrets illisibles, réglage invalide : déclaré, pas de run
             done.append((item.id, kind, _refused(client, item.id, kind, exc).outcome))
             continue
+        env.forced = kind == "run" and bool(state.get("force_requested"))
         result = runner(env, kind)
         done.append((item.id, kind, result.outcome if result else "started"))
     return done

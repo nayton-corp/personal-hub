@@ -6,9 +6,10 @@
 // les comptes que les relevés attendent.
 import { base, date, el } from "../../format.js";
 import {
-  FIELD_LABEL, WALLET_ASSETS, button, field, input, instAv, link, networkChecks, open as openConnection, paths,
+  FIELD_LABEL, WALLET_ASSETS, button, field, input, link, networkChecks, open as openConnection, paths,
   readSetting, run, say, secretInput, settingInput, slug, walletOf,
 } from "./connections.js";
+import { instAv } from "./instav.js";
 import { instLook } from "./meta.js";
 import { approve, propose } from "./proposals.js";
 import { action, go } from "../../shell.js";

@@ -58,13 +58,26 @@ const VIEWS = `
 `;
 
 const RUBRICS = `
+      <section class="card" data-rubric="conn" aria-labelledby="t-all">
+        <div class="head"><h2 id="t-all">Tout actualiser</h2></div>
+        <p class="note" id="all-note">Relit toutes les sources, puis refait les calculs de la nuit.</p>
+        <button class="btn" id="conn-refresh" type="button">Tout actualiser maintenant</button>
+        <p id="all-msg" class="message" role="status"></p>
+      </section>
+
       <section class="card" data-rubric="conn" aria-labelledby="t-conn">
-        <div class="head"><h2 id="t-conn">Connexions</h2><button class="link" id="conn-refresh" type="button">Tout actualiser</button></div>
-        <p class="note">Banques, plateformes et cours que le hub collecte, chacun à son horaire ; « Actualiser » le lance tout de suite. Une connexion se crée en ajoutant un compte ; ses identifiants sont chiffrés à la saisie et ne s'affichent plus jamais.</p>
+        <div class="head"><h2 id="t-conn">Connexions</h2></div>
+        <p class="note">Banques, plateformes et cours que le hub collecte, chacun à son horaire. Touche une connexion pour la régler ou la mettre en pause ; une connexion se crée en ajoutant un compte, ses identifiants sont chiffrés à la saisie et ne s'affichent plus jamais.</p>
         <div id="coll-list"></div>
         <p id="coll-msg" class="message" role="status"></p>
       </section>
       <section class="card form" data-rubric="conn" id="conn-editor" hidden></section>
+
+      <section class="card" data-rubric="conn" aria-labelledby="t-calc">
+        <div class="head"><h2 id="t-calc">Calculs</h2></div>
+        <p class="note">Ce que le hub refait seul après les relevés. « Actualiser » le fait tout de suite, dans la minute.</p>
+        <div id="task-list"></div>
+      </section>
 
       <section class="card" data-rubric="accounts">
         <button class="btn" id="acct-add" type="button" data-a="rubric" data-v="add-account">Ajouter un compte</button>
