@@ -350,9 +350,9 @@ def test_an_account_filters_the_screen_and_back_returns_home(page: Any) -> None:
     _screen_ok(page, "patrimoine")
 
 
-def test_wealth_cards_open_tall_sheets_and_strategies_unfold(page: Any) -> None:
+def test_wealth_cards_open_tall_sheets_strategies_included(page: Any) -> None:
     """Répartition, Rendement et Stratégies tiennent en trois cartes. Les deux premières
-    ouvrent leur détail dans un grand panneau ; Stratégies se déplie sur place et mène à
+    ouvrent leur détail dans un grand panneau, Stratégies aussi, qui mène à
     « Que veux-tu faire ? », la quatrième intention annoncée sans être ouverte."""
     page.reload()
     page.wait_for_selector("#tabs-start button")  # onglets dessinés (l'orbe, elle, est fixe)
@@ -365,8 +365,9 @@ def test_wealth_cards_open_tall_sheets_and_strategies_unfold(page: Any) -> None:
     page.locator('#patrimoine [data-a="w-card"][data-v="rend"]').click()
     page.wait_for_selector("#sheet.tall #tabSeg")
     page.locator('#sheet [data-a="sheet-close"]').click()
-    page.locator('#patrimoine .sumcard[data-a="w-fold"][data-v="strat"]').click()
-    page.locator('#sec-strat [data-a="strat-new"]').click()
+    page.locator('#patrimoine [data-a="w-card"][data-v="strat"]').click()
+    page.wait_for_selector('#sheet.tall [data-a="strat-new"]')
+    page.locator('#sheet [data-a="strat-new"]').click()
     page.wait_for_selector('#sheet [data-a="strat-kind"]')
     assert page.locator('#sheet [data-a="strat-kind"]').count() == 3
     assert "Bientôt" in page.locator("#sheet button[disabled]").inner_text()

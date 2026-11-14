@@ -16,7 +16,7 @@ import { moneyRate } from "./wcurve.js";
 import { DEBT_KIND, debtMark } from "./debts.js";
 import { goodMark } from "./goods.js";
 import { byLabel } from "./wsheets.js";
-import { stratBrief, stratSection } from "./strategies.js";
+import { stratBrief } from "./strategies.js";
 import * as more from "./wcards.js";
 import * as place from "./wplace.js";
 import { base } from "../../format.js";
@@ -151,7 +151,7 @@ const perfCtx = (all) => ({
   fmtDate: (d) => d.split("-").reverse().join("."),
 });
 
-// trois cartes résumé : leur détail s'ouvre dans un grand panneau ; Stratégies se déplie sur place
+// trois cartes résumé : leur détail s'ouvre dans un grand panneau, Stratégies compris
 function cards(sel) {
   const a = allocBrief(sel), p = M.perf && M.perf.summary, st = stratBrief();
   const card = (a2, v, l, val, sub, cls = "") => `<button class="sumcard${cls}" type="button" data-a="${a2}"${v ?
@@ -167,8 +167,7 @@ function cards(sel) {
       `${r == null ? "" : `${ratePct(r)} · `}${esc(range().label)}`);
   }
   return `<div class="sumcards wcards">${card("w-card", "alloc", "Répartition", a.v, a.s)}${second}${more.moreCards()}
-    ${FOLD.strat ? `<button class="sumcard wide" type="button" data-a="w-fold" data-v="strat" aria-expanded="false"><span class="l">Stratégies</span><span class="v">${st.v}${st.hot ?
-      ' <span class="pill info">à voir</span>' : ""}</span><span class="s">${st.s}</span></button>` : ""}</div>${FOLD.strat ? "" : stratSection()}`;
+    ${card("w-card", "strat", "Stratégies", `${st.v}${st.hot ? ' <span class="pill info">à voir</span>' : ""}`, st.s, " wide")}</div>`;
 }
 
 SHEETS.walloc = () => ({ title: "Répartition", tall: true, body: allocDetail(scopeLines(lines() || [], { t: "home" })) });
@@ -255,7 +254,11 @@ export const actions = {
   "w-clear": () => { for (const f of FILTERS) S.filters[f.key].clear(); store.notify(); announceSel(); },
   "w-byopen": () => openSheet("by"),
   "w-by": (v) => { if (SH.kind === "by") closeSheet(); set({ by: v }); },
-  "w-card": (v) => { if (v !== "alloc") S.tab = v; openSheet(v === "alloc" ? "walloc" : "wperf"); },
+  "w-card": (v) => {
+    if (v === "alloc" || v === "strat") return openSheet(`w${v}`);
+    S.tab = v;
+    openSheet("wperf");
+  },
   "w-display": () => openSheet("wdisplay"),
   "w-alloc": (v) => {
     const prev = { filters: Object.fromEntries(FILTERS.map((f) => [f.key, new Set(S.filters[f.key])])), by: S.by };

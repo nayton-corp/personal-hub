@@ -3,7 +3,6 @@
 // puis constate l'opération au journal ou prend la réponse (c'est fait, plus tard, je passe).
 // La section du patrimoine, le panneau d'une stratégie, celui où on l'écrit ; calculs : smodel.js.
 import * as M from "./smodel.js";
-import { FOLD, foldSection } from "./wstate.js";
 import { SHEETS, SH, closeSheet, esc, failure, ibox, ic, n2, openSheet, renderSheet, skel, toast } from "../../ui.js";
 import { base, date, decimals } from "../../format.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
@@ -39,7 +38,8 @@ function card(s) {
     <span class="go">${ic("chev")}</span></button>`;
 }
 
-export function stratSection() {
+// le grand panneau de la carte Stratégies, comme Répartition et Rendement
+SHEETS.wstrat = () => {
   const e = store.use(STRATS);
   const all = e.data ? e.data.items : [];
   const live = all.filter((s) => s.status !== "ended"), ended = all.length - live.length;
@@ -52,8 +52,8 @@ export function stratSection() {
     return `${list}<button class="secondary strat-add" type="button" data-a="strat-new">Nouvelle stratégie</button>${old}
       <p class="hint">Le hub ne passe aucun ordre : il te prévient, tu décides, il constate au journal.</p>`;
   };
-  return foldSection("strat", "Stratégies", "", "", body);
-}
+  return { title: "Stratégies", tall: true, body: body() };
+};
 
 // les lignes « À faire » de l'accueil : une étape atteinte qui attend une réponse
 export function todoRows() {
@@ -255,7 +255,6 @@ export async function deeplink(stepId) {
   const d = await api(STRATS);
   const s = d.items.find((x) => x.steps.some((st) => st.id === stepId));
   if (!s) return false;
-  FOLD.strat = false;
   go("patrimoine", { page: null });
   store.cache.set(STRATS, { status: "ok", data: d, error: null, stale: false, busy: false });
   openSheet("strategy", s.id);

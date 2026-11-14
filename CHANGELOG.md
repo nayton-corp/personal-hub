@@ -15,6 +15,13 @@
   passe de 127 à 49 px.
 - Patrimoine : tourner le téléphone en paysage ouvre la courbe en plein écran, comme prévu par la
   refonte ; revenu en portrait, elle se referme (sauf si le plein écran avait été ouvert à la main).
+- Patrimoine : plus de total dans la barre du haut. Il apparaissait et disparaissait au
+  défilement, et la barre changeait de hauteur à chaque fois.
+- Patrimoine : la carte Stratégies ouvre son détail dans le même grand panneau que Répartition et
+  Rendement, au lieu de se déplier sur la page.
+- Panneau Période : il tient sans défiler sur un grand téléphone. Lignes plus serrées, épingles
+  sans fond (bleues quand la période est dans la barre), et le bouton « Afficher cette plage » sous
+  les dates au lieu d'être collé en bas du panneau.
 
 ## [0.21.2] · 2026-11-13
 

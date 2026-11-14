@@ -47,7 +47,7 @@ SHEETS.periods = () => {
   })();
   return {
     title: "Période",
-    body: `<p class="hint">Touche une période pour l'afficher. L'épingle la met dans la barre sous la courbe (de 2 à 6).</p>
+    body: `<p class="hint">L'épingle met la période dans la barre sous la courbe (2 à 6).</p>
       <div class="list">${PRESETS.map((p) => {
         const on = !S.custom && S.period === p.k, pinned = S.pinned.includes(p.k);
         return `<div class="prow"><button class="prow-main" type="button" data-a="w-period" data-v="${p.k}" aria-pressed="${on}"><b>${p.k}</b><span>${esc(p.label)}</span>${on ? ic("check") : ""}</button>
@@ -55,8 +55,8 @@ SHEETS.periods = () => {
       }).join("")}</div>
       <h3>Plage personnalisée</h3>
       <div class="jf-pair"><label class="field" for="w-d0">Du<input type="date" id="w-d0" value="${d0}" min="${first}" max="${last}"></label>
-      <label class="field" for="w-d1">Au<input type="date" id="w-d1" value="${c[1] || last}" min="${first}" max="${last}"></label></div>`,
-    foot: '<button class="primary" type="button" data-a="w-custom">Afficher cette plage</button>',
+      <label class="field" for="w-d1">Au<input type="date" id="w-d1" value="${c[1] || last}" min="${first}" max="${last}"></label></div>
+      <button class="secondary pcustom" type="button" data-a="w-custom">Afficher cette plage</button>`,
   };
 };
 
