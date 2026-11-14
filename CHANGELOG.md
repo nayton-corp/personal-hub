@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+## [0.22.1] · 2026-11-14
+
+### Corrigé
+
+- Budget : un mois d'avant le premier budget s'affichait « Erreur interne » dès qu'une catégorie
+  était suivie à l'année : sa cible annuelle, absente ce mois-là, était exigée par la réponse.
+  Elle peut maintenant manquer (« Sans cible annuelle »).
+
 ## [0.22.0] · 2026-11-14
 
 ### À la mise à jour

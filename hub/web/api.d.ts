@@ -1381,7 +1381,7 @@ export interface ValidationError {
 
 export interface YearlyOut {
   from?: string | null;
-  target: MoneyOut;
+  target: MoneyOut | null;
   spent: MoneyOut;
   ratio: string | null;
 }
