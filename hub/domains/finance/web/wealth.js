@@ -3,13 +3,13 @@
 // ou des actifs. Toucher un compte ou un actif ouvre sa page (wpages.js), avec retour et chemin ;
 // la barre de contexte dit toujours ce que l'écran montre. État et lignes : wstate.js ; courbe :
 // wmodel.js et wchart.js ; haut de l'écran : whero.js ; panneaux : wsheets.js.
-import { BY, FILTERS, FOLD, PRESETS, S, SORTS, TABS, accLabel, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
+import { BY, FILTERS, FOLD, PRESETS, S, SORTS, TABS, accLabel, accMark, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
 import { SH, SHEETS, amount, announce, closeSheet, esc, fill, ic, n0, openSheet, skel, toast } from "../../ui.js";
 import { accountPage, assetPage } from "./wpages.js";
 import { allocBrief, allocDetail } from "./walloc.js";
 import { chartSVG, flagHTML, gutter, legendHTML, nearest, rulerHTML } from "./wchart.js";
 import { displayBody, drawLand, drawTop, heroHTML, periodsHTML } from "./whero.js";
-import { facetMark, assetMark } from "./meta.js";
+import { assetMark } from "./meta.js";
 import { gainSpan, perfSection, rate, ratePct, signedMoney, units } from "./perf.js";
 import { kindFor, model } from "./wmodel.js";
 import { moneyRate } from "./wcurve.js";
@@ -186,7 +186,7 @@ function listSection(sel) {
     const c = f.kind === "debt" ? net && net.by_account[f.acc] : perf && (S.view === "acc" ? perf.by_account[f.acc] : perf.by_asset[f.asset]);
     if (f.kind === "debt") return { key, title: f.name, sub: `${esc(f.inst)} · ${DEBT_KIND[f.debtKind] || "Dette"}`, mark: debtMark({ kind: f.debtKind }, ""), value: sum(ls), c, debt: true };
     if (f.kind === "good") return { key, title: f.name, sub: `Bien · ${esc(f.inst)}`, mark: goodMark({ kind: f.goodKind }, ""), value: sum(ls), c: null, cash: true };
-    if (S.view === "acc") return { key, title: f.accName, sub: `${esc(f.inst)} · ${{ cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" }[f.kind] || ""}`, mark: facetMark("inst", f.inst, ""), value: sum(ls), c, cash: f.kind === "cash" };
+    if (S.view === "acc") return { key, title: f.accName, sub: `${esc(f.inst)} · ${{ cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" }[f.kind] || ""}`, mark: accMark(ls, ""), value: sum(ls), c, cash: f.kind === "cash" };
     const q = ls.reduce((t, l) => t + Number(l.qty), 0), nAcc = new Set(ls.map((l) => l.acc)).size;
     return { key, title: f.name, sub: `<span class="money">${n0(q) === "0" ? q : n0(q)}</span> ${esc(f.unit)} · ${nAcc > 1 ? `${nAcc} comptes` : esc(accLabel(f))}`, mark: assetMark(f), value: sum(ls), c, cash: f.asset.startsWith("ccy:") };
   });

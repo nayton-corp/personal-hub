@@ -18,6 +18,8 @@
   compte » (le choix de la plateforme) et dans les connexions. Un nom sans logo garde son sigle ou
   ses initiales. Les commerçants et établissements suisses viennent du pack pays
   (`merchant_logos`, `institution_logos`).
+- Patrimoine : autour du logo d'un compte, un halo à la teinte de son groupe quand la répartition
+  est par catégorie, disponibilité ou objectif (la même que dans la répartition).
 
 ## [0.22.1] · 2026-11-14
 

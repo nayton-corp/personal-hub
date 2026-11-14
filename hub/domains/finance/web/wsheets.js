@@ -2,9 +2,9 @@
 // (dix au choix, six épinglées, une plage libre), « Répartir par » (ce qui filtre, puis ce qui se
 // lit dans les fonds), « Voir le patrimoine de… » (passer d'un compte à l'autre), le repère de
 // la performance en %, et les actifs d'un bloc du contenu des fonds.
-import { BY, FILTERS, LOOK, PRESETS, S, accLabel, asOf, fMark, fName, firstDay, here, lines, lookPath, match, scopeLines, sum } from "./wstate.js";
+import { BY, FILTERS, LOOK, PRESETS, S, accLabel, accMark, asOf, fMark, fName, firstDay, here, lines, lookPath, match, scopeLines, sum } from "./wstate.js";
 import { SHEETS, amount, esc, ic, share } from "../../ui.js";
-import { FACET, assetMark, facetMark, instMark } from "./meta.js";
+import { FACET, assetMark, facetMark } from "./meta.js";
 import { KIND_LABEL } from "./wstate.js";
 import { units } from "./perf.js";
 import { store } from "../../store.js";
@@ -81,7 +81,7 @@ SHEETS.switch = () => {
     const group = [...accs.values()].filter((ls) => ls[0].kind === kind).sort((a, b) => sum(b) - sum(a));
     if (!group.length) continue;
     body += `<h3 class="grp-title">${KIND_LABEL[kind] === "Compte" ? "Comptes" : kind === "debt" ? "Dettes" : KIND_LABEL[kind]}</h3>`;
-    body += group.map((ls) => row(cur.t === "acc" && cur.id === ls[0].acc, kind === "debt" ? facetMark("cat", "debt") : instMark(ls[0].inst), accLabel(ls[0]), kind === "debt" ? "dette" : FACET.goal.names[ls[0].goal] || "", sum(ls), "w-switch-acc", ls[0].acc)).join("");
+    body += group.map((ls) => row(cur.t === "acc" && cur.id === ls[0].acc, kind === "debt" ? facetMark("cat", "debt") : accMark(ls), accLabel(ls[0]), kind === "debt" ? "dette" : FACET.goal.names[ls[0].goal] || "", sum(ls), "w-switch-acc", ls[0].acc)).join("");
   }
   return { title: "Voir le patrimoine de…", body };
 };

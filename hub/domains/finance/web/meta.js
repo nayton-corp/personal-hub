@@ -234,6 +234,13 @@ export function instMark(v, size = "sm") {
   return ibox(`<span class="${t.length > 2 ? "wm" : ""}">${esc(t)}</span>`, l ? l.c : facetColor("inst", v), size);
 }
 
+// halo d'un compte : la teinte de son groupe dans la répartition affichée, autour du logo
+export function ringed(mark, color) {
+  if (!color) return mark;
+  const m = mark.replace('class="ibox', 'class="ibox ring');
+  return m.includes('data-css="') ? m.replace('data-css="', `data-css="--ring:${color};`) : m.replace('class="ibox ring', `data-css="--ring:${color}" class="ibox ring`);
+}
+
 export const facetName = (key, v) => FACET[key].names[v] ?? v;
 export const facetColor = (key, v) => (key === "inst" && instLook(v) ? instLook(v).c : cv(Math.max(0, FACET[key].values.indexOf(v))));
 export function facetMark(key, v, size = "sm") {
