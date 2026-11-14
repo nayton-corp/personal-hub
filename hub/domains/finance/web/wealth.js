@@ -4,7 +4,7 @@
 // la barre de contexte dit toujours ce que l'écran montre. État et lignes : wstate.js ; courbe :
 // wmodel.js et wchart.js ; haut de l'écran : whero.js ; panneaux : wsheets.js.
 import { BY, FILTERS, FOLD, PRESETS, S, SORTS, TABS, accLabel, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
-import { SH, SHEETS, amount, announce, closeSheet, esc, fill, ic, money, n0, openSheet, skel, toast } from "../../ui.js";
+import { SH, SHEETS, amount, announce, closeSheet, esc, fill, ic, n0, openSheet, skel, toast } from "../../ui.js";
 import { accountPage, assetPage } from "./wpages.js";
 import { allocBrief, allocDetail } from "./walloc.js";
 import { chartSVG, flagHTML, gutter, legendHTML, nearest, rulerHTML } from "./wchart.js";
@@ -39,10 +39,7 @@ export function init() {
   document.addEventListener("pointerup", (e) => pointer(e, "up"));
   document.addEventListener("keydown", keys);
   window.addEventListener("resize", () => { if (store.params.tab === "patrimoine") render(); });
-  window.addEventListener("scroll", () => {
-    if (store.params.tab === "patrimoine") $("pat-top").classList.toggle("compact", window.scrollY > 110);
-  }, { passive: true });
-  // la barre du haut change de hauteur (total qui apparaît au défilement, chemin, police chargée) :
+  // la barre du haut change de hauteur (chemin d'un compte ou d'un actif, police chargée) :
   // les onglets Comptes / Actifs se collent toujours juste dessous, jamais à moitié cachés
   new ResizeObserver(() => $("patrimoine").style.setProperty("--topbar-h", `${$("pat-top").offsetHeight}px`)).observe($("pat-top"));
   // téléphone tourné en paysage sur le patrimoine : la courbe passe en plein écran ; revenu en
@@ -145,7 +142,6 @@ export function render() {
   fill($("legend"), M.pts.length > 1 ? legendHTML(M, kind, "line") : "");
   fill($("wper"), periodsHTML());
   fill($("wsecs"), r.t === "acc" ? accountPage(M, r) : r.t === "asset" ? assetPage(M, all, r) : homeSections(all));
-  fill($("miniTotal"), `${r.t === "home" && activeCount() ? "Sélection · " : ""}${money(sum(M.sel))} ${base()}`);
 }
 
 // --- patrimoine : répartition, performance, comptes et actifs --------------------------------

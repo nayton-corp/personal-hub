@@ -33,8 +33,6 @@ button:disabled { cursor: default; }
 .topbar-title { font-weight: 700; font-size: 1.176rem; flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; margin: 0; }
 .topbar-sub { font-size: .735rem; font-weight: 500; color: var(--muted); }
 .topbar-sub.warn { color: var(--warn); }
-.topbar-mini { font-size: .765rem; font-weight: 600; color: var(--muted); height: 0; overflow: hidden; opacity: 0; transition: opacity .2s, height .2s; }
-.topbar.compact .topbar-mini { height: 17px; opacity: 1; }
 /* l'accueil n'a pas de barre : une ligne discrète (fraîcheur, œil, réglages) qui défile avec lui */
 .bare-bar { display: flex; align-items: center; gap: 2px; padding: calc(var(--top) + 4px) 8px 0 10px; }
 .bare-bar .topbar-sub { flex: 1; min-width: 0; }

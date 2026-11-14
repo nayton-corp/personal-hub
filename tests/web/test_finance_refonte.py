@@ -198,15 +198,14 @@ def test_the_first_steps_card_opens_and_goes_away(page: Any) -> None:
 
 
 def test_the_accounts_and_assets_tabs_stick_right_below_the_top_bar(page: Any) -> None:
-    """La barre du haut grandit au défilement (le total apparaît) : les onglets restent dessous."""
+    """Collés en défilant, les onglets restent juste sous la barre du haut, entiers."""
     open_tab(page, "patrimoine")
     page.wait_for_selector("#detailHead .vtabs")
     page.evaluate("""() => { const l = document.querySelector('#wsecs .list');
       for (let i = 0; i < 20; i++) l.appendChild(l.firstElementChild.cloneNode(true)); }""")
     try:
         page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        page.wait_for_selector("#pat-top.compact")
-        page.wait_for_timeout(400)  # la hauteur du total s'anime
+        page.wait_for_timeout(300)
         top, tabs = page.evaluate("""() => [
           document.getElementById('pat-top').getBoundingClientRect().bottom,
           document.getElementById('detailHead').getBoundingClientRect().top]""")
