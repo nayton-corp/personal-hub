@@ -97,7 +97,24 @@ const LOGO_TINT = {
 };
 // icônes des apps (PNG 128 px, App Store) ; les cryptos, des tracés (coins/*.svg)
 export const logoUrl = (logo) => new URL(`./logos/${logo}.${logo.startsWith("coins/") ? "svg" : "png"}`, import.meta.url).href;
-export const logoImg = (logo) => `<img src="${logoUrl(logo)}" alt="" decoding="async">`;
+// Chaque vue se redessine en entier (innerHTML) à chaque relecture : les <img> sont recréées.
+// Pour qu'elles s'affichent aussitôt, sans clignoter, chaque logo est gardé chargé et décodé en
+// mémoire dès sa première apparition (l'image recréée est alors servie tout de suite), et le
+// décodage n'est plus différé : `decoding="async"` laissait la pastille blanche le temps d'un
+// décodage à chaque rendu, sur Safari surtout.
+const warm = new Map();
+function keepWarm(url) {
+  if (warm.has(url) || typeof Image === "undefined") return;
+  const img = new Image();
+  img.src = url;
+  if (img.decode) img.decode().catch(() => warm.delete(url)); // raté (hors ligne) : réessayé au rendu suivant
+  warm.set(url, img);
+}
+export const logoImg = (logo) => {
+  const url = logoUrl(logo);
+  keepWarm(url);
+  return `<img src="${url}" alt="">`;
+};
 export const logoMark = (logo, size = "sm") => `<span class="ibox logo ${size}" aria-hidden="true">${logoImg(logo)}</span>`;
 // plateformes et portefeuilles connus partout (motifs sur le nom en minuscules, le plus précis d'abord)
 const INST_LOGOS = [

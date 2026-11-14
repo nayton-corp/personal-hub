@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+## [0.25.1] · 2026-11-14
+
+### Finance
+
+- Les logos (comptes, plateformes, cryptos, fonds) ne clignotent plus et ne disparaissent plus
+  quand l'écran se relit : chaque logo est gardé chargé et décodé en mémoire dès sa première
+  apparition, son décodage n'est plus différé (Safari laissait la pastille blanche à chaque
+  rendu), et le service worker les sert de son cache au lieu de les redemander au serveur à
+  chaque fois.
+
 ## [0.25.0] · 2026-11-14
 
 ### À la mise à jour
