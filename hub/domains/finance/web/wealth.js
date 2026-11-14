@@ -3,22 +3,19 @@
 // ou des actifs. Toucher un compte ou un actif ouvre sa page (wpages.js), avec retour et chemin ;
 // la barre de contexte dit toujours ce que l'écran montre. État et lignes : wstate.js ; courbe :
 // wmodel.js et wchart.js ; haut de l'écran : whero.js ; panneaux : wsheets.js.
-import { BY, FILTERS, FOLD, PRESETS, S, SORTS, TABS, accLabel, accMark, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
+import { BY, FILTERS, FOLD, PRESETS, S, TABS, accLabel, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
 import { SH, SHEETS, amount, announce, closeSheet, esc, fill, ic, n0, openSheet, skel, toast } from "../../ui.js";
 import { accountPage, assetPage } from "./wpages.js";
 import { allocBrief, allocDetail } from "./walloc.js";
 import { chartSVG, flagHTML, gutter, legendHTML, nearest, rulerHTML } from "./wchart.js";
 import { displayBody, drawLand, drawTop, heroHTML, periodsHTML } from "./whero.js";
-import { assetMark, facetColor, ringed } from "./meta.js";
-import { gainSpan, perfSection, rate, ratePct, signedMoney, units } from "./perf.js";
+import { perfSection, rate, ratePct, signedMoney, units } from "./perf.js";
 import { kindFor, model } from "./wmodel.js";
-import { moneyRate } from "./wcurve.js";
-import { DEBT_KIND, debtMark } from "./debts.js";
-import { goodMark } from "./goods.js";
 import { byLabel } from "./wsheets.js";
 import { stratBrief } from "./strategies.js";
 import * as more from "./wcards.js";
 import * as place from "./wplace.js";
+import * as list from "./wlist.js";
 import { base } from "../../format.js";
 import { go } from "../../shell.js";
 import { linkTo } from "./journal.js";
@@ -178,45 +175,9 @@ SHEETS.wperf = () => ({
 });
 SHEETS.wdisplay = () => ({ title: "Affichage", body: displayBody(M, lines() || []) });
 
-function listSection(sel) {
-  const groups = Object.groupBy(sel, (l) => (S.view === "acc" ? `a:${l.acc}` : `s:${l.asset}`));
-  const perf = M.perf, net = M.net;
-  let rows = Object.entries(groups).map(([key, ls]) => {
-    const f = ls[0];
-    const c = f.kind === "debt" ? net && net.by_account[f.acc] : perf && (S.view === "acc" ? perf.by_account[f.acc] : perf.by_asset[f.asset]);
-    if (f.kind === "debt") return { key, title: f.name, sub: `${esc(f.inst)} · ${DEBT_KIND[f.debtKind] || "Dette"}`, mark: debtMark({ kind: f.debtKind }, ""), value: sum(ls), c, debt: true };
-    if (f.kind === "good") return { key, title: f.name, sub: `Bien · ${esc(f.inst)}`, mark: goodMark({ kind: f.goodKind }, ""), value: sum(ls), c: null, cash: true };
-    if (S.view === "acc") return { key, title: f.accName, sub: `${esc(f.inst)} · ${{ cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" }[f.kind] || ""}`, mark: accMark(ls, ""), value: sum(ls), c, cash: f.kind === "cash" };
-    const q = ls.reduce((t, l) => t + Number(l.qty), 0), nAcc = new Set(ls.map((l) => l.acc)).size;
-    return { key, title: f.name, sub: `<span class="money">${n0(q) === "0" ? q : n0(q)}</span> ${esc(f.unit)} · ${nAcc > 1 ? `${nAcc} comptes` : esc(accLabel(f))}`, mark: ringed(assetMark(f), facetColor("cat", f.cat)), value: sum(ls), c, cash: f.asset.startsWith("ccy:") };
-  });
-  const gainOf = (r) => (r.c ? units(r.c.gain) : -Infinity);
-  rows.sort(S.sort === "val" ? (a, b) => b.value - a.value : S.sort === "chg" ? (a, b) => gainOf(b) - gainOf(a) : (a, b) => a.title.localeCompare(b.title, "fr"));
-  rows = rows.filter((r) => Math.abs(r.value) >= 0.5 || S.view === "acc");
-  const so = SORTS.find((s) => s.k === S.sort);
-  const days = M.pts.length > 1 ? Math.round((Date.parse(M.pts[M.pts.length - 1].d) - Date.parse(M.pts[0].d)) / 864e5) : 0;
-  const delta = (r) => {
-    if (!r.c || M.pts.length < 2) return "";
-    const g = units(r.c.gain);
-    if (r.debt) return `<span class="faint num">intérêts ${signedMoney(g)}</span>`;
-    if (r.cash) return `<span class="faint num">apports ${signedMoney(units(r.c.net_flows))}</span>`;
-    const x = moneyRate(rate(r.c.personal), days);
-    return gainSpan(g, x ? x.v : null).replace(` ${base()}`, "");
-  };
-  return `<section class="section" aria-labelledby="t-detail"><div class="detail-head" id="detailHead">
-      <div class="vtabs" role="group" aria-label="Comptes ou actifs">${[["acc", "Comptes"], ["asset", "Actifs"]].map(([k, l]) => `<button type="button" data-a="w-view" data-v="${k}" aria-pressed="${S.view === k}">${l}${S.view === k ? ` <b class="num">${rows.length}</b>` : ""}</button>`).join("")}</div>
-      <button class="sort-btn" type="button" data-a="w-sort" aria-label="Trier par ${so.label}, toucher pour changer">Trier : ${so.label}${ic("sort")}</button></div>
-    <h2 class="sr" id="t-detail">Comptes et actifs</h2>
-    <div class="list">${rows.length ? rows.map((r) => `<button class="row row2 go-row" type="button" data-a="w-open" data-v="${esc(r.key)}">${r.mark}
-      <span class="row-main"><span class="row-title">${esc(r.title)}</span><span class="row-sub">${r.sub}</span></span>
-      <span class="row-num"><span class="row-val num">${amount(r.value)}</span><span class="row-delta">${delta(r)}</span></span><span class="go">${ic("chev")}</span></button>`).join("")
-      : '<div class="empty">Aucun élément ne correspond à ces filtres.<br><button type="button" data-a="w-clear">Effacer les filtres</button></div>'}</div>
-</section>`;
-}
-
 function homeSections(all) {
   const sel = scopeLines(all, { t: "home" });
-  return cards(sel) + listSection(sel);
+  return cards(sel) + list.listSection(sel, M);
 }
 
 // --- actions ----------------------------------------------------------------------------------
@@ -249,6 +210,7 @@ export function only(key, v) {
 export const actions = {
   ...place.actions,
   ...more.actions,
+  ...list.actions,
   filters: () => openSheet("filters"),
   "w-opt": (v) => { const i = v.indexOf("|"); toggle(v.slice(0, i), v.slice(i + 1)); store.notify(); announceSel(); },
   "w-clear": () => { for (const f of FILTERS) S.filters[f.key].clear(); store.notify(); announceSel(); },
@@ -305,7 +267,6 @@ export const actions = {
     set({ custom: [a, b], scrub: null, ruler: null });
   },
   "w-view": (v) => set({ view: v }),
-  "w-sort": () => set({ sort: SORTS[(SORTS.findIndex((s) => s.k === S.sort) + 1) % SORTS.length].k }),
   // un compte (a:<id>) ou un actif (s:<actif>) : sa page, ajoutée au chemin
   "w-open": (v) => {
     closeSheet(true);

@@ -614,3 +614,20 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 #coll-list .row:hover .go-btn { color: var(--accent); }
 /* Calculs : la ligne dit l'horaire et le dernier passage, sur deux lignes au besoin */
 #task-list .row .n span { white-space: normal; }
+/* liste Comptes / Actifs : gain en francs puis pastille du rendement (▲ / ▼) */
+.list-cap { margin: 8px 0 0; font-size: .676rem; color: var(--faint); }
+.row-delta.gline { display: inline-flex; align-items: center; gap: 6px; }
+.gpill { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border-radius: 7px; font-size: .676rem; font-weight: 600; white-space: nowrap; }
+.gpill i { font-style: normal; font-size: .55rem; }
+.gpill.pos { color: var(--pos); background: color-mix(in srgb, var(--pos) 15%, transparent); }
+.gpill.neg { color: var(--neg); background: color-mix(in srgb, var(--neg) 15%, transparent); }
+.gpill.zero { color: var(--muted); background: var(--surface-2); }
+.sort-btn b { font-weight: 700; }
+.list-foot { display: block; width: 100%; min-height: 44px; padding: 10px 0; text-align: center; font-size: .735rem; color: var(--muted); }
+.list-foot b { color: var(--accent); font-weight: 600; }
+.mrow { gap: 12px; } .mrow > span:not(.ibox) { flex: 1; min-width: 0; }
+.linkrow { width: 100%; text-align: left; color: var(--ink); } .linkrow > span { flex: 1; min-width: 0; } .linkrow svg { width: 16px; height: 16px; color: var(--faint); flex: none; }
+.list-foot svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px; }
+.eyebtn { width: 44px; height: 44px; display: grid; place-items: center; flex: none; color: var(--ink); border-radius: 50%; }
+.eyebtn svg { width: 22px; height: 22px; } .eyebtn[aria-pressed="true"] { color: var(--faint); } .eyebtn:disabled { opacity: .5; }
+.mrow.off > span:not(.ibox) { color: var(--muted); }
