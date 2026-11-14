@@ -30,7 +30,12 @@ const ASSET_F = { key: "asset", label: "Actif", values: [], names: {} };
 export const FILTERS = [...FACETS, ACC_F, ASSET_F];
 export const BY = ["cat", "liq", "goal", "inst", "acc", "asset"];
 export const LOOK = [["region", "Région"], ["sector", "Secteur"], ["currency", "Devise"]];
-export const SORTS = [{ k: "val", label: "Valeur" }, { k: "chg", label: "Gain" }, { k: "az", label: "Nom" }];
+export const SORTS = [
+  { k: "val", label: "Valeur", short: "Valeur" },
+  { k: "gain", label: "Gain en francs", short: "Gain", hint: "sur la période choisie en haut" },
+  { k: "pct", label: "Gain en %", short: "Gain %", hint: "rendement de l'argent engagé, même période" },
+  { k: "az", label: "Nom", short: "Nom" },
+];
 export const TABS = [["rend", "Rendement"], ["risk", "Risque"]];
 
 const saved = pref("wealth", {});
@@ -49,7 +54,9 @@ export const S = {
   hidden: new Set(Array.isArray(saved.hidden) ? saved.hidden : HIDDEN),
   tab: TABS.some(([k]) => k === saved.tab) ? saved.tab : "rend",
   view: saved.view === "asset" ? "asset" : "acc",
-  sort: SORTS.some((s) => s.k === saved.sort) ? saved.sort : "val",
+  // l'ancien tri « chg » est le gain en francs ; l'ordre se garde à part
+  sort: saved.sort === "chg" ? "gain" : SORTS.some((s) => s.k === saved.sort) ? saved.sort : "val",
+  dir: saved.dir === "asc" || saved.dir === "desc" ? saved.dir : saved.sort === "az" ? "asc" : "desc",
   gross: saved.gross === true, // Brut : les dettes sortent du total, de la courbe et de la répartition
   amode: "pos", // page d'un actif : ma position ou le cours
   where: "here", // page d'un actif ouverte depuis un compte : ce compte ou partout
@@ -71,8 +78,8 @@ export function foldSection(k, title, extra, sum, body) {
 }
 
 export function remember() {
-  const { by, period, pinned, mode, unit, cmp, view, sort, tab, gross } = S;
-  setPref("wealth", { ...pref("wealth", {}), by, period, pinned, mode, unit, cmp, view, sort, tab, gross, hidden: [...S.hidden] });
+  const { by, period, pinned, mode, unit, cmp, view, sort, dir, tab, gross } = S;
+  setPref("wealth", { ...pref("wealth", {}), by, period, pinned, mode, unit, cmp, view, sort, dir, tab, gross, hidden: [...S.hidden] });
 }
 
 // --- page ouverte : [] le patrimoine ; [{t:"acc", id}] un compte ; {t:"asset", id, from} un actif

@@ -606,3 +606,12 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .topbar.spaced .topbar-space { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .viewctl { padding-top: 12px; }
 .viewctl.filterbar:empty, .viewctl.ctxbar:empty { display: none; }
+/* liste Comptes / Actifs : gain en francs puis pastille du rendement (▲ / ▼) */
+.list-cap { margin: 8px 0 0; font-size: .676rem; color: var(--faint); }
+.row-delta.gline { display: inline-flex; align-items: center; gap: 6px; }
+.gpill { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border-radius: 7px; font-size: .676rem; font-weight: 600; white-space: nowrap; }
+.gpill i { font-style: normal; font-size: .55rem; }
+.gpill.pos { color: var(--pos); background: color-mix(in srgb, var(--pos) 15%, transparent); }
+.gpill.neg { color: var(--neg); background: color-mix(in srgb, var(--neg) 15%, transparent); }
+.gpill.zero { color: var(--muted); background: var(--surface-2); }
+.sort-btn b { font-weight: 700; }
