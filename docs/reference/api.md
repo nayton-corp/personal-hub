@@ -58,6 +58,9 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `POST` | `/api/proposals/{proposal_id}/revert` | Crée et applique l'inverse d'une proposition réversible (un Face ID). |
 | `GET` | `/api/resolve` | Resolve |
 | `GET` | `/api/search` | Les domaines lisibles, fusionnés par rang (`hub.core.search`) : chaque résultat dit son domaine, son rang dans ce domaine et le passage trouvé. |
+| `GET` | `/api/tasks` | Chaque tâche : son horaire, sa dernière demande, son dernier passage. |
+| `POST` | `/api/tasks/refresh` | « Tout actualiser » : chaque connexion active, puis les calculs des domaines quand elles ont fini. |
+| `POST` | `/api/tasks/{name}/run` | Relancer une tâche maintenant : le planificateur la prend dans la minute. |
 | `GET` | `/api/tools` | Capabilities |
 | `GET` | `/api/tools/{domain}` | Domain Tools |
 | `POST` | `/api/tools/{domain}/{name}` | Call Tool |

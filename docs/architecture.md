@@ -140,6 +140,28 @@ domaine. Ils lisent `/api/domains` et chargent les modules de chaque domaine, se
 `hub/domains/<nom>/web/` sous `/d/<nom>/` ([D-018](decisions.md)). La finance y pose ses
 écrans, ses rubriques et ses styles comme les autres ; sans elle, l'app démarre.
 
+## Tâches planifiées relancées à la main
+
+Ce que la crontab lance seule (`deploy/crontab` : contrôle, sauvegarde, ménage, santé) et les
+morceaux de la nuit d'un domaine (contrat facultatif `NightlyTasks`, `DomainTask`) sont des
+**tâches** (`hub/core/tasks.py`). Chacune note son dernier passage dans `core.db`
+(`task_runs` : début, fin, issue, quelques mots sans montant), qu'elle vienne de la nuit ou de
+l'app. L'app les liste (`GET /api/tasks`) : Réglages › État des sources pour les calculs d'un
+domaine, État du hub › Entretien pour le reste.
+
+« Actualiser » (ou « Lancer ») pose une demande (`POST /api/tasks/<nom>/run`) ; le planificateur,
+qui se réveille chaque minute, la prend et lance la même commande que la nuit (`hub task run
+<nom>` pour un morceau de domaine). « Tout actualiser maintenant » (`POST /api/tasks/refresh`)
+demande chaque connexion, puis chaque calcul des domaines avec `after_sources` : la demande
+attend que plus aucune connexion n'ait d'actualisation en cours et que la dernière ait fini
+depuis deux minutes (le temps de l'import), 45 minutes au plus. Une tâche qui porte un
+connecteur (« Compositions des fonds ») n'attend pas le planificateur : c'est une actualisation
+forcée de ses connexions ([collectors.md](collectors.md)). Le rapprochement n'en est pas une :
+il se refait à chaque lecture.
+
+`hub nightly` enchaîne le ménage (`hub.housekeeping`), puis chaque morceau des domaines ; un
+morceau en échec n'arrête pas les suivants, la commande échoue à la fin (alerte ntfy).
+
 ## Ce qui tourne
 
 Sur le Mac (phase 1), en conteneurs (`deploy/compose.yaml`) : `api`, `web` (Caddy : fichiers

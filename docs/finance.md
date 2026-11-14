@@ -24,6 +24,11 @@ alias fin='hubc run --rm --no-deps importer hub finance'
   avec `fin imports retry`.
 - `hub verify` (chaque nuit et avant/après chaque migration) recalcule la chaîne du journal et
   l'empreinte de chaque ligne (`verify-ledger`).
+- La nuit de la Finance est en morceaux (`hub/domains/finance/nightly.py`), chacun avec sa ligne
+  dans Réglages › État des sources › Calculs et son « Actualiser » : courbe du patrimoine,
+  stratégies (étapes et DCA repérés), alertes, cartes « À valider » des relevés en attente,
+  compositions des fonds (une relecture forcée de « Cours et cryptos »), contrôle du registre.
+  « Tout actualiser maintenant » relit toutes les connexions, puis les refait.
 
 ## L'app (lot 2)
 
@@ -463,7 +468,9 @@ d'ordre** : il prévient, la personne agit chez sa plateforme, le hub constate a
 
 Chaque nuit, après la vérification, le hub cherche dans le journal des achats réguliers
 (`patrimoine/app/strategy_detect.py`, règles pures dans `patrimoine/model/regular_buys.py`) et
-propose la stratégie dans « À valider ». Il ne l'écrit jamais seul.
+propose la stratégie dans « À valider ». Il ne l'écrit jamais seul. Sans attendre la nuit :
+« Chercher maintenant » dans le panneau Stratégies, ou « Actualiser » sur la ligne Stratégies
+d'État des sources.
 
 - **Où.** Chaque crypto (achats du journal crypto) et chaque titre d'un compte de titres. Un
   compte de prévoyance (3a) se lit au niveau du compte : ce sont ses versements qui sont

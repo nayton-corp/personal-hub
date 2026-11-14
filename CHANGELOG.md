@@ -2,6 +2,37 @@
 
 ## [Non publié]
 
+## [0.25.0] · 2026-11-14
+
+### À la mise à jour
+
+- Migration `core` 0011 : la table `task_runs` (dernier passage de chaque tâche) et la colonne
+  `collector_state.force_requested_at`. Rien à faire : le Pi l'installe seul. Les lignes de
+  l'app se remplissent au fil des passages (la première nuit pour la plupart).
+
+### Hub
+
+- Relancer à la main ce qui tourne seul. Réglages › État du hub › Entretien : contrôle
+  d'intégrité, sauvegarde, contrôle des sauvegardes, santé du serveur et ménage de la nuit, avec
+  leur dernier passage et « Lancer » (pris dans la minute par le planificateur, comme la nuit).
+  En ligne de commande : `hub task list`, `hub task run <tâche>`.
+- `hub nightly` enchaîne le ménage puis chaque morceau de la nuit des domaines, chacun noté ; un
+  morceau en échec n'arrête plus les suivants, la commande échoue à la fin (alerte ntfy).
+
+### Finance
+
+- État des sources : « Tout actualiser maintenant » relit toutes les connexions, puis refait les
+  calculs de la nuit quand elles ont fini. Nouvelle carte Calculs : courbe du patrimoine,
+  stratégies (étapes et DCA repérés), alertes, cartes « À valider », compositions des fonds,
+  contrôle du registre, chacun avec son dernier passage et « Actualiser ». Le rapprochement y
+  figure pour mémoire : il se refait à chaque ouverture.
+- Stratégies : « Chercher maintenant » lance la recherche des achats réguliers sans attendre la
+  nuit.
+- Compositions des fonds : « Actualiser » les relit toutes, même fraîches (actualisation forcée
+  de « Cours et cryptos »).
+- Connexions : une ligne n'a plus qu'un bouton (« Actualiser », ou « Réactiver » / « Contrôler »
+  quand elle est suspendue) et se touche pour s'ouvrir ; « Désactiver » passe dans sa fiche. Les
+  noms ne sont plus coupés sur téléphone.
 ## [0.24.1] · 2026-11-14
 
 ### Finance

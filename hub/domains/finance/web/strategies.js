@@ -4,10 +4,11 @@
 // La section du patrimoine, le panneau d'une stratégie, celui où on l'écrit ; calculs : smodel.js.
 import * as M from "./smodel.js";
 import { SHEETS, SH, closeSheet, esc, failure, ibox, ic, n0, n2, openSheet, renderSheet, skel, toast } from "../../ui.js";
-import { base, date, decimals } from "../../format.js";
+import { ago, base, date, decimals } from "../../format.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { api, store } from "../../store.js";
 import { go } from "../../shell.js";
+import { financeTask, follow } from "./tasks.js";
 
 export const STRATS = "/finance/strategies";
 const cash = (minor) => M.roundMoney(minor, decimals(), base(), n0, n2);
@@ -42,6 +43,19 @@ function card(s) {
     <span class="go">${ic("chev")}</span></button>`;
 }
 
+// quand le hub a cherché les achats réguliers (la nuit), et le bouton pour chercher tout de suite
+function searchLine() {
+  const t = financeTask("finance.strategies");
+  if (!t) return "";
+  const waiting = t.requested || t.running;
+  follow(waiting);
+  const last = t.ended_at ? `dernière recherche ${ago(Date.parse(t.ended_at))}` : "pas encore faite";
+  const act = waiting ? '<span class="muted">Recherche en cours…</span>'
+    : '<button class="link" type="button" data-a="task-run" data-v="finance.strategies">Chercher maintenant</button>';
+  const say = `Le hub cherche tes achats réguliers chaque nuit (${esc(last)}).`;
+  return `<p class="hint strat-search">${say} ${act}</p>`;
+}
+
 // le grand panneau de la carte Stratégies, comme Répartition et Rendement
 SHEETS.wstrat = () => {
   const e = store.use(STRATS);
@@ -54,7 +68,7 @@ SHEETS.wstrat = () => {
       : '<div class="empty">Une stratégie, c\'est une décision prise à froid : « si ça arrive, je fais ça ». Le hub te prévient le jour venu.</div>';
     const old = ended ? `<button class="link-row" type="button" data-a="strat-ended">${plural(ended, "stratégie terminée", "stratégies terminées")}${ic("chev")}</button>` : "";
     return `${list}<button class="secondary strat-add" type="button" data-a="strat-new">Nouvelle stratégie</button>${old}
-      <p class="hint">Le hub ne passe aucun ordre : il te prévient, tu décides, il constate au journal.</p>`;
+      ${searchLine()}<p class="hint">Le hub ne passe aucun ordre : il te prévient, tu décides, il constate au journal.</p>`;
   };
   return { title: "Stratégies", tall: true, body: body() };
 };

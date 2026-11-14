@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from hub import cli_ops
-from hub.core import proposal_reconcile
+from hub.core import proposal_reconcile, tasks
 from hub.core.context import HubContext
 from hub.core.notify import Message
 from hub.platform import logging as hub_logging
@@ -50,14 +51,18 @@ def register(app: typer.Typer, ctx: Ctx, ready: Ctx) -> None:
         from hub.core.maintenance import verify as run
 
         hub = ctx()
-        report = run(hub)
-        typer.echo(json.dumps(report.public(), ensure_ascii=False))
-        if report.ok:
-            return
+        with tasks.recorded(hub.core.engine, "hub.verify") as note:
+            report = run(hub)
+            typer.echo(json.dumps(report.public(), ensure_ascii=False))
+            note.text = "intact" if report.ok else "en écart : " + ", ".join(report.failed)
+            if not report.ok:
+                _verify_failed(hub, report.failed, notify)
+
+    def _verify_failed(hub: HubContext, failed: list[str], notify: bool) -> None:
         if notify and hub.notifier.send(
             Message(
                 "Contrôle d'intégrité en échec",
-                "En cause : " + ", ".join(report.failed)[:300] + ". Aucune donnée n'est modifiée ; "
+                "En cause : " + ", ".join(failed)[:300] + ". Aucune donnée n'est modifiée ; "
                 "regarder avant la prochaine mise à jour.",
                 priority="urgent",
                 tags="rotating_light",
@@ -81,11 +86,14 @@ def register(app: typer.Typer, ctx: Ctx, ready: Ctx) -> None:
 
         hub = ctx()
         target = dest or hub.settings.paths.backup
-        files = backup_all(hub, target, stamp)
-        out: dict[str, object] = {"files": [f.name for f in files]}
-        if restic:
-            out["pruned"] = prune_local_copies(target, hub.settings.backup.keep_local_days)
-            out["restic"] = len(restic_backup(hub))
+        with tasks.recorded(hub.core.engine, "hub.backup") if restic else nullcontext() as note:
+            files = backup_all(hub, target, stamp)
+            out: dict[str, object] = {"files": [f.name for f in files]}
+            if restic:
+                out["pruned"] = prune_local_copies(target, hub.settings.backup.keep_local_days)
+                out["restic"] = len(restic_backup(hub))
+            if note is not None:
+                note.text = f"{len(files)} bases copiées"
         typer.echo(json.dumps(out))
 
     @app.command("backup-check")
@@ -94,11 +102,15 @@ def register(app: typer.Typer, ctx: Ctx, ready: Ctx) -> None:
         des bases en sont ressorties et comparées aux originaux. Code 1 au moindre écart."""
         from hub.core.maintenance import restic_check
 
-        try:
-            typer.echo(json.dumps(restic_check(ctx())))
-        except RuntimeError as exc:
-            typer.echo(str(exc), err=True)
-            raise typer.Exit(1) from exc
+        hub = ctx()
+        with tasks.recorded(hub.core.engine, "hub.backup_check") as note:
+            try:
+                typer.echo(json.dumps(restic_check(hub)))
+            except RuntimeError as exc:
+                typer.echo(str(exc), err=True)
+                note.text = "copies en écart"
+                raise typer.Exit(1) from exc
+            note.text = "copies relues"
 
     @app.command()
     def restore(
@@ -123,4 +135,38 @@ def register(app: typer.Typer, ctx: Ctx, ready: Ctx) -> None:
 
         hub_logging.configure(get_settings().log_level)
         last = state or get_settings().paths.data / "scheduler.last"
-        run_forever(crontab, state=last, on_failure=cli_ops.job_failed)
+        hub = ctx()
+        run_forever(
+            crontab,
+            state=last,
+            on_failure=cli_ops.job_failed,
+            requested=lambda: tasks.take_requested(hub.core.engine, hub),
+        )
+
+    task_app = typer.Typer(no_args_is_help=True, help="Tâches planifiées, relancées à la main")
+    app.add_typer(task_app, name="task")
+
+    @task_app.command("list")
+    def task_list() -> None:
+        """Chaque tâche : horaire, demande en attente, dernier passage."""
+        hub = ready()
+        with hub.core.engine.connect() as conn:
+            typer.echo(json.dumps(tasks.status(conn, hub), ensure_ascii=False))
+
+    @task_app.command("run")
+    def task_run(name: Annotated[str, typer.Argument(help="ex. finance.strategies")]) -> None:
+        """Lance tout de suite un morceau de la nuit (ce que fait le planificateur sur demande
+        de l'app). L'entretien a ses propres commandes : `hub backup --restic`…"""
+        from hub.core.maintenance import housekeeping
+
+        hub = ready()
+        if name == tasks.HOUSEKEEPING:
+            with tasks.recorded(hub.core.engine, name) as note:
+                note.text = "fait"
+                typer.echo(json.dumps(housekeeping(hub)))
+            return
+        task = tasks.find(hub, name)
+        if task.run is None:
+            typer.echo(f"{name} : lancer « {' '.join(task.command) or 'depuis l app'} »", err=True)
+            raise typer.Exit(2)
+        typer.echo(json.dumps({"task": name, "said": tasks.run_domain_task(hub, task)}))

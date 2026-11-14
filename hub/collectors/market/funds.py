@@ -13,8 +13,9 @@ Un lecteur par émetteur, pas par fonds : tous les fonds d'un émetteur publient
 
 Un fonds qu'aucun lecteur ne connaît (HSBC, Vanguard, fonds UBS non cotés…) peut lire la
 composition d'un ETF qui suit le même indice : réglage `funds` (ISIN détenu → ISIN de l'ETF).
-Sinon il reste sans composition, et le hub le signale. Un passage par jour au plus ; seuls des
-ISIN quittent la machine.
+Sinon il reste sans composition, et le hub le signale. Un passage par jour au plus, sauf
+actualisation forcée depuis l'app (`env.forced` : chaque fonds est relu) ; seuls des ISIN
+quittent la machine.
 """
 
 from __future__ import annotations
@@ -101,7 +102,7 @@ def labelled(isin: str, source: str, data: bytes) -> bytes:
 
 def run(env: Env, http: Http) -> tuple[int, list[str]]:
     """(fichiers déposés, manques du passage). Sans hub (tests, essai à la main), rien."""
-    if env.client is None or env.memory.get(DAY_KEY) == env.today.isoformat():
+    if env.client is None or (not env.forced and env.memory.get(DAY_KEY) == env.today.isoformat()):
         return 0, []
     try:
         funds = env.client.needs(env.name).get("funds", [])
@@ -111,7 +112,8 @@ def run(env: Env, http: Http) -> tuple[int, list[str]]:
     dropped, failed = 0, ""
     for fund in funds:
         isin = str(fund.get("isin") or "") if isinstance(fund, dict) else ""
-        if not isin or not due(fund, env.today, m.funds_refresh_days):
+        fresh = not due(fund, env.today, 0 if env.forced else m.funds_refresh_days)
+        if not isin or fresh:
             continue
         source = m.funds.get(isin, isin)
         try:

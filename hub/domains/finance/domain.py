@@ -16,10 +16,19 @@ from fastapi import APIRouter
 from sqlalchemy import Connection, Engine, event, text
 
 from hub.core import inbox, integrity, profile
-from hub.core.domain import Event, Health, Hit, McpTool, Needs, ProposalKind, Ref
+from hub.core.domain import (
+    DomainTask,
+    Event,
+    Health,
+    Hit,
+    McpTool,
+    Needs,
+    ProposalKind,
+    Ref,
+)
 from hub.core.manifest import Manifest, Observation, Severity
 from hub.core.search import excerpt
-from hub.domains.finance import manifest
+from hub.domains.finance import manifest, nightly
 from hub.domains.finance.api import build_router
 from hub.domains.finance.classement.app import packs, recurring, sentinels
 from hub.domains.finance.cli import build_cli
@@ -295,18 +304,18 @@ class FinanceDomain:
         with begin_immediate(self._engine) as conn:
             return strategy_detect.request(conn, self.today())
 
+    def tasks(self) -> Sequence[DomainTask]:
+        return nightly.build(self)
+
     def nightly(self) -> None:
-        refreshed = self.refresh_snapshots(force=True)
-        log.info("snapshots.nightly", rows=refreshed.rows)
-        log.info("imports.review_requested", count=self.request_reviews())
-        log.info("sentinels.raised", count=len(self.run_sentinels()))
-        log.info("strategies.checked", opened=len(self.run_strategies()))
-        log.info("strategies.detected", asked=self.detect_strategies())
-        result = self.verify_ledger()
-        if result.ok:
-            log.info("ledger.verified", links=result.links)
-        else:
-            log.error("ledger.verify_failed", errors=result.errors[:5])
+        """Chaque morceau de la nuit (nightly.py) ; un échec est journalisé, la suite passe."""
+        for task in self.tasks():
+            if task.run is None:
+                continue
+            try:
+                log.info("finance.nightly", task=task.id, said=task.run())
+            except Exception as exc:
+                log.error("finance.nightly_failed", task=task.id, error=str(exc)[:120])
 
     def health(self) -> Health:
         if not self.path.exists():

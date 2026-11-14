@@ -101,6 +101,21 @@ def test_tick(
     assert log == expected
 
 
+def test_a_forced_refresh_reaches_the_flow(tmp_path: Path) -> None:
+    """Une actualisation forcée (core.tasks) le dit au flux ; un run planifié, non."""
+    seen: list[bool] = []
+
+    def runner(env: Env, kind: Kind) -> Result:
+        seen.append(env.forced)
+        return Result("ok")
+
+    hub = FakeHub(run_requested=True, force_requested=True)
+    tick(lambda i: _env(tmp_path, hub, i.id), [BCF], hub, LATER, poll_checks=True, runner=runner)  # type: ignore[arg-type]
+    hub.force_requested = False
+    tick(lambda i: _env(tmp_path, hub, i.id), [BCF], hub, LATER, poll_checks=True, runner=runner)  # type: ignore[arg-type]
+    assert seen == [True, False]
+
+
 def test_runs_go_in_parallel_and_never_twice(tmp_path: Path) -> None:
     """Un run lent ne bloque pas la boucle ; tant qu'il tourne, sa connexion n'est pas relancée
     (l'actualisation demandée attend), les autres partent."""

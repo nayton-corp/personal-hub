@@ -167,3 +167,29 @@ def test_nightly_logs_failure(filled: FinanceDomain, monkeypatch: pytest.MonkeyP
     )
     filled.nightly()
     assert not filled.verify().ok
+
+
+def test_the_night_comes_in_pieces_that_say_what_they_did(
+    filled: FinanceDomain, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Chaque morceau a sa ligne dans l'app (core.tasks) et dit ce qu'il a fait, sans montant ;
+    le contrôle du registre en écart échoue (la ligne passe en échec)."""
+    pieces = {t.id: t for t in filled.tasks()}
+    assert list(pieces) == [
+        "snapshots",
+        "strategies",
+        "sentinels",
+        "reviews",
+        "compositions",
+        "ledger",
+    ]
+    assert pieces["compositions"].run is None
+    assert pieces["compositions"].connector == "market"
+    said = {k: t.run() for k, t in pieces.items() if t.run is not None}
+    assert said["ledger"] == "intact"
+    assert said["snapshots"] == "courbe recalculée"
+    monkeypatch.setattr(
+        filled, "verify_ledger", lambda: ledger.VerifyResult(ok=False, errors=["x"])
+    )
+    with pytest.raises(RuntimeError, match="registre"):
+        pieces["ledger"].run()  # type: ignore[misc]

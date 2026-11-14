@@ -5,6 +5,9 @@ repris supercronic pour ne pas embarquer un binaire de plus dans l'image. Les jo
 tour se suivent. La dernière minute servie est notée dans un fichier d'état : au redémarrage,
 chaque job manqué pendant l'arrêt (au plus un jour en arrière) est rejoué une fois (audit m18).
 
+Chaque minute, il lance aussi ce que l'app a demandé (`requested`, core.tasks), avec la même
+commande que la nuit.
+
 Un job qui sort en erreur est signalé à `on_failure` (une alerte ntfy, posée par la CLI) : une
 nuit ratée ne reste plus dans les journaux du conteneur (audit du 10/11, O1). Le code de sortie
 `REPORTED` dit que la commande a déjà prévenu elle-même, avec ses détails.
@@ -143,6 +146,26 @@ def tick(
     ]
 
 
+Requested = Callable[[], list[tuple[str, ...]]]
+
+
+def serve_requested(
+    requested: Requested, runner: Runner = _run, on_failure: OnFailure | None = None
+) -> list[tuple[tuple[str, ...], int]]:
+    """Les commandes demandées depuis l'app (core.tasks), lancées comme un job de la crontab.
+    Une demande illisible (base occupée) attend la minute suivante."""
+    try:
+        commands = requested()
+    except Exception as exc:
+        log.warning("scheduler.requests_unreadable", error=type(exc).__name__)
+        return []
+    out = []
+    for command in commands:
+        job = Job(frozenset(), frozenset(), frozenset(), frozenset(), frozenset(), command, "")
+        out.append((command, serve(job, "scheduler.requested", runner, on_failure)))
+    return out
+
+
 def _last_served(state: Path | None) -> datetime | None:
     try:
         return datetime.fromisoformat(state.read_text().strip()) if state else None
@@ -155,8 +178,10 @@ def run_forever(
     tz: str | None = None,
     state: Path | None = None,
     on_failure: OnFailure | None = None,
+    requested: Requested | None = None,
 ) -> None:  # pragma: no cover - boucle
-    """`state` : fichier de la dernière minute servie (rattrapage au redémarrage)."""
+    """`state` : fichier de la dernière minute servie (rattrapage au redémarrage) ;
+    `requested` : les commandes demandées depuis l'app, lues chaque minute."""
     jobs = parse(crontab.read_text())
     zone = ZoneInfo(tz) if tz else local_tz()
     last = _last_served(state)
@@ -169,6 +194,8 @@ def run_forever(
             for job in missed(jobs, last, nxt):
                 serve(job, "scheduler.catch_up", on_failure=on_failure)
         tick(jobs, nxt, on_failure=on_failure)
+        if requested is not None:
+            serve_requested(requested, on_failure=on_failure)
         last = nxt
         if state is not None:
             try:

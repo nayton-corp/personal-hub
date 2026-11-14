@@ -6,6 +6,7 @@
 // ligne dit son état en mots, la teinte ne fait que doubler.
 import { api, store } from "./store.js";
 import { SHEETS, closeSheet, esc, failure, fill, ibox, ic, openSheet, pref, toast } from "./ui.js";
+import { actions as upkeepActions, renderUpkeep } from "./upkeep.js";
 
 const $ = (id) => document.getElementById(id);
 const P = store.params;
@@ -116,6 +117,7 @@ export function render() {
     return;
   }
   if (found && found.m) found.m.rubric(r);
+  if (r === "health") renderUpkeep();
   if (r === "display") {
     const hide = pref("hide", false), theme = pref("theme", "system");
     fill($("display-rows"), `
@@ -131,6 +133,7 @@ SHEETS.logout = () => ({
 });
 
 export const actions = {
+  ...upkeepActions,
   logout: () => openSheet("logout"),
   "logout-go": async (_v, btn) => {
     btn.disabled = true;

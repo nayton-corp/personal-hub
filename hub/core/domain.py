@@ -57,6 +57,28 @@ class CollectorNeeds(Protocol):
     def collector_needs(self, connector: str) -> Needs: ...
 
 
+@dataclass(frozen=True)
+class DomainTask:
+    """Un morceau de la tâche de nuit d'un domaine, que l'app peut relancer à la main. La tâche
+    s'appelle `<domaine>.<id>`. `run` rend quelques mots sans montant (« 1 DCA repéré »). Sans
+    `run`, la tâche est l'actualisation forcée des connexions de `connector` : elle relit ce
+    qu'elles gardent d'habitude pour plus tard (les compositions des fonds, par exemple)."""
+
+    id: str
+    label: str
+    run: Callable[[], str] | None = None
+    connector: str | None = None
+    when: str = "chaque nuit"
+
+
+@runtime_checkable
+class NightlyTasks(Protocol):
+    """Facultatif sur un domaine : sa tâche de nuit en morceaux, dans l'ordre où la nuit les
+    lance. Chacun a sa ligne dans l'app, son dernier passage et son bouton (core.tasks)."""
+
+    def tasks(self) -> Sequence[DomainTask]: ...
+
+
 class AfterCommit(Protocol):
     """Facultatif sur un handler local : suite hors transaction, une fois l'effet validé
     (recalculs, relances). Une erreur y est journalisée, jamais remontée."""

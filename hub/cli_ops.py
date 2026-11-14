@@ -59,7 +59,13 @@ def build(ctx: Callable[[], HubContext]) -> typer.Typer:
         """Disques, réplique, sauvegardes, avertissements des domaines : alerte ce qui cloche,
         puis envoie le signal de vie si tout va bien. Code 0 : l'alerte est déjà partie."""
         from hub.core import health as checks
+        from hub.core import tasks
 
-        typer.echo(json.dumps(checks.run(ctx()), ensure_ascii=False))
+        hub = ctx()
+        with tasks.recorded(hub.core.engine, "hub.health") as note:
+            result = checks.run(hub)
+            n = len(result["findings"])
+            note.text = "tout va bien" if not n else f"{n} point{'s' if n > 1 else ''} à regarder"
+        typer.echo(json.dumps(result, ensure_ascii=False))
 
     return app
