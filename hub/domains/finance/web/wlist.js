@@ -1,8 +1,9 @@
 // Patrimoine, liste Comptes / Actifs : chaque ligne dit sa valeur, son gain en francs et son
 // rendement en pastille (▲ vert, ▼ rouge) sur la période choisie en haut ; un actif dit aussi sa
 // quantité. Le tri se choisit dans un petit panneau : un critère, et pour chacun l'ordre
-// (décroissant ou croissant). Les chiffres viennent de /finance/performance (agrégats par compte
-// et par actif) : aucune écriture n'est lue ici.
+// (décroissant ou croissant). Une ligne se masque (l'œil, ou d'elle-même à zéro) sans quitter
+// les calculs. Les chiffres viennent de /finance/performance (agrégats par compte et par actif) :
+// aucune écriture n'est lue ici.
 import { SORTS, S, accLabel, accMark, range, remember, sum } from "./wstate.js";
 import { SHEETS, amount, closeSheet, esc, ic, openSheet, qty } from "../../ui.js";
 import { assetMark, facetColor, ringed } from "./meta.js";
@@ -30,7 +31,8 @@ function rowsOf(sel, M) {
     const q = ls.reduce((t, l) => t + Number(l.qty), 0);
     // la quantité d'abord ; le compte qui la tient se lit sur la page de l'actif
     const where = nAcc > 1 ? ` · ${nAcc} comptes` : cash ? ` · ${esc(accLabel(f))}` : "";
-    return { ...base, title: f.name, sub: cash ? where.slice(3) : `<span class="money num">${qty(String(+q.toFixed(8)))}</span> ${esc(unitOf(f))}${where}`, mark: ringed(assetMark(f), facetColor("cat", f.cat)), cash };
+    const amt = `<span class="money num">${qty(String(+q.toFixed(8)))}</span> ${esc(unitOf(f))}`;
+    return { ...base, title: f.name, sub: cash ? where.slice(3) : amt + where, mark: ringed(assetMark(f), facetColor("cat", f.cat)), cash };
   });
   // des liquidités sans intérêts n'ont ni gain ni rendement : elles se rangent après les autres
   for (const r of rows) if (r.cash && r.gain != null && Math.round(r.gain) === 0) Object.assign(r, { gain: null, pct: null });
@@ -53,7 +55,8 @@ function order(rows) {
 export function pill(p) {
   if (p == null) return "";
   const z = Math.round(p * 1000) === 0, t = z ? "zero" : p > 0 ? "pos" : "neg";
-  return `<span class="gpill ${t} num">${z ? "" : `<i aria-hidden="true">${p > 0 ? "▲" : "▼"}</i>`}<span class="sr">${z ? "" : p > 0 ? "hausse " : "baisse "}</span>${(Math.abs(p) * 100).toFixed(1).replace(".", ",")} %</span>`;
+  const head = z ? "" : `<i aria-hidden="true">${p > 0 ? "▲" : "▼"}</i><span class="sr">${p > 0 ? "hausse " : "baisse "}</span>`;
+  return `<span class="gpill ${t} num">${head}${(Math.abs(p) * 100).toFixed(1).replace(".", ",")} %</span>`;
 }
 
 function delta(r) {
@@ -71,7 +74,7 @@ const dirWord = () => (S.sort === "az" ? (S.dir === "asc" ? "A → Z" : "Z → A
 // au-delà d'un an, le % d'une ligne est celui de toute la période, pas un taux annuel
 const long = (M) => M.pts.length > 1 && Date.parse(M.pts[M.pts.length - 1].d) - Date.parse(M.pts[0].d) > 366 * 864e5;
 
-let LAST = { all: [], zero: () => false }; // lignes du dernier rendu, pour le panneau « Lignes masquées »
+let LAST = { all: [] }; // lignes du dernier rendu, pour le panneau « Lignes masquées »
 
 // une ligne masquée (à la main, ou à zéro) quitte la liste mais reste dans les totaux, la courbe
 // et le gain : seul l'affichage change ; elle ne se voit plus du tout, l'œil du panneau la rend
@@ -81,6 +84,8 @@ const rowHTML = (r) => `<button class="row row2 go-row" type="button" data-a="w-
       <span class="row-main"><span class="row-title">${esc(r.title)}</span><span class="row-sub">${r.sub}</span></span>
       <span class="row-num"><span class="row-val num">${amount(r.value)}</span><span class="row-delta gline">${delta(r)}</span></span><span class="go">${ic("chev")}</span></button>`;
 
+const pl = (n) => (n > 1 ? "s" : "");
+
 export function listSection(sel, M) {
   const all = order(rowsOf(sel, M));
   LAST = { all };
@@ -88,38 +93,48 @@ export function listSection(sel, M) {
   const so = SORTS.find((s) => s.k === S.sort);
   const n = all.length - hid, word = S.view === "acc" ? "compte" : "actif";
   return `<section class="section" aria-labelledby="t-detail"><div class="detail-head" id="detailHead">
-      <div class="vtabs" role="group" aria-label="Comptes ou actifs">${[["acc", "Comptes"], ["asset", "Actifs"]].map(([k, l]) => `<button type="button" data-a="w-view" data-v="${k}" aria-pressed="${S.view === k}">${l}${S.view === k ? ` <b class="num">${n}</b>` : ""}</button>`).join("")}</div>
-      <button class="sort-btn" type="button" data-a="w-sort" aria-haspopup="dialog" aria-label="Trier par ${so.short}, ${dirWord()}. Changer le tri et l'affichage">${ic("sort")}${so.short} <b aria-hidden="true">${arrow()}</b></button></div>
+      <div class="vtabs" role="group" aria-label="Comptes ou actifs">${[["acc", "Comptes"], ["asset", "Actifs"]].map(([k, l]) =>
+        `<button type="button" data-a="w-view" data-v="${k}" aria-pressed="${S.view === k}">${l}${S.view === k ? ` <b class="num">${n}</b>` : ""}</button>`).join("")}</div>
+      <button class="sort-btn" type="button" data-a="w-sort" aria-haspopup="dialog"
+        aria-label="Trier par ${so.short}, ${dirWord()}. Changer le tri et l'affichage">${ic("sort")}${so.short} <b aria-hidden="true">${arrow()}</b></button></div>
     <h2 class="sr" id="t-detail">Comptes et actifs</h2>
     ${M.pts.length > 1 ? `<p class="list-cap">Gain et rendement ${esc(range().label)}${long(M) ? ", en tout (pas par an)" : ""}</p>` : ""}
     <div class="list">${rows.length ? rows.map(rowHTML).join("")
       : hid ? "" : '<div class="empty">Aucun élément ne correspond à ces filtres.<br><button type="button" data-a="w-clear">Effacer les filtres</button></div>'}</div>
-    ${hid ? `<button class="list-foot" type="button" data-a="w-mutes">${ic("eyeoff")}${hid} ${word}${hid > 1 ? "s" : ""} masqué${hid > 1 ? "s" : ""}, toujours compté${hid > 1 ? "s" : ""} · <b>Gérer</b></button>` : ""}
+    ${hid ? `<button class="list-foot" type="button" data-a="w-mutes">${ic("eyeoff")}${hid} ${word}${pl(hid)} masqué${pl(hid)},
+      toujours compté${pl(hid)} · <b>Gérer</b></button>` : ""}
 </section>`;
 }
 
 SHEETS.wsort = () => {
   const [down, up] = DIRS[S.sort];
-  const opt = (s) => `<button class="row byrow" type="button" data-a="w-sort-by" data-v="${s.k}" aria-pressed="${S.sort === s.k}"><span class="row-main"><span class="row-title">${s.label}</span>${s.hint ? `<span class="row-sub">${s.hint}</span>` : ""}</span><span class="chk">${S.sort === s.k ? ic("check") : ""}</span></button>`;
+  const opt = (s) => `<button class="row byrow" type="button" data-a="w-sort-by" data-v="${s.k}" aria-pressed="${S.sort === s.k}">
+    <span class="row-main"><span class="row-title">${s.label}</span>${s.hint ? `<span class="row-sub">${s.hint}</span>` : ""}</span>
+    <span class="chk">${S.sort === s.k ? ic("check") : ""}</span></button>`;
+  const dir = ([k, l]) => `<button type="button" data-a="w-sort-dir" data-v="${k}" aria-pressed="${S.dir === k}">${l}</button>`;
+  const hand = S.muted.size ? `${S.muted.size} masqué${pl(S.muted.size)} à la main` : "aucun pour l'instant";
   return {
     title: "Trier et afficher",
     body: `<div class="list">${SORTS.map(opt).join("")}</div>
       <h3 class="grp-title">Ordre</h3>
-      <div class="seg" role="group" aria-label="Ordre">${[["desc", down], ["asc", up]].map(([k, l]) => `<button type="button" data-a="w-sort-dir" data-v="${k}" aria-pressed="${S.dir === k}">${l}</button>`).join("")}</div>
+      <div class="seg" role="group" aria-label="Ordre">${[["desc", down], ["asc", up]].map(dir).join("")}</div>
       <h3 class="grp-title">Lignes masquées</h3>
       <p class="hint">Elles quittent la liste mais restent dans le total, la courbe et le gain.</p>
-      <div class="setrow"><span id="zero-lbl">Masquer les lignes à zéro<small>Comptes vidés, actifs vendus</small></span><button class="switch" type="button" role="switch" aria-checked="${S.zero}" aria-labelledby="zero-lbl" data-a="w-zero"></button></div>
-      <button class="setrow linkrow" type="button" data-a="w-mutes"><span>Choisir les ${S.view === "acc" ? "comptes" : "actifs"} à masquer<small>${S.muted.size ? `${S.muted.size} masqué${S.muted.size > 1 ? "s" : ""} à la main` : "aucun pour l'instant"}</small></span>${ic("chev")}</button>`,
+      <div class="setrow"><span id="zero-lbl">Masquer les lignes à zéro<small>Comptes vidés, actifs vendus</small></span>
+        <button class="switch" type="button" role="switch" aria-checked="${S.zero}" aria-labelledby="zero-lbl" data-a="w-zero"></button></div>
+      <button class="setrow linkrow" type="button" data-a="w-mutes"><span>Choisir les ${S.view === "acc" ? "comptes" : "actifs"} à masquer<small>${hand}</small></span>${ic("chev")}</button>`,
   };
 };
 
-// chaque ligne de la vue, avec son interrupteur ; une ligne à zéro déjà masquée le dit
+// chaque ligne de la vue, avec son œil ; une ligne à zéro déjà masquée le dit
 SHEETS.wmute = () => ({
   title: S.view === "acc" ? "Comptes affichés" : "Actifs affichés",
   body: `<p class="hint">Touche l'œil pour masquer une ligne de la liste. Elle reste dans le total, la courbe, la répartition et le gain.</p>
     <div class="list">${LAST.all.map((r) => {
       const auto = S.zero && zero(r) && !S.muted.has(r.key), off = muted(r);
-      return `<div class="setrow mrow${off ? " off" : ""}">${r.mark}<span>${esc(r.title)}<small>${auto ? "masqué car à zéro" : off ? "masqué" : amount(r.value)}</small></span><button class="eyebtn" type="button" data-a="w-mute" data-v="${esc(r.key)}" aria-pressed="${off}" aria-label="${off ? "Afficher" : "Masquer"} ${esc(r.title)}"${auto ? " disabled" : ""}>${ic(off ? "eyeoff" : "eye")}</button></div>`;
+      return `<div class="setrow mrow${off ? " off" : ""}">${r.mark}<span>${esc(r.title)}<small>${auto ? "masqué car à zéro" : off ? "masqué" : amount(r.value)}</small></span>
+        <button class="eyebtn" type="button" data-a="w-mute" data-v="${esc(r.key)}" aria-pressed="${off}"
+          aria-label="${off ? "Afficher" : "Masquer"} ${esc(r.title)}"${auto ? " disabled" : ""}>${ic(off ? "eyeoff" : "eye")}</button></div>`;
     }).join("")}</div>`,
 });
 

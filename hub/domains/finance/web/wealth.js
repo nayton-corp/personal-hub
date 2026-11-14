@@ -4,7 +4,7 @@
 // la barre de contexte dit toujours ce que l'écran montre. État et lignes : wstate.js ; courbe :
 // wmodel.js et wchart.js ; haut de l'écran : whero.js ; panneaux : wsheets.js.
 import { BY, FILTERS, FOLD, PRESETS, S, TABS, accLabel, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
-import { SH, SHEETS, amount, announce, closeSheet, esc, fill, ic, n0, openSheet, skel, toast } from "../../ui.js";
+import { SH, SHEETS, announce, closeSheet, esc, fill, n0, openSheet, skel, toast } from "../../ui.js";
 import { accountPage, assetPage } from "./wpages.js";
 import { allocBrief, allocDetail } from "./walloc.js";
 import { chartSVG, flagHTML, gutter, legendHTML, nearest, rulerHTML } from "./wchart.js";

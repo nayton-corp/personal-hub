@@ -49,6 +49,10 @@ def page(instance: tuple[str, str]) -> Iterator[Any]:  # noqa: F811
 
 def test_logos_are_ready_at_each_redraw_and_never_refetched(page: Any) -> None:
     open_tab(page, "patrimoine")
+    # le compte ajouté est vide : sans ce réglage, la liste le masquerait (ligne à zéro)
+    page.evaluate("localStorage.setItem('hub.wealth', JSON.stringify({ zero: false }))")
+    page.reload()
+    open_tab(page, "patrimoine")
     page.wait_for_selector("#patrimoine .ibox.logo img")
     page.wait_for_load_state("networkidle")
     fetched: list[str] = []
