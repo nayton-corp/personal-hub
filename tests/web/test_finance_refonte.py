@@ -227,3 +227,17 @@ def test_turning_the_phone_puts_the_curve_in_full_screen(page: Any) -> None:
         page.set_viewport_size({"width": WIDTH, "height": HEIGHT})
         open_tab(page, "accueil")
     assert page.problems == []
+
+
+@pytest.mark.parametrize("tab", ["patrimoine", "budget", "journal"])
+def test_the_top_bar_is_one_line_and_the_screen_controls_live_in_the_page(
+    page: Any, tab: str
+) -> None:
+    """La barre du haut tient sur une ligne ; filtre, mois et recherche sont dans le contenu."""
+    open_tab(page, tab)
+    bar = page.evaluate(f"document.querySelector('#{tab} .topbar').offsetHeight")
+    assert bar <= 60, f"barre du haut de {tab} : {bar} px"
+    ctl = {"patrimoine": "#filterbar", "budget": "#budCtx", "journal": "#jq"}[tab]
+    assert page.locator(f"#{tab} .topbar {ctl}").count() == 0
+    assert page.locator(f"#{tab} .viewctl {ctl}, #{tab} {ctl}.viewctl").count() == 1
+    open_tab(page, "accueil")

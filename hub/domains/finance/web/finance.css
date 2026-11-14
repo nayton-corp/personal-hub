@@ -592,3 +592,17 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .fv-row.done .row-title { color: var(--muted); text-decoration: line-through; }
 .fv-row { text-align: left; }
 .fv-card .v { margin-bottom: 2px; }
+
+/* --- en-têtes d'un espace : une seule ligne (bouton d'espace, titre, fraîcheur, œil, réglages).
+   Le nom de l'espace reste pour les lecteurs d'écran ; les réglages de l'écran (filtre, mois,
+   recherche) vivent dans le contenu, juste dessous, et défilent avec lui. */
+.topbar.spaced .topbar-row { padding: 6px 6px 6px 10px; gap: 4px; }
+.topbar.spaced .space-btn { width: 34px; height: 34px; border-radius: 10px; margin-right: 6px; }
+.topbar.spaced .space-btn svg { width: 18px; height: 18px; }
+.topbar.spaced .icon-btn:not(.space-btn) { width: 38px; height: 38px; }
+.topbar.spaced .icon-btn svg { width: 20px; height: 20px; }
+.topbar.spaced .topbar-title { flex-direction: row; align-items: baseline; gap: 8px; font-size: 1.06rem; }
+.topbar.spaced .topbar-sub { font-size: .7rem; min-width: 0; }
+.topbar.spaced .topbar-space { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.viewctl { padding-top: 12px; }
+.viewctl.filterbar:empty, .viewctl.ctxbar:empty { display: none; }

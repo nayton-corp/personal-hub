@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+## [0.24.1] · 2026-11-14
+
+### Finance
+
+- Barre du haut sur une seule ligne (bouton d'espace, titre, « Mis à jour » à côté, œil,
+  réglages) sur Aperçu, Patrimoine, Budget et Journal : 51 px au lieu de 116 à 168. Le nom de
+  l'espace reste lu par les lecteurs d'écran.
+- Le filtre du patrimoine, le choix du mois du budget et la recherche du journal quittent la
+  barre : ils sont en tête du contenu et défilent avec lui.
+
 ## [0.24.0] · 2026-11-14
 
 ### Finance
