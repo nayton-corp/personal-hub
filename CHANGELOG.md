@@ -2,6 +2,17 @@
 
 ## [Non publié]
 
+## [0.26.1] · 2026-11-14
+
+### Corrigé
+
+- Stratégies repérées : un seul achat fait après la dernière échéance d'un DCA (un échange, un
+  achat en plus, un versement 3a complémentaire) cachait toute la série, et « Chercher
+  maintenant » ne trouvait rien. La série peut maintenant finir à n'importe quel achat récent.
+- 3a : les achats de fonds du compte titres d'un 3a VIAC étaient lus comme des versements.
+- Quand rien n'est trouvé, la ligne Stratégies d'État des sources dit la cible la plus proche et
+  ce qui lui manque ; `hub finance dca-explain` le détaille pour chaque cible.
+
 ## [0.26.0] · 2026-11-14
 
 ### Finance

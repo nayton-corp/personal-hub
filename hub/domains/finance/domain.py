@@ -304,6 +304,11 @@ class FinanceDomain:
         with begin_immediate(self._engine) as conn:
             return strategy_detect.request(conn, self.today())
 
+    def explain_detection(self) -> list[strategy_detect.Tried]:
+        """Pourquoi aucun achat régulier n'est proposé, cible par cible (compteurs et raisons)."""
+        with self._engine.connect() as conn:
+            return strategy_detect.explain(conn, self.today())
+
     def tasks(self) -> Sequence[DomainTask]:
         return nightly.build(self)
 

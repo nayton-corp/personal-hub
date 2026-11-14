@@ -121,6 +121,26 @@ def build_cli(domain: Finance, make: Callable[[Settings], Finance]) -> typer.Typ
         refreshed = domain.refresh_snapshots(force=True)
         _out({"snapshots": refreshed.rows, **domain.refresh_derived()})
 
+    @app.command("dca-explain")
+    def dca_explain_cmd() -> None:
+        """Pourquoi aucun DCA n'est proposé : par cible, achats, plus longue série, raisons
+        (des compteurs, jamais un montant ni une date)."""
+        from hub.domains.finance.patrimoine.app import strategy_detect
+
+        ready()
+        with engine.connect() as conn:
+            found = strategy_detect.candidates(conn, domain.today())
+            tried = strategy_detect.explain(conn, domain.today())
+        _out(
+            {
+                "found": [f.scope for f in found],
+                "not_found": [
+                    {"name": t.name, "buys": t.buys, "longest": t.longest, "why": list(t.why)}
+                    for t in tried
+                ],
+            }
+        )
+
     golden_cli.register(domain, ready, app=app)
     registre.register(domain, ready, accounts=accounts, categories=categories)
     classement.register(domain, ready, rules_app=rules_app, packs_app=packs_app)
