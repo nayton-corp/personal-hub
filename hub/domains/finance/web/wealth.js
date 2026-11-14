@@ -42,6 +42,18 @@ export function init() {
   window.addEventListener("scroll", () => {
     if (store.params.tab === "patrimoine") $("pat-top").classList.toggle("compact", window.scrollY > 110);
   }, { passive: true });
+  // la barre du haut change de hauteur (total qui apparaît au défilement, chemin, police chargée) :
+  // les onglets Comptes / Actifs se collent toujours juste dessous, jamais à moitié cachés
+  new ResizeObserver(() => $("patrimoine").style.setProperty("--topbar-h", `${$("pat-top").offsetHeight}px`)).observe($("pat-top"));
+  // téléphone tourné en paysage sur le patrimoine : la courbe passe en plein écran ; revenu en
+  // portrait, elle en ressort, sauf si le plein écran avait été ouvert à la main
+  const turned = matchMedia("(orientation: landscape) and (max-height: 540px)");
+  let auto = false;
+  turned.addEventListener("change", (e) => {
+    if (store.params.tab !== "patrimoine" || $("patrimoine").hidden) return;
+    if (e.matches && !S.full) { auto = true; actions["w-full"]("1"); }
+    else if (!e.matches && auto && S.full) { auto = false; actions["w-full"]("0"); }
+  });
 }
 
 // --- doigt : lire une date, mesurer entre deux dates ------------------------------------------
@@ -134,8 +146,6 @@ export function render() {
   fill($("wper"), periodsHTML());
   fill($("wsecs"), r.t === "acc" ? accountPage(M, r) : r.t === "asset" ? assetPage(M, all, r) : homeSections(all));
   fill($("miniTotal"), `${r.t === "home" && activeCount() ? "Sélection · " : ""}${money(sum(M.sel))} ${base()}`);
-  const dh = $("detailHead");
-  if (dh) requestAnimationFrame(() => dh.style.setProperty("--topbar-h", `${$("pat-top").offsetHeight}px`));
 }
 
 // --- patrimoine : répartition, performance, comptes et actifs --------------------------------
@@ -199,8 +209,8 @@ function listSection(sel) {
     return gainSpan(g, x ? x.v : null).replace(` ${base()}`, "");
   };
   return `<section class="section" aria-labelledby="t-detail"><div class="detail-head" id="detailHead">
-      <div class="seg" role="group" aria-label="Comptes ou actifs">${[["acc", "Comptes"], ["asset", "Actifs"]].map(([k, l]) => `<button type="button" data-a="w-view" data-v="${k}" aria-pressed="${S.view === k}">${l}</button>`).join("")}</div>
-      <div class="detail-meta"><span>${rows.length} ${S.view === "acc" ? "compte" : "actif"}${rows.length > 1 ? "s" : ""}</span><button class="sort-btn" type="button" data-a="w-sort" aria-label="Trier par ${so.label}, toucher pour changer">Trier : ${so.label}${ic("sort")}</button></div></div>
+      <div class="vtabs" role="group" aria-label="Comptes ou actifs">${[["acc", "Comptes"], ["asset", "Actifs"]].map(([k, l]) => `<button type="button" data-a="w-view" data-v="${k}" aria-pressed="${S.view === k}">${l}${S.view === k ? ` <b class="num">${rows.length}</b>` : ""}</button>`).join("")}</div>
+      <button class="sort-btn" type="button" data-a="w-sort" aria-label="Trier par ${so.label}, toucher pour changer">Trier : ${so.label}${ic("sort")}</button></div>
     <h2 class="sr" id="t-detail">Comptes et actifs</h2>
     <div class="list">${rows.length ? rows.map((r) => `<button class="row row2 go-row" type="button" data-a="w-open" data-v="${esc(r.key)}">${r.mark}
       <span class="row-main"><span class="row-title">${esc(r.title)}</span><span class="row-sub">${r.sub}</span></span>

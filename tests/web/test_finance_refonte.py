@@ -195,3 +195,36 @@ def test_the_first_steps_card_opens_and_goes_away(page: Any) -> None:
     page.locator('#sheet [data-a="fv-done"]').click()
     page.wait_for_selector("#apercu .fv-card", state="detached")
     assert page.problems == []
+
+
+def test_the_accounts_and_assets_tabs_stick_right_below_the_top_bar(page: Any) -> None:
+    """La barre du haut grandit au défilement (le total apparaît) : les onglets restent dessous."""
+    open_tab(page, "patrimoine")
+    page.wait_for_selector("#detailHead .vtabs")
+    page.evaluate("""() => { const l = document.querySelector('#wsecs .list');
+      for (let i = 0; i < 20; i++) l.appendChild(l.firstElementChild.cloneNode(true)); }""")
+    try:
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        page.wait_for_selector("#pat-top.compact")
+        page.wait_for_timeout(400)  # la hauteur du total s'anime
+        top, tabs = page.evaluate("""() => [
+          document.getElementById('pat-top').getBoundingClientRect().bottom,
+          document.getElementById('detailHead').getBoundingClientRect().top]""")
+        assert abs(tabs - top) <= 1, f"onglets à {tabs} px, barre du haut jusqu'à {top} px"
+    finally:
+        page.evaluate("window.scrollTo(0, 0)")
+        open_tab(page, "accueil")
+
+
+def test_turning_the_phone_puts_the_curve_in_full_screen(page: Any) -> None:
+    open_tab(page, "patrimoine")
+    page.wait_for_selector("#cw svg")
+    try:
+        page.set_viewport_size({"width": HEIGHT, "height": WIDTH})  # paysage
+        page.wait_for_selector("#wland .land:not(.rot)")
+        page.set_viewport_size({"width": WIDTH, "height": HEIGHT})  # retour en portrait
+        page.wait_for_selector("#wland", state="detached")
+    finally:
+        page.set_viewport_size({"width": WIDTH, "height": HEIGHT})
+        open_tab(page, "accueil")
+    assert page.problems == []
