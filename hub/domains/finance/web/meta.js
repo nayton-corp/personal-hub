@@ -87,7 +87,7 @@ export function brandMark(slug, size = "sm") {
 // jamais demandés à un service tiers ; les établissements et commerçants du pays viennent du pack
 // pays. Un nom sans logo garde son sigle ou ses initiales.
 const LOGOS = new Set([
-  "fidelity", "invesco", "ishares", "ubs", "vanguard", "xtrackers",
+  "fidelity", "invesco", "ishares", "revolut", "ubs", "vanguard", "xtrackers",
   "binance", "coinbase", "coinbasewallet", "ibkr", "kucoin", "ledger", "metamask", "multiversx", "phantom", "swissborg", "trustwallet",
 ]);
 // teinte d'un logo dans les graphiques (répartition par compte), quand l'établissement n'a pas de sigle
@@ -95,16 +95,17 @@ const LOGO_TINT = {
   binance: "#F0B90B", coinbase: "#0052FF", coinbasewallet: "#0052FF", ibkr: "#D81222", kucoin: "#01BC8D", ledger: "var(--ink)",
   metamask: "#F6851B", multiversx: "#23F7DD", phantom: "#AB9FF2", swissborg: "#01C38D", trustwallet: "#0500FF",
 };
-export const logoUrl = (logo) => new URL(`./logos/${logo}.svg`, import.meta.url).href;
+// icônes des apps (PNG 128 px, App Store) ; les cryptos, des tracés (coins/*.svg)
+export const logoUrl = (logo) => new URL(`./logos/${logo}.${logo.startsWith("coins/") ? "svg" : "png"}`, import.meta.url).href;
 export const logoImg = (logo) => `<img src="${logoUrl(logo)}" alt="" decoding="async">`;
 export const logoMark = (logo, size = "sm") => `<span class="ibox logo ${size}" aria-hidden="true">${logoImg(logo)}</span>`;
 // plateformes et portefeuilles connus partout (motifs sur le nom en minuscules, le plus précis d'abord)
 const INST_LOGOS = [
   [/coinbase ?wallet/, "coinbasewallet"], [/\bcoinbase/, "coinbase"], [/\bbinance/, "binance"], [/\bkucoin/, "kucoin"],
   [/\bledger\b/, "ledger"], [/meta ?mask/, "metamask"], [/\bphantom\b/, "phantom"], [/\btrust( ?wallet)?\b/, "trustwallet"],
-  [/multiversx|\begld\b|elrond|xportal/, "multiversx"], [/interactive ?brokers|\bibkr\b/, "ibkr"], [/swissborg/, "swissborg"],
+  [/multiversx|\begld\b|elrond|xportal/, "multiversx"], [/interactive ?brokers|\bibkr\b/, "ibkr"], [/swissborg/, "swissborg"], [/\brevolut\b/, "revolut"],
 ];
-const MERCHANT_LOGOS = [[/binance/, "binance"], [/coinbase/, "coinbase"], [/kucoin/, "kucoin"], [/interactive brokers|\bibkr\b/, "ibkr"]];
+const MERCHANT_LOGOS = [[/revolut/, "revolut"], [/binance/, "binance"], [/coinbase/, "coinbase"], [/kucoin/, "kucoin"], [/interactive brokers|\bibkr\b/, "ibkr"]];
 // un logo connu : international (ci-dessus) ou nommé par le pack pays, ses fichiers étant dans logos/
 const known = (logo) => {
   const pk = countryLook();

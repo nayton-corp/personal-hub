@@ -33,7 +33,7 @@ def test_every_coin_logo_has_its_file_and_back() -> None:
 
 
 def test_every_declared_logo_has_its_file_and_back() -> None:
-    files = {p.stem for p in LOGOS.glob("*.svg")}
+    files = {p.stem for p in LOGOS.glob("*.png")}
     assert _declared() | _pack() == files
 
 

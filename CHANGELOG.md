@@ -13,6 +13,9 @@
 - Comptes crypto : le logo se trouve aussi d'après le nom du compte ou sa référence quand
   l'établissement est générique (« Crypto » pour un portefeuille ou une plateforme : Binance,
   SwissBorg, Ledger BTC…).
+- Logos à jour : les établissements, plateformes et commerçants prennent l'icône actuelle de leur
+  app (App Store suisse, PNG 128 px embarqués) au lieu de tracés parfois anciens (TWINT, IBKR,
+  MetaMask, Trust Wallet, Coop…). Revolut aussi.
 - Patrimoine, vue Actifs : le même halo que les comptes, à la couleur de la catégorie.
 
 ## [0.23.0] · 2026-11-14
