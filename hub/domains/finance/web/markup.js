@@ -22,8 +22,8 @@ const VIEWS = `
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
           <button class="icon-btn" type="button" data-a="settings" aria-label="Réglages"></button>
         </div>
-        <div class="filterbar" id="filterbar"></div>
       </header>
+      <div class="filterbar viewctl" id="filterbar"></div>
       <div id="patBody"></div>
     </section>
 
@@ -35,8 +35,8 @@ const VIEWS = `
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
           <button class="icon-btn" type="button" data-a="settings" aria-label="Réglages"></button>
         </div>
-        <div class="ctxbar" id="budCtx"></div>
       </header>
+      <div class="ctxbar viewctl" id="budCtx"></div>
       <div id="budBody"></div>
     </section>
 
@@ -48,9 +48,11 @@ const VIEWS = `
           <button class="icon-btn" type="button" data-a="hide" aria-pressed="false"></button>
           <button class="icon-btn" type="button" data-a="settings" aria-label="Réglages"></button>
         </div>
+      </header>
+      <div class="viewctl">
         <div class="searchbox"><span id="search-ic"></span><input id="jq" type="search" placeholder="Contrepartie, libellé…" aria-label="Rechercher une écriture, 3 lettres au moins" autocomplete="off" enterkeyhint="search"></div>
         <div class="filterbar" id="jChips" role="group" aria-label="Filtrer le journal"></div>
-      </header>
+      </div>
       <div id="jBody"></div>
     </section>
 `;
