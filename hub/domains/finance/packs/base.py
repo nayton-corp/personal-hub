@@ -77,6 +77,7 @@ class CountryPack:
     institution_marks: Mapping[str, tuple[str, str]] = field(default_factory=dict)
     merchant_logos: tuple[tuple[str, str], ...] = ()
     institution_logos: Mapping[str, str] = field(default_factory=dict)
+    fund_logos: tuple[tuple[str, str], ...] = ()  # émetteurs de fonds du pays (motif → logo)
     category_icons: Mapping[str, tuple[str, int]] = field(default_factory=dict)
 
     def pension_cap(self, year: int) -> int | None:
@@ -103,6 +104,7 @@ class CountryPack:
                 "institution_marks": {k: list(v) for k, v in self.institution_marks.items()},
                 "merchant_logos": [list(x) for x in self.merchant_logos],
                 "institution_logos": dict(self.institution_logos),
+                "fund_logos": [list(x) for x in self.fund_logos],
                 "category_icons": {k: list(v) for k, v in self.category_icons.items()},
             },
         }

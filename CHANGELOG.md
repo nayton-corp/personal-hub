@@ -2,6 +2,22 @@
 
 ## [Non publié]
 
+## [0.24.0] · 2026-11-14
+
+### Finance
+
+- Logos des actifs : les cryptos ont leur vrai logo en couleur (92 symboles : BTC, ETH, SOL,
+  ATOM, EGLD, TAO, RENDER, USDC…), les fonds celui de leur émetteur d'après leur nom (iShares,
+  Vanguard, UBS, Xtrackers, Invesco, Fidelity ; ZKB par le pack suisse, `fund_logos`). Un actif
+  sans logo garde son symbole ou ses initiales.
+- Comptes crypto : le logo se trouve aussi d'après le nom du compte ou sa référence quand
+  l'établissement est générique (« Crypto » pour un portefeuille ou une plateforme : Binance,
+  SwissBorg, Ledger BTC…).
+- Logos à jour : les établissements, plateformes et commerçants prennent l'icône actuelle de leur
+  app (App Store suisse, PNG 128 px embarqués) au lieu de tracés parfois anciens (TWINT, IBKR,
+  MetaMask, Trust Wallet, Coop…). Revolut aussi.
+- Patrimoine, vue Actifs : le même halo que les comptes, à la couleur de la catégorie.
+
 ## [0.23.0] · 2026-11-14
 
 ### À la mise à jour

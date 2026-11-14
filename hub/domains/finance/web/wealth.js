@@ -9,7 +9,7 @@ import { accountPage, assetPage } from "./wpages.js";
 import { allocBrief, allocDetail } from "./walloc.js";
 import { chartSVG, flagHTML, gutter, legendHTML, nearest, rulerHTML } from "./wchart.js";
 import { displayBody, drawLand, drawTop, heroHTML, periodsHTML } from "./whero.js";
-import { assetMark } from "./meta.js";
+import { assetMark, facetColor, ringed } from "./meta.js";
 import { gainSpan, perfSection, rate, ratePct, signedMoney, units } from "./perf.js";
 import { kindFor, model } from "./wmodel.js";
 import { moneyRate } from "./wcurve.js";
@@ -188,7 +188,7 @@ function listSection(sel) {
     if (f.kind === "good") return { key, title: f.name, sub: `Bien · ${esc(f.inst)}`, mark: goodMark({ kind: f.goodKind }, ""), value: sum(ls), c: null, cash: true };
     if (S.view === "acc") return { key, title: f.accName, sub: `${esc(f.inst)} · ${{ cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" }[f.kind] || ""}`, mark: accMark(ls, ""), value: sum(ls), c, cash: f.kind === "cash" };
     const q = ls.reduce((t, l) => t + Number(l.qty), 0), nAcc = new Set(ls.map((l) => l.acc)).size;
-    return { key, title: f.name, sub: `<span class="money">${n0(q) === "0" ? q : n0(q)}</span> ${esc(f.unit)} · ${nAcc > 1 ? `${nAcc} comptes` : esc(accLabel(f))}`, mark: assetMark(f), value: sum(ls), c, cash: f.asset.startsWith("ccy:") };
+    return { key, title: f.name, sub: `<span class="money">${n0(q) === "0" ? q : n0(q)}</span> ${esc(f.unit)} · ${nAcc > 1 ? `${nAcc} comptes` : esc(accLabel(f))}`, mark: ringed(assetMark(f), facetColor("cat", f.cat)), value: sum(ls), c, cash: f.asset.startsWith("ccy:") };
   });
   const gainOf = (r) => (r.c ? units(r.c.gain) : -Infinity);
   rows.sort(S.sort === "val" ? (a, b) => b.value - a.value : S.sort === "chg" ? (a, b) => gainOf(b) - gainOf(a) : (a, b) => a.title.localeCompare(b.title, "fr"));
