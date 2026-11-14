@@ -3,14 +3,14 @@
 // puis constate l'opération au journal ou prend la réponse (c'est fait, plus tard, je passe).
 // La section du patrimoine, le panneau d'une stratégie, celui où on l'écrit ; calculs : smodel.js.
 import * as M from "./smodel.js";
-import { SHEETS, SH, closeSheet, esc, failure, ibox, ic, n2, openSheet, renderSheet, skel, toast } from "../../ui.js";
+import { SHEETS, SH, closeSheet, esc, failure, ibox, ic, n0, n2, openSheet, renderSheet, skel, toast } from "../../ui.js";
 import { base, date, decimals } from "../../format.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { api, store } from "../../store.js";
 import { go } from "../../shell.js";
 
 export const STRATS = "/finance/strategies";
-const cash = (minor) => `${n2(minor / 10 ** decimals())} ${base()}`;
+const cash = (minor) => M.roundMoney(minor, decimals(), base(), n0, n2);
 const items = () => (store.data(STRATS) || { items: [] }).items;
 const find = (id) => items().find((s) => s.id === id) || null;
 const mark = (s, size = "") => ibox(ic(M.KIND[s.kind].icon), M.KIND[s.kind].color, size);
@@ -30,11 +30,15 @@ export function stratBrief() {
   return { v: plural(live.length, "stratégie", "stratégies"), s: reached ? plural(reached, "étape atteinte", "étapes atteintes") : "rien à faire pour l'instant", hot: reached > 0 };
 }
 
+// « Repérée » : le hub l'a trouvée dans le journal ; la tenue vient avec, depuis le premier achat
+const found = (s) => (M.isDetected(s) ? '<span class="pill info strat-found">Repérée</span>' : "");
 function card(s) {
   const sub = s.step ? M.stepLine(s, cash) : M.levelLine(s);
+  const kept = M.isDetected(s) && !s.step ? M.keptLine(s) : "";
+  const line = [kept, sub].filter(Boolean).join(" · ");
   return `<button class="row row2 go-row strat-row" type="button" data-a="strat-open" data-v="${esc(s.id)}">${mark(s)}
     <span class="row-main"><span class="row-title">${esc(s.name)} ${pill(s)}</span>
-      <span class="strat-say">${esc(s.phrase)}</span>${sub ? `<span class="row-sub">${esc(sub)}</span>` : ""}</span>
+      <span class="strat-say">${esc(s.phrase)}</span>${line || found(s) ? `<span class="row-sub">${found(s)}${esc(line)}</span>` : ""}</span>
     <span class="go">${ic("chev")}</span></button>`;
 }
 
@@ -93,6 +97,7 @@ SHEETS.strategy = (id, sh) => {
     title: `${mark(s)}<span>${esc(s.name)}</span>`,
     body: `<p class="strat-say big">${esc(s.phrase)}</p>
       <p class="strat-now">${pill(s)}${level ? `<span>${esc(level)}</span>` : ""}</p>
+      ${M.isDetected(s) ? `<p class="hint">Repérée par le hub dans ton journal, validée par toi. Suivie depuis le ${esc(date(s.created_on))}.</p>` : ""}
       ${s.note ? `<p class="hint">Ensuite : ${esc(s.note)}</p>` : ""}
       ${s.step ? stepBlock(s, sh.busy) : ""}
       <h3 class="field">Étapes</h3>
@@ -161,7 +166,7 @@ SHEETS.stratform = (id, sh) => {
   if (!s && !t.scope && scopes.length) t.scope = scopes[0].key;
   const name = s ? s.name : (scopes.find((x) => x.key === t.scope) || { name: "…" }).name;
   let said = "";
-  try { said = M.phrase(t.kind, name, { ...t, ...M.settings(t, decimals()) }, cash); } catch { said = ""; }
+  try { said = M.phrase(t.kind, name, { ...t, ...M.settings(t, decimals()) }, cash, M.isAccount(s ? s.scope : t.scope)); } catch { said = ""; }
   const on = s ? "" : scopes.length ? select("scope", "Sur quoi", scopes.map((x) => [x.key, x.name]), t.scope)
     : `<p class="hint">Rien à cibler pour l'instant : il faut d'abord ${t.kind === "ladder" ? "une crypto" : "un placement"} dans le patrimoine.</p>`;
   return {

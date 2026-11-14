@@ -1,10 +1,11 @@
 // Les cartes de la finance (manifeste `cards`) : créer une proposition du domaine, la valider
 // aussitôt, et la carte « plusieurs écritures, une catégorie » dont chaque écriture se décoche
-// dans « À valider » (approvals.js).
+// dans « À valider » (approvals.js) ; une stratégie repérée y montre ses preuves (sdetect.js).
 import { approve, pendingPath } from "../../approvals.js";
 import { date, units } from "../../format.js";
 import { api, store } from "../../store.js";
 import { esc, n2 } from "../../ui.js";
+import { seenDetail } from "./sdetect.js";
 
 export { approve, outcome } from "../../approvals.js";
 
@@ -34,6 +35,7 @@ export async function proposeAndApprove(items) {
 // la liste des écritures se déplie sous la carte, chaque écriture se décoche
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 export function detail(p) {
+  if (p.kind === "save_strategy") return seenDetail(p);
   if (p.kind !== "categorize_entries") return "";
   const off = dropped.get(p.id) || new Set();
   const list = p.preview.details.entries || [];

@@ -495,6 +495,18 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .strat-say.big { font-size: .941rem; font-weight: 600; margin: 14px 0 8px; }
 .strat-now { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .765rem; color: var(--muted); margin: 0; }
 .strat-add { margin-top: 12px; }
+.strat-found { font-size: .66rem; padding: 1px 7px; margin-right: 6px; vertical-align: 1px; }
+.strat-row .row-sub { white-space: normal; }
+/* carte « À valider » d'une stratégie repérée : les échéances vues au journal, les garde-fous */
+.prop-more.seen { margin: 0 0 12px 30px; }
+.seen-lbl { margin: 0; font-size: .66rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.seen-bars { display: flex; align-items: flex-end; gap: 4px; height: 58px; margin: 8px 0 6px; }
+.seen-bars span { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: .6rem; color: var(--muted); }
+.seen-bars i { display: block; width: 100%; max-width: 16px; border-radius: 4px 4px 2px 2px; background: var(--accent); }
+.seen-bars i.none { background: var(--line); }
+.seen-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: .794rem; line-height: 1.35; }
+.seen-checks li { display: flex; gap: 7px; }
+.seen-checks .ic { flex: none; width: 14px; height: 14px; margin-top: 2px; color: var(--pos); }
 .strat-step { margin: 14px 0; padding: 12px; border-radius: 14px; background: var(--accent-soft); font-size: .824rem; }
 .strat-coins { margin-top: 6px; border-top: 1px solid var(--line); }
 .strat-coin { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; min-height: 36px; align-items: center; }

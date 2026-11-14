@@ -443,7 +443,7 @@ d'ordre** : il prévient, la personne agit chez sa plateforme, le hub constate a
 | Genre | Cible | Réglages | Étape atteinte quand |
 |---|---|---|---|
 | `ladder` vendre par paliers | une crypto, `crypto:alt` (tout sauf bitcoin et stablecoins), `crypto:all` | 1 à 4 paliers (niveau en % du prix d'achat, part à vendre), 10 points d'écart au moins | la valeur dont le prix d'achat est connu atteint le niveau ; un palier à la fois, dans l'ordre |
-| `recurring` achat régulier | un instrument tenu | chaque mois (jour 1 à 28) ou chaque semaine, montant | l'échéance arrive ; un achat déjà au journal (jusqu'à 3 jours avant) la coche sans alerte |
+| `recurring` achat régulier | un instrument tenu, ou `account:<id>` (versements sur un compte de prévoyance) | chaque mois (jour 1 à 28) ou chaque semaine, montant | l'échéance arrive ; un achat (un versement) déjà au journal (jusqu'à 3 jours avant) la coche sans alerte |
 | `dip` grosse baisse | un instrument coté | baisse (15 % au moins) sous le plus haut des 90 ou 365 derniers jours, montant | le dernier cours (5 jours au plus) est sous le seuil ; une alerte par baisse, il faut un nouveau plus haut pour la suivante |
 
 - Tables `strategies` et `strategy_steps` (migration 0027) ; règles pures dans
@@ -458,6 +458,33 @@ d'ordre** : il prévient, la personne agit chez sa plateforme, le hub constate a
   étape (`done`, `later`, `skip`) : `answer_strategy_step`. Lecture : `GET /api/finance/strategies`
   (les stratégies, où elles en sont, et `scopes` : sur quoi elles peuvent porter).
 - Le suivi compte des étapes tenues ou passées, jamais un rendement.
+
+### Stratégies repérées (DCA)
+
+Chaque nuit, après la vérification, le hub cherche dans le journal des achats réguliers
+(`patrimoine/app/strategy_detect.py`, règles pures dans `patrimoine/model/regular_buys.py`) et
+propose la stratégie dans « À valider ». Il ne l'écrit jamais seul.
+
+- **Où.** Chaque crypto (achats du journal crypto) et chaque titre d'un compte de titres. Un
+  compte de prévoyance (3a) se lit au niveau du compte : ce sont ses versements qui sont
+  réguliers (cible `account:<id>`) ; ses achats de fonds, faits par le compte lui-même, ne sont
+  pas lus un par un.
+- **Garde-fous.** Tout doit être vrai à la fois : au moins 4 achats d'affilée chaque mois (6
+  chaque semaine) ; chaque écart dans la plage du rythme (26 à 35 jours, 6 à 8 jours) ; chaque
+  montant à 15 % au plus de la médiane ; le dernier achat date de moins d'un écart maximal ; aucune
+  vente (aucun retrait) pendant la série ; pas plus d'achats hors série que la moitié de la série.
+  Plusieurs achats le même jour comptent pour un ; un ancien montant (avant une augmentation) sort
+  de la série. Une cible qui a déjà une stratégie d'achat régulier n'est pas proposée.
+- **La carte.** Une demande `proposal.request` de `save_strategy` avec `since` (la première
+  échéance de la série) et une `create_key` (`finance:strategy-detect:<cible>:<rythme>:<tranche>`,
+  tranches de montant d'environ 30 %). Le cœur ne crée qu'une carte par clé : refusée ou expirée,
+  elle ne revient pas, sauf si le rythme ou le montant change de tranche. L'aperçu montre chaque
+  échéance et ce que le journal en dit (`details.detected`).
+- **Validée.** La stratégie porte `origin = 'detected'` (migration 0030) et commence à `since` :
+  les échéances déjà passées sont posées tenues (le journal montre l'achat) ou passées
+  (`patrimoine/app/strategy_history.py`) ; l'échéance en cours reste à la vérification de nuit.
+- Paliers et achats sur creux ne sont pas devinés : une vente ou un gros achat isolé ne dit pas
+  quelle règle on suivait.
 
 ## Biens hors comptes et frais des fonds
 
