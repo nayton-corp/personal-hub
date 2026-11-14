@@ -17,7 +17,7 @@ un commerçant (usage nominatif), sans lien ni approbation de leur part.
 | swisscom | logo Swisscom (CNCF landscape, `hosted_logos/swisscom.svg`), le symbole sans le mot |
 | twint | [tabler](https://github.com/tabler/tabler) `core/img/payments/twint.svg`, le symbole sans le mot |
 | bcf | emblème de la Banque Cantonale de Fribourg (traits et chevron), sans les lettres |
-| viac | hexagone de VIAC redessiné (forme d'après Lawnicons) ; teinte à confirmer |
+| viac | hexagone vert de VIAC redessiné (forme d'après Lawnicons, teinte relevée sur le logo) |
 
 Ajouter un logo : un SVG carré `viewBox` quelconque, fond plein, marque centrée avec une marge
 (un rond de la taille du carré la contient), puis son nom dans `LOGOS` et `LOGO_TINT` (`meta.js`)
