@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+## [0.21.4] · 2026-11-14
+
+### Corrigé
+
+- Budget : un mois d'avant le premier budget s'affichait « Erreur interne » dès qu'une catégorie
+  était suivie à l'année : sa cible annuelle, absente ce mois-là, était exigée par la réponse.
+  Elle peut maintenant manquer (« Sans cible annuelle »).
+
 ## [0.21.3] · 2026-11-14
 
 ### Corrigé
@@ -19,9 +27,6 @@
   défilement, et la barre changeait de hauteur à chaque fois.
 - Patrimoine : la carte Stratégies ouvre son détail dans le même grand panneau que Répartition et
   Rendement, au lieu de se déplier sur la page.
-- Budget : un mois d'avant le premier budget s'affichait « Erreur interne » dès qu'une catégorie
-  était suivie à l'année : sa cible annuelle, absente ce mois-là, était exigée par la réponse.
-  Elle peut maintenant manquer (« Sans cible annuelle »).
 - Panneau Période : il tient sans défiler sur un grand téléphone. Lignes plus serrées, épingles
   sans fond (bleues quand la période est dans la barre), et le bouton « Afficher cette plage » sous
   les dates au lieu d'être collé en bas du panneau.
