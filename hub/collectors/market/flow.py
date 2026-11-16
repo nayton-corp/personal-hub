@@ -8,7 +8,7 @@ API publiques et sans identifiant bancaire.
 - portefeuilles : le solde des adresses publiques des secrets (`wallets`) : BTC par
   mempool.space (adresses, ou xpub d'un Ledger), ETH et ses jetons par un nœud RPC public, SOL
   et ses jetons par le RPC public de Solana ;
-- compositions des fonds détenus, une fois par jour (funds.py), en fichiers à part.
+- compositions et frais (TER) des fonds détenus, une fois par jour (funds.py, fees.py).
 
 Tout le reste est déposé dans un seul fichier `hub.market.v1` ; seul le domaine Finance le lit.
 Une source facultative en panne n'empêche pas le dépôt du reste (le détail du run la nomme).
@@ -31,7 +31,7 @@ from embit import bip32, script
 from hub.collectors.base import Failure, Kind, Result
 from hub.collectors.dropbox import is_market_json
 from hub.collectors.http import Http
-from hub.collectors.market import funds, history, multiversx, net
+from hub.collectors.market import fees, history, multiversx, net
 from hub.collectors.market.cosmos import atom_wallet
 from hub.collectors.market.evm import networks
 from hub.collectors.market.history import (
@@ -587,6 +587,6 @@ def run(env: Env, kind: Kind, http: Http | None = None) -> Result:
         env.memory.put("last_run", env.today.isoformat())
     if since < env.today - timedelta(days=COINGECKO_MAX_DAYS):  # cours plus anciens jamais lus
         notes.append(f"prices.crypto:truncated={COINGECKO_MAX_DAYS}")
-    got, gaps = funds.run(env, http)  # après `last_run` : une composition manquée attend demain
+    got, gaps = fees.with_compositions(env, http)  # après `last_run` : un manque attend demain
     detail = "partial " + " ".join(failed + gaps + notes) if failed or gaps or notes else None
     return Result("ok" if dropped or got else "nothing_new", int(dropped) + got, detail)

@@ -320,6 +320,27 @@ immobilier suisse) est stable : il n'est plus cherché. Un site en panne laisse 
 `funds:<issue>` sur le passage, et le fonds est redemandé au passage suivant. Seuls des ISIN
 quittent la machine.
 
+**Frais courants des fonds (TER).** Au même passage, une fois par jour au plus, chaque fonds
+détenu sans TER, ou dont le TER relevé a au moins `fees_refresh_days` jours (90 par défaut), est
+cherché par ISIN ; un TER saisi à la main dans l'app ne l'est jamais (le hub le dit dans
+`needs` : `ter_since`, `ter_by_user`). Une cascade de lecteurs génériques, un par site :
+1. `fee_lists` : des pages où une plateforme publie ISIN, devise et TER de chaque fonds
+   proposé, y compris les classes non cotées (par défaut les listes 3a et libre passage de
+   VIAC) ;
+2. la fiche du fonds sur finanzfluss (`/informer/etf/<isin>/`, puis `/informer/fonds/<isin>/`,
+   libellé « Gesamtkosten (TER) ») : ETF et fonds européens ;
+3. pour un fonds dont le symbole Yahoo est réglé dans `quotes`, la fiche de cotation sur
+   stockanalysis (`/etf/<symbole>/` sans suffixe, `/quote/<place>/<symbole>/` pour `.SW`, `.L`,
+   `.DE`, `.AS`, `.PA`, `.MI` ; libellé « Expense Ratio »).
+
+Les pages se lisent en texte : le libellé (ou l'ISIN), puis le premier pourcentage qui le suit
+sans autre chiffre entre les deux, entre 0 et 5 %. Le collecteur dépose `fund-fees.csv`
+(`isin,ter_pct,origin,on_date`) ; le domaine Finance le lit comme un fichier déposé à la main.
+Un site en panne n'arrête pas la cascade ; si aucun site n'a répondu, le manque
+`fees:<issue>` reste sur le passage et le fonds est redemandé au suivant. Un fonds qu'aucun site
+ne connaît reste « frais inconnus » : son TER se saisit dans l'app. Seuls des ISIN et des
+symboles quittent la machine.
+
 Les portefeuilles se règlent dans l'app (« Régler » sur « Cours et cryptos ») : un compte
 `crypto:<nom>`, la crypto, et les adresses ou la clé publique étendue, une par ligne. Ce sont des
 réglages de la connexion, visibles dans l'app : des adresses publiques et des clés publiques,

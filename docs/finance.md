@@ -534,11 +534,16 @@ d'État des sources.
 - Un bien entre dans le patrimoine net (enveloppe `biens`, présente seulement quand un bien
   existe) et dans la répartition (« Biens »). Il n'entre jamais dans le rendement : une
   estimation n'est ni un gain ni une perte.
-- **Frais des fonds.** Table `fund_fees` (migration 0029) : le TER d'un fonds, en % par an,
-  saisi par la proposition `set_fund_fee`. `GET /api/finance/fees` donne, pour les fonds détenus,
-  la valeur, le TER, le coût par an, la valeur couverte et non couverte, et l'écart de valeur
-  finale sur 30 ans à 5 % par an avant frais (`patrimoine/app/fees.py`). Un fonds sans TER
-  saisi reste « frais inconnus » : le hub n'en devine aucun et ne propose aucun autre fonds.
+- **Frais des fonds.** Table `fund_fees` (migrations 0029, 0031) : le TER d'un fonds, en % par
+  an, relevé par le collecteur « market » sur le site d'une plateforme ou du fonds (fichier
+  `isin,ter_pct,origin,on_date`, `patrimoine/infra/fee_file.py` ; `source = 'issuer'`, avec le
+  site dans `origin`) ou saisi par la proposition `set_fund_fee` (`source = 'user'`). Une saisie
+  l'emporte toujours sur un TER relevé ; un TER relevé identique au précédent n'ajoute rien.
+  `GET /api/finance/fees` donne, pour les fonds détenus, la valeur, le TER, sa source, son site
+  et son jour, le coût par an, la valeur couverte et non couverte, et l'écart de valeur finale
+  sur 30 ans à 5 % par an avant frais (`patrimoine/app/fees.py`). Un fonds dont aucun site ne
+  publie le TER reste « frais inconnus » : le hub n'en devine aucun et ne propose aucun autre
+  fonds. Voir [collectors.md](collectors.md) pour la cascade des sites.
 
 ## Autres commandes
 

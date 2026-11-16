@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+## [0.27.0] · 2026-11-16
+
+### Ajouté
+
+- Frais des fonds : le TER de chaque fonds détenu est cherché automatiquement par ISIN, chaque
+  nuit, par le collecteur des cours : listes de fonds publiées par une plateforme (ISIN, devise,
+  TER), puis fiche du fonds, puis fiche de cotation pour un fonds dont le symbole est réglé.
+  L'écran dit où chaque TER a été relevé ; un TER saisi à la main l'emporte toujours, et la
+  saisie reste possible pour un fonds qu'aucun site ne connaît. Relu tous les 90 jours.
+
 ## [0.26.5] · 2026-11-16
 
 ### Corrigé

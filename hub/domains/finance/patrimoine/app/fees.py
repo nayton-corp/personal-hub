@@ -1,11 +1,14 @@
 """Frais courants des fonds détenus (migration 0029) : ce que le TER coûte par an, et sur trente
 ans.
 
-Le TER vient de `fund_fees` (saisi par la proposition `set_fund_fee`, la dernière ligne d'un ISIN
-fait foi). Un fonds sans TER connu est listé « frais inconnus » et reste hors des totaux : rien
-n'est deviné. Coût par an : valeur détenue × TER. Coût sur trente ans : l'écart entre la valeur
-finale sans frais et avec, pour la position d'aujourd'hui laissée telle quelle, au rendement
-annuel supposé `ASSUMED_RETURN` avant frais ; un ordre de grandeur, dit comme tel à l'écran.
+Le TER vient de `fund_fees` : relevé sur le site d'une plateforme ou du fonds par le collecteur
+« market » (`source = 'issuer'`, fichier lu par `apply`), ou saisi par la proposition
+`set_fund_fee` (`source = 'user'`). Une saisie l'emporte toujours sur un TER relevé ; entre deux
+lignes de même source, la dernière fait foi. Un fonds sans TER connu est listé « frais inconnus »
+et reste hors des totaux : rien n'est deviné. Coût par an : valeur détenue × TER. Coût sur
+trente ans : l'écart entre la valeur finale sans frais et avec, pour la position d'aujourd'hui
+laissée telle quelle, au rendement annuel supposé `ASSUMED_RETURN` avant frais ; un ordre de
+grandeur, dit comme tel à l'écran.
 """
 
 from __future__ import annotations
@@ -18,6 +21,8 @@ from sqlalchemy import Connection, text
 from hub.core.domain import Preview
 from hub.domains.finance.patrimoine.app import valuation
 from hub.domains.finance.patrimoine.app.fund_needs import is_fund
+from hub.domains.finance.patrimoine.infra.fee_file import FeeFile
+from hub.domains.finance.patrimoine.model.instruments import Result
 from hub.domains.finance.registre.app.kinds import Params, bad, fp
 from hub.kernel.clock import now_iso
 from hub.kernel.ids import new_id
@@ -29,12 +34,60 @@ MAX_TER = Decimal("0.05")
 
 
 def known(conn: Connection) -> dict[str, tuple[Decimal, str]]:
-    """{ISIN : (TER par an, source)} : la dernière ligne posée fait foi."""
-    out: dict[str, tuple[Decimal, str]] = {}
-    for isin, ter, source in conn.execute(
-        text("SELECT isin, ter, source FROM fund_fees ORDER BY created_at, id")
+    """{ISIN : (TER par an, source)} : la dernière saisie, sinon le dernier TER relevé."""
+    return {isin: (ter, source) for isin, (ter, source, _o, _on) in latest(conn).items()}
+
+
+def latest(conn: Connection) -> dict[str, tuple[Decimal, str, str | None, str]]:
+    """{ISIN : (TER par an, source, site, jour)} : la dernière saisie l'emporte sur tout TER
+    relevé ; sinon le dernier relevé."""
+    out: dict[str, tuple[Decimal, str, str | None, str]] = {}
+    for isin, ter, source, origin, at in conn.execute(
+        text(
+            "SELECT isin, ter, source, origin, created_at FROM fund_fees "
+            "ORDER BY source = 'user', created_at, id"
+        )
     ):
-        out[str(isin)] = (Decimal(ter), str(source))
+        out[str(isin)] = (Decimal(ter), str(source), origin, str(at)[:10])
+    return out
+
+
+def apply(
+    conn: Connection, import_id: str, doc: FeeFile, indexes: set[int] | None
+) -> list[tuple[int, Result]]:
+    """Un TER relevé n'entre que s'il change le dernier relevé du fonds ; une saisie à la main
+    reste devant lui (voir `latest`)."""
+    out: list[tuple[int, Result]] = []
+    for i, fee in enumerate(doc.fees):
+        if indexes is not None and i not in indexes:
+            continue
+        result = Result()
+        last = conn.execute(
+            text(
+                "SELECT ter FROM fund_fees WHERE isin = :i AND source = 'issuer' "
+                "ORDER BY created_at DESC, id DESC LIMIT 1"
+            ),
+            {"i": fee.isin},
+        ).scalar()
+        if last is not None and Decimal(last) == fee.ter:
+            result.duplicates += 1
+        else:
+            conn.execute(
+                text(
+                    "INSERT INTO fund_fees (id, isin, ter, source, origin, import_id, created_at) "
+                    "VALUES (:id, :i, :t, 'issuer', :o, :imp, :at)"
+                ),
+                {
+                    "id": new_id(),
+                    "i": fee.isin,
+                    "t": format(fee.ter.normalize(), "f"),
+                    "o": fee.origin,
+                    "imp": import_id,
+                    "at": now_iso(),
+                },
+            )
+            result.new += 1
+        out.append((i, result))
     return out
 
 
@@ -69,7 +122,7 @@ def cost_over(value: int, ter: Decimal, years: int = YEARS) -> int:
 
 def summary(conn: Connection, on_date: str) -> dict[str, object]:
     ccy = base_currency()
-    fees = known(conn)
+    fees = latest(conn)
     items: list[dict[str, object]] = []
     yearly = covered = unknown = later = 0
     for isin, (name, value) in sorted(_held(conn, on_date).items(), key=lambda kv: -kv[1][1]):
@@ -90,6 +143,8 @@ def summary(conn: Connection, on_date: str) -> dict[str, object]:
                 "value": Money(value, ccy).to_api(),
                 "ter_pct": _pct(fee[0]) if fee else None,
                 "source": fee[1] if fee else None,
+                "origin": fee[2] if fee else None,
+                "since": fee[3] if fee else None,
                 "yearly_cost": Money(cost, ccy).to_api() if cost is not None else None,
             }
         )

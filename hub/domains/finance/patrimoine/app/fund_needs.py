@@ -5,6 +5,10 @@ Un fonds se reconnaît à son type (`fund`, `etf`) ou à son nom (« ETF », « 
 « Fonds », « Index ») : un courtier range souvent un ETF parmi les actions (IBKR). Seuls ces
 ISIN quittent le hub : une action détenue en direct n'a pas de composition à chercher.
 
+Pour les frais courants (collecteur « market », fees.py), chaque fonds porte aussi le jour de
+son dernier TER relevé (`ter_since`) et si le TER a été saisi à la main (`ter_by_user` : le
+collecteur ne le cherche pas).
+
 Une composition « stable » tient dans une seule case par dimension (un fonds d'or, un fonds
 immobilier suisse) : elle ne change pas, le collecteur ne la cherche plus.
 """
@@ -67,13 +71,28 @@ def known(conn: Connection) -> dict[str, tuple[str, bool]]:
     return out
 
 
+def fee_dates(conn: Connection) -> tuple[dict[str, str], set[str]]:
+    """({ISIN : jour du dernier TER relevé}, ISIN dont le TER a été saisi à la main)."""
+    seen_on: dict[str, str] = {}
+    by_user: set[str] = set()
+    for isin, source, at in conn.execute(text("SELECT isin, source, created_at FROM fund_fees")):
+        if source == "user":
+            by_user.add(str(isin))
+        else:
+            seen_on[str(isin)] = max(seen_on.get(str(isin), ""), str(at)[:10])
+    return seen_on, by_user
+
+
 def needs(conn: Connection, on_date: str) -> list[dict[str, str | bool | None]]:
     seen = known(conn)
+    fees_seen, by_user = fee_dates(conn)
     return [
         {
             "isin": isin,
             "since": seen[isin][0] if isin in seen else None,
             "stable": seen[isin][1] if isin in seen else False,
+            "ter_since": fees_seen.get(isin),
+            "ter_by_user": isin in by_user,
         }
         for isin in held_funds(conn, on_date)
     ]
