@@ -64,3 +64,12 @@ export function sinceBuy(value, cost, latent = null) {
   const gain = latent ?? value - cost;
   return { gain, pct: gain / cost };
 }
+
+// Sans prix de revient (un compte de prévoyance, un compte bancaire, une position dont l'achat
+// n'est pas au registre) : le gain depuis l'ouverture, valeur − versements nets, sur toute
+// l'histoire (`start` : la valeur du premier jour, `flows` : les apports nets depuis). Le % se
+// rapporte à l'argent versé ; sans argent versé, les francs seuls.
+export function sinceStart(gain, start, flows) {
+  const put = start + flows;
+  return { gain, pct: put > 0 ? gain / put : null };
+}

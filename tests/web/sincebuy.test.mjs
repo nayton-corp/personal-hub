@@ -2,7 +2,7 @@
 // rapporté à un capital moyen qui peut être minuscule).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { sinceBuy } from "../../hub/domains/finance/web/wcurve.js";
+import { sinceBuy, sinceStart } from "../../hub/domains/finance/web/wcurve.js";
 
 test("le gain et le % se lisent sur le prix de revient", () => {
   const r = sinceBuy(1200, 1000);
@@ -18,4 +18,9 @@ test("sans prix de revient connu et positif : rien plutôt qu'un chiffre faux", 
   assert.equal(sinceBuy(500, null), null);
   assert.equal(sinceBuy(500, 0), null);
   assert.equal(sinceBuy(500, -3), null);
+});
+
+test("sans prix de revient : le gain depuis l'ouverture, sur l'argent versé", () => {
+  assert.deepEqual(sinceStart(100, 0, 1000), { gain: 100, pct: 0.1 });
+  assert.deepEqual(sinceStart(5, 0, -200), { gain: 5, pct: null }); // plus retiré que versé
 });

@@ -275,8 +275,9 @@ de base (valeur − prix de revient) et une pastille du même gain en % du prix 
 ▼ rouge), comme les apps de placement : la période choisie en haut ne change que la courbe et la
 carte du haut. Le prix de revient est celui des positions (`holdings`, `cost`) ; une crypto
 tenue dans plusieurs comptes prend le prix de revient commun (`crypto.since_purchase`, celui de
-sa page) ; un compte additionne ses positions, sans ses liquidités. Sans prix de revient pour
-une position, ni gain ni pastille ; des liquidités ou un bien n'en ont pas ; une dette dit ses
+sa page) ; un compte additionne ses positions, sans ses liquidités. Sans prix de revient (prévoyance, achat
+absent du registre), le gain depuis l'ouverture : valeur − versements nets sur toute l'histoire,
+en % de l'argent versé ; des liquidités ou un bien n'en ont pas ; une dette dit ses
 intérêts de la période. La page d'un compte (Positions) et celle d'un actif (« Depuis l'achat »)
 disent le même pourcentage. Un actif montre sa quantité (« 0.236 BTC », « 380 parts ») et « N comptes »
 quand il est à plusieurs endroits. Le panneau « Trier et afficher » choisit un critère (valeur,
