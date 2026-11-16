@@ -190,7 +190,7 @@ def test_a_refused_dca_does_not_come_back(
 def test_a_pension_account_is_read_by_its_deposits_not_its_funds(
     ctx: HubContext, fin: FinanceDomain, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    viac = add_ref(fin, "viac:3.1", "pension", "3a VIAC")
+    viac = add_ref(fin, "viac:3.1", "pension", "Prévoyance A")
     with begin_immediate(fin.engine()) as conn:
         d = date(2026, 1, 25)
         for i in range(10):
@@ -227,8 +227,10 @@ def test_a_pension_account_is_read_by_its_deposits_not_its_funds(
     fin.detect_strategies()
     proposal_events.sync_events(ctx)
     (p,) = pending(ctx)
-    assert p.preview["summary"] == "Versement régulier repéré : 600 CHF sur 3a VIAC chaque mois"
-    assert p.preview["details"]["phrase"] == "Le 25 du mois, je verse 600 CHF sur 3a VIAC."
+    assert (
+        p.preview["summary"] == "Versement régulier repéré : 600 CHF sur Prévoyance A chaque mois"
+    )
+    assert p.preview["details"]["phrase"] == "Le 25 du mois, je verse 600 CHF sur Prévoyance A."
     accept(ctx, p)
     ((origin, scope),) = rows(fin, "SELECT origin, scope FROM strategies")
     assert (origin, scope) == ("detected", f"account:{viac.id}")
@@ -286,7 +288,7 @@ def test_explain_says_what_is_missing_without_amounts() -> None:
 def test_fund_buys_on_the_pension_titles_side_are_not_deposits(
     ctx: HubContext, fin: FinanceDomain, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    titles = add_ref(fin, "viac:3.1:titres", "pension", "3a VIAC titres")
+    titles = add_ref(fin, "viac:3.1:titres", "pension", "Prévoyance A titres")
     with begin_immediate(fin.engine()) as conn:
         d = date(2026, 1, 27)
         for i in range(10):
@@ -303,7 +305,7 @@ def test_fund_buys_on_the_pension_titles_side_are_not_deposits(
     with fin.engine().connect() as conn:
         assert strategy_detect.candidates(conn, date(2026, 11, 14)) == []
         (tried,) = strategy_detect.explain(conn, date(2026, 11, 14))
-    assert (tried.name, tried.buys, tried.why) == ("3a VIAC titres", 0, ("aucun achat",))
+    assert (tried.name, tried.buys, tried.why) == ("Prévoyance A titres", 0, ("aucun achat",))
     (task,) = [t for t in fin.tasks() if t.id == "strategies"]
     assert task.run is not None
     assert task.run() == "aucun DCA : aucun achat récent"
@@ -329,25 +331,29 @@ def test_a_monthly_transfer_to_a_platform_is_read_from_the_bank(
     with begin_immediate(fin.engine()) as conn:
         from hub.domains.finance.registre.app import catalog
 
-        ibkr = catalog.add_account(
-            conn, institution="IBKR", name="U123 titres", kind="securities", external_ref="ibkr:t"
+        broker = catalog.add_account(
+            conn,
+            institution="Courtier",
+            name="Titres",
+            kind="securities",
+            external_ref="courtier:t",
         )
-    _bank_transfers(fin, "Interactive Brokers (U.K.) Ltd", date(2026, 3, 5), 9, 50_000)
+    _bank_transfers(fin, "Courtier SA ordre permanent", date(2026, 3, 5), 9, 50_000)
     at(fin, monkeypatch, "2026-11-14")
     from hub.domains.finance.patrimoine.app import strategy_detect
 
     with fin.engine().connect() as conn:
         (found,) = strategy_detect.candidates(conn, date(2026, 11, 14))
-    assert found.scope == f"account:{ibkr.id}"
+    assert found.scope == f"account:{broker.id}"
     assert (found.series.cadence, found.series.day, found.series.amount) == ("monthly", 5, 50_000)
     fin.detect_strategies()
     proposal_events.sync_events(ctx)
     (p,) = pending(ctx)
-    assert p.preview["summary"] == "Versement régulier repéré : 500 CHF sur IBKR chaque mois"
+    assert p.preview["summary"] == "Versement régulier repéré : 500 CHF sur Courtier chaque mois"
     assert p.preview["details"]["detected"]["kept"] == 9
     accept(ctx, p)
     ((scope,),) = rows(fin, "SELECT scope FROM strategies")
-    assert scope == f"account:{ibkr.id}"
+    assert scope == f"account:{broker.id}"
 
 
 def test_a_weekly_series_known_up_to_the_last_statement_is_not_stopped(

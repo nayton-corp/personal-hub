@@ -6,12 +6,11 @@
 
 ### Corrigé
 
-- Stratégies repérées : seuls les versements 3a étaient trouvés. Un versement régulier vers une
-  plateforme (IBKR, SwissBorg) se lit maintenant tout seul, depuis les virements de la banque,
-  sans attendre son relevé ni son API (« Versement régulier repéré : 500 CHF sur IBKR chaque
-  mois »).
-- Un achat hebdomadaire sur SwissBorg n'a plus l'air « arrêté » parce que le dernier relevé
-  déposé date de plus d'une semaine : la série est jugée au jour de ce relevé.
+- Stratégies repérées : un versement régulier vers une plateforme de titres ou de crypto se lit
+  maintenant depuis les virements de la banque, sans attendre le relevé ni l'API de la
+  plateforme.
+- Une série d'achats sur un compte tenu par un relevé déposé à la main est jugée au jour de ce
+  relevé, et non à aujourd'hui.
 - Une série qui commence il y a presque deux ans n'est plus refusée à la création de sa carte.
 
 ## [0.26.4] · 2026-11-16
@@ -64,7 +63,7 @@
 - Stratégies repérées : un seul achat fait après la dernière échéance d'un DCA (un échange, un
   achat en plus, un versement 3a complémentaire) cachait toute la série, et « Chercher
   maintenant » ne trouvait rien. La série peut maintenant finir à n'importe quel achat récent.
-- 3a : les achats de fonds du compte titres d'un 3a VIAC étaient lus comme des versements.
+- 3a : les achats de fonds du compte titres d'un 3a étaient lus comme des versements.
 - Quand rien n'est trouvé, la ligne Stratégies d'État des sources dit la cible la plus proche et
   ce qui lui manque ; `hub finance dca-explain` le détaille pour chaque cible.
 
@@ -196,7 +195,7 @@
   semaine), rythme régulier, montants à ±15 %, série en cours, aucune vente pendant la série. Une
   carte refusée ne revient pas, sauf si le montant ou le rythme change nettement.
 - Un 3a se lit au niveau du compte : le versement régulier, pas chaque fonds. Nouvelle cible
-  d'achat régulier `account:<id>` (« Le 25 du mois, je verse 600 CHF sur 3a VIAC »).
+  d'achat régulier `account:<id>` (« Le 1er du mois, je verse 100 CHF sur mon 3a »).
 - Une stratégie repérée et validée part du premier achat : les échéances passées sont posées
   tenues ou passées d'après le journal, et la liste la marque « Repérée ».
 - La phrase d'un achat régulier dit « Le 1er du mois » et « 200 CHF » (au lieu de « Le 1 du
