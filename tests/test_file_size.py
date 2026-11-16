@@ -16,7 +16,7 @@ LIMIT = 400
 TOO_LONG: dict[str, int] = {
     "hub/core/collectors.py": 459,
     "hub/collectors/exchanges/binance_history.py": 478,
-    "hub/domains/finance/web/journal.js": 662,
+    "hub/domains/finance/web/journal.js": 660,
     "hub/domains/finance/web/connections.js": 513,
     "hub/core/proposals.py": 636,
     "hub/collectors/market/flow.py": 592,
