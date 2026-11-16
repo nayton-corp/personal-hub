@@ -499,7 +499,7 @@ def test_no_yearly_rate_for_a_position_bought_during_the_year(fin: FinanceDomain
     acc = ref(fin, "test:achats-etales", "securities")
     with begin_immediate(fin.engine()) as conn:
         price(conn, "2026-01-01", "100")
-        trade(conn, acc, "2026-06-01", "2", 20_000)  # un premier achat, puis l'essentiel en novembre
+        trade(conn, acc, "2026-06-01", "2", 20_000)  # un premier achat, l'essentiel en novembre
         trade(conn, acc, "2026-11-01", "18", 180_000)
         price(conn, "2026-12-31", "98")
     s = run(fin, "2026-12-31", start="2026-01-01")["summary"]
