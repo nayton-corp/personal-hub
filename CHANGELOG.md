@@ -2,17 +2,26 @@
 
 ## [Non publié]
 
+## [0.26.4] · 2026-11-16
+
+### Corrigé
+
+- Le taux annuel de ton argent (`mwr`, au-delà d'un an) suit la même règle que le rendement de la
+  période : rien quand l'argent n'est resté qu'une partie de la période (un compte vidé tôt
+  affichait un taux de plusieurs centaines de % par an). Le gain en francs reste.
+- Positions d'un compte : plus de préfixe interne « crypto: » dans l'unité.
+- Commentaires, tests et journal des versions : plus de chiffres réels.
+
 ## [0.26.3] · 2026-11-16
 
 ### Corrigé
 
 - Page d'un actif : le prix de revient par part, en francs, s'affichait sans devise à côté d'un
-  cours en euros ou en dollars (14.73 contre 15.40 EUR), et faisait croire à un gain. Il dit
-  maintenant « CHF ».
+  cours dans une autre devise, et pouvait faire croire à un gain. Il dit maintenant sa devise.
 - Le rendement de l'argent engagé d'une période n'est plus donné quand le capital moyen tombe
-  sous la moitié de l'argent mis en jeu (au lieu du quart) : une position achetée de mai à
-  novembre affichait −10,6 % sur 1 an pour −37 CHF sur 1 081. Les francs seuls, et à côté le gain
-  depuis l'achat (−3,4 %).
+  sous la moitié de l'argent mis en jeu (au lieu du quart) : une position achetée en cours
+  d'année, ou un compte vidé tôt dans la période, donnait un taux trompeur. Les francs seuls, et à
+  côté le gain depuis l'achat.
 - Journal d'un actif (« Voir les achats et ventes ») : « Erreur interne » à chaque ouverture, le
   numéro d'un ordre ne passait pas le contrôle de la réponse.
 - Une erreur du hub (500) faisait passer toute l'app « Hors ligne » jusqu'à la réponse suivante.
@@ -25,8 +34,8 @@
 
 - Patrimoine, liste Comptes / Actifs : la pastille rapportait le gain de la période à un capital
   moyen qui pouvait tomber à quelques centaines de francs (vente puis rachat, achat récent) :
-  Bitcoin +1 438 CHF sur 7 666 affichait +172 %. Chaque ligne dit maintenant son gain depuis
-  l'achat, en francs et en % du prix de revient (≈ +23 %), comme les apps de placement ; sans
+  une ligne vendue puis rachetée pouvait afficher plus de +100 %. Chaque ligne dit maintenant son
+  gain depuis l'achat, en francs et en % du prix de revient, comme les apps de placement ; sans
   prix de revient, ni gain ni pastille.
 - Le rendement de l'argent engagé d'une période (carte du haut, Accueil) n'est plus donné quand
   le capital moyen tombe sous le quart de l'argent mis en jeu : les francs seuls.

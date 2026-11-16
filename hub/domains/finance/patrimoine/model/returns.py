@@ -82,8 +82,8 @@ def mwr(days: Sequence[str], s: Series) -> Decimal | None:
 
 # Le capital moyen ne descend pas sous la moitié de l'argent mis en jeu (départ + apports) : en
 # dessous, l'argent n'a été là qu'une petite partie de la période (achats récents, vente suivie
-# d'un rachat) et le taux trompe : +172 % pour un gain de 1 438 sur 7 666, −10,6 % sur 1 an pour
-# −37 sur 1 081 achetés de mai à novembre (16/11). Les francs seuls, et le gain depuis l'achat.
+# d'un rachat) et le taux trompe : un gain modeste devient +100 % et plus, ou une petite perte
+# devient −10 % sur l'année. Les francs seuls, et le gain depuis l'achat.
 STAKE_SHARE = 2
 
 
@@ -110,6 +110,18 @@ def staked(s: Series, j: int) -> int:
     """L'argent mis en jeu avant le jour `j` : la valeur de départ et chaque apport. Un apport du
     jour même, placé en fin de journée comme le flux, n'a encore rien eu à faire fructifier."""
     return max(s.value[0], 0) + sum(f for f in s.flow[1:j] if f > 0)
+
+
+def engaged(s: Series) -> bool:
+    """L'argent est-il resté assez longtemps pour qu'un taux de la période ait un sens : le capital
+    moyen tient au moins la moitié de l'argent mis en jeu (STAKE_SHARE)."""
+    last = len(s.value) - 1
+    if last <= 0:
+        return False
+    weighted = sum(j * f for j, f in enumerate(s.flow))
+    with localcontext(RATE_CONTEXT):
+        capital = Decimal(s.value[0] + sum(s.flow)) - Decimal(weighted) / last
+        return capital * STAKE_SHARE >= staked(s, last)
 
 
 def personal(s: Series, floor: int) -> Decimal | None:

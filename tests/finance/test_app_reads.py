@@ -553,11 +553,11 @@ def test_dated_month_start_rules() -> None:
 
 
 def test_trades_of_an_asset(client: TestClient, ctx: HubContext, fin: FinanceDomain) -> None:
-    """16/11 : le journal d'un actif (« Voir les achats et ventes ») répondait « Erreur interne » :
+    """Le journal d'un actif (« Voir les achats et ventes ») répondait « Erreur interne » :
     l'identifiant d'un ordre (son numéro) ne passait pas le contrôle de la réponse."""
     with begin_immediate(fin.engine()) as conn:
         acc = catalog.add_account(
-            conn, institution="IBKR", name="IBKR titres", kind="securities", external_ref="t:1"
+            conn, institution="Courtier", name="Titres", kind="securities", external_ref="t:1"
         )
         ledger.append(
             conn,

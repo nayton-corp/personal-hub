@@ -56,7 +56,7 @@ export function moneyRate(period, days, yearly = null) {
 
 // Le gain d'une ligne de la liste ou d'une position : depuis l'achat (valeur − prix de revient), comme
 // les apps de placement, quelle que soit la période choisie en haut (16/11 : le % d'une période,
-// rapporté au capital moyen, s'envolait à +172 % sur une ligne vendue puis rachetée). `latent` :
+// rapporté au capital moyen, s'envolait sur une ligne vendue puis rachetée). `latent` :
 // le gain déjà calculé (une crypto tous comptes : celui des parts dont l'achat est connu). Sans
 // prix de revient connu et positif, rien : ni francs ni pastille plutôt qu'un chiffre faux.
 export function sinceBuy(value, cost, latent = null) {
