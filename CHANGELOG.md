@@ -2,6 +2,18 @@
 
 ## [Non publié]
 
+## [0.26.3] · 2026-11-16
+
+### Corrigé
+
+- Page d'un actif : le prix de revient par part, en francs, s'affichait sans devise à côté d'un
+  cours en euros ou en dollars (14.73 contre 15.40 EUR), et faisait croire à un gain. Il dit
+  maintenant « CHF ».
+- Le rendement de l'argent engagé d'une période n'est plus donné quand le capital moyen tombe
+  sous la moitié de l'argent mis en jeu (au lieu du quart) : une position achetée de mai à
+  novembre affichait −10,6 % sur 1 an pour −37 CHF sur 1 081. Les francs seuls, et à côté le gain
+  depuis l'achat (−3,4 %).
+
 ## [0.26.2] · 2026-11-16
 
 ### Corrigé

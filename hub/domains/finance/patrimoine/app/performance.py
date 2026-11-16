@@ -25,7 +25,7 @@ le flux étant placé en fin de journée ; un jour sans base positive est sauté
 taux annuel qui égalise valeur de départ, flux datés et valeur de fin, donné à partir d'un an.
 Rendement de l'argent engagé (`personal`) : le gain rapporté au capital moyen, chaque flux compté
 depuis son jour ; c'est le pourcentage que l'écran met à côté du gain en francs d'une période. Il
-n'est pas donné quand ce capital moyen tombe sous le quart de l'argent mis en jeu (vente puis
+n'est pas donné quand ce capital moyen tombe sous la moitié de l'argent mis en jeu (vente puis
 rachat, achat en fin de période) : le taux n'aurait plus de sens. Une ligne de la liste, elle,
 dit son gain depuis l'achat (prix de revient, holdings.py), pas celui d'une période.
 
@@ -173,15 +173,15 @@ def report(
         top = max(top, x)
         peaks.append(top)
     cum, timed, run, weighted = [], [], 0, 0  # Σ flux, Σ flux × jour
-    stakes, stake = [], max(s.value[0], 0)  # départ + Σ apports
+    stakes, stake = [], max(s.value[0], 0)  # départ + Σ apports des jours d'avant (returns.staked)
     for j, f in enumerate(s.flow):
         run += f
         weighted += j * f
-        if j and f > 0:
-            stake += f
         cum.append(run)
         timed.append(weighted)
         stakes.append(stake)
+        if j and f > 0:
+            stake += f
     floor = min_base()
     points = []
     for k in _sample(days, ks, ke, step):

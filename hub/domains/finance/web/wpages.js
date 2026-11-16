@@ -136,7 +136,7 @@ export function assetPage(m, all, r) {
     const bought = buyGain(ls, pool), mine = moneyRate(c ? rate(c.personal) : null, days, c ? rate(c.mwr) : null);
     h += section("Ma position", r.from && S.where === "here" ? `dans ${esc(f.inst)}` : "tous comptes", `<div class="strip">
       <div><span>Quantité</span><b class="num money">${qty(q)}</b></div><div><span>Cours</span><b class="num">${f.price ? `${px(Number(f.price))} <small>${esc(f.priceCcy || "")}</small>` : "—"}</b></div>
-      <div><span>Prix de revient</span><b class="num">${cost != null && q ? `<span class="money">${px(cost / q)}</span>` : "—"}</b></div>
+      <div><span>Prix de revient</span><b class="num">${cost != null && q ? `<span class="money">${px(cost / q)}</span> <small>${base()}</small>` : "—"}</b></div>
       <div><span>Gain latent</span><b class="num ${tone(lat)}">${lat == null ? "—" : `<span class="money">${sgnMoney(lat)}</span>`}</b></div>
       <div><span>Depuis l'achat</span><b class="num ${tone(bought ? bought.pct : null)}">${bought ? pct(bought.pct) : "—"}</b></div>
       <div><span>Rendement ${S.custom ? "" : S.period}${mine && mine.yr ? ", par an" : ""}</span><b class="num ${tone(mine ? mine.v : null)}">${mine ? pct(mine.v) : "—"}</b></div></div>

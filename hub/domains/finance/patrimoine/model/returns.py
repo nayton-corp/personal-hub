@@ -80,10 +80,11 @@ def mwr(days: Sequence[str], s: Series) -> Decimal | None:
         return (lo + hi) / 2
 
 
-# Le capital moyen ne descend pas sous ce quart de l'argent mis en jeu (départ + apports) : en
-# dessous, quelques jours de détention ou une vente suivie d'un rachat suffisent à en faire un
-# taux absurde (+172 % pour un gain de 1 438 sur 7 666, 16/11).
-STAKE_SHARE = 4
+# Le capital moyen ne descend pas sous la moitié de l'argent mis en jeu (départ + apports) : en
+# dessous, l'argent n'a été là qu'une petite partie de la période (achats récents, vente suivie
+# d'un rachat) et le taux trompe : +172 % pour un gain de 1 438 sur 7 666, −10,6 % sur 1 an pour
+# −37 sur 1 081 achetés de mai à novembre (16/11). Les francs seuls, et le gain depuis l'achat.
+STAKE_SHARE = 2
 
 
 def dietz(
@@ -106,8 +107,9 @@ def dietz(
 
 
 def staked(s: Series, j: int) -> int:
-    """L'argent mis en jeu jusqu'au jour `j` : la valeur de départ et chaque apport."""
-    return max(s.value[0], 0) + sum(f for f in s.flow[1 : j + 1] if f > 0)
+    """L'argent mis en jeu avant le jour `j` : la valeur de départ et chaque apport. Un apport du
+    jour même, placé en fin de journée comme le flux, n'a encore rien eu à faire fructifier."""
+    return max(s.value[0], 0) + sum(f for f in s.flow[1:j] if f > 0)
 
 
 def personal(s: Series, floor: int) -> Decimal | None:
