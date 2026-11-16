@@ -11,6 +11,7 @@ from tests.finance.test_allocation import ON, REAL, setup
 from tests.finance.test_wealth import WORLD
 
 VOO = "US9229083632"
+NO_TER = {"ter_since": None, "ter_by_user": False}  # aucun TER relevé ni saisi
 
 
 def test_held_funds_and_the_date_of_their_composition(finance: FinanceDomain) -> None:
@@ -22,14 +23,25 @@ def test_held_funds_and_the_date_of_their_composition(finance: FinanceDomain) ->
     finance.importer.process([Incoming("voo.csv", as_stock.encode())])
     with finance.engine().connect() as conn:
         assert fund_needs.needs(conn, ON) == [
-            {"isin": REAL, "since": None, "stable": False},
-            {"isin": WORLD, "since": "2026-09-30", "stable": False},
-            {"isin": VOO, "since": None, "stable": False},  # un ETF que le courtier dit action
+            {"isin": REAL, "since": None, "stable": False, **NO_TER},
+            {"isin": WORLD, "since": "2026-09-30", "stable": False, **NO_TER},
+            {
+                "isin": VOO,
+                "since": None,
+                "stable": False,
+                **NO_TER,
+            },  # un ETF que le courtier dit action
         ]
     # ce que le collecteur reçoit : des ISIN et des dates, rien d'autre
     asked = finance.collector_needs("market")
     assert [n["isin"] for n in asked["funds"]] == [REAL, WORLD, VOO]
-    assert {k for n in asked["funds"] for k in n} == {"isin", "since", "stable"}
+    assert {k for n in asked["funds"] for k in n} == {
+        "isin",
+        "since",
+        "stable",
+        "ter_since",
+        "ter_by_user",
+    }
     assert finance.collector_needs("bcf") == {}
 
 
@@ -44,7 +56,7 @@ def test_a_fund_in_a_single_box_is_stable(finance: FinanceDomain) -> None:
     finance.importer.process([Incoming("immobilier.csv", whole.encode())])
     with finance.engine().connect() as conn:
         found = {n["isin"]: n for n in fund_needs.needs(conn, ON)}
-    assert found[REAL] == {"isin": REAL, "since": "2026-10-30", "stable": True}
+    assert found[REAL] == {"isin": REAL, "since": "2026-10-30", "stable": True, **NO_TER}
     assert found[WORLD]["stable"] is False  # trois secteurs
 
 

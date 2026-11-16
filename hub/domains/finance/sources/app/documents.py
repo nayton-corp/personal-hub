@@ -1,6 +1,7 @@
 """Documents du lot 6 que reçoit l'importeur, à côté des relevés camt.053, Revolut et VIAC :
 relevés IBKR (Flex Query), cours du marché et soldes crypto, positions saisies à la main,
-relevés SwissBorg, exports « Trade History » de Binance, compositions de fonds.
+relevés SwissBorg, exports « Trade History » de Binance, compositions et frais courants de
+fonds.
 
 Chacun se reconnaît à son contenu (et, pour une liste de lignes d'émetteur, à l'ISIN du nom de
 fichier, gardé dans la source de l'import), se relit depuis l'archive par sa source, et
@@ -15,8 +16,8 @@ from typing import Any, Literal
 
 from sqlalchemy import Connection
 
-from hub.domains.finance.patrimoine.app import lookthrough
-from hub.domains.finance.patrimoine.infra import composition
+from hub.domains.finance.patrimoine.app import fees, lookthrough
+from hub.domains.finance.patrimoine.infra import composition, fee_file
 from hub.domains.finance.patrimoine.model.instruments import DocumentError, Result
 from hub.domains.finance.sources.app import binance_csv, ibkr, manual, market, swissborg
 from hub.domains.finance.sources.app.outcomes import StatementOutcome
@@ -59,6 +60,7 @@ HANDLERS: tuple[Handler, ...] = (
         market.apply,
     ),
     Handler(composition.SOURCE, 1, composition.detect, composition.parse, lookthrough.apply),
+    Handler(fee_file.SOURCE, 1, fee_file.detect, fee_file.parse, fees.apply),
     Handler(
         manual.SOURCE,
         2,

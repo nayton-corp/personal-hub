@@ -78,6 +78,11 @@ def ishares_site(*, down: bool = False) -> Fake:
     return Fake(route)
 
 
+def fee_site(url: str) -> bool:
+    """Les sites des frais (market/fees.py), absents de ces tests : aucun TER trouvé."""
+    return any(h in url for h in ("viac.ch", "finanzfluss", "stockanalysis"))
+
+
 def dropped(env: Any) -> dict[str, bytes]:
     """{ISIN : contenu} des fichiers de composition déposés."""
     out = {}
@@ -187,11 +192,23 @@ def test_the_market_run_drops_the_compositions_with_the_rest(
     fake_hub.funds = held(CSPX)
     env = make_env("market", market={"crypto": {}, "erc20_tokens": {}, "staking_tokens": {}})
     rest, site = market_api(), ishares_site()
-    both = Fake(lambda m, u, d: site.route(m, u, d) if "ishares" in u else rest.route(m, u, d))
+    both = Fake(
+        lambda m, u, d: (
+            (404, b"")
+            if fee_site(u)
+            else site.route(m, u, d)
+            if "ishares" in u
+            else rest.route(m, u, d)
+        )
+    )
     result = market.run(env, "run", Http(both))
     assert (result.outcome, result.files, result.detail) == ("ok", 2, None)
     assert list(dropped(env)) == [CSPX]
     later = make_env("market", market={"crypto": {}, "erc20_tokens": {}, "staking_tokens": {}})
     fake_hub.funds = held(CSPX)
-    down = Fake(lambda m, u, d: (503, b"") if "ishares" in u else rest.route(m, u, d))
+    down = Fake(
+        lambda m, u, d: (
+            (404, b"") if fee_site(u) else (503, b"") if "ishares" in u else rest.route(m, u, d)
+        )
+    )
     assert market.run(later, "run", Http(down)).detail == "partial funds:site_unavailable"

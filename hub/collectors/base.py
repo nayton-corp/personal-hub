@@ -115,6 +115,15 @@ class MarketConfig(BaseModel):
     funds: dict[str, str] = {}
     ishares_url: str = "https://www.ishares.com"
     funds_refresh_days: int = Field(default=7, ge=1, le=90)  # une composition plus jeune attend
+    # frais courants (TER) des fonds détenus (market/fees.py) : listes ISIN + TER publiées par
+    # une plateforme, puis fiches par ISIN, puis fiches de cotation par symbole (`quotes`)
+    fee_lists: list[str] = [
+        "https://viac.ch/en/products/pillar-3a/strategies/",
+        "https://viac.ch/en/products/vested-benefits/strategies/",
+    ]
+    finanzfluss_url: str = "https://www.finanzfluss.de"
+    stockanalysis_url: str = "https://stockanalysis.com"
+    fees_refresh_days: int = Field(default=90, ge=1, le=366)  # un TER plus jeune attend
     # portefeuilles réglés dans l'app (G5) ; ceux des secrets d'avant G5 s'y ajoutent
     wallets: list[dict[str, Any]] = []
     mempool_url: str = "https://mempool.space/api"

@@ -104,7 +104,9 @@ def build_router(host: Host) -> APIRouter:
     def fees_route(_p: AnyReader) -> dict[str, object]:
         """Frais courants des fonds détenus : TER, coût par an et sur trente ans (ordre de
         grandeur, au rendement supposé `assumed_return_pct`). Un fonds sans TER connu a
-        `ter_pct` nul et reste hors des totaux. Saisir un TER : `set_fund_fee` (Double Sas)."""
+        `ter_pct` nul et reste hors des totaux. `source` : `issuer` (relevé par le collecteur
+        « market », site dans `origin`) ou `user` (saisi par `set_fund_fee`, Double Sas : il
+        l'emporte)."""
         with engine.connect() as conn:
             return fees.summary(conn, host.today().isoformat())
 

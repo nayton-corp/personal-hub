@@ -1,7 +1,8 @@
 // Patrimoine : les cartes Revenus et Frais, et leur détail dans un grand panneau. Revenus : les
 // dividendes et intérêts des douze derniers mois (/finance/performance). Frais : ce que les
 // frais courants des fonds coûtent par an et sur trente ans (/finance/fees) ; un fonds sans TER
-// connu est dit « frais inconnus », et son TER se saisit ici, sous Face ID.
+// connu est dit « frais inconnus » : le collecteur des cours le cherche chaque nuit par ISIN, et
+// s'il reste introuvable il se saisit ici, sous Face ID (une saisie l'emporte sur un relevé).
 import { SH, SHEETS, amount, closeSheet, esc, failure, ibox, ic, openSheet, pf, renderSheet, toast } from "../../ui.js";
 import { asOf, iso, perfPath } from "./wstate.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
@@ -32,7 +33,7 @@ export function moreCards() {
     const known = f.items.filter((i) => i.ter_pct != null).length;
     h += known ? card("fees", "Frais des fonds", `${amount(units(f.yearly_cost))}`,
       `par an${known < f.items.length ? ` · ${f.items.length - known} inconnu${f.items.length - known > 1 ? "s" : ""}` : ""}`)
-      : card("fees", "Frais des fonds", "Inconnus", `${f.items.length} fonds à renseigner`);
+      : card("fees", "Frais des fonds", "Inconnus", `${f.items.length} fonds sans TER pour l'instant`);
   }
   return h;
 }
@@ -50,13 +51,16 @@ SHEETS.wincome = () => {
   };
 };
 
+// d'où vient le TER : « relevé sur <site> » ou « saisi par toi »
+const feeFrom = (i) => i.ter_pct == null ? "" : i.source === "user" ? " · saisi par toi" : i.origin ? ` · relevé sur ${esc(i.origin)}` : "";
+
 SHEETS.wfees = () => {
   const f = store.use(FEES).data;
   if (!f) return null;
   const rows = f.items.map((i) => `<button class="row go-row" type="button" data-a="fee-edit" data-v="${esc(i.isin)}" aria-label="${esc(i.name)}, ${i.ter_pct == null ?
     "frais inconnus, saisir" : `${i.ter_pct} % par an, modifier`}">
     ${ibox(ic("trend"), i.ter_pct == null ? "var(--warn)" : "var(--accent)")}<span class="row-main"><span class="row-title">${esc(i.name)}</span><span class="row-sub">${amount(
-      units(i.value))} détenus</span></span>
+      units(i.value))} détenus${feeFrom(i)}</span></span>
     <span class="row-num">${i.ter_pct == null ?
       '<span class="pill warn">Inconnus</span>' : `<span class="row-val num">${amount(units(i.yearly_cost))}</span><span class="row-delta">${esc(i.ter_pct)} % par an</span>`}</span>
     <span class="go">${ic("chev")}</span></button>`).join("");
@@ -67,7 +71,7 @@ SHEETS.wfees = () => {
       <dl class="dl"><dt>Sur ${f.years} ans, si rien ne change</dt><dd>${amount(units(f.cost_over_years))}</dd></dl>
       <p class="hint">Les frais courants (TER) sont prélevés dans le cours du fonds : tu ne les vois sur aucun relevé.
         Sur ${f.years} ans : l'écart de valeur finale pour tes parts d'aujourd'hui, à ${esc(f.assumed_return_pct)} % par an avant frais. Un ordre de grandeur, pas une prévision.</p>
-      ${unknown >= 1 ? `<p class="hint">${amount(unknown)} dans des fonds aux frais inconnus, hors de ces totaux. Le TER est sur la fiche du fonds (KID) : touche la ligne pour le saisir.</p>` : ""}
+      ${unknown >= 1 ? `<p class="hint">${amount(unknown)} dans des fonds aux frais inconnus, hors de ces totaux. Le hub cherche leur TER chaque nuit par ISIN ; s'il reste introuvable, touche la ligne pour le saisir (fiche du fonds, KID).</p>` : ""}
       <div class="list">${rows}</div>`,
   };
 };
@@ -80,7 +84,8 @@ SHEETS.wfee = (isin, sh) => {
     title: esc(i.name),
     body: `<label class="field" for="fee-ter">Frais courants (TER), en % par an
         <input id="fee-ter" value="${esc(sh.tmp)}" inputmode="decimal" placeholder="0.20" autocomplete="off" data-autofocus></label>
-      <p class="hint">Tel que l'émetteur le publie, sur la fiche du fonds (${esc(isin)}).</p>
+      <p class="hint">Tel que l'émetteur le publie, sur la fiche du fonds (${esc(isin)}).${i.source === "issuer" && i.origin ?
+        ` Relevé sur ${esc(i.origin)}${i.since ? ` le ${esc(i.since.split("-").reverse().join("."))}` : ""} ; ta saisie l'emportera sur ce chiffre.` : ""}</p>
       ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}`,
     foot: `<button class="primary" type="button" data-a="fee-save" ${sh.busy ? "disabled" : ""}>${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer avec Face ID"}</button>`,
   };

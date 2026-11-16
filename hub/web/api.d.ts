@@ -659,6 +659,8 @@ export interface FundFeeOut {
   value: MoneyOut;
   ter_pct: string | null;
   source: string | null;
+  origin?: string | null;
+  since?: string | null;
   yearly_cost: MoneyOut | null;
 }
 

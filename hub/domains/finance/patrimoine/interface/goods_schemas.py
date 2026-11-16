@@ -30,7 +30,9 @@ class FundFeeOut(Out):
     name: str
     value: MoneyOut
     ter_pct: str | None  # None : frais inconnus
-    source: str | None
+    source: str | None  # 'user' (saisi) ou 'issuer' (relevé par le collecteur)
+    origin: str | None = None  # site où le TER a été relevé
+    since: str | None = None  # jour de la saisie ou du relevé
     yearly_cost: MoneyOut | None
 
 
