@@ -550,3 +550,33 @@ def test_dated_month_start_rules() -> None:
         assert period.start_day("2026-04") == 10
     finally:
         period.set_rules([])
+
+
+def test_trades_of_an_asset(client: TestClient, ctx: HubContext, fin: FinanceDomain) -> None:
+    """16/11 : le journal d'un actif (« Voir les achats et ventes ») répondait « Erreur interne » :
+    l'identifiant d'un ordre (son numéro) ne passait pas le contrôle de la réponse."""
+    with begin_immediate(fin.engine()) as conn:
+        acc = catalog.add_account(
+            conn, institution="IBKR", name="IBKR titres", kind="securities", external_ref="t:1"
+        )
+        ledger.append(
+            conn,
+            "trades",
+            {
+                "account_id": acc.id,
+                "trade_date": "2026-10-01",
+                "isin": "IE00TEST0001",
+                "quantity": "3.5",
+                "amount_minor": 5_250,
+                "currency": "CHF",
+                "dedup_key": "test|ordre",
+                "import_id": None,
+                "created_at": "2026-10-01T00:00:00.000Z",
+            },
+        )
+    app_session(ctx, client)  # l'app : les ordres sont des écritures, pas des agrégats
+    r = client.get("/api/finance/trades?isin=IE00TEST0001")
+    assert r.status_code == 200, r.text
+    (t,) = r.json()["items"]
+    assert (t["account_id"], t["quantity"], t["amount"]["minor"]) == (acc.id, "3.5", 5_250)
+    assert isinstance(t["id"], str)

@@ -13,6 +13,11 @@
   sous la moitié de l'argent mis en jeu (au lieu du quart) : une position achetée de mai à
   novembre affichait −10,6 % sur 1 an pour −37 CHF sur 1 081. Les francs seuls, et à côté le gain
   depuis l'achat (−3,4 %).
+- Journal d'un actif (« Voir les achats et ventes ») : « Erreur interne » à chaque ouverture, le
+  numéro d'un ordre ne passait pas le contrôle de la réponse.
+- Une erreur du hub (500) faisait passer toute l'app « Hors ligne » jusqu'à la réponse suivante.
+  Seuls le réseau coupé et le hub qui redémarre (502, 503, 504) le font maintenant. Le Journal
+  dit quand le hub ne répond pas (pendant une mise à jour du Pi) et propose « Réessayer ».
 
 ## [0.26.2] · 2026-11-16
 

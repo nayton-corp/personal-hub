@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { currentMonth, monthSpan, setTimeZone, shiftMonth } from "../../hub/web/store.js";
+import { ApiError, currentMonth, monthSpan, setTimeZone, shiftMonth, unreachable } from "../../hub/web/store.js";
 
 test("décaler un mois franchit les années", () => {
   assert.equal(shiftMonth("2026-01", -1), "2025-12");
@@ -24,4 +24,11 @@ test("bornes d'un mois budgétaire, dates comprises", () => {
   assert.deepEqual(monthSpan("2026-02", 1), ["2026-02-01", "2026-02-28"]);
   assert.deepEqual(monthSpan("2026-11", 25), ["2026-10-25", "2026-11-24"]);
   assert.deepEqual(monthSpan("2026-03", 10), ["2026-03-10", "2026-04-09"]);
+});
+
+test("une erreur du hub n'est pas une coupure (16/11)", () => {
+  assert.equal(unreachable(new TypeError("Failed to fetch")), true); // réseau coupé
+  assert.equal(unreachable(new ApiError("Bad Gateway", 502)), true); // hub qui redémarre
+  assert.equal(unreachable(new ApiError("Erreur interne", 500)), false);
+  assert.equal(unreachable(new ApiError("Introuvable", 404)), false);
 });
