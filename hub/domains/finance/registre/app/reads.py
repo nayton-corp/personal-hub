@@ -142,7 +142,7 @@ def trades(conn: Connection, isin: str, account: str | None = None) -> list[dict
     ).fetchall()
     return [
         {
-            "id": r[0],
+            "id": str(r[0]),  # le numéro de l'ordre : un texte pour l'app, comme les écritures
             "account_id": r[1],
             "trade_date": r[2],
             "isin": r[3],

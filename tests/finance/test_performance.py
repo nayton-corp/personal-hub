@@ -475,7 +475,7 @@ def test_a_sold_position_keeps_its_past_in_its_account(
 
 def test_no_return_when_the_money_was_barely_in(fin: FinanceDomain) -> None:
     """16/11 : vendu tôt dans la période, racheté à la fin, le capital moyen ne fait plus qu'une
-    poignée de francs et le taux s'envolait (+172 % pour un gain de 1 438 sur 7 666). Sous le quart
+    poignée de francs et le taux s'envolait (+172 % pour un gain de 1 438 sur 7 666). Sous la moitié
     de l'argent mis en jeu, pas de taux : les francs seuls."""
     acc = ref(fin, "test:vente-rachat", "securities")
     with begin_immediate(fin.engine()) as conn:
@@ -491,3 +491,17 @@ def test_no_return_when_the_money_was_barely_in(fin: FinanceDomain) -> None:
     # sans la vente, l'argent était là tout le temps : le taux se dit
     late = run(fin, "2026-03-31", start="2026-03-25")["summary"]
     assert rate(late["personal"]) == pytest.approx(0.10, abs=1e-6)
+
+
+def test_no_yearly_rate_for_a_position_bought_during_the_year(fin: FinanceDomain) -> None:
+    """16/11 : un ETF acheté de mai à novembre affichait −10,6 % sur 1 an pour −37 sur 1 081 :
+    l'argent n'avait été là qu'un tiers de l'année. Les francs seuls."""
+    acc = ref(fin, "test:achats-etales", "securities")
+    with begin_immediate(fin.engine()) as conn:
+        price(conn, "2026-01-01", "100")
+        trade(conn, acc, "2026-06-01", "2", 20_000)  # un premier achat, l'essentiel en novembre
+        trade(conn, acc, "2026-11-01", "18", 180_000)
+        price(conn, "2026-12-31", "98")
+    s = run(fin, "2026-12-31", start="2026-01-01")["summary"]
+    assert chf(s["gain"]) == -4_000
+    assert s["personal"] is None

@@ -7,7 +7,7 @@ import { GROUP_LABEL, catIc, catMark, txMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { PERIODS, periodOf } from "./jperiods.js";
 import * as sel from "./jselect.js";
-import { api, monthSpan, store } from "../../store.js";
+import { api, monthSpan, store, unreachable } from "../../store.js";
 import { SHEETS, SH, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, n2, openSheet, qty, renderSheet, skel, toast } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -71,7 +71,9 @@ async function load(more = false) {
     tx.cursor = page.next_cursor || null;
     tx.error = null;
   } catch (e) {
-    tx.error = e.message;
+    // hub injoignable (réseau, mise à jour du Pi) : la page reste, l'app passe « hors ligne »
+    if (unreachable(e)) store.offline = true;
+    tx.error = unreachable(e) ? "le hub ne répond pas pour l'instant" : e.message;
   } finally {
     tx.loading = false;
     if (key !== txKey()) tx.key = null; // les filtres ont changé pendant la requête : on relance
@@ -150,7 +152,7 @@ function draw() {
   const q = P.q;
   const filtered = P.txcat || q || P.tx !== "all" || active.length;
   let h = `<div class="jsum" role="status"><span><b>${list.length}</b> écriture${list.length > 1 ? "s" : ""}${tx.cursor ? " affichées" : ""}</span><span>Entrées <b class="amt-in num">+${amount2(inn)}</b></span><span>Sorties <b class="num">−${amount2(out)}</b></span>${q && q.length < 3 ? `<span>Encore ${3 - q.length} lettre${3 - q.length > 1 ? "s" : ""} pour chercher</span>` : ""}</div>`;
-  if (tx.error) h += `<div class="err-box" role="alert">Impossible de charger : ${esc(tx.error)}</div>`;
+  if (tx.error) h += `<div class="err-box" role="alert">Impossible de charger : ${esc(tx.error)} <button class="link" type="button" data-a="jretry">Réessayer</button></div>`;
   else if (!list.length) h += tx.loading ? skel("block") : `<div class="empty">Aucune écriture ne correspond.${filtered ? '<br><button type="button" data-a="jreset">Tout afficher</button>' : ""}</div>`;
   if (F().sort === "amount") {
     // trié par montant : une seule liste, la date passe sous le nom
@@ -185,7 +187,7 @@ function watchMore() {
 function renderTrades(a) {
   const te = store.use(`/finance/trades?isin=${encodeURIComponent(a.isin)}${a.account ? `&account=${encodeURIComponent(a.account)}` : ""}`);
   const accName = accNames();
-  if (te.status === "error") return fill($("jBody"), `<div class="err-box" role="alert">Impossible de charger : ${esc(te.error.message)}</div>`);
+  if (te.status === "error") return fill($("jBody"), `<div class="err-box" role="alert">Impossible de charger : ${esc(te.error.message)} <button class="link" type="button" data-a="jretry">Réessayer</button></div>`);
   if (!te.data) return fill($("jBody"), skel());
   const items = te.data.items;
   const buy = items.filter((t) => Number(t.quantity) > 0).length, sell = items.length - buy;
@@ -486,6 +488,13 @@ export function init() {
 
 export const actions = {
   ...sel.actions,
+  // relire la liste (et les ordres d'un actif) après un échec
+  jretry: () => {
+    for (const k of [...store.cache.keys()]) if (k.startsWith("/finance/trades?")) store.cache.delete(k);
+    tx.error = null;
+    tx.key = null;
+    store.notify();
+  },
   junlink: () => {
     unlink();
     announce("Filtre retiré");

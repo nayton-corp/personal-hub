@@ -85,9 +85,11 @@ function remembered() {
   }
 }
 
-// Hors ligne : une réponse qui ne vient pas (réseau coupé, hub arrêté) laisse à l'écran les
-// derniers chiffres reçus pendant la session ; rien n'est gardé sur l'appareil.
-const unreachable = (e) => !(e instanceof ApiError) || e.status >= 500;
+// Hors ligne : une réponse qui ne vient pas (réseau coupé, hub arrêté ou en train de redémarrer
+// derrière son relais : 502, 503, 504) laisse à l'écran les derniers chiffres reçus pendant la
+// session ; rien n'est gardé sur l'appareil. Une erreur du hub (500) n'est pas une coupure : elle
+// se dit là où elle arrive, sans faire passer toute l'app « hors ligne » (16/11).
+export const unreachable = (e) => !(e instanceof ApiError) || [502, 503, 504].includes(e.status);
 
 class Store {
   constructor() {
