@@ -32,3 +32,11 @@ test("une connexion complète n'ajoute rien à son dernier passage", () => {
   assert.equal(gapNote({ gaps: [] }), "");
   assert.equal(gapNote(undefined), "");
 });
+
+test("frais des fonds : le site en échec est nommé, un fonds introuvable reste sur la connexion", () => {
+  assert.match(gapText({ scope: "fees.list", reason: "http_403" }), /liste de la plateforme \(http_403\)/);
+  assert.match(gapText({ scope: "fees.finanzfluss", reason: "network" }), /sur finanzfluss/);
+  const missing = { scope: "fees", reason: "not_found=2" };
+  assert.match(gapText(missing), /Frais de 2 fonds introuvables/);
+  assert.deepEqual(gapRows({ items: [{ label: "Marché", mode: "enabled", gaps: [missing] }] }), []);
+});

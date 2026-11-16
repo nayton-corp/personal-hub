@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+## [0.27.1] · 2026-11-16
+
+### Corrigé
+
+- Frais des fonds : un passage qui ne trouve pas de TER le dit désormais sur la ligne de la
+  source des cours : le site qui a refusé et sa réponse (par ex. « http_403 »), ou le nombre de
+  fonds qu'aucun site ne publie. Avant, rien n'apparaissait. Le journal du collecteur compte les
+  fonds demandés, trouvés, introuvables et en échec.
+
 ## [0.27.0] · 2026-11-16
 
 ### Ajouté

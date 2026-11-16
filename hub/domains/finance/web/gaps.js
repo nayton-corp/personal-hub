@@ -2,6 +2,7 @@
 // est incomplète, et l'accueil le dit avec ce qu'il faut faire (docs/finance-politique.md).
 const NETWORKS = { eth: "Ethereum", base: "Base", arbitrum: "Arbitrum", polygon: "Polygon", bsc: "BNB Chain", sol: "Solana", cosmos: "Cosmos", btc: "Bitcoin" };
 const net = (n) => NETWORKS[n] || n;
+const FEE_SITES = { list: "la liste de la plateforme", finanzfluss: "finanzfluss", stockanalysis: "stockanalysis" };
 
 // une phrase par manque : ce qui manque, puis le geste
 export function gapText(g) {
@@ -21,6 +22,8 @@ export function gapText(g) {
   if (g.reason.startsWith("skipped=")) return `${g.reason.slice(8)} période${g.reason.slice(8) === "1" ? "" : "s"} refusée${g.reason.slice(8) === "1" ? "" : "s"} par la source (${step})`;
   if (step === "prices" || step === "crypto" || step === "quotes" || step === "history_prices") return `Cours ${parts[1] ? `de ${parts[1].toUpperCase()} ` : ""}non lus, nouvel essai au prochain passage`;
   if (step === "funds") return "Compositions des fonds non lues, nouvel essai demain";
+  if (step === "fees" && g.reason.startsWith("not_found=")) return `Frais de ${g.reason.slice(10)} fonds introuvables par ISIN : saisis-les dans Frais des fonds`;
+  if (step === "fees") return `Frais des fonds non lus${parts[1] ? ` sur ${FEE_SITES[parts[1]] || parts[1]}` : ""} (${g.reason}), nouvel essai demain`;
   if (step === "wallet") return `Solde de ${parts[1]} non lu, nouvel essai au prochain passage`;
   if (step === "history") return `Historique ${parts[1] ? `de ${parts[1]} ` : ""}non lu, nouvel essai au prochain passage`;
   return `${g.scope} non lu (${g.reason})`;
@@ -28,7 +31,7 @@ export function gapText(g) {
 
 // un manque sans geste possible (explorateur fermé : le réseau est en « solde seul ») se dit sur
 // la connexion, pas dans « À faire » : le rapprochement montre tout mouvement non expliqué
-const quiet = (g) => g.reason === "blocked";
+const quiet = (g) => g.reason === "blocked" || g.reason.startsWith("not_found=");
 
 // le manque d'une connexion, à la suite de son dernier passage (liste des connexions)
 export function gapNote(c) {
