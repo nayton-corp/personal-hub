@@ -493,7 +493,13 @@ d'État des sources.
 - **Où.** Chaque crypto (achats du journal crypto) et chaque titre d'un compte de titres. Un
   compte de prévoyance (3a) se lit au niveau du compte : ce sont ses versements qui sont
   réguliers (cible `account:<id>`) ; ses achats de fonds, faits par le compte lui-même, ne sont
-  pas lus un par un.
+  pas lus un par un. Une plateforme (IBKR, SwissBorg… : l'établissement d'un compte de titres
+  ou de crypto) se lit aussi par ses versements, du côté de la banque : les virements d'un compte
+  bancaire dont le texte nomme la plateforme (`patrimoine/app/platform_deposits.py`, alias
+  `interactive brokers` pour IBKR). Ils arrivent avec les relevés de la banque, même sans API
+  ni relevé de la plateforme ; la cible est son premier compte de titres ou de crypto.
+- **Relevé déposé à la main.** Une crypto achetée seulement sur un compte tenu par un relevé
+  déposé à la main (SwissBorg) est jugée « en cours » au jour du dernier relevé, pas aujourd'hui.
 - **Garde-fous.** Tout doit être vrai à la fois : au moins 4 achats d'affilée chaque mois (6
   chaque semaine) ; chaque écart dans la plage du rythme (26 à 35 jours, 6 à 8 jours) ; chaque
   montant à 15 % au plus de la médiane ; le dernier achat date de moins d'un écart maximal ; aucune

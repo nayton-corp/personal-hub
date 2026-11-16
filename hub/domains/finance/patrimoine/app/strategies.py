@@ -13,7 +13,12 @@ from decimal import Decimal
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.patrimoine.app import crypto_cost, crypto_moves, price_history
+from hub.domains.finance.patrimoine.app import (
+    crypto_cost,
+    crypto_moves,
+    platform_deposits,
+    price_history,
+)
 from hub.domains.finance.patrimoine.app.ledger_sums import (
     CATEGORY_JOIN,
     INCOME_CATEGORIES,
@@ -126,7 +131,7 @@ def is_crypto(scope: str) -> bool:
 
 
 def is_account(scope: str) -> bool:
-    """Une cible `account:<id>` : les versements sur un compte qui investit seul (3a)."""
+    """Une cible `account:<id>` : les versements sur un 3a, ou vers une plateforme."""
     return scope.startswith(ACCOUNT)
 
 
@@ -143,9 +148,12 @@ def scope_name(conn: Connection, scope: str) -> str | None:
     """Le nom affiché d'une cible, ou None si elle n'existe pas."""
     if scope in rules.GROUPS:
         return rules.GROUPS[scope]
-    if is_account(scope):  # seul un compte de prévoyance investit seul ce qu'on y verse
+    if is_account(scope):  # un 3a, ou une plateforme (IBKR, SwissBorg) par son établissement
         found = conn.execute(
-            text("SELECT name FROM accounts WHERE id = :i AND kind = 'pension'"),
+            text(
+                "SELECT CASE kind WHEN 'pension' THEN name ELSE institution END FROM accounts "
+                "WHERE id = :i AND kind IN ('pension', 'securities', 'crypto')"
+            ),
             {"i": scope.removeprefix(ACCOUNT)},
         ).scalar()
         return None if found is None else str(found)
@@ -209,7 +217,16 @@ class Today:
         if is_crypto(scope):
             return self._traded(scope, since, sign=1, until=end)
         if is_account(scope):
-            sql, key = DEPOSITS_SQL, scope.removeprefix(ACCOUNT)
+            key = scope.removeprefix(ACCOUNT)
+            platform = platform_deposits.find(self.conn, key)
+            if platform is not None:  # une plateforme : les virements partis de la banque
+                paid, _back = platform_deposits.dated(
+                    platform_deposits.moves(self.conn, platform, since, end)
+                )
+                return sum(
+                    abs(self.positions.fx.to_base(m, c, d.isoformat()) or 0) for d, m, c in paid
+                )
+            sql = DEPOSITS_SQL
         else:
             sql, key = TRADES_SQL, scope
         total = 0

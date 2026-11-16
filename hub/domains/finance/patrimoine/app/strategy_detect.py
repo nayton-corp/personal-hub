@@ -23,7 +23,7 @@ from datetime import date
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.patrimoine.app import crypto_moves, strategy_history
+from hub.domains.finance.patrimoine.app import crypto_moves, platform_deposits, strategy_history
 from hub.domains.finance.patrimoine.app.strategies import ACCOUNT, DEPOSITS_SQL, Today, scope_name
 from hub.domains.finance.patrimoine.model import regular_buys as rb
 from hub.domains.finance.patrimoine.model.instruments import crypto_key
@@ -31,8 +31,11 @@ from hub.domains.finance.patrimoine.model.positions import STABLECOINS
 from hub.domains.finance.registre.app import ledger
 from hub.kernel.ids import urn
 
-LOOKBACK_DAYS = 2 * 366
+LOOKBACK_DAYS = 2 * 366 - 40  # le début d'une série (une échéance) reste dans les deux ans
 KIND = "save_strategy"
+# un compte crypto tenu par un relevé déposé à la main : connu jusqu'à son dernier dépôt
+STATEMENT_ACCOUNTS = {"crypto:swissborg": "swissborg"}
+Seen = dict[str, tuple[list[rb.Buy], list[date]]]
 
 
 @dataclass(frozen=True)
@@ -57,24 +60,52 @@ class Found:
         }
 
 
-def _crypto(now: Today, since: str) -> dict[str, tuple[list[rb.Buy], list[date]]]:
-    out: dict[str, tuple[list[rb.Buy], list[date]]] = {}
+def _statement_day(now: Today, account_ids: set[str]) -> date | None:
+    """Le jour jusqu'où des comptes tenus par un relevé déposé à la main sont connus (le dernier
+    dépôt), ou None si l'un d'eux se lit tout seul : une série n'est pas « arrêtée » parce que
+    le dernier relevé date un peu."""
+    days = []
+    for account_id in sorted(account_ids):
+        ref = now.conn.execute(
+            text("SELECT external_ref FROM accounts WHERE id = :i"), {"i": account_id}
+        ).scalar()
+        source = STATEMENT_ACCOUNTS.get(str(ref))
+        if source is None:
+            return None
+        last = now.conn.execute(
+            text("SELECT max(received_at) FROM imports WHERE status = 'applied' AND source = :s"),
+            {"s": source},
+        ).scalar()
+        if not last:
+            return None
+        days.append(date.fromisoformat(str(last)[:10]))
+    return min([*days, now.today]) if days else None
+
+
+def _crypto(now: Today, since: str, as_of: dict[str, date]) -> Seen:
+    out: Seen = {}
+    where: dict[str, set[str]] = {}
     for m in crypto_moves.moves(now.conn, now.day):
         key = crypto_key(m.symbol)
         if m.role != "trade" or m.on < since or key in STABLECOINS:
             continue
+        where.setdefault(key, set()).add(m.account_id)
         buys, sold = out.setdefault(key, ([], []))
         if m.quantity > 0:
             buys.append(rb.Buy(date.fromisoformat(m.on), abs(m.amount)))
         else:
             sold.append(date.fromisoformat(m.on))
+    for key, accounts in where.items():
+        day = _statement_day(now, accounts)
+        if day is not None:
+            as_of[key] = day
     return out
 
 
-def _securities(now: Today, since: str) -> dict[str, tuple[list[rb.Buy], list[date]]]:
+def _securities(now: Today, since: str, as_of: dict[str, date]) -> Seen:
     """Les titres des comptes de titres ; ceux d'un compte de prévoyance sont achetés par le
     compte lui-même, ils ne disent rien d'une décision."""
-    out: dict[str, tuple[list[rb.Buy], list[date]]] = {}
+    out: Seen = {}
     for isin, on, minor, ccy, qty in now.conn.execute(
         text(
             "SELECT t.isin, t.trade_date, t.amount_minor, t.currency, CAST(t.quantity AS REAL) "
@@ -95,9 +126,9 @@ def _securities(now: Today, since: str) -> dict[str, tuple[list[rb.Buy], list[da
     return out
 
 
-def _pension(now: Today, since: str) -> dict[str, tuple[list[rb.Buy], list[date]]]:
+def _pension(now: Today, since: str, as_of: dict[str, date]) -> Seen:
     """Les versements sur chaque compte de prévoyance (les retraits comptent comme des ventes)."""
-    out: dict[str, tuple[list[rb.Buy], list[date]]] = {}
+    out: Seen = {}
     ids = now.conn.execute(text("SELECT id FROM accounts WHERE kind = 'pension'")).scalars()
     for account_id in list(ids):
         buys: list[rb.Buy] = []
@@ -117,6 +148,21 @@ def _pension(now: Today, since: str) -> dict[str, tuple[list[rb.Buy], list[date]
     return out
 
 
+def _platforms(now: Today, since: str, as_of: dict[str, date]) -> Seen:
+    """Les virements de la banque vers chaque plateforme (IBKR, SwissBorg…) : un versement
+    régulier se voit sans attendre la plateforme (platform_deposits.py)."""
+    out: Seen = {}
+    for p in platform_deposits.platforms(now.conn):
+        paid, back = platform_deposits.dated(platform_deposits.moves(now.conn, p, since, now.day))
+        buys = []
+        for d, minor, ccy in paid:
+            base = now.positions.fx.to_base(minor, ccy, d.isoformat())
+            if base:
+                buys.append(rb.Buy(d, abs(base)))
+        out[f"{ACCOUNT}{p.account_id}"] = (buys, back)
+    return out
+
+
 @dataclass(frozen=True)
 class Tried:
     """Une cible regardée sans série retenue : ses achats, la plus longue série essayée, ce qui
@@ -129,10 +175,13 @@ class Tried:
     why: tuple[str, ...]
 
 
-def _sources(now: Today, since: str) -> list[tuple[str, tuple[list[rb.Buy], list[date]]]]:
-    out: list[tuple[str, tuple[list[rb.Buy], list[date]]]] = []
-    for source in (_crypto, _securities, _pension):
-        out.extend(sorted(source(now, since).items()))
+def _sources(now: Today, since: str) -> list[tuple[str, list[rb.Buy], list[date], date]]:
+    """(cible, achats, ventes, jour jusqu'où la cible est connue)."""
+    out: list[tuple[str, list[rb.Buy], list[date], date]] = []
+    for source in (_crypto, _securities, _pension, _platforms):
+        as_of: dict[str, date] = {}
+        for scope, (buys, sold) in sorted(source(now, since, as_of).items()):
+            out.append((scope, buys, sold, as_of.get(scope, now.today)))
     return out
 
 
@@ -143,10 +192,10 @@ def explain(conn: Connection, today: date) -> list[Tried]:
     since = date.fromordinal(today.toordinal() - LOOKBACK_DAYS).isoformat()
     taken = _taken(conn)
     out = []
-    for scope, (buys, sold) in _sources(now, since):
-        if scope in taken or rb.detect(buys, sold, today) is not None:
+    for scope, buys, sold, known in _sources(now, since):
+        if scope in taken or rb.detect(buys, sold, known) is not None:
             continue
-        longest, why = rb.explain(buys, sold, today)
+        longest, why = rb.explain(buys, sold, known)
         name = scope_name(conn, scope) or scope.removeprefix("CRYPTO:")
         out.append(Tried(scope, name, len(rb.by_day(buys)), longest, tuple(why)))
     return sorted(out, key=lambda t: (-t.longest, -t.buys, t.name))
@@ -165,10 +214,10 @@ def candidates(conn: Connection, today: date, only: str | None = None) -> list[F
     since = date.fromordinal(today.toordinal() - LOOKBACK_DAYS).isoformat()
     taken = _taken(conn)
     found: list[Found] = []
-    for scope, (buys, sold) in _sources(now, since):
+    for scope, buys, sold, known in _sources(now, since):
         if scope in taken or (only is not None and scope != only):
             continue
-        series = rb.detect(buys, sold, today)
+        series = rb.detect(buys, sold, known)
         if series is not None:
             found.append(Found(scope, series))
     return found
