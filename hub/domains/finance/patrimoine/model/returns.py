@@ -80,24 +80,41 @@ def mwr(days: Sequence[str], s: Series) -> Decimal | None:
         return (lo + hi) / 2
 
 
-def dietz(s: Series, j: int, flows: int, weighted: int, floor: int) -> Decimal | None:
+# Le capital moyen ne descend pas sous ce quart de l'argent mis en jeu (départ + apports) : en
+# dessous, quelques jours de détention ou une vente suivie d'un rachat suffisent à en faire un
+# taux absurde (+172 % pour un gain de 1 438 sur 7 666, 16/11).
+STAKE_SHARE = 4
+
+
+def dietz(
+    s: Series, j: int, flows: int, weighted: int, floor: int, staked: int | None = None
+) -> Decimal | None:
     """Rendement de l'argent engagé du départ au jour `j` : le gain rapporté au capital moyen,
     chaque flux compté depuis son jour (en fin de journée, comme le rendement pondéré). C'est le
-    pourcentage qui va avec le gain en francs. `flows` = Σ flux, `weighted` = Σ flux × jour ; None
-    sans capital à faire fructifier."""
+    pourcentage qui va avec le gain en francs. `flows` = Σ flux, `weighted` = Σ flux × jour,
+    `staked` = départ + Σ apports (flux positifs) ; None sans capital à faire fructifier, ou quand
+    le capital moyen est trop petit devant l'argent mis en jeu pour qu'un taux ait un sens."""
     if j <= 0:
         return None
     with localcontext(RATE_CONTEXT):
         capital = Decimal(s.value[0] + flows) - Decimal(weighted) / j
         if capital < floor:
             return None
+        if staked is not None and capital * STAKE_SHARE < staked:
+            return None
         return Decimal(s.value[j] - s.value[0] - flows) / capital
+
+
+def staked(s: Series, j: int) -> int:
+    """L'argent mis en jeu jusqu'au jour `j` : la valeur de départ et chaque apport."""
+    return max(s.value[0], 0) + sum(f for f in s.flow[1 : j + 1] if f > 0)
 
 
 def personal(s: Series, floor: int) -> Decimal | None:
     """Le rendement de l'argent engagé sur toute la période (`dietz` au dernier jour)."""
     weighted = sum(j * f for j, f in enumerate(s.flow))
-    return dietz(s, len(s.value) - 1, sum(s.flow), weighted, floor)
+    last = len(s.value) - 1
+    return dietz(s, last, sum(s.flow), weighted, floor, staked(s, last))
 
 
 def _rate(x: Decimal | None) -> str | None:

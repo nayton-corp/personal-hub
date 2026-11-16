@@ -24,7 +24,10 @@ Rendement pondéré dans le temps : produit des rendements journaliers (V(t) −
 le flux étant placé en fin de journée ; un jour sans base positive est sauté. Rendement personnel :
 taux annuel qui égalise valeur de départ, flux datés et valeur de fin, donné à partir d'un an.
 Rendement de l'argent engagé (`personal`) : le gain rapporté au capital moyen, chaque flux compté
-depuis son jour ; c'est le pourcentage que l'écran met à côté du gain en francs, à toute durée.
+depuis son jour ; c'est le pourcentage que l'écran met à côté du gain en francs d'une période. Il
+n'est pas donné quand ce capital moyen tombe sous le quart de l'argent mis en jeu (vente puis
+rachat, achat en fin de période) : le taux n'aurait plus de sens. Une ligne de la liste, elle,
+dit son gain depuis l'achat (prix de revient, holdings.py), pas celui d'une période.
 
 Le calcul complet est gardé en mémoire tant que le registre, les cours, le change et les dettes
 n'ont pas changé (empreinte relue à chaque demande). Seuls des agrégats en sortent.
@@ -170,11 +173,15 @@ def report(
         top = max(top, x)
         peaks.append(top)
     cum, timed, run, weighted = [], [], 0, 0  # Σ flux, Σ flux × jour
+    stakes, stake = [], max(s.value[0], 0)  # départ + Σ apports
     for j, f in enumerate(s.flow):
         run += f
         weighted += j * f
+        if j and f > 0:
+            stake += f
         cum.append(run)
         timed.append(weighted)
+        stakes.append(stake)
     floor = min_base()
     points = []
     for k in _sample(days, ks, ke, step):
@@ -187,7 +194,7 @@ def report(
                 "net_flows": money(flows, ccy),
                 "gain": money(s.value[j] - s.value[0] - flows, ccy),
                 "twr": _rate(s.index[j] - 1) if s.positive else None,
-                "personal": _rate(dietz(s, j, flows, timed[j], floor)),
+                "personal": _rate(dietz(s, j, flows, timed[j], floor, stakes[j])),
                 "drawdown": _rate(s.index[j] / peaks[j] - 1) if s.positive else None,
                 "complete": not s.missing[j],
             }

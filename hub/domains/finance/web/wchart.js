@@ -228,8 +228,10 @@ export function rulerHTML(m, kind) {
   let txt;
   if (kind === "price") txt = `Cours ${px(a.price)} → ${px(b.price)} : <b class="${b.price >= a.price ? "pos" : "neg"}">${pct(b.price / a.price - 1)}</b>`;
   else {
-    const gain = b.g - a.g, twr = a.r == null || b.r == null ? null : (1 + b.r) / (1 + a.r) - 1;
-    txt = `<b class="${b.v >= a.v ? "pos" : "neg"}"><span class="money">${sgnMoney(b.v - a.v)}</span> ${base()}</b> de variation · gain <b class="${gain >= 0 ? "pos" : "neg"}"><span class="money">${sgnMoney(gain)}</span></b>${twr == null ? "" : ` (${pct(twr)})`} · apports <span class="money">${sgnMoney(b.f - a.f)}</span>`;
+    // à côté des francs, pas de pondéré dans le temps (il contredirait le gain) ; la vue Performance
+    // en %, elle, le mesure : il y est nommé
+    const gain = b.g - a.g, twr = kind !== "pct" || a.r == null || b.r == null ? null : (1 + b.r) / (1 + a.r) - 1;
+    txt = `<b class="${b.v >= a.v ? "pos" : "neg"}"><span class="money">${sgnMoney(b.v - a.v)}</span> ${base()}</b> de variation · gain <b class="${gain >= 0 ? "pos" : "neg"}"><span class="money">${sgnMoney(gain)}</span></b>${twr == null ? "" : ` (${pct(twr)} pondéré)`} · apports <span class="money">${sgnMoney(b.f - a.f)}</span>`;
   }
   return `<div class="ruler-out" role="status"><span class="t">Du <b>${shortDate(a.d)}</b> au <b>${shortDate(b.d)}</b> (${days} j)<br>${txt}</span><button class="x" type="button" data-a="w-ruler-clear" aria-label="Effacer la mesure"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
 }

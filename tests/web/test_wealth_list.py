@@ -150,3 +150,30 @@ def test_an_old_gain_sort_becomes_the_gain_in_francs(page: Any) -> None:
     _list(page)
     assert page.inner_text("#detailHead .sort-btn").split() == ["Gain", "↓"]
     page.evaluate("localStorage.removeItem('hub.wealth')")
+
+
+def test_a_line_says_its_gain_since_purchase_not_a_period_rate(page: Any) -> None:
+    """16/11 : Bitcoin +1 438 sur 7 666 affichait 172,4 % (le % d'une période rapporté à un capital
+    moyen minuscule). Une ligne dit son gain depuis l'achat, sur le prix de revient ; sans prix
+    de revient pour une position, ni francs ni pastille."""
+    _list(page)
+    got = page.evaluate("""async () => {
+      const m = await import('/d/finance/wcrypto.js');
+      const btc = { isin: 'BTC', value: 7666, cost: 6228 }, cash = { value: 120 };
+      return {
+        one: m.buyGain([btc, cash]),
+        two: m.buyGain([btc, { isin: 'ETH', value: 334, cost: 372 }]),
+        blind: m.buyGain([btc, { isin: 'ETH', value: 334, cost: null }]),
+        cash: m.buyGain([cash]),
+        pool: m.buyGain([btc], {
+          cost: { minor: 500000, currency: 'CHF' }, unrealized: { minor: 50000, currency: 'CHF' },
+        }),
+      };
+    }""")
+    assert got["one"]["gain"] == 1438
+    assert got["one"]["pct"] == pytest.approx(1438 / 6228)
+    assert got["two"]["gain"] == 8000 - 6600
+    assert got["blind"] is None
+    assert got["cash"] is None
+    assert got["pool"]["pct"] == pytest.approx(0.1)
+    assert "Gain depuis l'achat" in page.inner_text("#patrimoine .list-cap")
