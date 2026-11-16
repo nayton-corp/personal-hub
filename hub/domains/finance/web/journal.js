@@ -7,7 +7,7 @@ import { GROUP_LABEL, catIc, catMark, txMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { PERIODS, periodOf } from "./jperiods.js";
 import * as sel from "./jselect.js";
-import { api, monthSpan, store, unreachable } from "../../store.js";
+import { api, lost, monthSpan, store } from "../../store.js";
 import { SHEETS, SH, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, n2, openSheet, qty, renderSheet, skel, toast } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -71,9 +71,7 @@ async function load(more = false) {
     tx.cursor = page.next_cursor || null;
     tx.error = null;
   } catch (e) {
-    // hub injoignable (réseau, mise à jour du Pi) : la page reste, l'app passe « hors ligne »
-    if (unreachable(e)) store.offline = true;
-    tx.error = unreachable(e) ? "le hub ne répond pas pour l'instant" : e.message;
+    tx.error = lost(e);
   } finally {
     tx.loading = false;
     if (key !== txKey()) tx.key = null; // les filtres ont changé pendant la requête : on relance
@@ -488,17 +486,8 @@ export function init() {
 
 export const actions = {
   ...sel.actions,
-  // relire la liste (et les ordres d'un actif) après un échec
-  jretry: () => {
-    for (const k of [...store.cache.keys()]) if (k.startsWith("/finance/trades?")) store.cache.delete(k);
-    tx.error = null;
-    tx.key = null;
-    store.notify();
-  },
-  junlink: () => {
-    unlink();
-    announce("Filtre retiré");
-  },
+  jretry: () => (Object.assign(tx, { error: null, key: null }), store.retry("/finance/trades?")), // après un échec
+  junlink: () => (unlink(), announce("Filtre retiré")),
   "jlink-acc": (acc) => {
     if (!link) return;
     link.asset = null;

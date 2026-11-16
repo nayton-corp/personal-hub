@@ -6,7 +6,7 @@
 // les calculs. Les prix de revient viennent de /finance/holdings (par position, et commun à tous
 // les comptes pour une crypto), les intérêts d'une dette de /finance/performance : aucune écriture
 // n'est lue ici.
-import { SORTS, S, accLabel, accMark, lines, remember, sum } from "./wstate.js";
+import { SORTS, S, accLabel, accMark, lines, remember, sum, unitOf } from "./wstate.js";
 import { SHEETS, amount, closeSheet, esc, ic, openSheet, qty } from "../../ui.js";
 import { assetMark, facetColor, ringed } from "./meta.js";
 import { signedMoney, units } from "./perf.js";
@@ -16,8 +16,6 @@ import { goodMark } from "./goods.js";
 import { store } from "../../store.js";
 
 const KIND = { cash: "Compte", securities: "Titres", pension: "Prévoyance", crypto: "Crypto" };
-// l'unité d'une crypto : son symbole, sans le préfixe interne « crypto: »
-const unitOf = (f) => (f.unit === "parts" ? "parts" : (f.unit || "").replace(/^crypto:/i, "").toUpperCase());
 
 function rowsOf(sel, M) {
   const groups = Object.groupBy(sel, (l) => (S.view === "acc" ? `a:${l.acc}` : `s:${l.asset}`));

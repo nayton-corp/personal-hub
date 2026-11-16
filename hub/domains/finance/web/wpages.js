@@ -4,7 +4,7 @@
 // position (quantité, cours, prix de revient), les comptes qui le détiennent, sa composition
 // quand c'est un fonds, et mène aux achats et ventes du Journal.
 import { MOIS, MOIS_L, base, date, daysSince, staleDays } from "../../format.js";
-import { S, accLabel, asOf, day, range, sum } from "./wstate.js";
+import { S, accLabel, asOf, day, range, sum, unitOf } from "./wstate.js";
 import { amount, esc, ic, n0, n2, qty, share } from "../../ui.js";
 import { assetMark, facetName, instMark } from "./meta.js";
 import { compact, pct, px, sgnMoney } from "./wchart.js";
@@ -86,7 +86,7 @@ export function accountPage(m, r) {
   const tot = sum(ls);
   let h = section("Positions", `${ls.length} ligne${ls.length > 1 ? "s" : ""}`, `<div class="list">${ls.map((l) => {
     const b2 = buyGain([l]), cash = l.asset.startsWith("ccy:");
-    const sub = `<span class="money">${qty(l.qty)}</span> ${esc(l.unit)}${cash ? "" : l.price ? ` × <span class="money">${n2(Number(l.price))}</span> ${esc(l.priceCcy || "")}` : " · sans cours"}`;
+    const sub = `<span class="money">${qty(l.qty)}</span> ${esc(unitOf(l))}${cash ? "" : l.price ? ` × <span class="money">${n2(Number(l.price))}</span> ${esc(l.priceCcy || "")}` : " · sans cours"}`;
     const right = cash ? `<span class="sec-note">${share(l.value / (tot || 1))}</span>` : `<span class="delta ${tone(b2 ? b2.pct : null)}">${b2 ? pct(b2.pct) : ""}</span> <span class="sec-note">· ${share(l.value / (tot || 1))}</span>`;
     return `<button class="row go-row" type="button" data-a="w-open" data-v="${esc(`s:${l.asset}`)}">${assetMark(l, "sm")}<span class="row-main"><span class="row-title">${esc(l.name)}</span><span class="row-sub">${sub}</span></span><span class="row-num"><span class="row-val num">${amount(l.value)}</span><span class="row-delta num">${right}</span></span><span class="go">${ic("chev")}</span></button>`;
   }).join("")}</div>`);
@@ -145,7 +145,7 @@ export function assetPage(m, all, r) {
   }
   const held = all.filter((l) => l.asset === r.id), tot = sum(held);
   h += section("Détenu dans", `${new Set(held.map((l) => l.acc)).size} compte(s) · ${amount(tot)}`, `<div class="list">${held.slice().sort((a, b) => b.value - a.value).map((l) => `<button class="row go-row" type="button" data-a="w-open" data-v="${esc(`a:${l.acc}`)}">${instMark(l.inst, "sm", [l.accName])}
-      <span class="row-main"><span class="row-title">${esc(accLabel(l))}${l.acc === r.from ? ' <span class="sec-note">· ici</span>' : ""}</span><span class="row-sub"><span class="money">${qty(l.qty)}</span> ${esc(l.unit)} · ${esc(facetName("liq", l.liq))}</span>
+      <span class="row-main"><span class="row-title">${esc(accLabel(l))}${l.acc === r.from ? ' <span class="sec-note">· ici</span>' : ""}</span><span class="row-sub"><span class="money">${qty(l.qty)}</span> ${esc(unitOf(l))} · ${esc(facetName("liq", l.liq))}</span>
         <span class="minibar"><i data-css="width:${Math.max(0, Math.min(100, (l.value / (tot || 1)) * 100)).toFixed(1)}%"></i></span></span>
       <span class="row-num"><span class="row-val num">${amount(l.value)}</span><span class="row-delta sec-note">${share(l.value / (tot || 1))} de l'actif</span></span><span class="go">${ic("chev")}</span></button>`).join("")}</div>`);
   if (f.isin) h += composition(f.isin);

@@ -52,6 +52,7 @@ from hub.domains.finance.patrimoine.model.returns import (
     _sample,
     _span,
     dietz,
+    engaged,
     extremes,
     mwr,
     personal,
@@ -132,7 +133,9 @@ def _summary(days: Sequence[str], s: Series, ccy: str, *, with_mwr: bool = True)
         "price_effect": money(gain - income - fees, ccy),
         "twr": _rate(twr),
         "twr_yearly": _rate(yearly),
-        "mwr": _rate(mwr(days, s)) if with_mwr else None,
+        # le taux annuel suit la même règle que `personal` : rien quand l'argent n'a été là qu'une
+        # partie de la période (un compte vidé tôt donnait un taux annuel énorme)
+        "mwr": _rate(mwr(days, s)) if with_mwr and engaged(s) else None,
         "personal": _rate(personal(s, floor)),
         "complete": not any(s.missing),
     }

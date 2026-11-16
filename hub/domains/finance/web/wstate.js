@@ -179,6 +179,8 @@ export function match(l, except) {
   return true;
 }
 export const sum = (ls) => ls.reduce((t, l) => t + l.value, 0);
+// l'unité d'une ligne : « parts », ou le symbole d'une crypto sans le préfixe interne « crypto: »
+export const unitOf = (f) => (f.unit === "parts" ? "parts" : (f.unit || "").replace(/^crypto:/i, "").toUpperCase());
 
 // les lignes que montre une page : la sélection filtrée, un compte, un actif (dans un compte)
 export function scopeLines(all, r = here()) {

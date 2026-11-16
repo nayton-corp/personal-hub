@@ -475,7 +475,7 @@ def test_a_sold_position_keeps_its_past_in_its_account(
 
 def test_no_return_when_the_money_was_barely_in(fin: FinanceDomain) -> None:
     """16/11 : vendu tôt dans la période, racheté à la fin, le capital moyen ne fait plus qu'une
-    poignée de francs et le taux s'envolait (+172 % pour un gain de 1 438 sur 7 666). Sous la moitié
+    poignée de francs et le taux s'envolait. Sous la moitié
     de l'argent mis en jeu, pas de taux : les francs seuls."""
     acc = ref(fin, "test:vente-rachat", "securities")
     with begin_immediate(fin.engine()) as conn:
@@ -494,8 +494,8 @@ def test_no_return_when_the_money_was_barely_in(fin: FinanceDomain) -> None:
 
 
 def test_no_yearly_rate_for_a_position_bought_during_the_year(fin: FinanceDomain) -> None:
-    """16/11 : un ETF acheté de mai à novembre affichait −10,6 % sur 1 an pour −37 sur 1 081 :
-    l'argent n'avait été là qu'un tiers de l'année. Les francs seuls."""
+    """Une position achetée surtout en fin d'année : l'argent n'a été là qu'une partie de la
+    période, un taux annuel grossirait la perte. Les francs seuls."""
     acc = ref(fin, "test:achats-etales", "securities")
     with begin_immediate(fin.engine()) as conn:
         price(conn, "2026-01-01", "100")
@@ -504,4 +504,20 @@ def test_no_yearly_rate_for_a_position_bought_during_the_year(fin: FinanceDomain
         price(conn, "2026-12-31", "98")
     s = run(fin, "2026-12-31", start="2026-01-01")["summary"]
     assert chf(s["gain"]) == -4_000
+    assert s["personal"] is None
+
+
+def test_no_yearly_rate_for_money_gone_early_in_the_period(fin: FinanceDomain) -> None:
+    """Un compte vidé quelques mois après le début d'une période de trois ans : pas de taux annuel
+    (il dépasserait 100 %). Le gain en francs reste ; le taux suit la règle de `personal`."""
+    acc = ref(fin, "test:vide-tot", "securities")
+    with begin_immediate(fin.engine()) as conn:
+        price(conn, "2024-01-01", "100")
+        trade(conn, acc, "2024-01-01", "10", 100_000)
+        price(conn, "2024-04-30", "200")
+        trade(conn, acc, "2024-05-01", "-10", -200_000)
+        price(conn, "2026-12-31", "210")
+    s = run(fin, "2026-12-31", start="2024-01-01")["summary"]
+    assert chf(s["gain"]) == 100_000
+    assert s["mwr"] is None
     assert s["personal"] is None
