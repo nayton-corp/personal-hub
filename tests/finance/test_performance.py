@@ -471,3 +471,23 @@ def test_a_sold_position_keeps_its_past_in_its_account(
     unknown = get(account=["inconnu"])
     assert unknown["lines"] == 0
     assert unknown["summary"] is None
+
+
+def test_no_return_when_the_money_was_barely_in(fin: FinanceDomain) -> None:
+    """16/11 : vendu tôt dans la période, racheté à la fin, le capital moyen ne fait plus qu'une
+    poignée de francs et le taux s'envolait (+172 % pour un gain de 1 438 sur 7 666). Sous le quart
+    de l'argent mis en jeu, pas de taux : les francs seuls."""
+    acc = ref(fin, "test:vente-rachat", "securities")
+    with begin_immediate(fin.engine()) as conn:
+        price(conn, "2026-01-01", "100")
+        trade(conn, acc, "2026-01-01", "10", 100_000)
+        trade(conn, acc, "2026-01-05", "-10", -100_000)  # tout vendu
+        price(conn, "2026-03-25", "100")
+        trade(conn, acc, "2026-03-25", "10", 100_000)  # racheté six jours avant la fin
+        price(conn, "2026-03-31", "110")
+    s = run(fin, "2026-03-31", start="2026-01-01")["summary"]
+    assert chf(s["gain"]) == 10_000  # le gain en francs, lui, reste juste
+    assert s["personal"] is None
+    # sans la vente, l'argent était là tout le temps : le taux se dit
+    late = run(fin, "2026-03-31", start="2026-03-25")["summary"]
+    assert rate(late["personal"]) == pytest.approx(0.10, abs=1e-6)

@@ -32,8 +32,8 @@ export const BY = ["cat", "liq", "goal", "inst", "acc", "asset"];
 export const LOOK = [["region", "Région"], ["sector", "Secteur"], ["currency", "Devise"]];
 export const SORTS = [
   { k: "val", label: "Valeur", short: "Valeur" },
-  { k: "gain", label: "Gain en francs", short: "Gain", hint: "sur la période choisie en haut" },
-  { k: "pct", label: "Gain en %", short: "Gain %", hint: "rendement de l'argent engagé, même période" },
+  { k: "gain", label: "Gain en francs", short: "Gain", hint: "depuis l'achat" },
+  { k: "pct", label: "Gain en %", short: "Gain %", hint: "depuis l'achat, sur le prix de revient" },
   { k: "az", label: "Nom", short: "Nom" },
 ];
 export const TABS = [["rend", "Rendement"], ["risk", "Risque"]];

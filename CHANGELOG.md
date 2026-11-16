@@ -2,6 +2,23 @@
 
 ## [Non publié]
 
+## [0.26.2] · 2026-11-16
+
+### Corrigé
+
+- Patrimoine, liste Comptes / Actifs : la pastille rapportait le gain de la période à un capital
+  moyen qui pouvait tomber à quelques centaines de francs (vente puis rachat, achat récent) :
+  Bitcoin +1 438 CHF sur 7 666 affichait +172 %. Chaque ligne dit maintenant son gain depuis
+  l'achat, en francs et en % du prix de revient (≈ +23 %), comme les apps de placement ; sans
+  prix de revient, ni gain ni pastille.
+- Le rendement de l'argent engagé d'une période (carte du haut, Accueil) n'est plus donné quand
+  le capital moyen tombe sous le quart de l'argent mis en jeu : les francs seuls.
+- Page d'une crypto : la carte du haut et la section « Ma position » donnent le même gain
+  latent (prix de revient commun à tous les comptes).
+- À côté d'un gain en francs, plus de rendement pondéré dans le temps : page d'un actif (« Depuis
+  l'achat » et le rendement de ton argent), positions et bande Performance d'un compte, carte
+  Rendement sous 1 an, règle de la courbe. La vue Performance en % le garde, nommé.
+
 ## [0.26.1] · 2026-11-14
 
 ### Corrigé

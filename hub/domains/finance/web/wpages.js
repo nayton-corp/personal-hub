@@ -4,7 +4,7 @@
 // position (quantité, cours, prix de revient), les comptes qui le détiennent, sa composition
 // quand c'est un fonds, et mène aux achats et ventes du Journal.
 import { MOIS, MOIS_L, base, date, daysSince, staleDays } from "../../format.js";
-import { S, accLabel, asOf, day, lineId, range, sum } from "./wstate.js";
+import { S, accLabel, asOf, day, range, sum } from "./wstate.js";
 import { amount, esc, ic, n0, n2, qty, share } from "../../ui.js";
 import { assetMark, facetName, instMark } from "./meta.js";
 import { compact, pct, px, sgnMoney } from "./wchart.js";
@@ -12,7 +12,8 @@ import { rate, units } from "./perf.js";
 import { DEBT_KIND, debtDetail } from "./debts.js";
 import { goodDetail } from "./goods.js";
 import { monthly } from "./wmodel.js";
-import { assetSince } from "./wcrypto.js";
+import { assetSince, buyGain } from "./wcrypto.js";
+import { moneyRate } from "./wcurve.js";
 import { store } from "../../store.js";
 
 const RATE = 0.04; // rendement supposé pour la date estimée d'un objectif (jamais la hausse passée)
@@ -48,8 +49,9 @@ function bars(data) {
 
 function perfStrip(c, days) {
   if (!c) return "";
-  const g = units(c.gain), r = rate(c.twr), yr = rate(c.twr_yearly);
-  return `<div class="strip"><div><span>Gain</span><b class="num ${tone(g)}"><span class="money">${sgnMoney(g)}</span></b></div><div><span>Rendement pondéré</span><b class="num ${tone(r)}">${pct(r)}</b></div><div><span>Par an</span><b class="num">${yr == null || days < 365 ? "—" : pct(yr)}</b></div></div>
+  // à côté du gain : le rendement de ton argent (wcurve.js), comme la carte du haut
+  const g = units(c.gain), mine = moneyRate(rate(c.personal), days, rate(c.mwr));
+  return `<div class="strip"><div><span>Gain</span><b class="num ${tone(g)}"><span class="money">${sgnMoney(g)}</span></b></div><div><span>Rendement de ton argent${mine && mine.yr ? ", par an" : ""}</span><b class="num ${tone(mine ? mine.v : null)}">${mine ? pct(mine.v) : "—"}</b></div></div>
     ${c.complete ? "" : '<p class="pnote">Des cours manquent sur la période : chiffres partiels.</p>'}`;
 }
 
@@ -83,9 +85,9 @@ export function accountPage(m, r) {
   }
   const tot = sum(ls);
   let h = section("Positions", `${ls.length} ligne${ls.length > 1 ? "s" : ""}`, `<div class="list">${ls.map((l) => {
-    const c2 = m.perf ? m.perf.by_line[lineId(l)] : null, cash = l.asset.startsWith("ccy:");
+    const b2 = buyGain([l]), cash = l.asset.startsWith("ccy:");
     const sub = `<span class="money">${qty(l.qty)}</span> ${esc(l.unit)}${cash ? "" : l.price ? ` × <span class="money">${n2(Number(l.price))}</span> ${esc(l.priceCcy || "")}` : " · sans cours"}`;
-    const right = cash ? `<span class="sec-note">${share(l.value / (tot || 1))}</span>` : `<span class="delta ${tone(c2 ? rate(c2.twr) : null)}">${c2 ? pct(rate(c2.twr)) : ""}</span> <span class="sec-note">· ${share(l.value / (tot || 1))}</span>`;
+    const right = cash ? `<span class="sec-note">${share(l.value / (tot || 1))}</span>` : `<span class="delta ${tone(b2 ? b2.pct : null)}">${b2 ? pct(b2.pct) : ""}</span> <span class="sec-note">· ${share(l.value / (tot || 1))}</span>`;
     return `<button class="row go-row" type="button" data-a="w-open" data-v="${esc(`s:${l.asset}`)}">${assetMark(l, "sm")}<span class="row-main"><span class="row-title">${esc(l.name)}</span><span class="row-sub">${sub}</span></span><span class="row-num"><span class="row-val num">${amount(l.value)}</span><span class="row-delta num">${right}</span></span><span class="go">${ic("chev")}</span></button>`;
   }).join("")}</div>`);
   if (c && m.pts.length > 1) h += section("Performance", esc(m.label), `${perfStrip(c, days)}<p class="hint">D'où vient la valeur</p>${bridge(c)}`);
@@ -131,12 +133,13 @@ export function assetPage(m, all, r) {
     const q = m.qty, value = sum(ls), blind = pool ? units(pool.unknown_cost_value) : 0;
     const cost = pool ? (blind >= 1 ? null : units(pool.cost)) : m.cost;
     const lat = pool ? units(pool.unrealized) : cost != null ? value - cost : null;
+    const bought = buyGain(ls, pool), mine = moneyRate(c ? rate(c.personal) : null, days, c ? rate(c.mwr) : null);
     h += section("Ma position", r.from && S.where === "here" ? `dans ${esc(f.inst)}` : "tous comptes", `<div class="strip">
       <div><span>Quantité</span><b class="num money">${qty(q)}</b></div><div><span>Cours</span><b class="num">${f.price ? `${px(Number(f.price))} <small>${esc(f.priceCcy || "")}</small>` : "—"}</b></div>
       <div><span>Prix de revient</span><b class="num">${cost != null && q ? `<span class="money">${px(cost / q)}</span>` : "—"}</b></div>
       <div><span>Gain latent</span><b class="num ${tone(lat)}">${lat == null ? "—" : `<span class="money">${sgnMoney(lat)}</span>`}</b></div>
-      <div><span>Rendement ${S.custom ? "" : S.period}</span><b class="num ${tone(c ? rate(c.twr) : null)}">${c ? pct(rate(c.twr)) : "—"}</b></div>
-      <div><span>Par an</span><b class="num">${c && days >= 365 && rate(c.twr_yearly) != null ? pct(rate(c.twr_yearly)) : "—"}</b></div></div>
+      <div><span>Depuis l'achat</span><b class="num ${tone(bought ? bought.pct : null)}">${bought ? pct(bought.pct) : "—"}</b></div>
+      <div><span>Rendement ${S.custom ? "" : S.period}${mine && mine.yr ? ", par an" : ""}</span><b class="num ${tone(mine ? mine.v : null)}">${mine ? pct(mine.v) : "—"}</b></div></div>
       ${pool && (units(pool.realized) || units(pool.income)) ? `<p class="pnote">Depuis l'achat : réalisé <span class="money">${sgnMoney(units(pool.realized))}</span> ${base()}, récompenses reçues <span class="money">${n0(units(pool.income))}</span> ${base()}.</p>` : ""}
       ${cost == null ? `<p class="pnote">Prix de revient inconnu pour une partie des parts${pool ? ` (<span class="money">${n0(blind)}</span> ${base()} sans historique d'achat, hors du gain latent)` : ""}.</p>` : ""}`);
   }

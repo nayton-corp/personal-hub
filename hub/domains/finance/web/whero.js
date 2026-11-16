@@ -10,6 +10,7 @@ import { assetMark, instMark } from "./meta.js";
 import { base } from "../../format.js";
 import { kindFor } from "./wmodel.js";
 import { moneyRate } from "./wcurve.js";
+import { assetSince, buyGain } from "./wcrypto.js";
 import { rate } from "./perf.js";
 
 const $ = (id) => document.getElementById(id);
@@ -101,8 +102,11 @@ export function heroHTML(m, all, r = here()) {
     const where = r.from && S.where === "here" ? `dans ${accOf(r.from) ? accOf(r.from).inst : ""}` : held > 1 ? `partout (${held} comptes)` : `dans ${m.sel[0].inst}`;
     label = at(`Ma position · ${where}`);
     big = `<span class="money">${n0(p.v)}</span><small>${base()}</small>`;
-    const lat = m.cost != null && !scrub ? p.v - m.cost : null;
-    sub = `<div class="hero-delta"><span class="delta ${tone(p.g)}"><span class="money">${sgnMoney(p.g)}</span> ${base()}${mineTxt}</span><span class="period-link">${since}</span></div>${lat != null ? `<div class="hero-sub">Gain latent depuis l'achat <span class="money">${sgnMoney(lat)}</span> ${base()} (${pct(m.cost ? lat / m.cost : 0)})</div>` : ""}`;
+    // le même gain depuis l'achat que la ligne de la liste et la page (une crypto partout : le
+    // prix de revient commun)
+    const f0 = m.sel[0], pool = f0 && f0.kind === "crypto" && !(r.from && S.where === "here") ? assetSince(f0.isin) : null;
+    const lat = scrub ? null : buyGain(m.sel, pool);
+    sub = `<div class="hero-delta"><span class="delta ${tone(p.g)}"><span class="money">${sgnMoney(p.g)}</span> ${base()}${mineTxt}</span><span class="period-link">${since}</span></div>${lat ? `<div class="hero-sub">Gain latent depuis l'achat <span class="money">${sgnMoney(lat.gain)}</span> ${base()} (${pct(lat.pct)})</div>` : ""}`;
   } else if (kind === "val") {
     label = at(what);
     big = `<span class="money">${nf(p.v)}</span><small>${base()}</small>`;

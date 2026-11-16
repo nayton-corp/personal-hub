@@ -11,6 +11,7 @@ import { chartSVG, flagHTML, gutter, legendHTML, nearest, rulerHTML } from "./wc
 import { displayBody, drawLand, drawTop, heroHTML, periodsHTML } from "./whero.js";
 import { perfSection, rate, ratePct, signedMoney, units } from "./perf.js";
 import { kindFor, model } from "./wmodel.js";
+import { moneyRate } from "./wcurve.js";
 import { byLabel } from "./wsheets.js";
 import { stratBrief } from "./strategies.js";
 import * as more from "./wcards.js";
@@ -159,9 +160,11 @@ function cards(sel) {
     second = card("w-card", "risk", "Risque", dd == null ? "—" : dd < 0 ? `<span class="neg">${ratePct(dd)}</span>` : "Aucune baisse",
       vol == null ? "pas assez de recul" : `volatilité ${ratePct(vol).replace("+", "")} par an`);
   } else {
-    const g = p ? units(p.gain) : null, r = p ? rate(p.mwr) ?? rate(p.twr) : null;
+    // le rendement de ton argent, comme la carte du haut : jamais le pondéré dans le temps
+    const pts = M.pts, days = pts.length > 1 ? Math.round((Date.parse(pts[pts.length - 1].d) - Date.parse(pts[0].d)) / 864e5) : 0;
+    const g = p ? units(p.gain) : null, mine = p ? moneyRate(rate(p.personal), days, rate(p.mwr)) : null, r = mine ? mine.v : null;
     second = card("w-card", "rend", "Rendement", g == null ? "—" : `<span class="${g >= 0 ? "pos" : "neg"}">${signedMoney(g)} ${base()}</span>`,
-      `${r == null ? "" : `${ratePct(r)} · `}${esc(range().label)}`);
+      `${r == null ? "" : `${ratePct(r)}${mine.yr ? " par an" : ""} · `}${esc(range().label)}`);
   }
   return `<div class="sumcards wcards">${card("w-card", "alloc", "Répartition", a.v, a.s)}${second}${more.moreCards()}
     ${card("w-card", "strat", "Stratégies", `${st.v}${st.hot ? ' <span class="pill info">à voir</span>' : ""}`, st.s, " wide")}</div>`;
