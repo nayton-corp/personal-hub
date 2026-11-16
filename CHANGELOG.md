@@ -12,6 +12,15 @@
   L'écran dit où chaque TER a été relevé ; un TER saisi à la main l'emporte toujours, et la
   saisie reste possible pour un fonds qu'aucun site ne connaît. Relu tous les 90 jours.
 
+## [0.26.6] · 2026-11-16
+
+### Corrigé
+
+- Patrimoine, liste Comptes / Actifs : un compte ou un actif sans prix de revient (prévoyance,
+  achat absent du registre, une seule position sans prix) n'affichait plus ni gain ni pastille
+  depuis la 0.26.2. Il affiche maintenant son gain depuis l'ouverture (valeur − versements nets,
+  sur toute l'histoire) et le % de l'argent versé.
+
 ## [0.26.5] · 2026-11-16
 
 ### Corrigé

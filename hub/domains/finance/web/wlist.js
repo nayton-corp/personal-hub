@@ -1,16 +1,19 @@
 // Patrimoine, liste Comptes / Actifs : chaque ligne dit sa valeur, son gain depuis l'achat en
 // francs et en pastille (▲ vert, ▼ rouge), comme les apps de placement : la période choisie en haut
-// ne change que la courbe et la carte du haut (16/11). Une dette dit ses intérêts de la période. Un
+// ne change que la courbe et la carte du haut. Sans prix de revient (prévoyance, compte bancaire,
+// achat absent du registre), le gain depuis l'ouverture : valeur − versements nets, sur toute
+// l'histoire (/finance/performance sans date de début). Une dette dit ses intérêts de la période. Un
 // actif dit aussi sa quantité. Le tri se choisit dans un petit panneau : un critère, et pour chacun l'ordre
 // (décroissant ou croissant). Une ligne se masque (l'œil, ou d'elle-même à zéro) sans quitter
 // les calculs. Les prix de revient viennent de /finance/holdings (par position, et commun à tous
 // les comptes pour une crypto), les intérêts d'une dette de /finance/performance : aucune écriture
 // n'est lue ici.
-import { SORTS, S, accLabel, accMark, lines, remember, sum, unitOf } from "./wstate.js";
+import { SORTS, S, accLabel, accMark, lines, perfPath, remember, sum, unitOf } from "./wstate.js";
 import { SHEETS, amount, closeSheet, esc, ic, openSheet, qty } from "../../ui.js";
 import { assetMark, facetColor, ringed } from "./meta.js";
 import { signedMoney, units } from "./perf.js";
 import { assetSince, buyGain } from "./wcrypto.js";
+import { perfSel, sinceStart } from "./wcurve.js";
 import { DEBT_KIND, debtMark } from "./debts.js";
 import { goodMark } from "./goods.js";
 import { store } from "../../store.js";
@@ -19,14 +22,18 @@ const KIND = { cash: "Compte", securities: "Titres", pension: "Prévoyance", cry
 
 function rowsOf(sel, M) {
   const groups = Object.groupBy(sel, (l) => (S.view === "acc" ? `a:${l.acc}` : `s:${l.asset}`));
-  const net = M.net;
+  const net = M.net, all = lines() || sel;
+  // toute l'histoire, par compte et par actif : le gain depuis l'ouverture quand le prix de revient manque
+  const ever = store.use(perfPath(null, null, "month", perfSel(sel, all))).data;
   const rows = Object.entries(groups).map(([key, ls]) => {
     const f = ls[0], value = sum(ls);
     const debt = f.kind === "debt" && net && M.pts.length > 1 ? net.by_account[f.acc] : null;
     // une crypto tenue dans la liste par tous ses comptes : le prix de revient commun, celui de sa page
     const every = S.view === "asset" && f.kind === "crypto" && ls.length === (lines() || []).filter((l) => l.asset === f.asset).length;
     const pool = every ? assetSince(f.isin) : null;
-    const bought = f.kind === "debt" ? null : buyGain(ls, pool);
+    const e = ever && (S.view === "acc" ? ever.by_account[f.acc] : ever.by_asset[f.asset]);
+    const bought = f.kind === "debt" || f.kind === "good" ? null
+      : buyGain(ls, pool) || (e ? sinceStart(units(e.gain), units(e.start), units(e.net_flows)) : null);
     const gain = debt ? units(debt.gain) : bought ? bought.gain : null, pct = bought ? bought.pct : null;
     const base = { key, value, gain, pct };
     if (f.kind === "debt") return { ...base, title: f.name, sub: `${esc(f.inst)} · ${DEBT_KIND[f.debtKind] || "Dette"}`, mark: debtMark({ kind: f.debtKind }, ""), debt: true };
@@ -39,6 +46,8 @@ function rowsOf(sel, M) {
     const amt = `<span class="money num">${qty(String(+q.toFixed(8)))}</span> ${esc(unitOf(f))}`;
     return { ...base, title: f.name, sub: cash ? where.slice(3) : amt + where, mark: ringed(assetMark(f), facetColor("cat", f.cat)), cash };
   });
+  // des liquidités sans intérêts n'ont ni gain ni rendement : elles se rangent après les autres
+  for (const r of rows) if (r.cash && r.gain != null && Math.round(r.gain) === 0) Object.assign(r, { gain: null, pct: null });
   return rows;
 }
 
@@ -98,7 +107,7 @@ export function listSection(sel, M) {
       <button class="sort-btn" type="button" data-a="w-sort" aria-haspopup="dialog"
         aria-label="Trier par ${so.short}, ${dirWord()}. Changer le tri et l'affichage">${ic("sort")}${so.short} <b aria-hidden="true">${arrow()}</b></button></div>
     <h2 class="sr" id="t-detail">Comptes et actifs</h2>
-    <p class="list-cap">Gain depuis l'achat</p>
+    <p class="list-cap">Gain depuis l'achat, ou depuis l'ouverture sans prix d'achat</p>
     <div class="list">${rows.length ? rows.map(rowHTML).join("")
       : hid ? "" : '<div class="empty">Aucun élément ne correspond à ces filtres.<br><button type="button" data-a="w-clear">Effacer les filtres</button></div>'}</div>
     ${hid ? `<button class="list-foot" type="button" data-a="w-mutes">${ic("eyeoff")}${hid} ${word}${pl(hid)} masqué${pl(hid)},
