@@ -2,6 +2,18 @@
 
 ## [Non publié]
 
+## [0.26.5] · 2026-11-16
+
+### Corrigé
+
+- Stratégies repérées : seuls les versements 3a étaient trouvés. Un versement régulier vers une
+  plateforme (IBKR, SwissBorg) se lit maintenant tout seul, depuis les virements de la banque,
+  sans attendre son relevé ni son API (« Versement régulier repéré : 500 CHF sur IBKR chaque
+  mois »).
+- Un achat hebdomadaire sur SwissBorg n'a plus l'air « arrêté » parce que le dernier relevé
+  déposé date de plus d'une semaine : la série est jugée au jour de ce relevé.
+- Une série qui commence il y a presque deux ans n'est plus refusée à la création de sa carte.
+
 ## [0.26.4] · 2026-11-16
 
 ### Corrigé

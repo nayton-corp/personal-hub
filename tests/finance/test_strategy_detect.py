@@ -15,6 +15,7 @@ from sqlalchemy import text
 from hub.core import proposal_events, proposals
 from hub.core.context import HubContext
 from hub.domains.finance.domain import FinanceDomain
+from hub.domains.finance.patrimoine.app import strategies
 from hub.domains.finance.patrimoine.model import regular_buys as rb
 from hub.domains.finance.registre.app import ledger
 from hub.platform.db import begin_immediate
@@ -306,3 +307,71 @@ def test_fund_buys_on_the_pension_titles_side_are_not_deposits(
     (task,) = [t for t in fin.tasks() if t.id == "strategies"]
     assert task.run is not None
     assert task.run() == "aucun DCA : aucun achat récent"
+
+
+def _bank_transfers(fin: FinanceDomain, words: str, first: date, n: int, minor: int) -> None:
+    from tests.finance.conftest import add_account
+
+    bank = add_account(fin, kind="cash")
+    with begin_immediate(fin.engine()) as conn:
+        d = first
+        for i in range(n):
+            ledger.append_entry(
+                conn,
+                ledger.NewEntry(bank.id, d.isoformat(), -minor, "CHF", f"v{i}", counterparty=words),
+            )
+            d = (d.replace(day=28) + timedelta(days=4)).replace(day=first.day)
+
+
+def test_a_monthly_transfer_to_a_platform_is_read_from_the_bank(
+    ctx: HubContext, fin: FinanceDomain, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with begin_immediate(fin.engine()) as conn:
+        from hub.domains.finance.registre.app import catalog
+
+        ibkr = catalog.add_account(
+            conn, institution="IBKR", name="U123 titres", kind="securities", external_ref="ibkr:t"
+        )
+    _bank_transfers(fin, "Interactive Brokers (U.K.) Ltd", date(2026, 3, 5), 9, 50_000)
+    at(fin, monkeypatch, "2026-11-14")
+    from hub.domains.finance.patrimoine.app import strategy_detect
+
+    with fin.engine().connect() as conn:
+        (found,) = strategy_detect.candidates(conn, date(2026, 11, 14))
+    assert found.scope == f"account:{ibkr.id}"
+    assert (found.series.cadence, found.series.day, found.series.amount) == ("monthly", 5, 50_000)
+    fin.detect_strategies()
+    proposal_events.sync_events(ctx)
+    (p,) = pending(ctx)
+    assert p.preview["summary"] == "Versement régulier repéré : 500 CHF sur IBKR chaque mois"
+    assert p.preview["details"]["detected"]["kept"] == 9
+    accept(ctx, p)
+    ((scope,),) = rows(fin, "SELECT scope FROM strategies")
+    assert scope == f"account:{ibkr.id}"
+
+
+def test_a_weekly_series_known_up_to_the_last_statement_is_not_stopped(
+    fin: FinanceDomain, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from hub.domains.finance.patrimoine.app import strategy_detect
+
+    weekly = [rb.Buy(date(2026, 8, 3) + timedelta(weeks=i), 5_000) for i in range(10)]
+    # dernier achat le 5 octobre : arrêtée vu d'aujourd'hui…
+    assert rb.detect(weekly, [], TODAY) is None
+    # … mais pas vue du jour du dernier relevé déposé
+    assert rb.detect(weekly, [], date(2026, 10, 8)) is not None
+    sb = add_ref(fin, "crypto:swissborg", "crypto", "SwissBorg")
+    other = add_ref(fin, "crypto:binance", "crypto", "Binance")
+    with begin_immediate(fin.engine()) as conn:
+        conn.execute(
+            text(
+                "INSERT INTO imports (id, source, file_sha256, file_name, received_at, status, "
+                "updated_at) VALUES ('i1', 'swissborg', 'x', 'r.xlsx', '2026-10-08T10:00:00Z', "
+                "'applied', '2026-10-08T10:00:00Z')"
+            )
+        )
+    at(fin, monkeypatch, "2026-11-14")
+    with fin.engine().connect() as conn:
+        now = strategies.Today(conn, TODAY)
+        assert strategy_detect._statement_day(now, {sb.id}) == date(2026, 10, 8)
+        assert strategy_detect._statement_day(now, {sb.id, other.id}) is None  # lu tout seul
