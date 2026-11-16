@@ -90,6 +90,12 @@ function remembered() {
 // session ; rien n'est gardé sur l'appareil. Une erreur du hub (500) n'est pas une coupure : elle
 // se dit là où elle arrive, sans faire passer toute l'app « hors ligne » (16/11).
 export const unreachable = (e) => !(e instanceof ApiError) || [502, 503, 504].includes(e.status);
+// le message d'un échec de chargement ; injoignable, l'app passe « hors ligne »
+export function lost(e) {
+  if (!unreachable(e)) return e.message;
+  store.offline = true;
+  return "le hub ne répond pas pour l'instant";
+}
 
 class Store {
   constructor() {
@@ -133,6 +139,12 @@ class Store {
         this.notify();
       });
     return entry;
+  }
+
+  // relire ce qui commence par `prefix` (après un échec), puis redessiner
+  retry(prefix) {
+    for (const k of [...this.cache.keys()]) if (k.startsWith(prefix)) this.cache.delete(k);
+    this.notify();
   }
 
   // une valeur prête, ou null
