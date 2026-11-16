@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+## [0.26.6] · 2026-11-16
+
+### Corrigé
+
+- Patrimoine, liste Comptes / Actifs : un compte ou un actif sans prix de revient (prévoyance,
+  achat absent du registre, une seule position sans prix) n'affichait plus ni gain ni pastille
+  depuis la 0.26.2. Il affiche maintenant son gain depuis l'ouverture (valeur − versements nets,
+  sur toute l'histoire) et le % de l'argent versé.
+
 ## [0.26.5] · 2026-11-16
 
 ### Corrigé
