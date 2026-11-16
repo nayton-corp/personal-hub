@@ -17,7 +17,8 @@ const KIND_IC = { loan: "car", mortgage: "home", leasing: "car", student: "brief
 export const debtMark = (d, size = "") => ibox(ic(KIND_IC[d.kind] || "landmark"), "var(--neg)", size);
 const DAY_COUNT = { "act/365": "Jours réels / 365", "act/360": "Jours réels / 360", "30/360": "30 / 360 (hypothèques)" };
 
-const today = () => new Date().toISOString().slice(0, 10);
+// le jour civil de l'appareil (pas celui d'UTC : entre minuit et 1 h ou 2 h en Suisse, la veille)
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const u = (m) => units(m);
 const txt = (m) => (m == null ? "" : String(units(m)));
 // « 12'500,50 » → centimes ; "" → null ; illisible → NaN

@@ -15,7 +15,8 @@ const KIND_IC = { home: "home", vehicle: "car", object: "gift", loan: "user", ot
 const USUAL = { home: "", vehicle: "-15", object: "", loan: "", other: "" };
 export const goodMark = (g, size = "") => ibox(ic(KIND_IC[g.kind] || "layers"), "var(--s5)", size);
 
-const today = () => new Date().toISOString().slice(0, 10);
+// le jour civil de l'appareil (pas celui d'UTC : entre minuit et 1 h ou 2 h en Suisse, la veille)
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const find = (id) => ((store.data(GOODS) || {}).items || []).find((g) => g.id === id) || null;
 // « 12'500,50 » → centimes ; "" → null ; illisible → NaN
 function minor(s) {
