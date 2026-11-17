@@ -2,6 +2,14 @@
 
 ## [Non publié]
 
+## [0.28.1] · 2026-11-17
+
+### Corrigé
+
+- Fiche d'un actif, « Ma position » : les six chiffres se rangent sur deux lignes de trois (ils
+  s'alignaient sur une seule ligne trop étroite sur téléphone) et l'unité (CHF, %) reste collée
+  au chiffre. Le cours affiché est celui de la ligne au cours le plus récent.
+
 ## [0.28.0] · 2026-11-17
 
 ### Ajouté

@@ -135,9 +135,11 @@ export function assetPage(m, all, r) {
     const q = m.qty, value = sum(ls), blind = pool ? units(pool.unknown_cost_value) : 0;
     const cost = pool ? (blind >= 1 ? null : units(pool.cost)) : m.cost;
     const lat = pool ? units(pool.unrealized) : cost != null ? value - cost : null;
+    // le cours : celui de la ligne au cours le plus récent (une ligne peut garder un cours plus ancien)
+    const pl = ls.filter((l) => l.price).reduce((a, l) => (a && (a.priceDate || "") >= (l.priceDate || "") ? a : l), null) || f;
     const bought = buyGain(ls, pool), mine = moneyRate(c ? rate(c.personal) : null, days, c ? rate(c.mwr) : null);
     h += section("Ma position", r.from && S.where === "here" ? `dans ${esc(f.inst)}` : "tous comptes", `<div class="strip">
-      <div><span>Quantité</span><b class="num money">${qty(q)}</b></div><div><span>Cours</span><b class="num">${f.price ? `${px(Number(f.price))} <small>${esc(f.priceCcy || "")}</small>` : "—"}</b></div>
+      <div><span>Quantité</span><b class="num money">${qty(q)}</b></div><div><span>Cours</span><b class="num">${pl.price ? `${px(Number(pl.price))} <small>${esc(pl.priceCcy || "")}</small>` : "—"}</b></div>
       <div><span>Prix de revient</span><b class="num">${cost != null && q ? `<span class="money">${px(cost / q)}</span> <small>${base()}</small>` : "—"}</b></div>
       <div><span>Gain latent</span><b class="num ${tone(lat)}">${lat == null ? "—" : `<span class="money">${sgnMoney(lat)}</span>`}</b></div>
       <div><span>Depuis l'achat</span><b class="num ${tone(bought ? bought.pct : null)}">${bought ? pct(bought.pct) : "—"}</b></div>
