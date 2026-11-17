@@ -707,3 +707,4 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .bfoot { display: flex; flex-direction: column; gap: 4px; padding: 4px 16px 8px; }
 .bfoot-l { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; color: var(--accent); font-weight: 600; font-size: .794rem; }
 .bfoot-l .ic { width: 16px; height: 16px; }
+.kv-go { width: 100%; text-align: left; color: inherit; }

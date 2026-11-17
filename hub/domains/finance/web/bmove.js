@@ -28,7 +28,8 @@ SHEETS.bhead = () => {
   const src = p.income_source === "set" ? "saisis par toi" : p.income_source === "average" ? "moyenne des trois mois d'avant" : "aucun revenu connu";
   const unassigned = p.unassigned ? u(p.unassigned) : null;
   const saved = f ? u(f.groups.find((x) => x.group === "savings")?.total) : null;
-  const lines = p.savings_lines.map((s) => kv("piggy", "var(--s2)", esc(s.name), `${m0(u(s.done))} / ${m0(u(s.target))}`, u(s.done) >= u(s.target) ? "versé" : "à verser")).join("");
+  const lines = p.savings_lines.map((s) => `<button class="kv kv-go" type="button" data-a="cat" data-v="${esc(s.category)}">${ibox(ic("piggy"), "var(--s2)", "sm")}
+    <span>${esc(s.name)}<span class="s">${u(s.done) >= u(s.target) ? "versé" : "à verser"}</span></span><b class="num">${m0(u(s.done))} / ${m0(u(s.target))}</b></button>`).join("");
   return {
     title: `${esc(monthName(b.month).replace(/^./, (c) => c.toUpperCase()))} en détail`,
     body: `<h3>Le plan</h3>
@@ -44,7 +45,8 @@ SHEETS.bhead = () => {
       ${cmp != null ? kv("calendar", "var(--s6)", `Au même jour en ${esc(monthName(prevMonth(b.month)).split(" ")[0])}`,
         `${cmp > 0 ? "+" : "−"}${m0(Math.abs(cmp))} ${base()}`, cmp > 0 ? "tu dépenses plus vite" : "tu dépenses moins vite") : ""}
       ${saved != null && f && u(f.income) ? kv("piggy", "var(--s2)", "Épargné", amount(saved), `${pf(saved / u(f.income), 0)} % des revenus reçus`) : ""}
-      ${lines ? `<h3>Épargne visée</h3>${lines}` : ""}
+      <h3>Épargne visée</h3>${lines || '<p class="hint">Aucune pour l\'instant : fixe ce que tu veux mettre de côté chaque mois sur tes catégories d\'épargne.</p>'}
+      <button class="link-row" type="button" data-a="plan">${lines ? "Modifier l'épargne visée" : "Fixer l'épargne visée"}${ic("chev")}</button>
       <p class="hint">Le reste = revenus attendus − épargne visée − dépensé. Les catégories hors budget et les provisions de l'année n'y comptent pas.</p>`,
     foot: `<button class="secondary" type="button" data-a="bincome" aria-haspopup="dialog">${ic("arrowin")}Revenus attendus</button>
       <button class="secondary" type="button" data-a="plan" aria-haspopup="dialog">${ic("sliders")}Ajuster les cibles</button>`,

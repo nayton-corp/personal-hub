@@ -134,3 +134,27 @@ def test_the_budget_and_its_panels_fit_a_phone(page: Any, width: int) -> None:
     finally:
         page.set_viewport_size({"width": WIDTH, "height": HEIGHT})
     assert page.problems == []
+
+
+def test_a_savings_target_is_set_from_the_month_detail(page: Any) -> None:
+    cats = _get(page, "/finance/categories")["items"]
+    saving = next(c for c in cats if c["active"] and c["group"] == "savings")
+    open_tab(page, "budget")
+    page.locator('#budBody [data-a="bhead"]').click()
+    page.wait_for_selector('#sheet [data-a="plan"]')
+    page.locator('#sheet .link-row[data-a="plan"]').click()
+    page.wait_for_selector(f"#plan-{saving['id']}")
+    page.fill(f"#plan-{saving['id']}", "300")
+    page.locator('#sheet [data-a="plan-save"]').click()
+    page.wait_for_selector("html:not(.sheet-open)")
+    plan = _budget(page)["plan"]
+    assert float(plan["savings"]["display"]) >= 300
+    assert saving["id"] in {x["category"] for x in plan["savings_lines"]}
+    # la catégorie d'épargne s'ouvre depuis le mois en détail, avec sa cible
+    page.locator('#budBody [data-a="bhead"]').click()
+    page.locator(f'#sheet [data-a="cat"][data-v="{saving["id"]}"]').click()
+    page.wait_for_selector("#t-input")
+    assert page.input_value("#t-input") == "300"
+    page.locator('#sheet [data-a="sheet-close"]').click()
+    page.wait_for_selector("html:not(.sheet-open)")
+    assert page.problems == []

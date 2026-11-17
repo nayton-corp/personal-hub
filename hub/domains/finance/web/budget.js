@@ -124,12 +124,13 @@ SHEETS.cat = (id, sh) => {
   const spent = line ? line.s : 0;
   const n = P.period === "q" ? 3 : 1;
   const year = line && line.yearly ? (line.yearly.target ? u(line.yearly.target) : null) : null;
-  const target = line && line.yearly ? (year != null ? year / 12 : null) : line && line.t != null ? line.t / n : null; // cible mensuelle
+  const saving = group === "savings" && b ? b.plan.savings_lines.find((x) => x.category === id) : null; // épargne visée (lot A)
+  const target = saving ? u(saving.target) / n : line && line.yearly ? (year != null ? year / 12 : null) : line && line.t != null ? line.t / n : null; // cible mensuelle
   if (sh.cad == null) sh.cad = line && line.yearly ? "year" : "month";
   if (sh.tmp == null) sh.tmp = sh.cad === "year" ? Math.round(year || 0) : target != null ? Math.round(target) : 0;
   const was = line && line.yearly ? "year" : "month";
   const shown = was === "year" ? Math.round(year ?? -1) : Math.round(target ?? -1);
-  const s = line ? (line.yearly ? yearState(line) : catState(line)) : { k: "ok", txt: "Aucune dépense" };
+  const s = line ? (line.yearly ? yearState(line) : catState(line)) : { k: "ok", txt: group === "savings" ? "Épargne" : "Aucune dépense" };
   const te = store.use(trendPath(id));
   let hist = skel("block");
   if (te.data) {
@@ -141,16 +142,17 @@ SHEETS.cat = (id, sh) => {
       ${pts.map((p) => `<div><i class="${p.m === P.month ? "" : "past"}" data-css="--h:${((p.v / mx) * 72).toFixed(0)}px;--c:${target != null && p.v > target ? "var(--neg)" : look.color}"></i><span>${shortMonth(p.m)}</span></div>`).join("")}</div>
       ${target != null ? '<p class="hint">Pointillés : la cible mensuelle.</p>' : ""}`;
   }
-  const budgetable = (group === "fixed" || group === "variable") && (!c || (c.mode || "target") === "target"); // suivie sans cible, hors budget : pas de cible
+  const budgetable = (group === "fixed" || group === "variable" || group === "savings") && (!c || (c.mode || "target") === "target"); // suivie sans cible, hors budget : pas de cible
   const removing = budgetable && !(sh.tmp > 0) && shown > 0, changed = removing || (budgetable && sh.tmp > 0 && (sh.tmp !== shown || sh.cad !== was)); // champ vidé : cible retirée
   const per = sh.cad === "year" ? "annuelle" : "mensuelle";
   return {
     title: `${catMark(id, group)}<span>${esc(name)}</span>`,
-    body: `<div class="sheet-big num">${amount(spent)}${line && line.t != null ? ` <small>sur ${amount(line.t)}</small>` : ""}</div>
+    body: `<div class="sheet-big num">${saving ? `${amount(u(saving.done))} <small>versés sur ${amount(u(saving.target))}</small>` : `${amount(spent)}${line && line.t != null ? ` <small>sur ${amount(line.t)}</small>` : ""}`}</div>
       <span class="crow-st ${s.k}">${escNums(s.txt)} · ${esc(periodLabel(b))}</span>
       <h3>Six derniers mois</h3>${hist}
       ${budgetable ? `<h3>Cible ${per}</h3>
-      <div class="seg cad-seg" role="group" aria-label="Suivi">${[["month", "Par mois"], ["year", "Par an"]].map(([k, l]) => `<button type="button" data-a="tcad" data-v="${k}" aria-pressed="${sh.cad === k}">${l}</button>`).join("")}</div>
+      ${group === "savings" ? '<p class="hint">Ce que tu veux mettre de côté chaque mois : compté dans l\'épargne visée du plan, retiré du reste à dépenser.</p>' : ""}
+      <div class="seg cad-seg" role="group" aria-label="Suivi"${group === "savings" ? " hidden" : ""}>${[["month", "Par mois"], ["year", "Par an"]].map(([k, l]) => `<button type="button" data-a="tcad" data-v="${k}" aria-pressed="${sh.cad === k}">${l}</button>`).join("")}</div>
       <div class="target"><button type="button" data-a="tstep" data-v="-10" aria-label="Diminuer de 10">−</button><input id="t-input" inputmode="decimal" value="${sh.tmp || ""}" aria-label="Cible ${per} en ${base()}" placeholder="aucune"><button type="button" data-a="tstep" data-v="10" aria-label="Augmenter de 10">+</button></div>
       ${sh.cad === "year" ? `<p class="hint">Pour les dépenses par à-coups (vacances, entretien) : comparée au cumul depuis janvier, sans peser sur le reste à vivre du mois.${line && line.yearly ? ` Dépensé depuis janvier : ${m0(u(line.yearly.spent))} ${base()}.` : ""}</p>` : ""}
       ${sh.bad || sh.err ? `<div class="err" role="alert">${esc(sh.bad || sh.err)}</div>` : ""}` : '<p class="hint">Les cibles portent sur les dépenses fixes et variables.</p>'}
@@ -174,9 +176,14 @@ function planData() {
   const year = new Set(cur.lines.filter((l) => l.yearly).map((l) => l.category));
   const now = Object.fromEntries(cur.lines.map((l) => [l.category, l.yearly ? (l.yearly.target ? u(l.yearly.target) : null) : l.target ? u(l.target) : null]));
   const avg = Object.fromEntries(past.lines.map((l) => [l.category, (u(l.spent) / past.months.length) * (year.has(l.category) ? 12 : 1)]));
-  const rows = cats.items.filter((c) => c.active && (c.mode || "target") === "target" && (c.group === "fixed" || c.group === "variable"))
+  // l'épargne visée : les cibles des catégories d'épargne, la moyenne versée d'après le flux
+  for (const x of cur.plan.savings_lines) now[x.category] = u(x.target);
+  const fq = store.data(`/finance/flows?month=${store.today}&period=q`);
+  for (const i of fq ? fq.groups.find((x) => x.group === "savings")?.items || [] : []) avg[i.category] = u(i.total) / past.months.length;
+  const ORDER = { fixed: 0, variable: 1, savings: 2 };
+  const rows = cats.items.filter((c) => c.active && (c.mode || "target") === "target" && c.group in ORDER)
     .map((c) => ({ id: c.id, name: c.name, group: c.group, now: now[c.id] ?? null, avg: avg[c.id] || 0, year: year.has(c.id) }))
-    .sort((a, b) => (a.group === b.group ? 0 : a.group === "fixed" ? -1 : 1) || b.avg - a.avg || a.name.localeCompare(b.name, "fr"));
+    .sort((a, b) => ORDER[a.group] - ORDER[b.group] || b.avg - a.avg || a.name.localeCompare(b.name, "fr"));
   return { rows, income: u(past.income) / past.months.length, months: past.months };
 }
 
@@ -185,8 +192,10 @@ const planChanges = (d, tmp) => d.rows.filter((r) => tmp[r.id] != null && tmp[r.
 SHEETS.plan = (_arg, sh) => {
   const d = planData();
   if (!d) return { title: "Préparer le budget", body: skel("block") };
-  if (!sh.tmp) sh.tmp = Object.fromEntries(d.rows.map((r) => [r.id, r.now ?? roundUp(r.avg)]));
-  const total = d.rows.reduce((t, r) => t + (sh.tmp[r.id] || 0) / (r.year ? 12 : 1), 0);
+  // l'épargne n'est proposée qu'une fois choisie : rien n'est mis de côté sans le demander
+  if (!sh.tmp) sh.tmp = Object.fromEntries(d.rows.map((r) => [r.id, r.now ?? (r.group === "savings" ? 0 : roundUp(r.avg))]));
+  const sum = (save) => d.rows.filter((r) => (r.group === "savings") === save).reduce((t, r) => t + (sh.tmp[r.id] || 0) / (r.year ? 12 : 1), 0);
+  const total = sum(false), saved = sum(true);
   const ch = planChanges(d, sh.tmp);
   const from = `${shortMonth(d.months[0])} – ${shortMonth(d.months[d.months.length - 1])}`;
   let g = null;
@@ -195,13 +204,15 @@ SHEETS.plan = (_arg, sh) => {
     g = r.group;
     const v = sh.tmp[r.id];
     return `${head}<div class="plan-row">${catMark(r.id, r.group, "sm")}
-      <label for="plan-${esc(r.id)}"><b>${esc(r.name)}${r.year ? ' <span class="pill">par an</span>' : ""}</b><small>${r.avg ? `moyenne ${m0(r.avg)}` : "rien dépensé"}${r.now != null ? ` · cible ${m0(r.now)}` : ""}</small></label>
+      <label for="plan-${esc(r.id)}"><b>${esc(r.name)}${r.year ? ' <span class="pill">par an</span>' : ""}</b><small>${r.avg ? `moyenne ${m0(r.avg)}` : r.group === "savings" ? "rien versé" : "rien dépensé"}${r.now != null ? ` · cible ${m0(r.now)}` : ""}</small></label>
       <input id="plan-${esc(r.id)}" data-plan="${esc(r.id)}" inputmode="decimal" value="${v ? v : ""}" placeholder="—" aria-label="Cible ${r.year ? "annuelle" : "mensuelle"} ${esc(r.name)} en ${base()}"></div>`;
   }).join("");
   return {
     title: "Préparer le budget",
     body: `<p class="hint">Une cible par mois et par catégorie, proposée d'après ta moyenne des derniers mois (${esc(from)}) et arrondie à la dizaine. Laisse vide ce que tu ne veux pas suivre.</p>
-      <div class="plan-sum"><span>Revenus<b class="num">${amount(d.income)}</b></span><span>Budget<b class="num">${amount(total)}</b></span><span>Reste<b class="num${d.income - total < 0 ? " neg" : ""}">${amount(d.income - total)}</b></span></div>
+      <div class="plan-sum"><span>Revenus<b class="num">${amount(d.income)}</b></span><span>Budget<b class="num">${amount(total)}</b></span>
+        <span>Reste<b class="num${d.income - total - saved < 0 ? " neg" : ""}">${amount(d.income - total - saved)}</b></span></div>
+      ${saved ? `<p class="hint">Dont ${amount(saved)} d'épargne visée, retirée du reste.</p>` : ""}
       ${rows}${sh.bad || sh.err ? `<div class="err" role="alert">${esc(sh.bad || sh.err)}</div>` : ""}`,
     foot: `<button class="primary" type="button" data-a="plan-save" ${ch.length && !sh.busy && !sh.bad ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : ch.length ? `${sh.touched ? "Enregistrer" : "Accepter"} ${ch.length} cible${ch.length > 1 ? "s" : ""}${sh.touched ? "" : " proposée" + (ch.length > 1 ? "s" : "")} avec Face ID` : "Aucun changement"}</button>`,
   };
@@ -309,7 +320,7 @@ export const actions = {
     renderSheet();
   },
   plan: () => {
-    for (const p of [budgetPath(store.today, "m"), budgetPath(store.today, "q"), CATS]) store.use(p);
+    for (const p of [budgetPath(store.today, "m"), budgetPath(store.today, "q"), CATS, `/finance/flows?month=${store.today}&period=q`]) store.use(p);
     openSheet("plan");
   },
   "plan-save": async () => {
@@ -321,7 +332,7 @@ export const actions = {
     SH.err = "";
     renderSheet();
     try {
-      const items = ch.map((r) => ["set_budget", { category_id: r.id, amount_minor: toMinor(SH.tmp[r.id]), cadence: r.year ? "year" : "month", valid_from: `${store.today}-01` }]);
+      const items = ch.map((r) => ["set_budget", { category_id: r.id, amount_minor: toMinor(SH.tmp[r.id]), cadence: r.year && r.group !== "savings" ? "year" : "month", valid_from: `${store.today}-01` }]);
       const [text, bad] = outcome(await proposeAndApprove(items));
       if (bad) {
         if (SH.kind === "plan") SH.err = text;
