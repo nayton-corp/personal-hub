@@ -36,6 +36,11 @@ from hub.domains.finance.classement.app.category_kinds import (
     archive_inverse,
     edit_inverse,
 )
+from hub.domains.finance.classement.app.move_kinds import (
+    MoveBudget,
+    MoveBudgetHandler,
+    move_inverse,
+)
 from hub.domains.finance.classement.app.plan_kinds import (
     SetPlanIncome,
     SetPlanIncomeHandler,
@@ -131,6 +136,13 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
             SetPlanIncomeHandler(domain),
             reversible=True,
             inverse=plan_income_inverse,
+            ai_allowed=True,
+        ),
+        "move_budget": ProposalKind(
+            MoveBudget,
+            MoveBudgetHandler(domain),
+            reversible=True,
+            inverse=move_inverse,
             ai_allowed=True,
         ),
         "add_note": ProposalKind(AddNote, AddNoteHandler(), ai_allowed=True),

@@ -25,6 +25,7 @@ ORDER = (
     "finance_month_summary",
     "finance_budget_status",
     "finance_budget_months",
+    "finance_budget_upcoming",
     "finance_flows",
     "finance_category_trend",
     "finance_networth",
@@ -93,6 +94,8 @@ DESCRIPTIONS = {
     "set_fund_fee": "Propose les frais courants (TER, en % par an) d'un fonds détenu.",
     "set_plan_income": "Propose les revenus attendus par mois du plan du budget (sans montant : "
     "la moyenne des revenus des trois derniers mois).",
+    "move_budget": "Propose de déplacer un montant de la cible d'une catégorie vers une autre, "
+    "pour un mois seulement (couvrir un dépassement avec ce qui reste ailleurs).",
     "save_good": "Propose un bien hors comptes (logement, véhicule, objet, prêt accordé), sa "
     "mise à jour ou une nouvelle valeur à une date.",
     "save_strategy": "Propose d'écrire ou de modifier une stratégie (finance_strategies) : vendre "
@@ -132,6 +135,7 @@ ROUTE_TOOLS: dict[str, str | None] = {
     "/budget": "finance_budget_status",
     "/budget/totals": "finance_budget_months",
     "/budget/months": "finance_budget_months",
+    "/budget/upcoming": "finance_budget_upcoming",
     "/flows": "finance_flows",
     "/trend": "finance_category_trend",
     "/review": "finance_to_review",

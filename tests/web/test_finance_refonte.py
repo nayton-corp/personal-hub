@@ -1,4 +1,4 @@
-"""La refonte de Finance dans un vrai navigateur : le budget en pourcentage, la sélection
+"""La refonte de Finance dans un vrai navigateur : le reste de chaque cible du budget, la sélection
 multiple du journal, les biens hors comptes, les frais des fonds, la mise en route, et aucun
 écran qui dépasse sur un petit ou un grand téléphone."""
 
@@ -69,17 +69,17 @@ def test_no_screen_overflows_on_a_small_or_a_large_phone(page: Any, width: int) 
     assert page.problems == []
 
 
-def test_the_budget_reads_in_percent_of_each_budget(page: Any) -> None:
+def test_the_budget_reads_what_is_left_of_each_target(page: Any) -> None:
     open_tab(page, "budget")
     page.locator('#budCats [data-a="boff"]').click()  # sans cible, les catégories sont repliées
-    page.locator('#budCats .crow[data-a="cat"]').first.click()
+    page.locator('#budCats .crow-sub .crow[data-a="cat"]').first.click()
     page.fill("#t-input", "400")
     page.locator('#sheet [data-a="target-save"]').click()
     page.wait_for_selector("#budCats .crow .pbar.pc")
-    shares = page.locator("#budCats .crow-top small").all_inner_texts()
-    assert shares
-    assert all(s.strip().endswith("%") for s in shares)
-    # la barre est une part du budget de la ligne : jamais plus large que sa piste
+    rests = page.locator("#budCats .crow .brest small").all_inner_texts()
+    assert rests
+    assert {r.strip() for r in rests} <= {"reste", "dépassé", "dépensé"}
+    # la barre est une part de la cible de la ligne : jamais plus large que sa piste
     widths = page.evaluate(
         "[...document.querySelectorAll('#budCats .pbar.pc')]"
         ".map((b) => b.firstElementChild.offsetWidth <= b.offsetWidth + 1)"

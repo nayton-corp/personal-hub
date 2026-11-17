@@ -14,10 +14,12 @@ DESCRIPTION = (
     "abonnements ; propositions de catégorie, de règle, de budget et de note."
 )
 
-# tables en ajout seul : un trigger refuse UPDATE et DELETE (migrations 0001, 0005, 0022, 0032)
+# tables en ajout seul : un trigger refuse UPDATE et DELETE (migrations 0001, 0005, 0022,
+# 0032, 0033)
 PROTECTED = frozenset(
     {
         "applied_proposals",
+        "budget_moves",
         "budgets",
         "categorization_lines",
         "categorizations",

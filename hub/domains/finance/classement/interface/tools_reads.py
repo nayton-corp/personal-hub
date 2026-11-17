@@ -9,13 +9,14 @@ from pydantic import Field
 
 from hub.core import profile
 from hub.core.domain import McpTool, ToolCaller
-from hub.domains.finance.classement.app import budget, packs, rules
+from hub.domains.finance.classement.app import budget, packs, rules, upcoming
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.tools import (
     AGGREGATES,
     MONTH_PROP,
     NONE,
     Month,
+    MonthArgs,
     NoArgs,
     ToolBox,
     _Args,
@@ -55,6 +56,13 @@ class ClassementReads(ToolBox):
         month = self._month(a.month)
         with self.engine.connect() as conn:
             return self._wrap(conn, text_out(budget.budget_months(conn, month, a.months)))
+
+    def upcoming(self, a: MonthArgs, caller: ToolCaller) -> dict[str, object]:
+        month = self._month(a.month)
+        aggregates_only = self._aggregates_only(caller)
+        with self.engine.connect() as conn:
+            out = upcoming.upcoming(conn, month, self.host.today(), aggregates_only=aggregates_only)
+            return self._wrap(conn, text_out(out))
 
     def rule_packs(self, _a: NoArgs, caller: ToolCaller) -> dict[str, Any]:
         country = profile.load(self.host.settings).country
@@ -109,6 +117,15 @@ class ClassementReads(ToolBox):
                 AGGREGATES,
                 MonthsArgs,
                 self.budget_months,
+            ),
+            tool(
+                "finance_budget_upcoming",
+                "« À venir » du mois : charges fixes et abonnements, payés ou attendus, avec "
+                "leur date, ce qui reste à payer et les charges pas vues à leur date habituelle.",
+                _obj({"month": MONTH_PROP}),
+                AGGREGATES,
+                MonthArgs,
+                self.upcoming,
             ),
             tool(
                 "finance_rule_packs",

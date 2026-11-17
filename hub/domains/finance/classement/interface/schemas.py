@@ -122,6 +122,26 @@ class BudgetOut(Out):
     prev_daily: list[int]  # la même courbe pour le mois d'avant, entier
 
 
+class UpcomingItemOut(Out):
+    kind: str  # fixed | subscription
+    category: str | None
+    name: str  # la catégorie, ou le nom de l'abonnement
+    on: str  # payée le, ou attendue le
+    amount: MoneyOut
+    status: str  # paid | due | late (pas vue 3 jours après le jour habituel)
+    suggested_target: MoneyOut | None  # fixe sans cible : son habitude, arrondie
+
+
+class UpcomingOut(Out):
+    month: str
+    currency: str
+    count: int
+    paid_count: int
+    due_total: MoneyOut  # ce qui reste à payer ce mois
+    late_count: int
+    items: list[UpcomingItemOut]  # vide pour la portée aggregates
+
+
 class BudgetTotalsOut(Out):
     month: str
     period: str

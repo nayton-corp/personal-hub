@@ -4,6 +4,11 @@
 
 ### Ajouté
 
+- Nouvel écran Budget : « Reste à dépenser » et ce qu'il laisse par jour, courbe du dépensé
+  cumulé face au mois d'avant et à la projection, une seule carte d'action (à classer, reprendre
+  un dépassement, charge pas vue, plan au-delà des revenus), dépenses du quotidien par ce qui
+  reste, hors budget en net, « À venir » par date, provisions de l'année. Panneaux « le mois en
+  détail », « Revenus attendus » et « Reprendre ». Les trois mois gardent la liste des catégories.
 - Budget, plan du mois (calcul serveur, `plan` dans `/finance/budget`) : revenus attendus
   (saisis, ou moyenne des trois mois d'avant), épargne visée (cibles posées sur les catégories
   d'épargne), non attribué, reste du mois et montant par jour. Nouvelle proposition
@@ -18,6 +23,12 @@
   changer l'icône, le groupe ou le mode, fusionner deux catégories, archiver et restaurer.
   Propositions `edit_category`, `merge_categories`, `archive_category` ; `create_category`
   tire l'identifiant du nom.
+- « À venir » du mois (`/finance/budget/upcoming`, outil `finance_budget_upcoming`) : charges
+  fixes et abonnements, payés, attendus ou en retard ; alerte quand une charge fixe n'est pas
+  vue trois jours après son jour habituel, et quand un nouvel abonnement est repéré.
+- Déplacer du budget d'une catégorie à une autre pour un mois (« Reprendre sur… ») : proposition
+  `move_budget`, annulable ; le mois suivant repart des cibles saisies. Migration finance 0033
+  (table `budget_moves`, en ajout seul).
 - Migration finance 0032 : table `plan_income` (en ajout seul), colonnes `mode`, `icon` et
   `archived_at` sur les catégories.
 

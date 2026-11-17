@@ -1423,6 +1423,26 @@ export interface UnpricedOut {
   name: string;
 }
 
+export interface UpcomingItemOut {
+  kind: string;
+  category: string | null;
+  name: string;
+  on: string;
+  amount: MoneyOut;
+  status: string;
+  suggested_target: MoneyOut | null;
+}
+
+export interface UpcomingOut {
+  month: string;
+  currency: string;
+  count: number;
+  paid_count: number;
+  due_total: MoneyOut;
+  late_count: number;
+  items: UpcomingItemOut[];
+}
+
 export interface UploadItemOut {
   import_id: string | null;
   status: string;

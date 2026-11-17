@@ -68,7 +68,7 @@ export async function deeplink(h) {
   try {
     const a = (await api("/observations?domain=finance")).items.find((x) => x.key === id);
     if (!a) return false;
-    if (a.kind === "recurring_up") action("subs")();
+    if (a.kind === "recurring_up" || a.kind === "recurring_new") action("subs")();
     else if (a.kind === "pillar3a_margin") go("sources", { rubric: "tax" });
     else if (a.detail && a.detail.category) {
       store.set({ month: a.detail.month || store.today, period: "m" });

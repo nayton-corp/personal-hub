@@ -37,6 +37,7 @@ AGGREGATE_TOOLS = {
     "finance_month_summary",
     "finance_budget_status",
     "finance_budget_months",
+    "finance_budget_upcoming",
     "finance_flows",
     "finance_category_trend",
     "finance_networth",
@@ -71,7 +72,7 @@ def test_capabilities_by_token(client: TestClient, ctx: HubContext, fin: Finance
         if kind.ai_allowed and k not in HANDWRITTEN
     )
     assert brain[0]["tools"] == [*ORDER, *generated]
-    assert len(generated) == 23
+    assert len(generated) == 24
     assert brain[0]["aggregates_only"] is False
     agg = client.get("/api/tools", headers=token(ctx, "aggregates")).json()["domains"]
     assert set(agg[0]["tools"]) == AGGREGATE_TOOLS

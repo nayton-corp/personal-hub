@@ -112,8 +112,28 @@ def targets(conn: Connection, month: str) -> dict[str, Target]:
         {"m": f"{month}-01", "ccy": base_currency()},
     )
     found = {r[0]: target_of(r[1], r[2], r[3], r[4]) for r in rows}
+    for cat, delta in moves(conn, month).items():  # lot D : déplacé pour ce mois seulement
+        was = found.get(cat)
+        if was is None or was.cadence == "month":
+            found[cat] = Target((was.amount if was else 0) + delta, "month")
     modes = category_modes(conn)
     return {c: t for c, t in found.items() if t.amount > 0 and modes.get(c, "target") == "target"}
+
+
+def moves(conn: Connection, month: str) -> dict[str, int]:
+    """Ce que les déplacements du mois (`budget_moves`) ajoutent (ou retirent) à chaque cible."""
+    out: dict[str, int] = {}
+    rows = conn.execute(
+        text(
+            "SELECT from_category, to_category, amount_minor FROM budget_moves "
+            "WHERE month = :m AND currency = :ccy"
+        ),
+        {"m": month, "ccy": base_currency()},
+    )
+    for src, dst, amount in rows:
+        out[str(src)] = out.get(str(src), 0) - int(amount)
+        out[str(dst)] = out.get(str(dst), 0) + int(amount)
+    return out
 
 
 def category_groups(conn: Connection) -> dict[str, str]:
