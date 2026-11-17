@@ -4,7 +4,7 @@
 // barre : elle est payée, à telle date, ou attendue vers tel jour.
 import { GROUP_LABEL, catMark } from "./meta.js";
 import { MOIS, base, monthName, units } from "../../format.js";
-import { amount, esc, ic, money, n0, pf, pref } from "../../ui.js";
+import { amount, esc, escNums, ic, m0, money, n0, pf, pref } from "../../ui.js";
 import { catState, fixedState, rank, yearState } from "./bmodel.js";
 
 export const UNCAT = "a-categoriser";
@@ -35,11 +35,11 @@ function bar(ratio, pace) {
 function yearRow(c, x) {
   const y = c.yearly, done = u(y.spent), goal = y.target ? u(y.target) : null;
   const s = yearState(c);
-  const month = c.s ? ` · ${n0(c.s)} ce mois` : "";
+  const month = c.s ? ` · ${m0(c.s)} ce mois` : "";
   return `<button class="crow" type="button" data-a="cat" data-v="${esc(c.category)}" aria-label="${esc(c.name)}, ${n0(done)}${goal != null ? ` sur ${n0(goal)}` : ""} ${base()} depuis janvier, ${s.txt}">
     ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)} <span class="pill">par an</span></b><span class="t num">${money(done)}${goal != null ? ` / ${money(goal)}` : ""}</span></span>
     ${goal != null ? bar(yearDone(c), null) : ""}
-    <span class="crow-st ${s.k}">${s.txt}${month}</span></span></button>`;
+    <span class="crow-st ${s.k}">${escNums(s.txt)}${month}</span></span></button>`;
 }
 
 // une ligne de catégorie : sa barre (variable) ou sa date (fixe), et l'état en mots
@@ -52,7 +52,7 @@ function catRow(c, x) {
     ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}${tag}</b><span class="t num">${money(c.s)}${c.t != null ? ` / ${money(c.t)}` : ""}${!fixed && c.t ?
       `<small>${Math.round((c.s / c.t) * 100)} %</small>` : ""}</span></span>
     ${fixed || c.t == null ? "" : bar(c.t ? c.s / c.t : 0, x.pace)}
-    <span class="crow-st ${s.k}">${s.done ? ic("check") : ""}${s.txt}</span></span></button>`;
+    <span class="crow-st ${s.k}">${s.done ? ic("check") : ""}${escNums(s.txt)}</span></span></button>`;
 }
 
 // B : { bgroup, offOpen } (le filtre venu du diagramme de flux, « Hors cible » déplié) ; flows : /finance/flows
@@ -80,7 +80,7 @@ export function categories(m, B, flows) {
       <span class="crow-st ok">${off.map((c) => esc(c.name)).join(", ")} · compté dans le reste à vivre</span></span></button>${B.offOpen ? `<div class="crow-sub">${off.map((c) => catRow(c, x)).join("")}</div>` : ""}` : "";
   const varPart = vars.length ? `<div class="grp"><span>Variables</span><span class="num">${money(vs)}${vt ? ` / ${money(vt)}` : ""}</span></div>${kept.map((c) => catRow(c, x)).join("")}${offRow}` : "";
   const fixedPart = fixed.length ? `<button class="grp grp-btn" type="button" data-a="bfixed" aria-expanded="${openFixed}" aria-controls="fixed-body"><span>Fixes · <span class="num">${money(fs)}${ft ? ` / ${money(ft)}` : ""}</span></span>
-      <span class="grp-st">${due ? `${paid === due ? ic("check") : ""}${paid} sur ${due} payée${due > 1 ? "s" : ""}${left >= 1 ? ` · ${n0(left)} à venir` : ""}` : ""}${ic("down", openFixed ? "up" : "")}</span></button>
+      <span class="grp-st">${due ? `${paid === due ? ic("check") : ""}${paid} sur ${due} payée${due > 1 ? "s" : ""}${left >= 1 ? ` · ${m0(left)} à venir` : ""}` : ""}${ic("down", openFixed ? "up" : "")}</span></button>
       <div id="fixed-body">${openFixed ? fixed.map((c) => catRow(c, x)).join("") : ""}</div>` : "";
   return `<section class="card bflat" id="budCats" aria-labelledby="t-cats">
       <div class="section-head"><h2 class="section-title" id="t-cats">Catégories${nOver ? ` <span class="pill bad">${nOver} dépassée${nOver > 1 ? "s" : ""}</span>` : ""}</h2>${head}</div>
@@ -125,6 +125,6 @@ export function trend(d, P) {
         return `<button class="mcol" type="button" data-a="month" data-v="${x.m}" aria-pressed="${P.period === "m" && P.month === x.m}" aria-label="${monthName(x.m)} : fixes ${n0(x.F)}, variables ${n0(x.V)}, épargne ${n0(x.S)}${x.goal != null ? `, budget ${n0(x.goal)}${x.over >= 1 ? `, dépassé de ${n0(x.over)}` : ""}` : ""}">
           <span class="stack">${x.line != null ? `<span class="goal-line" data-css="bottom:${((x.line / mx) * 100).toFixed(1)}%"></span>` : ""}<span class="bars" data-css="--h:${((t / mx) * 100).toFixed(1)}%"><i data-css="--f:${x.F};--c:var(--s1)"></i><i data-css="--f:${x.V - x.over};--c:var(--s3)"></i>${x.over >= 1 ? `<i data-css="--f:${x.over};--c:var(--neg)"></i>` : ""}<i data-css="--f:${x.S};--c:var(--s2)"></i></span></span><span>${shortMonth(x.m)}</span></button>`;
       }).join("")}</div>
-      <div class="legend"><span><i data-css="--c:var(--s1)"></i>Fixes</span><span><i data-css="--c:var(--s3)"></i>Variables</span><span><i data-css="--c:var(--s2)"></i>Épargne</span>${goals.length ? `<span><i data-css="--c:var(--neg)"></i>Au-dessus du budget</span><span><i class="dashk"></i>Budget${goals.length === 1 ? ` ${n0(goals[0])}` : " du mois"}</span>` : ""}</div>
+      <div class="legend"><span><i data-css="--c:var(--s1)"></i>Fixes</span><span><i data-css="--c:var(--s3)"></i>Variables</span><span><i data-css="--c:var(--s2)"></i>Épargne</span>${goals.length ? `<span><i data-css="--c:var(--neg)"></i>Au-dessus du budget</span><span><i class="dashk"></i>Budget${goals.length === 1 ? ` ${m0(goals[0])}` : " du mois"}</span>` : ""}</div>
     </section>`;
 }

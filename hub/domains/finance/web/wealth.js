@@ -4,7 +4,7 @@
 // la barre de contexte dit toujours ce que l'écran montre. État et lignes : wstate.js ; courbe :
 // wmodel.js et wchart.js ; haut de l'écran : whero.js ; panneaux : wsheets.js.
 import { BY, FILTERS, FOLD, PRESETS, S, TABS, accLabel, activeCount, fName, here, lines, match, paths, range, remember, scopeLines, sum, trail } from "./wstate.js";
-import { SH, SHEETS, announce, closeSheet, esc, fill, n0, openSheet, skel, toast } from "../../ui.js";
+import { SH, SHEETS, announce, closeSheet, errBox, esc, fill, n0, openSheet, sheetEntryOpen, skel, toast } from "../../ui.js";
 import { accountPage, assetPage } from "./wpages.js";
 import { allocBrief, allocDetail } from "./walloc.js";
 import { chartSVG, flagHTML, gutter, legendHTML, nearest, rulerHTML } from "./wchart.js";
@@ -42,6 +42,14 @@ export function init() {
   new ResizeObserver(() => $("patrimoine").style.setProperty("--topbar-h", `${$("pat-top").offsetHeight}px`)).observe($("pat-top"));
   // téléphone tourné en paysage sur le patrimoine : la courbe passe en plein écran ; revenu en
   // portrait, elle en ressort, sauf si le plein écran avait été ouvert à la main
+  // retour du navigateur pendant le plein écran, ou écran quitté par la barre du bas : la courbe
+  // ne reste jamais par-dessus un autre écran
+  addEventListener("popstate", () => {
+    if (S.full && !(history.state && history.state.land)) { S.full = false; drawLand(null); store.notify(); }
+  });
+  store.on(() => {
+    if (S.full && store.params.tab !== "patrimoine") { S.full = false; drawLand(null); }
+  });
   const turned = matchMedia("(orientation: landscape) and (max-height: 540px)");
   let auto = false;
   turned.addEventListener("change", (e) => {
@@ -92,8 +100,8 @@ function pointer(e, phase) {
   if (e.pointerType !== "mouse" && S.scrub != null && wrap) release = setTimeout(() => { S.scrub = null; updateChart(); }, 1600);
 }
 function keys(e) {
+  if (e.key === "Escape" && S.full) return actions["w-full"]("0");
   if (store.params.tab !== "patrimoine") return;
-  if (e.key === "Escape" && S.full) { S.full = false; return render(); }
   const svg = e.target.closest && e.target.closest("[data-chart] svg");
   if (!svg || !["ArrowLeft", "ArrowRight", "Home", "End", "Escape"].includes(e.key) || M.pts.length < 2) return;
   e.preventDefault();
@@ -129,7 +137,7 @@ export function render() {
   }
   drawTop(all || []);
   if (err || !all) {
-    fill($("hero"), err ? `<div class="err-box" role="alert">Impossible de charger le patrimoine : ${esc(err.error.message)}</div>` : skel());
+    fill($("hero"), err ? errBox(`Impossible de charger le patrimoine : ${err.error.message}`) : skel());
     for (const id of ["cw", "legend", "wrul", "wper", "wsecs"]) fill($(id), "");
     return;
   }
@@ -296,8 +304,19 @@ export const actions = {
   "w-ruler": () => { closeSheet(); Object.assign(S, { rulerOn: !(S.rulerOn || S.ruler), ruler: null, scrub: null }); render(); },
   "w-ruler-clear": () => { Object.assign(S, { rulerOn: false, ruler: null }); render(); },
   "w-full": (v) => {
-    closeSheet();
-    Object.assign(S, { full: v === "1", scrub: null });
+    const open = v === "1";
+    // le plein écran a son entrée d'historique : le geste retour le ferme au lieu de changer
+    // d'écran par-dessous ; le fermer à la main retire cette entrée. Ouvert depuis un panneau,
+    // il prend l'entrée du panneau.
+    const inSheet = sheetEntryOpen();
+    closeSheet(false, false, open && inSheet);
+    if (open && !S.full) {
+      const st = { ...(history.state || {}), land: true };
+      delete st.sheet;
+      if (inSheet) history.replaceState(st, "");
+      else history.pushState(st, "");
+    } else if (!open && history.state && history.state.land) history.back();
+    Object.assign(S, { full: open, scrub: null });
     render();
     if (S.full) { const l = $("lcw"); if (l) l.querySelector("svg").focus({ preventScroll: true }); }
     else $("cw").querySelector("svg")?.focus({ preventScroll: true });

@@ -43,9 +43,16 @@ class EntryOut(Out):
     category: CategoryRefOut | None
 
 
+class EntryTotalsOut(Out):
+    count: int
+    in_minor: int  # entrées, virements internes exclus
+    out_minor: int  # sorties en valeur positive, virements internes exclus
+
+
 class EntryListOut(Out):
     items: list[EntryOut]
     next_cursor: str | None
+    totals: EntryTotalsOut | None = None  # toute la sélection, avec la première page seulement
 
 
 class CategorizationOut(Out):

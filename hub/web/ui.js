@@ -71,6 +71,35 @@ export const ICON = {
 export const ic = (n, cls = "") =>
   `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICON[n] || ICON.help}"/></svg>`;
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+// un texte venu du serveur (constat, résumé d'une proposition) dont les montants suivis ou
+// précédés d'un code de devise (« 430 CHF », « CHF 1'200.50 ») se masquent avec l'œil
+const AMT = /\d[\d'’\u202f\u00a0]*(?:[.,]\d+)?(?=\s?[A-Z]{3}\b)|(?<=\b[A-Z]{3}\s?)\d[\d'’\u202f\u00a0]*(?:[.,]\d+)?/g;
+/** @param {unknown} s */
+export const escMoney = (s) => {
+  const t = String(s ?? "");
+  let out = "", at = 0;
+  for (const m of t.matchAll(AMT)) {
+    out += `${esc(t.slice(at, m.index))}<span class="money">${esc(m[0])}</span>`;
+    at = (m.index ?? 0) + m[0].length;
+  }
+  return out + esc(t.slice(at));
+};
+// une ligne d'état faite de montants (« Reste 272 », « 120 sur 300 ») : chaque nombre se masque
+// (une date, « 25 nov. », reste lisible)
+const NUM = /\d[\d'’\u202f\u00a0]*(?:[.,]\d+)?(?!\d|\s?(?:janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc))/g;
+/** @param {unknown} s */
+export const escNums = (s) => {
+  const t = String(s ?? "");
+  let out = "", at = 0;
+  for (const m of t.matchAll(NUM)) {
+    out += `${esc(t.slice(at, m.index))}<span class="money">${esc(m[0])}</span>`;
+    at = (m.index ?? 0) + m[0].length;
+  }
+  return out + esc(t.slice(at));
+};
+// un échec de lecture, avec de quoi relire (action « retry » de la coquille)
+/** @param {string} text */
+export const errBox = (text) => `<div class="err-box" role="alert">${esc(text)} <button class="link" type="button" data-a="retry">Réessayer</button></div>`;
 // pastille teintée : pictogramme ou monogramme (déjà échappé)
 export const ibox = (inner, color, size = "") =>
   `<span class="ibox tint ${size}" data-css="--c:${color}" aria-hidden="true">${inner}</span>`;
@@ -101,6 +130,9 @@ export const n2 = (v) => {
 };
 const minus = (v, s) => (v < 0 && Number(s.replace(/'/g, "")) !== 0 ? "−" : "") + s;
 export const nf = (v) => minus(v, n0(v));
+// un montant dans une phrase : masqué avec les autres quand l'œil est fermé
+/** @param {number} v */
+export const m0 = (v) => `<span class="money">${n0(v)}</span>`;
 export const nf2 = (v) => minus(v, n2(v));
 export const pf = (x, d = 1) => (x * 100).toFixed(d).replace(".", ",");
 export const sgn = (v) => (v >= 0 ? "+" : "−");
@@ -192,7 +224,7 @@ export function sheetEntryOpen() {
 
 export function openSheet(kind, arg, tmp = null) {
   const wasOpen = Boolean(SH.kind);
-  Object.assign(SH, { kind, arg, tmp, err: "", cad: null });
+  Object.assign(SH, { kind, arg, tmp, err: "", cad: null, bad: "", touched: false, conv: null });
   if (!wasOpen) {
     SH.opener = document.activeElement;
     if (popsToSkip > 0) repush = true;

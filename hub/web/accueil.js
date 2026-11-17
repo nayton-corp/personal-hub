@@ -7,7 +7,7 @@
 // rows() : ses lignes { ic, c, mark, t, s, a, v, info }, ou null tant que ses données manquent.
 import { card, pendingCount, pendingPath } from "./approvals.js";
 import { store } from "./store.js";
-import { esc, fill, ibox, ic } from "./ui.js";
+import { esc, escMoney, fill, ibox, ic } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 const HOMES = []; // [domaine, module], dans l'ordre des domaines
@@ -54,7 +54,7 @@ const sub = (x) => (x.d ? `${capital(x.d)} · ${x.s}` : x.s);
 // une ligne « À faire » ou « À savoir » ; les écrans d'un domaine la reprennent (sans `d`)
 export const row = (x) => `<button class="trow press" type="button" data-a="${x.a}" ${x.v ? `data-v="${esc(x.v)}"` : ""}>
     ${x.mark || ibox(ic(x.ic), x.c)}
-    <span class="row-main"><span class="row-title">${esc(x.t)}</span><span class="row-sub">${esc(sub(x))}</span></span>
+    <span class="row-main"><span class="row-title">${escMoney(x.t)}</span><span class="row-sub">${escMoney(sub(x))}</span></span>
     <span class="chev-r">${ic("chev")}</span></button>`;
 
 function lists() {

@@ -65,10 +65,12 @@ SHEETS.wfees = () => {
       '<span class="pill warn">Inconnus</span>' : `<span class="row-val num">${amount(units(i.yearly_cost))}</span><span class="row-delta">${esc(i.ter_pct)} % par an</span>`}</span>
     <span class="go">${ic("chev")}</span></button>`).join("");
   const unknown = units(f.unknown_value);
+  const none = f.items.length > 0 && f.items.every((i) => i.ter_pct == null);
   return {
     title: "Frais des fonds", tall: true,
-    body: `<div class="sheet-big num">${amount(units(f.yearly_cost))} <small>par an</small></div>
-      <dl class="dl"><dt>Sur ${f.years} ans, si rien ne change</dt><dd>${amount(units(f.cost_over_years))}</dd></dl>
+    // aucun TER connu : pas de « 0 CHF », qui se lirait comme des fonds sans frais
+    body: `${none ? '<div class="sheet-big">Inconnus</div>' : `<div class="sheet-big num">${amount(units(f.yearly_cost))} <small>par an</small></div>
+      <dl class="dl"><dt>Sur ${f.years} ans, si rien ne change</dt><dd>${amount(units(f.cost_over_years))}</dd></dl>`}
       <p class="hint">Les frais courants (TER) sont prélevés dans le cours du fonds : tu ne les vois sur aucun relevé.
         Sur ${f.years} ans : l'écart de valeur finale pour tes parts d'aujourd'hui, à ${esc(f.assumed_return_pct)} % par an avant frais. Un ordre de grandeur, pas une prévision.</p>
       ${unknown >= 1 ? `<p class="hint">${amount(unknown)} dans des fonds aux frais inconnus, hors de ces totaux. Le hub cherche leur TER chaque nuit par ISIN ; s'il reste introuvable, touche la ligne pour le saisir (fiche du fonds, KID).</p>` : ""}

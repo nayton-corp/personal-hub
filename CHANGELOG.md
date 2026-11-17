@@ -2,6 +2,45 @@
 
 ## [Non publié]
 
+## [0.27.2] · 2026-11-17
+
+### Corrigé
+
+Corrections d'un passage de test manuel de toute l'app (interactions, affichage, petits écrans,
+coupures).
+
+- Saisie des montants : un seul lecteur pour les cibles du budget, « Préparer le budget » et le
+  montant visé d'un compte. « 12.50 », « 1'250.50 » et « 1 250,50 » sont lus tels quels (ils
+  devenaient 1'250 ou 125'050) ; un signe, une notation « 1e6 » ou trop de décimales sont
+  refusés avec un message au lieu d'être réinterprétés. Passer d'une cible par an à une cible
+  par mois et revenir rend le montant tapé.
+- Journal : « Plus d'écritures » ne lit plus deux fois la même page quand on touche plusieurs
+  fois ou pendant le chargement au défilement. Les totaux Entrées et Sorties portent sur toute
+  la sélection (calculés par le serveur, champ `totals` de la première page) et non plus sur les
+  lignes chargées.
+- « Voir les écritures » depuis le Budget ouvre le Journal sur les bornes du mois données par le
+  serveur (jour de début en vigueur ce mois-là) ; le retour revient au Budget et rend les filtres
+  d'avant.
+- Œil fermé : les montants écrits dans les phrases (À savoir, À valider, lignes d'état et
+  projection du Budget, légendes des courbes) sont masqués eux aussi.
+- Corriger une écriture : la liste des comptes n'est plus vide, et changer de champ ne fait plus
+  perdre le focus ni la saisie.
+- Frais des fonds : « Inconnus » au lieu de 0 CHF quand aucun TER n'est connu.
+- Écrans restés en erreur : bouton Réessayer (Accueil, Aperçu, Patrimoine, Budget, flux,
+  performance, stratégies) ; les lectures en échec se relancent au retour du réseau, le cache est
+  vidé quand la session expire (plus d'« Authentification requise » après reconnexion), et une
+  coupure dit « le hub ne répond pas » en français.
+- Un enregistrement de cible qui échoue après la fermeture de son panneau le dit dans un message.
+- Valider des propositions : deux touchers rapprochés n'envoient plus deux validations.
+- Historique : le retour ferme la courbe en plein écran ; un lien de notification suivi app
+  ouverte et le choix de l'espace où l'on est déjà n'ajoutent plus d'entrée fantôme ; un double
+  toucher sur un espace ne tombe plus sur le bouton redessiné de sa barre.
+- Profil : un code pays qui n'existe pas (ISO 3166) est refusé.
+- Affichage : champs à 16 px (pas de zoom iOS à la saisie), cibles tactiles de 44 px dans les
+  en-têtes, les périodes et les cases à cocher, montant jamais coupé de sa devise, initiales des
+  pastilles plus contrastées, barre du bas lisible avec le texte agrandi, « au-dessus du
+  budget », « 1 compte » / « 2 comptes ».
+
 ## [0.27.1] · 2026-11-16
 
 ### Corrigé

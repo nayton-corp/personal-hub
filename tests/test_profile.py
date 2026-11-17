@@ -90,6 +90,9 @@ def test_api_read_by_app_and_tokens_write_by_app_only(
     assert client.post("/api/profile", json={"country": "CH"}).json()["display_name"] == "Camille"
     assert client.post("/api/profile", json={"display_name": ""}).json()["display_name"] is None
     assert client.post("/api/profile", json={"country": "CHE"}).status_code == 422
+    # un code à deux lettres qui n'est pas un pays fermerait sans bruit les modules du pays
+    assert client.post("/api/profile", json={"country": "ZZ"}).status_code == 422
+    assert client.post("/api/profile", json={"country": "CH"}).json()["country"] == "CH"
     assert client.post("/api/profile", json={"plan": "x"}).status_code == 422
 
 

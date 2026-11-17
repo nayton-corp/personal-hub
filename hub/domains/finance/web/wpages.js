@@ -21,6 +21,8 @@ const tone = (v) => (v == null || Math.abs(v) < 1e-9 ? "zero" : v > 0 ? "pos" : 
 const section = (title, note, body, extra = "") => `<section class="section"><div class="section-head"><h2 class="section-title">${title}</h2>${extra || (note ? `<span class="sec-note">${note}</span>` : "")}</div>${body}</section>`;
 const link = (a, v, icon, text) => `<button class="linkrow" type="button" data-a="${a}" data-v="${esc(v)}">${ic(icon)}<span>${text}</span><span class="go">${ic("chev")}</span></button>`;
 
+const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
+
 // pont : départ, apports, revenus, plus-values et change, frais, arrivée
 function bridge(c) {
   const steps = [["Début", units(c.start), true], ["Apports", units(c.net_flows)], ["Revenus", units(c.income)], ["Plus-val.", units(c.price_effect)], ["Frais", units(c.fees)], ["Fin", units(c.end), true]];
@@ -144,7 +146,7 @@ export function assetPage(m, all, r) {
       ${cost == null ? `<p class="pnote">Prix de revient inconnu pour une partie des parts${pool ? ` (<span class="money">${n0(blind)}</span> ${base()} sans historique d'achat, hors du gain latent)` : ""}.</p>` : ""}`);
   }
   const held = all.filter((l) => l.asset === r.id), tot = sum(held);
-  h += section("Détenu dans", `${new Set(held.map((l) => l.acc)).size} compte(s) · ${amount(tot)}`, `<div class="list">${held.slice().sort((a, b) => b.value - a.value).map((l) => `<button class="row go-row" type="button" data-a="w-open" data-v="${esc(`a:${l.acc}`)}">${instMark(l.inst, "sm", [l.accName])}
+  h += section("Détenu dans", `${plural(new Set(held.map((l) => l.acc)).size, "compte")} · ${amount(tot)}`, `<div class="list">${held.slice().sort((a, b) => b.value - a.value).map((l) => `<button class="row go-row" type="button" data-a="w-open" data-v="${esc(`a:${l.acc}`)}">${instMark(l.inst, "sm", [l.accName])}
       <span class="row-main"><span class="row-title">${esc(accLabel(l))}${l.acc === r.from ? ' <span class="sec-note">· ici</span>' : ""}</span><span class="row-sub"><span class="money">${qty(l.qty)}</span> ${esc(unitOf(l))} · ${esc(facetName("liq", l.liq))}</span>
         <span class="minibar"><i data-css="width:${Math.max(0, Math.min(100, (l.value / (tot || 1)) * 100)).toFixed(1)}%"></i></span></span>
       <span class="row-num"><span class="row-val num">${amount(l.value)}</span><span class="row-delta sec-note">${share(l.value / (tot || 1))} de l'actif</span></span><span class="go">${ic("chev")}</span></button>`).join("")}</div>`);

@@ -379,3 +379,21 @@ button:not(:disabled):active, a.secondary:active, [role="button"]:active { trans
 .sheet.tall .sheet-body { flex: 1; }
 /* État du hub › Entretien : horaire et dernier passage, sur deux lignes au besoin */
 #upkeep .row .n span { white-space: normal; }
+/* --- test QA du 16/11 ------------------------------------------------------------------------ */
+/* 16 px au moins dans un champ : iOS ne zoome plus la page à la saisie */
+input, select, textarea { font-size: max(16px, 1em); }
+.plan-row input, .select-day { font-size: 16px; }
+/* un montant ne se coupe jamais entre ses chiffres et sa devise */
+.money { white-space: nowrap; }
+.hide-amounts svg text.money { visibility: hidden; }
+/* initiales d'une pastille teintée : lisibles sur leur fond clair (contraste 4,5) */
+.tint > span { color: color-mix(in srgb, var(--c, var(--accent)) 60%, var(--ink)); }
+/* texte agrandi (zoom 150 %, écran étroit) : les libellés de la barre du bas restent entiers */
+.tabbar button { min-width: 0; max-width: 100%; }
+@media (max-width: 300px) {
+  .tabbar button { font-size: .56rem; letter-spacing: -.01em; }
+  .tabbar button svg { width: 20px; height: 20px; }
+}
+#sheet-body { overflow-wrap: anywhere; }
+#sheet-body img, #sheet-body svg { max-width: 100%; }
+label.check { min-height: 44px; }

@@ -4,7 +4,7 @@
 // et la marge 3a sont sur l'Accueil, le taux d'épargne dans le Budget, la composition par
 // devise dans la Répartition.
 import { MOIS, base, date, units as toUnits } from "../../format.js";
-import { esc, ic, money, n0, pf, sgn, skel } from "../../ui.js";
+import { errBox, esc, ic, money, n0, pf, sgn, skel } from "../../ui.js";
 
 export const units = (m) => (m ? toUnits(m) : 0);
 export const rate = (s) => (s == null ? null : Number(s));
@@ -64,7 +64,7 @@ export function perfSummary(perf, label) {
 
 export function perfSection(ctx) {
   const { src, perf } = ctx;
-  if (src && src.status === "error") return `<div class="err-box" role="alert">Performance indisponible : ${esc(src.error.message)}</div>`;
+  if (src && src.status === "error") return errBox(`Performance indisponible : ${src.error.message}`);
   if (!ctx.sel.length) return '<div class="empty">Aucun élément ne correspond à ces filtres.</div>';
   if (!perf) return skel("block");
   if (!perf.summary || ctx.pts.length < 2) return '<div class="empty">Pas encore assez d\'historique pour mesurer la performance.</div>';

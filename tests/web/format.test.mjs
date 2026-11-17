@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { chf, chf2, date, decimals, initials, locale, monthName, pct, setBase, setLocale, signed, spct, toMinor, units } from "../../hub/web/format.js";
+import { chf, chf2, date, decimals, initials, locale, monthName, parseAmount, pct, setBase, setLocale, signed, spct, toMinor, units } from "../../hub/web/format.js";
 
 test("le séparateur des milliers vient de la locale du profil", () => {
   assert.equal(locale(), "fr");
@@ -49,4 +49,15 @@ test("montants par l'exposant de la devise de base, jamais par 100 en dur", () =
   assert.equal(setBase("CHF", 2), true);
   assert.equal(setBase("CHF", 2), false);
   assert.equal(chf2(-1234.5), "−1'234.50");
+});
+
+test("une saisie de montant tapée ou collée garde ses décimales et refuse le reste", () => {
+  setBase("CHF", 2);
+  assert.deepEqual(parseAmount("12.50"), { value: 12.5 });
+  assert.deepEqual(parseAmount("1'250.50"), { value: 1250.5 });
+  assert.deepEqual(parseAmount("1 250,50"), { value: 1250.5 });
+  assert.deepEqual(parseAmount("1\u202f250"), { value: 1250 });
+  assert.deepEqual(parseAmount("12."), { value: 12 });
+  assert.deepEqual(parseAmount(""), { value: 0 });
+  for (const bad of ["-300", "1e6", "12.345", "abc", "1.2.3"]) assert.ok(parseAmount(bad).error, bad);
 });
