@@ -2,6 +2,12 @@
 
 ## [Non publié]
 
+### Ajouté
+
+- Budget : l'épargne visée se règle dans l'app. « Préparer le budget » liste aussi les catégories
+  d'épargne (moyenne versée, rien de proposé d'office) ; « le mois en détail » ouvre chaque
+  catégorie d'épargne et sa cible mensuelle.
+
 ## [0.28.2] · 2026-11-17
 
 ### Corrigé
