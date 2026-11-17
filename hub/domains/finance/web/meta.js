@@ -72,6 +72,14 @@ function look(id, groupName) {
   return { icon, color: c === -1 ? "var(--faint)" : c === -2 ? "var(--accent)" : cv(c) };
 }
 export const catLook = look;
+// le pictogramme et la teinte d'une catégorie, tels qu'affichés (« home:2 ») : le choix de
+// l'écran Catégories part de ce que l'on voit, même quand l'icône vient du pack
+export function catIcon(id, groupName) {
+  const known = chosen(id) || CAT_LOOK[id] || countryLook().categories[id];
+  let [icon, c] = known || GROUP_LOOK[groupName] || ["dots", 5];
+  if (!known && id) icon = wordIcon(id) || icon;
+  return `${icon}:${c < 0 ? 0 : c}`;
+}
 export function catMark(id, groupName, size = "sm") {
   if (!id) return ibox(ic("help"), "var(--accent)", size);
   const l = look(id, groupName);

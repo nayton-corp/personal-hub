@@ -336,6 +336,10 @@
 /* halo d'un compte : la teinte de son groupe (catégorie, disponibilité, objectif) */
 .ibox.ring { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ring); }
 .catgrid button .ibox { width: 28px; height: 28px; font-size: .55rem; }
+/* icônes et teintes : une grille serrée de cases carrées, la choisie cerclée (lot Q) */
+.catgrid.icons { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; }
+.catgrid.icons button { justify-content: center; padding: 0; min-height: 44px; aspect-ratio: 1; border-color: transparent; background: var(--surface-2); }
+.catgrid.icons button[aria-checked="true"] { border: 2px solid var(--accent); background: var(--accent-soft); }
 /* journal : le jour reste sous la barre du haut pendant le défilement */
 .day { position: sticky; top: var(--topbar-h, 150px); z-index: 2; background: var(--surface-2); }
 
