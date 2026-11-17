@@ -3,7 +3,7 @@
 // une autre ou l'archiver. L'identifiant vient du hub, l'historique reste juste ; tout passe par
 // une proposition validée avec Face ID.
 import { SH, SHEETS, closeSheet, cv, esc, failure, ibox, ic, openSheet, renderSheet, toast } from "../../ui.js";
-import { CAT_ICONS, GROUP_LABEL, catMark } from "./meta.js";
+import { CAT_ICONS, GROUP_LABEL, catIcon, catMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { store } from "../../store.js";
 
@@ -49,7 +49,8 @@ SHEETS.cats = (_arg, sh) => {
 /** @param {any} c */
 function initial(c) {
   if (!c) return { name: "", icon: null, group: "variable", mode: "target", into: "" };
-  return { name: c.name, icon: c.icon, group: c.group, mode: c.mode || "target", into: "" };
+  const shown = c.icon || catIcon(c.id, c.group); // l'icône du pack se voit sélectionnée
+  return { name: c.name, icon: shown, shown, group: c.group, mode: c.mode || "target", into: "" };
 }
 
 /** ce que la proposition doit changer ; une erreur dite en clair sinon @param {any} c @param {any} t */
@@ -60,7 +61,7 @@ function params(c, t) {
   /** @type {Record<string, unknown>} */
   const out = { category_id: c.id };
   if (name !== c.name) out.name = name;
-  if (t.icon && t.icon !== c.icon) out.icon = t.icon;
+  if (t.icon && t.icon !== t.shown) out.icon = t.icon;
   if (t.group !== c.group) out.grp = t.group;
   if (expense(t.group) && t.mode !== c.mode) out.mode = t.mode;
   if (Object.keys(out).length === 1) throw new Error("Rien n'a changé");
