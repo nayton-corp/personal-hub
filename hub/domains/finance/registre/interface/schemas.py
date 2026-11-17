@@ -102,6 +102,10 @@ class CategoryOut(Out):
     name: str
     group: str
     active: bool
+    mode: str = "target"  # target | tracked | off_budget (le choisi, sinon celui du pack)
+    mode_set: bool = False  # choisi par la personne (sinon le défaut du pack)
+    icon: str | None = None  # icône choisie ; None : celle du pack
+    archived_at: str | None = None
 
 
 class CategoryListOut(Out):

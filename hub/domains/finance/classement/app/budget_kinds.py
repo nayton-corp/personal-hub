@@ -87,8 +87,9 @@ class SetBudgetHandler:
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, SetBudget)  # noqa: S101
         name, grp = category_row(conn, params.category_id)
-        if grp not in ("fixed", "variable"):
-            raise bad("un budget porte sur une catégorie de dépenses")
+        # une cible d'épargne fait l'épargne visée du plan du mois (refonte du budget, lot A)
+        if grp not in ("fixed", "variable", "savings"):
+            raise bad("un budget porte sur une catégorie de dépenses ou d'épargne")
         seq, before = _current(conn, params.category_id)
         target = self._target(conn, params)
         then = f" (avant {_said(before, params.currency)})" if before is not None else ""

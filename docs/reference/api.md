@@ -93,6 +93,7 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `GET` | `/api/finance/budget` | Réel et cible par catégorie de dépense, dépassements, reste à vivre, jours restants. `period=q` : les trois mois complets avant `month`. |
 | `GET` | `/api/finance/budget/months` | Les totaux du budget mois par mois, jusqu'à `month` compris. |
 | `GET` | `/api/finance/budget/totals` | Revenus, dépenses (fixes, variables), épargne, placements et taux d'épargne. |
+| `GET` | `/api/finance/budget/upcoming` | « À venir » du mois : charges fixes et abonnements, payés ou attendus (lot C). |
 | `GET` | `/api/finance/categories` | Categories |
 | `GET` | `/api/finance/debts` | Dettes et leur solde aujourd'hui : départ, paiements et intérêts depuis, fin projetée. |
 | `GET` | `/api/finance/entries` | Écritures filtrées ; montants en centimes, comparés en valeur absolue. |

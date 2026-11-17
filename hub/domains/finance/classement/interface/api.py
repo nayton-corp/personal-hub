@@ -9,7 +9,14 @@ from fastapi import APIRouter, BackgroundTasks, Query
 
 from hub.core import profile
 from hub.domains.finance.classement.app import budget as budget_app
-from hub.domains.finance.classement.app import insights, packs, recurring, rules, totals
+from hub.domains.finance.classement.app import (
+    insights,
+    packs,
+    recurring,
+    rules,
+    totals,
+    upcoming,
+)
 from hub.domains.finance.classement.app import review as reviewing
 from hub.domains.finance.classement.interface.schemas import (
     BudgetMonthsOut,
@@ -22,6 +29,7 @@ from hub.domains.finance.classement.interface.schemas import (
     SummaryOut,
     TodoOut,
     TrendOut,
+    UpcomingOut,
 )
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.http import (
@@ -87,6 +95,15 @@ def build_router(host: Host) -> APIRouter:
         m = checked_month(host, month)
         with engine.connect() as conn:
             return budget_app.budget_months(conn, m, months)
+
+    @r.get("/budget/upcoming", response_model=UpcomingOut)
+    def budget_upcoming(
+        p: AnyReader, month: Annotated[str | None, Query(pattern=MONTH)] = None
+    ) -> dict[str, object]:
+        """« À venir » du mois : charges fixes et abonnements, payés ou attendus (lot C)."""
+        m = checked_month(host, month)
+        with engine.connect() as conn:
+            return upcoming.upcoming(conn, m, host.today(), aggregates_only=aggregates_only(p))
 
     @r.get("/flows", response_model=FlowsOut)
     def flows(

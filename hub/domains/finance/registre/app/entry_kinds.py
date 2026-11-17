@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+import re
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import Connection, text
@@ -66,27 +67,64 @@ class AddNoteHandler:
         return {"entry_id": e.id, "note_seq": seq}
 
 
+Mode = Literal["target", "tracked", "off_budget"]
+# une icône de l'app et sa teinte (« cart:3 ») ; None : celle du pack
+Icon = Annotated[str, Field(pattern=r"^[a-z0-9-]{1,30}:[0-9]{1,2}$")]
+
+
 class CreateCategory(Params):
-    id: Slug
+    # sans identifiant, le hub le tire du nom (le front n'en invente pas)
+    id: Slug | None = None
     name: str = Field(min_length=1, max_length=60)
     grp: Literal["fixed", "variable", "savings", "income", "transfer"]
+    mode: Mode | None = None  # None : le mode par défaut du pack
+    icon: Icon | None = None
+
+
+def slug_for(conn: Connection, name: str) -> str:
+    """Un identifiant libre tiré du nom : « Cours de piano » → « cours-de-piano », puis
+    « cours-de-piano-2 » s'il est pris."""
+    base = re.sub(r"[^a-z0-9]+", "-", normalize(name)).strip("-")[:36].strip("-") or "categorie"
+    if len(base) < 2:
+        base = f"categorie-{base}"
+    taken = {str(r[0]) for r in conn.execute(text("SELECT id FROM categories"))}
+    found, n = base, 2
+    while found in taken:
+        found, n = f"{base}-{n}", n + 1
+    return found
 
 
 class CreateCategoryHandler:
+    def _id(self, conn: Connection, params: CreateCategory) -> str:
+        return params.id or slug_for(conn, params.name)
+
     def preview(self, conn: Connection, params: BaseModel) -> Preview:
         assert isinstance(params, CreateCategory)  # noqa: S101
-        if conn.execute(text("SELECT 1 FROM categories WHERE id = :i"), {"i": params.id}).first():
-            raise bad(f"catégorie déjà connue : {params.id}")
+        new = self._id(conn, params)
+        if conn.execute(text("SELECT 1 FROM categories WHERE id = :i"), {"i": new}).first():
+            raise bad(f"catégorie déjà connue : {new}")
+        named = conn.execute(
+            text("SELECT 1 FROM categories WHERE lower(name) = lower(:n) AND active = 1"),
+            {"n": params.name},
+        ).first()
+        if named:
+            raise bad(f"une catégorie s'appelle déjà « {params.name} »")
         return Preview(
             summary=f"Nouvelle catégorie « {params.name} » ({params.grp})",
-            details=params.model_dump(),
-            fingerprint=fp("create_category", "absent", params.id),
+            details={**params.model_dump(), "id": new},
+            fingerprint=fp("create_category", "absent", new),
         )
 
     def apply(self, conn: Connection, params: BaseModel, proposal_id: str) -> dict[str, Any]:
         assert isinstance(params, CreateCategory)  # noqa: S101
+        new = self._id(conn, params)
         try:
-            catalog.add_category(conn, id=params.id, name=params.name, grp=params.grp)
+            catalog.add_category(conn, id=new, name=params.name, grp=params.grp)
         except catalog.CatalogError as exc:
             raise bad(str(exc)) from None
-        return {"category_id": params.id}
+        if params.mode is not None or params.icon is not None:
+            conn.execute(
+                text("UPDATE categories SET mode = :m, icon = :i WHERE id = :c"),
+                {"m": params.mode, "i": params.icon, "c": new},
+            )
+        return {"category_id": new}

@@ -78,7 +78,8 @@ class Lines:
 _SCOPE = "(v.account_id IN {ids} OR (a.kind = 'cash' AND c.grp IN ('fixed', 'variable')))"
 
 
-def _scope(conn: Connection) -> tuple[str, dict[str, str]]:
+def scope_clause(conn: Connection) -> tuple[str, dict[str, str]]:
+    """La clause SQL du périmètre du budget (alias v, a, c), et ses paramètres."""
     ids, params = in_list("a", budget_accounts(conn))
     return _SCOPE.format(ids=ids), params
 
@@ -107,7 +108,7 @@ def period_report(conn: Connection, start: str, end: str, fx: FxTable | None = N
     courants, `_SCOPE`), entre `start` inclus et `end` exclu, dans la devise de base : une
     écriture en devise au change de son jour, sans change signalée et laissée de côté."""
     base = base_currency()
-    scope, params = _scope(conn)
+    scope, params = scope_clause(conn)
     rows = conn.execute(
         text(_LINES.format(scope=scope)),
         {**params, "unc": UNCATEGORIZED, "ccy": base, "s": start, "e": end},
@@ -140,6 +141,22 @@ def period_lines(conn: Connection, start: str, end: str, currency: str | None = 
     return period_report(conn, start, end).lines
 
 
+EXPENSE_GROUPS = ("fixed", "variable")
+
+
+def netted(lines: list[Line]) -> list[Line]:
+    """Un remboursement classé dans une catégorie de dépense la diminue, sans la rendre négative
+    sur la période : ce qui dépasse ce qu'elle a coûté compte en revenu (refonte du budget, lot A).
+    Les totaux restent justes (revenus − dépenses ne change pas)."""
+    out: list[Line] = []
+    for x in lines:
+        if x.group in EXPENSE_GROUPS and x.minor > 0:
+            out.append(Line(x.category, "income", x.minor, x.count))
+        else:
+            out.append(x)
+    return out
+
+
 @dataclass(frozen=True)
 class Totals:
     income: int
@@ -161,7 +178,7 @@ class Totals:
     @classmethod
     def of(cls, lines: list[Line]) -> Totals:
         g: dict[str, int] = {}
-        for x in lines:
+        for x in netted(lines):
             g[x.group] = g.get(x.group, 0) + x.minor
         return cls(
             income=g.get("income", 0),
@@ -216,7 +233,7 @@ def trend(
     first = shift_month(until, -(months - 1))
     start, _ = month_bounds(first)
     _, end = month_bounds(until)
-    scope, params = _scope(conn)
+    scope, params = scope_clause(conn)
     cat_clause = (
         "AND v.category_id = :cat"
         if category

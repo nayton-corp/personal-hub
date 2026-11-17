@@ -177,6 +177,10 @@ export interface BudgetOut {
   state: BudgetStateOut;
   lines: BudgetLineOut[];
   missing_fx: MissingFxOut[];
+  off_budget: OffBudgetOut[];
+  plan: PlanOut;
+  daily: number[];
+  prev_daily: number[];
 }
 
 export interface BudgetStateOut {
@@ -231,6 +235,10 @@ export interface CategoryOut {
   name: string;
   group: string;
   active: boolean;
+  mode?: string;
+  mode_set?: boolean;
+  icon?: string | null;
+  archived_at?: string | null;
 }
 
 export interface CategoryRefOut {
@@ -904,6 +912,13 @@ export interface ObservationOut {
   detail: Record<string, any>;
 }
 
+export interface OffBudgetOut {
+  category: string;
+  name: string;
+  net: MoneyOut;
+  count: number;
+}
+
 export interface PackOut {
   name: string;
   label: string;
@@ -996,6 +1011,17 @@ export interface Pillar3aOut {
   paid: MoneyOut;
   margin: MoneyOut;
   source: string;
+}
+
+export interface PlanOut {
+  income: MoneyOut | null;
+  income_source: string | null;
+  savings: MoneyOut;
+  targets: MoneyOut;
+  unassigned: MoneyOut | null;
+  rest: MoneyOut | null;
+  per_day: MoneyOut | null;
+  savings_lines: SavingsLineOut[];
 }
 
 export interface PreviewOut {
@@ -1176,6 +1202,13 @@ export interface RunnerConnectionOut {
 
 export interface RunnerListOut {
   items: RunnerConnectionOut[];
+}
+
+export interface SavingsLineOut {
+  category: string;
+  name: string;
+  target: MoneyOut;
+  done: MoneyOut;
 }
 
 export interface SearchOut {
@@ -1390,6 +1423,26 @@ export interface UnpricedOut {
   name: string;
 }
 
+export interface UpcomingItemOut {
+  kind: string;
+  category: string | null;
+  name: string;
+  on: string;
+  amount: MoneyOut;
+  status: string;
+  suggested_target: MoneyOut | null;
+}
+
+export interface UpcomingOut {
+  month: string;
+  currency: string;
+  count: number;
+  paid_count: number;
+  due_total: MoneyOut;
+  late_count: number;
+  items: UpcomingItemOut[];
+}
+
 export interface UploadItemOut {
   import_id: string | null;
   status: string;
@@ -1413,4 +1466,6 @@ export interface YearlyOut {
   target: MoneyOut | null;
   spent: MoneyOut;
   ratio: string | null;
+  pace?: string | null;
+  set_aside?: MoneyOut | null;
 }

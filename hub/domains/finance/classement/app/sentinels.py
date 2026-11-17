@@ -20,7 +20,7 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.classement.app import insights
+from hub.domains.finance.classement.app import insights, upcoming
 from hub.domains.finance.classement.model import pace
 from hub.domains.finance.packs import CountryPack
 from hub.domains.finance.packs import instance as packs
@@ -200,6 +200,67 @@ def _recurring(conn: Connection) -> list[Alert]:
     return out
 
 
+def _off_budget_up(conn: Connection, today: date) -> list[Alert]:
+    """Catégorie hors budget dont le net envoyé grossit trois mois clos de suite (lot Q) : de
+    l'argent prêté qui ne revient pas, par exemple ; une alerte par mois où ça se constate."""
+    month = period.month_of(today)
+    months = amounts.previous_months(month, 3)
+    names = insights.category_names(conn)
+    nets: dict[str, list[int]] = {}
+    for i, m in enumerate(months):
+        for x in insights.off_budget_lines(conn, [m]):
+            nets.setdefault(x.category, [0, 0, 0])[i] = -x.minor
+    out = []
+    for cat, (a, b, c) in sorted(nets.items()):
+        if 0 < a < b < c:
+            out.append(
+                Alert(
+                    f"off-budget-up:{cat}:{month}",
+                    "off_budget_up",
+                    f"{names.get(cat, cat)} : le net envoyé grossit depuis 3 mois",
+                    "Budget : une catégorie hors budget grossit",
+                    {
+                        "category": cat,
+                        "month": month,
+                        "nets": [amounts.in_base(v) for v in (a, b, c)],
+                    },
+                )
+            )
+    return out
+
+
+def _dues(conn: Connection, today: date) -> list[Alert]:
+    """Charge fixe pas vue 3 jours après son jour habituel (une fois par mois), et abonnement tout
+    juste repéré (une fois par abonnement) : upcoming.py, la règle de « À venir »."""
+    month = period.month_of(today)
+    out = [
+        Alert(
+            f"fixed-missing:{d.category or d.name}:{month}",
+            "fixed_missing",
+            f"Charge fixe pas vue : {d.name}",
+            "Budget : une charge fixe habituelle n'est pas passée",
+            {"category": d.category or None, "month": month, "expected_on": d.on},
+        )
+        for d in upcoming.late_fixed(conn, today)
+    ]
+    for key, label, cadence, per_month, ccy in upcoming.new_subscriptions(conn):
+        out.append(
+            Alert(
+                f"recurring-new:{key}",
+                "recurring_new",
+                f"Nouvel abonnement repéré : {label}",
+                "Un nouvel abonnement a été repéré",
+                {
+                    "merchant": key,
+                    "label": label,
+                    "cadence": cadence,
+                    "monthly": money(per_month, ccy),
+                },
+            )
+        )
+    return out
+
+
 def _pillar3a(conn: Connection, today: date, cap: int | None, pack: CountryPack) -> list[Alert]:
     if today.month not in PILLAR3A_MONTHS:
         return []
@@ -233,7 +294,8 @@ def evaluate(
 ) -> list[Alert]:
     pack = pack or packs.current()
     p3 = _pillar3a(conn, today, pillar3a_cap, pack) if pillar3a else []
-    return _budget(conn, today) + _recurring(conn) + p3
+    found = _budget(conn, today) + _off_budget_up(conn, today) + _dues(conn, today)
+    return found + _recurring(conn) + p3
 
 
 def run(

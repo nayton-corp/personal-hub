@@ -50,6 +50,7 @@ from hub.domains.finance.registre.interface.tools import (
     _obj,
     amount,
     base_text,
+    text_out,
     tool,
 )
 from hub.domains.finance.registre.model import amounts
@@ -125,6 +126,7 @@ class ClassementTools(ToolBox):
                     "budget": amount(b["budget"]) if b["budget"] else None,
                     "expenses": amount(b["expenses"]),
                     "rest_to_live": amount(b["rest_to_live"]) if b["rest_to_live"] else None,
+                    "plan": text_out(b["plan"]),  # revenus attendus, épargne visée, reste (H1)
                     "days_left": b["days_left"],
                     "over": [x["name"] for x in lines if x["over"]],
                     "lines": lines,
@@ -258,8 +260,8 @@ class ClassementTools(ToolBox):
     def propose_budget(self, a: ProposeBudgetArgs, caller: ToolCaller) -> dict[str, Any]:
         with self.engine.connect() as conn:
             cat = self._category(conn, a.category)
-        if cat["group"] not in insights.EXPENSE_GROUPS:
-            raise Problem("validation.params", "budget : catégorie de dépense seulement")
+        if cat["group"] not in (*insights.EXPENSE_GROUPS, "savings"):
+            raise Problem("validation.params", "budget : catégorie de dépense ou d'épargne")
         minor = Money.from_decimal(
             a.amount, base_currency()
         ).minor  # tel que saisi, dans sa cadence

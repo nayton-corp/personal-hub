@@ -46,6 +46,8 @@ REFERENCE_KINDS = frozenset(
     {
         "create_account",
         "create_category",
+        "edit_category",
+        "archive_category",
         "create_rule",
         "disable_rule",
         "save_debt",

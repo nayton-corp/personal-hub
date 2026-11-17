@@ -423,8 +423,8 @@ def test_health_and_events(client: TestClient, ctx: HubContext, loaded: FinanceD
     assert loaded.resolve(f"hub:finance:account:{acc['id']}") is not None
     assert loaded.resolve(events[1].urn) is not None
     assert (
-        len(loaded.mcp_tools()) == 52
-    )  # lot 7, la parité avec les routes (M11), biens et frais des fonds
+        len(loaded.mcp_tools()) == 58
+    )  # lot 7, la parité avec les routes (M11), biens, frais des fonds, plan, catégories
 
 
 def test_viac_pdf_upload_and_holdings(

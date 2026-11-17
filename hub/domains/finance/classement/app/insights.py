@@ -15,8 +15,17 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.domains.finance import thresholds
-from hub.domains.finance.classement.app.totals import Line, Lines, Totals, period_report
+from hub.domains.finance.classement.app.totals import (
+    EXPENSE_GROUPS as EXPENSE_GROUPS,
+)
+from hub.domains.finance.classement.app.totals import (
+    Line,
+    Lines,
+    Totals,
+    period_report,
+)
 from hub.domains.finance.packs import CountryPack
+from hub.domains.finance.packs import instance as packs
 from hub.domains.finance.registre.app.reads import budget_accounts, in_list, last_dates
 from hub.domains.finance.registre.model import institutions
 from hub.domains.finance.registre.model.amounts import (
@@ -32,7 +41,6 @@ from hub.kernel.money import base_currency
 PENSION_DEPOSITS = institutions.like_any(
     "bank_tx_code", institutions.prefixes(pension_deposit=True)
 )
-EXPENSE_GROUPS = ("fixed", "variable")
 FLOW_GROUPS = ("fixed", "variable", "savings")
 NAMES_EXTRA = {UNCATEGORIZED: "À catégoriser", OTHERS: "Autres"}
 
@@ -82,16 +90,50 @@ _TARGETS = (
 )
 
 
+def category_modes(conn: Connection) -> dict[str, str]:
+    """Mode budgétaire de chaque catégorie (lot Q) : le choisi, sinon celui du pack du pays."""
+    pack = packs.current()
+    rows = conn.execute(text("SELECT id, mode FROM categories"))
+    return {str(r[0]): str(r[1]) if r[1] else pack.mode_of(str(r[0])) for r in rows}
+
+
+def off_budget(conn: Connection) -> frozenset[str]:
+    """Catégories hors budget : ni dans le dépensé, ni dans le reste, ni dans les revenus."""
+    return frozenset(c for c, m in category_modes(conn).items() if m == "off_budget")
+
+
 def targets(conn: Connection, month: str) -> dict[str, Target]:
     """Cible en vigueur au début du mois, par catégorie (la dernière ligne gagne). Une dernière
     ligne à zéro retire la cible : la catégorie redevient « hors budget », elle n'est pas
-    « dépassée » au premier centime (audit du 10/11, B3)."""
+    « dépassée » au premier centime (audit du 10/11, B3). Une catégorie qui n'est pas en mode
+    « avec cible » (lot Q) n'en a pas, même si une ancienne ligne en porte une."""
     rows = conn.execute(
         text(_TARGETS.format(where=" AND valid_from <= :m")),
         {"m": f"{month}-01", "ccy": base_currency()},
     )
     found = {r[0]: target_of(r[1], r[2], r[3], r[4]) for r in rows}
-    return {c: t for c, t in found.items() if t.amount > 0}
+    for cat, delta in moves(conn, month).items():  # lot D : déplacé pour ce mois seulement
+        was = found.get(cat)
+        if was is None or was.cadence == "month":
+            found[cat] = Target((was.amount if was else 0) + delta, "month")
+    modes = category_modes(conn)
+    return {c: t for c, t in found.items() if t.amount > 0 and modes.get(c, "target") == "target"}
+
+
+def moves(conn: Connection, month: str) -> dict[str, int]:
+    """Ce que les déplacements du mois (`budget_moves`) ajoutent (ou retirent) à chaque cible."""
+    out: dict[str, int] = {}
+    rows = conn.execute(
+        text(
+            "SELECT from_category, to_category, amount_minor FROM budget_moves "
+            "WHERE month = :m AND currency = :ccy"
+        ),
+        {"m": month, "ccy": base_currency()},
+    )
+    for src, dst, amount in rows:
+        out[str(src)] = out.get(str(src), 0) - int(amount)
+        out[str(dst)] = out.get(str(dst), 0) + int(amount)
+    return out
 
 
 def category_groups(conn: Connection) -> dict[str, str]:
@@ -119,13 +161,39 @@ def expense_budget(conn: Connection, month: str) -> int | None:
 
 
 def monthly_expenses(lines: list[Line], year: frozenset[str]) -> int:
-    """Dépenses de la période hors catégories suivies à l'année, en positif."""
-    return -sum(x.minor for x in lines if x.group in EXPENSE_GROUPS and x.category not in year)
+    """Dépenses de la période hors catégories suivies à l'année, en positif ; une catégorie
+    remboursée au-delà de ce qu'elle a coûté compte pour 0 (totals.netted)."""
+    return -sum(
+        min(0, x.minor) for x in lines if x.group in EXPENSE_GROUPS and x.category not in year
+    )
 
 
 def report_for(conn: Connection, months: list[str]) -> Lines:
+    """Les totaux par catégorie du budget de la période, sans les catégories hors budget."""
     start, end = span(months)
-    return period_report(conn, start, end)
+    report = period_report(conn, start, end)
+    off = off_budget(conn)
+    if not off:
+        return report
+    return Lines([x for x in report.lines if x.category not in off], report.missing_fx)
+
+
+def off_budget_lines(conn: Connection, months: list[str]) -> list[Line]:
+    """Les catégories hors budget de la période (montant signé : négatif, plus envoyé que reçu)."""
+    off = off_budget(conn)
+    if not off:
+        return []
+    start, end = span(months)
+    found: dict[str, Line] = {}
+    for x in period_report(conn, start, end).lines:
+        if x.category in off:
+            was = found.get(x.category)
+            found[x.category] = (
+                x
+                if was is None
+                else Line(x.category, was.group, was.minor + x.minor, was.count + x.count)
+            )
+    return sorted(found.values(), key=lambda x: (x.minor, x.category))
 
 
 def lines_for(conn: Connection, months: list[str]) -> list[Line]:

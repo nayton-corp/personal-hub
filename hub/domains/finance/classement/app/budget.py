@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy import Connection
 
-from hub.domains.finance.classement.app import due
+from hub.domains.finance.classement.app import due, plan
 from hub.domains.finance.classement.app.insights import (
     EXPENSE_GROUPS,
     FLOW_GROUPS,
@@ -20,6 +20,7 @@ from hub.domains.finance.classement.app.insights import (
     lines_for,
     merge_small,
     monthly_expenses,
+    off_budget_lines,
     report_for,
     targets,
     totals_json,
@@ -125,20 +126,26 @@ def budget(
             spent[cat] = (groups[cat], 0, 0)
     out: list[dict[str, Any]] = []
     projection = 0
+    provisions = 0  # le douzième des cibles annuelles, pour le non attribué du plan
     targets_by_group = {"fixed": 0, "variable": 0}
-    for cat, (group, minor, count) in spent.items():
+    for cat, (group, net, count) in spent.items():
+        minor = max(0, net)  # remboursée au-delà de son coût : 0, le reste compte en revenu
         line: dict[str, Any] = {"category": cat, "name": names.get(cat, cat), "group": group}
         if cat in year:
             # suivie à l'année : comparée au cumul depuis janvier, pas au mois
+            # provision : rythme de l'année, à mettre de côté par mois, dépassement probable
             annual = goal[cat].annual if cat in goal else None
-            done = ytd.get(cat, 0)
+            done = max(0, ytd.get(cat, 0))
+            months_done = len(year_months(months[-1]))
+            elapsed = pace.year_elapsed(months_done, clock)
+            state = pace.yearly_state(done, annual, elapsed, months_done)
             line |= {
                 "spent": in_base(minor),
                 "count": count,
                 "target": None,
                 "ratio": None,
-                "over": annual is not None and done > annual,
-                "state": "over" if annual is not None and done > annual else "ok",
+                "over": state == "over",
+                "state": "ok" if state == "untracked" else state,
                 "projected": None,
                 "rest": None,
                 "yearly": {
@@ -146,8 +153,12 @@ def budget(
                     "spent": in_base(done),
                     "ratio": ratio(done, annual) if annual else None,
                     "from": year_months(months[-1])[0],
+                    "pace": ratio(*elapsed),
+                    "set_aside": _money(pace.set_aside(done, annual, months_done)),
                 },
             }
+            if annual is not None:
+                provisions += (annual + 6) // 12 * n
         else:
             target = goal[cat].monthly * n if cat in goal else None
             will = pace.projected(minor, group, target, clock)
@@ -204,7 +215,36 @@ def budget(
             "over_by": _money(-rest if rest is not None and rest < 0 else None),
         },
         "missing_fx": [m.public() for m in report.missing_fx],
+        # hors budget (lot Q) : le net de la période, envoyé − reçu, à part
+        "off_budget": _off_budget(conn, months, names, aggregates_only=aggregates_only),
+        # le plan du mois (H1) et la courbe des dépenses cumulées (plan.py)
+        **plan.month_plan(
+            conn,
+            months,
+            lines,
+            used=used,
+            budget=total_budget,
+            provisions=provisions,
+            today=today if clock.current else None,
+            days_left=days_left(month, today) if period == "m" else 0,
+            aggregates_only=aggregates_only,
+        ),
     }
+
+
+def _off_budget(
+    conn: Connection, months: list[str], names: dict[str, str], *, aggregates_only: bool
+) -> list[dict[str, Any]]:
+    out = [
+        {
+            "category": x.category,
+            "name": names.get(x.category, x.category),
+            "net": in_base(-x.minor),  # positif : plus envoyé que reçu
+            "count": x.count,
+        }
+        for x in off_budget_lines(conn, months)
+    ]
+    return merge_small(out, key="net") if aggregates_only else out
 
 
 def budget_totals(conn: Connection, month: str, period: str) -> dict[str, Any]:

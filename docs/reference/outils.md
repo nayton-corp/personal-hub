@@ -37,6 +37,7 @@ Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hu
 | `finance_month_summary` | `finance:aggregates` | `month`? | Totaux d'un mois : revenus, dépenses, épargne, et montant par catégorie (en positif). Répond à « combien en restaurants ce mois ? ». |
 | `finance_budget_status` | `finance:aggregates` | `month`? | Budget d'un mois : dépensé contre cible par catégorie, projection à fin de mois, dépassements, reste à vivre. |
 | `finance_budget_months` | `finance:aggregates` | `month`?, `months`? | Revenus, dépenses fixes et variables, épargne, placements et taux d'épargne, mois par mois jusqu'au mois demandé. |
+| `finance_budget_upcoming` | `finance:aggregates` | `month`? | « À venir » du mois : charges fixes et abonnements, payés ou attendus, avec leur date, ce qui reste à payer et les charges pas vues à leur date habituelle. |
 | `finance_flows` | `finance:aggregates` | `month`?, `period`? | Les flux d'un mois : revenus par source, puis fixe, variable, épargne par catégorie, et le reste sur compte ; `period: q` pour le trimestre. |
 | `finance_category_trend` | `finance:aggregates` | `category`, `months`? | Montant d'une catégorie mois par mois, jusqu'au mois en cours. |
 | `finance_networth` | `finance:aggregates` | — | Patrimoine net dans la devise de base, répartition par enveloppe, variations sur un mois et depuis janvier, marge 3a de l'année. |
@@ -64,15 +65,19 @@ Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hu
 | `finance_propose_note` | `finance:propose` | `entry_id`, `note` | Propose une note libre sur une écriture (un paiement entre particuliers…) ; rien n'est appliqué. |
 | `finance_proposal_status` | `finance:propose` | `proposal_id` | Dit si une proposition est en attente, acceptée, refusée ou expirée. |
 | `finance_propose_answer_strategy_step` | `finance:propose` | `step_id`, `answer`, `reason`? | Propose la réponse à une étape atteinte d'une stratégie : c'est fait, plus tard, je passe. |
+| `finance_propose_archive_category` | `finance:propose` | `category_id`, `archived`?, `reason`? | Propose d'archiver une catégorie (archived=false : la restaurer). |
 | `finance_propose_categorize_rest` | `finance:propose` | `before`, `direction`?, `category_id`, `reason`? | Propose la même catégorie pour tout ce qui reste à classer d'un commerçant. |
 | `finance_propose_correct_entry` | `finance:propose` | `entry_id`, `amount_minor`?, `booking_date`?, `account_id`?, `reason` | Propose de corriger le montant, la date ou le compte d'une écriture (une annulation puis une remplaçante, l'original reste). |
 | `finance_propose_create_account` | `finance:propose` | `institution`, `name`, `kind`?, `currency`?, `iban`?, `external_ref`?, `liquid`?, `budget_account`?, `reason`? | Propose d'ouvrir un compte (finance_pending_accounts en liste à ouvrir). |
-| `finance_propose_create_category` | `finance:propose` | `id`, `name`, `grp`, `reason`? | Propose une nouvelle catégorie (identifiant, nom, groupe). |
+| `finance_propose_create_category` | `finance:propose` | `id`?, `name`, `grp`, `mode`?, `icon`?, `reason`? | Propose une nouvelle catégorie (nom, groupe ; identifiant, mode et icône facultatifs). |
 | `finance_propose_decide_break` | `finance:propose` | `break_id`, `decision`, `cost_minor`?, `note`?, `reason`? | Propose de régler une rupture du rapprochement (finance_breaks) : coût saisi (`cost`, avec cost_minor), garder tel quel (`accept`), parti hors de mes comptes (`gone`). |
 | `finance_propose_disable_rule` | `finance:propose` | `rule_id`, `reason`? | Propose de désactiver une règle de catégorisation. |
 | `finance_propose_edit_account` | `finance:propose` | `account_id`, `name`?, `goal`?, `availability`?, `category`?, `hidden`?, `target`?, `reason`? | Propose les réglages d'un compte : nom, objectif, disponibilité, catégorie, masqué. |
+| `finance_propose_edit_category` | `finance:propose` | `category_id`, `name`?, `icon`?, `grp`?, `mode`?, `reason`? | Propose de renommer une catégorie, de changer son icône, son groupe ou son mode budgétaire (target : avec cible ; tracked : suivie sans cible ; off_budget : hors budget). |
 | `finance_propose_install_pack` | `finance:propose` | `name`, `reason`? | Propose d'installer un pack de règles (finance_rule_packs). |
 | `finance_propose_link_crypto_moves` | `finance:propose` | `entry_id`, `peer_id`, `kind`, `reason`? | Propose de relier deux mouvements crypto : virement entre mes comptes, ou mise et sortie de staking. |
+| `finance_propose_merge_categories` | `finance:propose` | `from_id`, `into_id`, `reason`? | Propose de fusionner deux catégories du même groupe : écritures, règles et cible passent sur into_id, from_id est archivée. |
+| `finance_propose_move_budget` | `finance:propose` | `from_category`, `to_category`, `amount_minor`, `currency`?, `month`?, `reason`? | Propose de déplacer un montant de la cible d'une catégorie vers une autre, pour un mois seulement (couvrir un dépassement avec ce qui reste ailleurs). |
 | `finance_propose_record_debt_balance` | `finance:propose` | `debt_id`, `on_date`, `amount_minor`, `reason`? | Propose un solde constaté d'une dette à une date. |
 | `finance_propose_save_debt` | `finance:propose` | `debt_id`?, `name`?, `lender`?, `kind`?, `currency`?, `original_minor`?, `rate_pct`?, `day_count`?, `payment_minor`?, `ends_on`?, `category_id`?, `account_id`?, `closed_on`?, `balance_minor`?, `balance_on`?, `opening_entry_id`?, `reason`? | Propose une dette ou sa mise à jour (nom, prêteur, départ, mensualité, taux). |
 | `finance_propose_save_good` | `finance:propose` | `good_id`?, `name`?, `kind`?, `currency`?, `yearly_change_pct`?, `closed_on`?, `value_minor`?, `value_on`?, `reason`? | Propose un bien hors comptes (logement, véhicule, objet, prêt accordé), sa mise à jour ou une nouvelle valeur à une date. |
@@ -80,5 +85,6 @@ Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hu
 | `finance_propose_set_account_goal` | `finance:propose` | `account_id`, `goal`, `reason`? | Propose l'objectif d'un compte (current, safety, projects, long_term, retirement). |
 | `finance_propose_set_fund_fee` | `finance:propose` | `isin`, `ter_pct`, `reason`? | Propose les frais courants (TER, en % par an) d'un fonds détenu. |
 | `finance_propose_set_month_start` | `finance:propose` | `start_day`, `valid_from`?, `reason`? | Propose le jour où commence le mois budgétaire, dès un mois donné. |
+| `finance_propose_set_plan_income` | `finance:propose` | `amount_minor`?, `currency`?, `valid_from`?, `reason`? | Propose les revenus attendus par mois du plan du budget (sans montant : la moyenne des revenus des trois derniers mois). |
 | `finance_propose_unlink_crypto_moves` | `finance:propose` | `entry_id`, `peer_id`, `kind`, `reason`? | Propose de défaire un lien entre deux mouvements crypto. |
 | `finance_propose_withdraw_break_decision` | `finance:propose` | `decision_id`, `reason`? | Propose de retirer une décision de rapprochement : la rupture se rouvre. |

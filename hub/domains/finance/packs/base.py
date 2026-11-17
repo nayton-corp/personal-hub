@@ -54,6 +54,17 @@ class PersonPayment:
         return {"prefix": self.prefix, "mark": self.mark, "category": self.category}
 
 
+# modes budgétaires d'une catégorie : avec cible, suivie sans cible, hors budget
+MODES = ("target", "tracked", "off_budget")
+# catégories des packs de règles génériques qu'une cible n'aide pas à suivre : à compter, sans
+# cible ni alerte (du liquide, un fourre-tout, des virements encore à qualifier)
+GENERIC_MODES: Mapping[str, str] = {
+    "retraits": "tracked",
+    "divers": "tracked",
+    "a-qualifier": "tracked",
+}
+
+
 @dataclass(frozen=True)
 class CountryPack:
     country: str
@@ -79,6 +90,14 @@ class CountryPack:
     institution_logos: Mapping[str, str] = field(default_factory=dict)
     fund_logos: tuple[tuple[str, str], ...] = ()  # émetteurs de fonds du pays (motif → logo)
     category_icons: Mapping[str, tuple[str, int]] = field(default_factory=dict)
+    # mode budgétaire proposé pour les catégories du pays (refonte du budget, lot Q)
+    category_modes: Mapping[str, str] = field(default_factory=dict)
+
+    def mode_of(self, category_id: str) -> str:
+        """Le mode par défaut d'une catégorie : celui du pays, sinon le générique, sinon
+        `target` (avec cible)."""
+        found = self.category_modes.get(category_id) or GENERIC_MODES.get(category_id)
+        return found or "target"
 
     def pension_cap(self, year: int) -> int | None:
         """Le plafond de l'année, sinon le dernier connu avant elle, sinon le premier."""

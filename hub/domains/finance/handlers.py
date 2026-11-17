@@ -26,6 +26,26 @@ from hub.domains.finance.classement.app.categorize_kinds import (
     RecategorizeHandler,
     recategorize_inverse,
 )
+from hub.domains.finance.classement.app.category_kinds import (
+    ArchiveCategory,
+    ArchiveCategoryHandler,
+    EditCategory,
+    EditCategoryHandler,
+    MergeCategories,
+    MergeCategoriesHandler,
+    archive_inverse,
+    edit_inverse,
+)
+from hub.domains.finance.classement.app.move_kinds import (
+    MoveBudget,
+    MoveBudgetHandler,
+    move_inverse,
+)
+from hub.domains.finance.classement.app.plan_kinds import (
+    SetPlanIncome,
+    SetPlanIncomeHandler,
+    plan_income_inverse,
+)
 from hub.domains.finance.classement.app.rule_kinds import (
     CreateRule,
     CreateRuleHandler,
@@ -111,6 +131,20 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
             inverse=budget_inverse,
             ai_allowed=True,
         ),
+        "set_plan_income": ProposalKind(
+            SetPlanIncome,
+            SetPlanIncomeHandler(domain),
+            reversible=True,
+            inverse=plan_income_inverse,
+            ai_allowed=True,
+        ),
+        "move_budget": ProposalKind(
+            MoveBudget,
+            MoveBudgetHandler(domain),
+            reversible=True,
+            inverse=move_inverse,
+            ai_allowed=True,
+        ),
         "add_note": ProposalKind(AddNote, AddNoteHandler(), ai_allowed=True),
         "correct_entry": ProposalKind(
             CorrectEntry,
@@ -126,6 +160,23 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
             CreateAccount, CreateAccountHandler(domain), ai_allowed=True
         ),
         "create_category": ProposalKind(CreateCategory, CreateCategoryHandler(), ai_allowed=True),
+        "edit_category": ProposalKind(
+            EditCategory,
+            EditCategoryHandler(domain),
+            reversible=True,
+            inverse=edit_inverse,
+            ai_allowed=True,
+        ),
+        "merge_categories": ProposalKind(
+            MergeCategories, MergeCategoriesHandler(domain), ai_allowed=True
+        ),
+        "archive_category": ProposalKind(
+            ArchiveCategory,
+            ArchiveCategoryHandler(domain),
+            reversible=True,
+            inverse=archive_inverse,
+            ai_allowed=True,
+        ),
         "set_account_goal": ProposalKind(SetAccountGoal, SetAccountGoalHandler(), ai_allowed=True),
         "edit_account": ProposalKind(EditAccount, EditAccountHandler(), ai_allowed=True),
         "install_pack": ProposalKind(InstallPack, InstallPackHandler(), ai_allowed=True),

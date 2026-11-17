@@ -86,6 +86,7 @@ export function categories(m, B, flows) {
       <div class="section-head"><h2 class="section-title" id="t-cats">Catégories${nOver ? ` <span class="pill bad">${nOver} dépassée${nOver > 1 ? "s" : ""}</span>` : ""}</h2>${head}</div>
       ${unclRow}${varPart}${fixedPart || ""}${!vars.length && !fixed.length && !uncl ? '<div class="empty">Aucune dépense sur la période.</div>' : ""}
       ${B.bgroup || m.T == null ? "" : `<button class="secondary plan-btn" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}Préparer le budget</button>`}
+      ${B.bgroup ? "" : `<button class="link-row" type="button" data-a="cats" aria-haspopup="dialog">Catégories : modes, icônes, fusion${ic("chev")}</button>`}
     </section>`;
 }
 

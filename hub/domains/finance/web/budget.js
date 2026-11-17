@@ -6,15 +6,19 @@
 // calcule pas.
 import { go, reveal } from "../../shell.js";
 import { MOIS, base, date, monthName, parseAmount, toMinor, units } from "../../format.js";
-import { categories, foldHead, offTarget, shortMonth, trend } from "./bviews.js";
+import { categories, foldHead, shortMonth, trend } from "./bviews.js";
+import { action, hero, heroActions } from "./bhero.js";
+import { daily, outside, provisions, upcoming } from "./bmonth.js";
+import * as bmove from "./bmove.js";
 import { catState, model, yearState } from "./bmodel.js";
 import { sankeyData, sankeyInfo, sankeySvg } from "./bflow.js";
 import { GROUP_LABEL, catLook, catMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { linkTo } from "./journal.js";
+import { MODE_LABEL } from "./categories.js";
 import { monthStartDay, shiftMonth, store } from "../../store.js";
 import {
-  SHEETS, SH, amount, amount2, announce, closeSheet, errBox, esc, escMoney, escNums, failure, fill, ibox, ic, m0, money, n0, nf, openSheet, pf, pref,
+  SHEETS, SH, amount, amount2, announce, closeSheet, errBox, esc, escNums, failure, fill, ibox, ic, m0, n0, openSheet, pref,
   renderSheet, setPref, skel, toast,
 } from "../../ui.js";
 
@@ -22,22 +26,15 @@ const $ = (id) => document.getElementById(id);
 const P = store.params;
 const CADENCE = { weekly: "chaque semaine", monthly: "mensuel", quarterly: "trimestriel", yearly: "annuel" };
 const OLDEST = 36; // mois en arrière au plus
-const B = { sk: null, bgroup: null, offOpen: false };
+const B = { sk: null, bgroup: null, offOpen: false, paidOpen: false };
 
 export const budgetPath = (month, period) => `/finance/budget?month=${month}&period=${period}`;
 const flowsPath = () => `/finance/flows?month=${P.month}&period=${P.period}`;
 const monthsPath = () => `/finance/budget/months?month=${P.month}&months=6`;
 const recurringPath = "/finance/recurring";
+const upcomingPath = () => `/finance/budget/upcoming?month=${P.month}`;
 const trendPath = (cat) => `/finance/trend?category=${encodeURIComponent(cat)}&months=6&month=${P.month}`;
 const u = (m) => (m ? units(m) : 0);
-
-// des écritures en devise sans change ce jour-là : laissées de côté par le serveur, dites ici
-function missingFx(items) {
-  if (!items.length) return "";
-  const n = items.reduce((t, x) => t + x.count, 0);
-  const ccys = [...new Set(items.map((x) => x.currency))].join(", ");
-  return `<div class="status warn">${ic("alert")}<span>${n} écriture${n > 1 ? "s" : ""} en ${esc(ccys)} sans taux de change ce jour-là : pas comptée${n > 1 ? "s" : ""} ici tant que le cours manque.</span></div>`;
-}
 
 // dates d'une période dont le mois ne commence pas le 1er : « 25 sept. – 24 oct. »
 function spanLabel(b) {
@@ -70,22 +67,8 @@ export function render() {
   if (be.status === "error") return fill($("budBody"), errBox(`Impossible de charger le budget : ${be.error.message}`));
   if (!b) return fill($("budBody"), skel());
   const m = model(b);
-  const st = m.state, off = offTarget(m);
-  let proj = "";
-  if (m.projection != null && m.T != null) {
-    const d = m.projection - m.T;
-    proj = `<div class="proj">${ic("trend")}<span>Projection fin ${P.period === "m" ? monthName(P.month).split(" ")[0] : "de période"} : <b class="num">${amount(m.projection)}</b>, ${d > 0 ? `<b>${m0(d)} au-dessus</b> du budget` : `<span class="delta pos">${m0(-d)} sous</span> le budget`}</span></div>`;
-  }
-  const hero = `<section class="card bflat" aria-labelledby="t-bud">
-      <div class="hero-label"><span id="t-bud">${m.T == null ? "Dépensé" : P.period === "m" ? "Reste à vivre" : "Reste sur 3 mois"}</span><span>${!m.current ? "clos" : m.daysLeft < 1 ? "Dernier jour du mois" : `${m.daysLeft} jour${m.daysLeft > 1 ? "s" : ""} restant${m.daysLeft > 1 ? "s" : ""}`}</span></div>
-      <div class="hero-amount num${m.rest != null && m.rest < 0 ? " neg" : ""}"><span class="money">${nf(m.T == null ? m.spent : m.rest)}</span><small>${base()}</small></div>
-      ${m.T == null ? `<button class="primary plan-cta" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}Créer mon budget</button>` : `<div class="hint">${amount(m.spent)} dépensés sur ${amount(m.T)} de budget${off >= 1 ? `, dont ${m0(off)} hors cible` : ""}</div>
-      <div class="pbar" role="img" aria-label="${pf(m.ratio, 0)} % du budget dépensé${m.expected != null ? `, ${pf(m.expected, 0)} % attendus à ce jour` : ""}" data-css="--c:${st.color}"><i data-css="width:${Math.min(100, m.ratio * 100).toFixed(1)}%"></i>${m.expected != null ? `<span class="pace" data-css="left:${(m.expected * 100).toFixed(1)}%"></span>` : ""}</div>`}
-      <div class="status ${st.k}">${ic(st.icon)}<span>${escMoney(st.text)}</span></div>
-      ${missingFx(m.missingFx)}
-      ${fe.data ? savingsStrip(fe.data) : ""}
-      ${proj}
-    </section>`;
+  const up = P.period === "m" ? store.use(upcomingPath()).data : null;
+  if (P.period === "m") store.use(CATS);
   // flux
   let flow = "";
   if (fe.data) {
@@ -98,13 +81,15 @@ export function render() {
       ${sd.tot > 1 ? `<div class="skcols" aria-hidden="true"><span>Revenus</span><span>Usage</span><span>Postes</span></div>${sankeySvg(sd, B.sk)}${sankeyInfo(sd, B.sk)}` : '<div class="empty">Aucun mouvement sur la période.</div>'}
     </section>`;
   } else if (fe.status === "error") flow = errBox(`Flux indisponible : ${fe.error.message}`);
-  fill($("budBody"), hero + categories(m, B, fe.data) + flow + subscriptions(re) + trend(me.data, P) + '<div class="endspace"></div>');
-}
-
-// revenus, épargne et taux d'épargne de la période, sous le reste à vivre
-function savingsStrip(f) {
-  const I = u(f.income), S = u(f.groups.find((x) => x.group === "savings")?.total);
-  return `<div class="strip three"><div><span>Revenus</span><b class="num">${money(I)}</b></div><div><span>Épargné</span><b class="num">${money(S)}</b></div><div><span>Taux d'épargne</span><b class="num">${I ? `${pf(S / I, 0)} %` : "—"}</b></div></div>`;
+  const head = hero(b, m), tail = subscriptions(re) + trend(me.data, P);
+  const foot = `<div class="bfoot"><button class="secondary" type="button" data-a="plan" aria-haspopup="dialog">${ic("sliders")}${m.T == null ? "Créer mon budget" : "Ajuster le budget"}</button>
+    <button class="linkish bfoot-l" type="button" data-a="cats">${ic("list")}Gérer les catégories</button></div>`;
+  // le mois : la tête, une action, le quotidien, le hors budget, le flux, ce qui arrive, les
+  // provisions ; trois mois ou un filtre venu du flux : la liste des catégories d'avant
+  const body = P.period === "m" && !B.bgroup
+    ? head + action(b, m, up) + daily(m, B) + outside(b) + flow + upcoming(up, b, B) + provisions(m) + tail + foot
+    : head + categories(m, B, fe.data) + flow + tail;
+  fill($("budBody"), `${body}<div class="endspace"></div>`);
 }
 
 function subscriptions(re) {
@@ -156,7 +141,7 @@ SHEETS.cat = (id, sh) => {
       ${pts.map((p) => `<div><i class="${p.m === P.month ? "" : "past"}" data-css="--h:${((p.v / mx) * 72).toFixed(0)}px;--c:${target != null && p.v > target ? "var(--neg)" : look.color}"></i><span>${shortMonth(p.m)}</span></div>`).join("")}</div>
       ${target != null ? '<p class="hint">Pointillés : la cible mensuelle.</p>' : ""}`;
   }
-  const budgetable = group === "fixed" || group === "variable";
+  const budgetable = (group === "fixed" || group === "variable") && (!c || (c.mode || "target") === "target"); // suivie sans cible, hors budget : pas de cible
   const removing = budgetable && !(sh.tmp > 0) && shown > 0, changed = removing || (budgetable && sh.tmp > 0 && (sh.tmp !== shown || sh.cad !== was)); // champ vidé : cible retirée
   const per = sh.cad === "year" ? "annuelle" : "mensuelle";
   return {
@@ -169,6 +154,9 @@ SHEETS.cat = (id, sh) => {
       <div class="target"><button type="button" data-a="tstep" data-v="-10" aria-label="Diminuer de 10">−</button><input id="t-input" inputmode="decimal" value="${sh.tmp || ""}" aria-label="Cible ${per} en ${base()}" placeholder="aucune"><button type="button" data-a="tstep" data-v="10" aria-label="Augmenter de 10">+</button></div>
       ${sh.cad === "year" ? `<p class="hint">Pour les dépenses par à-coups (vacances, entretien) : comparée au cumul depuis janvier, sans peser sur le reste à vivre du mois.${line && line.yearly ? ` Dépensé depuis janvier : ${m0(u(line.yearly.spent))} ${base()}.` : ""}</p>` : ""}
       ${sh.bad || sh.err ? `<div class="err" role="alert">${esc(sh.bad || sh.err)}</div>` : ""}` : '<p class="hint">Les cibles portent sur les dépenses fixes et variables.</p>'}
+      ${c && !budgetable && (group === "fixed" || group === "variable") ? `<p class="hint">${esc(MODE_LABEL[c.mode] || "")} :
+        ${c.mode === "off_budget" ? "ni dans le dépensé ni dans le reste." : "comptée dans le dépensé, sans cible ni alerte."}</p>` : ""}
+      ${c ? `<button class="link-row" type="button" data-a="cat-edit" data-v="${esc(id)}">Gérer la catégorie (nom, icône, mode)${ic("chev")}</button>` : ""}
       ${line && line.count ? `<div class="stack-v"><button class="secondary" type="button" data-a="cat-tx" data-v="${esc(id)}">${ic("list")}${line.count > 1 ? `Voir les ${line.count} écritures` : "Voir l'écriture"}</button></div>` : ""}`,
     foot: budgetable ? `<button class="primary" type="button" data-a="target-save" ${changed && !sh.busy && !sh.bad ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : removing ? "Retirer la cible avec Face ID" : "Enregistrer la cible avec Face ID"}</button>` : "",
   };
@@ -186,7 +174,7 @@ function planData() {
   const year = new Set(cur.lines.filter((l) => l.yearly).map((l) => l.category));
   const now = Object.fromEntries(cur.lines.map((l) => [l.category, l.yearly ? (l.yearly.target ? u(l.yearly.target) : null) : l.target ? u(l.target) : null]));
   const avg = Object.fromEntries(past.lines.map((l) => [l.category, (u(l.spent) / past.months.length) * (year.has(l.category) ? 12 : 1)]));
-  const rows = cats.items.filter((c) => c.active && (c.group === "fixed" || c.group === "variable"))
+  const rows = cats.items.filter((c) => c.active && (c.mode || "target") === "target" && (c.group === "fixed" || c.group === "variable"))
     .map((c) => ({ id: c.id, name: c.name, group: c.group, now: now[c.id] ?? null, avg: avg[c.id] || 0, year: year.has(c.id) }))
     .sort((a, b) => (a.group === b.group ? 0 : a.group === "fixed" ? -1 : 1) || b.avg - a.avg || a.name.localeCompare(b.name, "fr"));
   return { rows, income: u(past.income) / past.months.length, months: past.months };
@@ -246,6 +234,12 @@ function setMonth(month) {
 }
 
 export const actions = {
+  ...heroActions,
+  ...bmove.actions,
+  bpaid: () => {
+    B.paidOpen = !B.paidOpen;
+    store.notify();
+  },
   cat: (id) => {
     if (P.tab !== "budget") {
       store.set({ month: store.today, period: "m" });

@@ -622,3 +622,48 @@ def test_source_gaps_migration_keeps_decisions_and_withdrawals(tmp_path: Path) -
         )
     with domain.engine().connect() as conn:
         assert [d.break_kind for d in decisions.read(conn)] == ["no_price", "source_gap"]
+
+
+def test_budget_plan_migration_keeps_categories_and_adds_the_plan(tmp_path: Path) -> None:
+    """0032 : les catégories gardent leurs lignes (mode, icône, archivage à NULL : le défaut du
+    pack) ; les revenus attendus se saisissent en ajout seul."""
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    from hub.domains.finance.classement.app import plan
+    from hub.domains.finance.domain import MIGRATIONS
+    from hub.platform import migrations as runner
+    from tests.finance.conftest import finance_settings
+
+    settings = finance_settings(tmp_path)
+    domain = FinanceDomain(settings)
+    runner.upgrade(MIGRATIONS, domain.path, "0031_fund_fee_origin")
+    engine = make_engine(domain.path)
+    with engine.connect() as conn:
+        before = rows_of(conn, "SELECT id, name, grp, active FROM categories ORDER BY id")
+    engine.dispose()
+    runner.upgrade(MIGRATIONS, domain.path)
+    with domain.engine().connect() as conn:
+        assert rows_of(conn, "SELECT id, name, grp, active FROM categories ORDER BY id") == before
+        assert rows_of(
+            conn, "SELECT count(*) FROM categories WHERE mode IS NOT NULL OR icon IS NOT NULL "
+            "OR archived_at IS NOT NULL"
+        ) == [(0,)]  # fmt: skip
+        assert plan.entered_income(conn, "2026-10") is None
+    with begin_immediate(domain.engine()) as conn:
+        conn.execute(
+            text(
+                "INSERT INTO plan_income (amount_minor, currency, valid_from, created_at) "
+                "VALUES (480000, 'CHF', '2026-10-01', 'x')"
+            )
+        )
+    with domain.engine().connect() as conn:
+        assert plan.entered_income(conn, "2026-10") == (1, 480_000)
+        assert plan.entered_income(conn, "2026-09") is None
+    for statement in ("UPDATE plan_income SET amount_minor = 1", "DELETE FROM plan_income"):
+        with (
+            pytest.raises(IntegrityError, match="append_only"),
+            begin_immediate(domain.engine()) as conn,
+        ):
+            conn.execute(text(statement))
+    domain.engine().dispose()

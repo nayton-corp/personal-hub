@@ -2,7 +2,7 @@
 // Ce qui est propre au pays (commerçants, établissements, catégories de son pack de règles)
 // vient du pack pays, publié par le profil ; le front ne nomme que les marques internationales.
 import { BRANDS } from "./brands.js";
-import { packs } from "../../store.js";
+import { packs, store } from "../../store.js";
 import { cv, esc, ibox, ic, monogram, pref } from "../../ui.js";
 
 // le pack pays de la finance, compilé une fois par profil lu
@@ -54,8 +54,19 @@ const wordIcon = (s) => (CAT_WORDS.find(([re]) => re.test(s)) || [])[1];
 const GROUP_LOOK = { income: ["arrowin", 1], fixed: ["home", 5], variable: ["cart", 2], savings: ["piggy", 0], transfer: ["swap", -1] };
 export const GROUP_LABEL = { income: "Revenus", fixed: "Fixes", variable: "Variables", savings: "Épargne", transfer: "Transferts", mixed: "Autres" };
 
+// l'icône choisie dans l'écran Catégories (« cart:3 »), lue des catégories déjà chargées
+function chosen(id) {
+  const e = store.cache.get("/finance/categories");
+  const c = e && e.data ? e.data.items.find((x) => x.id === id) : null;
+  return c && c.icon ? [c.icon.split(":")[0], Number(c.icon.split(":")[1])] : null;
+}
+// les pictogrammes proposés pour une catégorie
+export const CAT_ICONS = ["home", "cart", "utensils", "coffee", "car", "train", "plane", "heart", "cross", "shield", "landmark", "receipt",
+  "repeat", "wifi", "phone", "play", "music", "ticket", "dumbbell", "bag", "gift", "book", "sparkle", "paw", "users", "briefcase", "piggy",
+  "trend", "coin", "banknote", "bolt", "box", "tag", "dots"];
+
 function look(id, groupName) {
-  const known = CAT_LOOK[id] || countryLook().categories[id];
+  const known = chosen(id) || CAT_LOOK[id] || countryLook().categories[id];
   let [icon, c] = known || GROUP_LOOK[groupName] || ["dots", 5];
   if (!known && id) icon = wordIcon(id) || icon;
   return { icon, color: c === -1 ? "var(--faint)" : c === -2 ? "var(--accent)" : cv(c) };

@@ -63,11 +63,14 @@ export function rows() {
     // les dépassements viennent déjà du budget ci-dessus, la marge 3a des chiffres clés
     if (a.kind === "pillar3a_margin" || a.kind === "budget_over") continue;
     const d = a.detail;
-    const s = a.kind === "recurring_up"
-      ? `${amount2Text(d.usual)} → ${amount2Text(d.last)} ${d.last.currency} · le ${date(a.on_date)}`
+    const subs = a.kind === "recurring_up" || a.kind === "recurring_new";
+    const s = a.kind === "recurring_up" ? `${amount2Text(d.usual)} → ${amount2Text(d.last)} ${d.last.currency} · le ${date(a.on_date)}`
+      : a.kind === "recurring_new" ? `${amount2Text(d.monthly)} ${d.monthly.currency} par mois · repéré le ${date(a.on_date)}`
+      : a.kind === "fixed_missing" ? `Attendue vers le ${date(d.expected_on)}`
+      : a.kind === "off_budget_up" ? "Hors budget : le net grossit depuis trois mois"
       : `${n0(units(d.spent))} sur ${n0(units(d.target))} ${base()}${a.kind === "budget_likely" ? ` · ${n0(units(d.projected))} projetés` : ""}`;
-    const cat = a.kind === "recurring_up" ? null : d.category;
-    out.push({ info: true, ic: a.kind === "recurring_up" ? "repeat" : "alert", c: a.kind === "recurring_up" ? "var(--s4)" : "var(--s3)", mark: cat ? catMark(cat) : null, t: a.title, s, a: a.kind === "recurring_up" ? "subs" : cat ? "cat" : "tab", v: cat || "budget" });
+    const cat = subs ? null : d.category;
+    out.push({ info: true, ic: subs ? "repeat" : "alert", c: subs ? "var(--s4)" : "var(--s3)", mark: cat ? catMark(cat) : null, t: a.title, s, a: subs ? "subs" : cat ? "cat" : "tab", v: cat || "budget" });
   }
   const p3 = k.pillar3a;
   if (p3 && p3.margin.minor > 0) {

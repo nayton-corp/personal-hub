@@ -154,8 +154,28 @@ def trades(conn: Connection, isin: str, account: str | None = None) -> list[dict
 
 
 def categories(conn: Connection) -> list[dict[str, Any]]:
-    rows = conn.execute(text("SELECT id, name, grp, active FROM categories ORDER BY grp, name"))
-    return [{"id": r[0], "name": r[1], "group": r[2], "active": bool(r[3])} for r in rows]
+    """Les catégories, avec leur mode budgétaire en vigueur (le choisi, sinon celui du pack),
+    leur icône choisie et leur archivage (une archivée n'est plus `active`)."""
+    pack = packs.current()
+    rows = conn.execute(
+        text(
+            "SELECT id, name, grp, active, mode, icon, archived_at FROM categories "
+            "ORDER BY grp, name"
+        )
+    )
+    return [
+        {
+            "id": r[0],
+            "name": r[1],
+            "group": r[2],
+            "active": bool(r[3]),
+            "mode": r[4] or pack.mode_of(r[0]),
+            "mode_set": r[4] is not None,
+            "icon": r[5],
+            "archived_at": r[6],
+        }
+        for r in rows
+    ]
 
 
 # --- écritures --------------------------------------------------------------------------------
