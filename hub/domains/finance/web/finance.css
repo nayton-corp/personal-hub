@@ -223,10 +223,11 @@
 .bridge rect.base { fill: var(--s6); } .bridge rect.pos { fill: var(--pos); } .bridge rect.neg { fill: var(--neg); }
 .uw path { fill: var(--neg); fill-opacity: .22; stroke: var(--neg); stroke-width: 1; }
 .fan .band { fill: var(--accent); fill-opacity: .14; } .fan .line { fill: none; stroke: var(--accent); stroke-width: 2; }
-.strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-flow: row; gap: 6px; margin-bottom: 8px; }
 .strip div { display: flex; flex-direction: column; min-width: 0; }
 .strip div > span { font-size: .676rem; color: var(--muted); }
 .strip b { font-size: .824rem; font-weight: 600; }
+.strip b.num { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* l'unité (CHF, %) reste collée au chiffre */
 .strip .pos, .tile-amt.pos, .pbars .vl.pos, .pbars .num.pos { color: var(--pos); }
 .strip .neg, .pbars .vl.neg, .pbars .num.neg { color: var(--neg); }
 .pnote { font-size: .706rem; color: var(--faint); margin: 8px 0 0; }
