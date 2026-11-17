@@ -64,3 +64,19 @@ def test_a_new_category_gets_its_id_from_the_hub(page: Any) -> None:
     page.wait_for_selector("html:not(.sheet-open)")
     made = _cats(page)["cours-de-piano"]
     assert (made["name"], made["group"], made["icon"]) == ("Cours de piano", "variable", "music:0")
+
+
+def test_the_icon_picker_is_a_compact_grid_with_the_current_icon_selected(page: Any) -> None:
+    _open_list(page)
+    page.locator('#sheet [data-a="cat-edit"]').first.click()
+    page.wait_for_selector("#cat-name")
+    icons = page.locator('#sheet [aria-label="Icône"] [role="radio"]')
+    assert page.locator('#sheet [aria-label="Icône"] [aria-checked="true"]').count() == 1
+    assert page.locator('#sheet [aria-label="Teinte"] [aria-checked="true"]').count() == 1
+    tops = icons.evaluate_all("(bs) => bs.map((b) => Math.round(b.getBoundingClientRect().top))")
+    assert tops.count(tops[0]) >= 5  # cinq icônes au moins par ligne sur un téléphone
+    # ouvrir sans rien toucher ne propose aucun changement d'icône
+    page.locator('#sheet [data-a="cat-save"]').click()
+    assert "Rien n'a changé" in page.inner_text("#sheet")
+    page.locator('#sheet [data-a="sheet-close"]').click()
+    page.wait_for_selector("html:not(.sheet-open)")
