@@ -27,6 +27,7 @@ from hub.domains.finance.classement.app.insights import (
     category_names,
     lines_for,
     targets,
+    yearly,
 )
 from hub.domains.finance.classement.app.recurring import MIN_COUNT, monthly
 from hub.domains.finance.registre.model import period as period_rules
@@ -85,7 +86,7 @@ def month_dues(conn: Connection, month: str, today: date) -> list[Due]:
     """Les charges fixes et abonnements du mois, payés ou attendus, par date."""
     start, after = period_rules.bounds(month)
     groups, modes, names = category_groups(conn), category_modes(conn), category_names(conn)
-    goal = targets(conn, month)
+    goal, year = targets(conn, month), yearly(conn)
     paid_on = due.last_paid(conn, start, after)
     expected_on = due.expected(conn, month)
     habit = _habit(conn, month)
@@ -106,7 +107,9 @@ def month_dues(conn: Connection, month: str, today: date) -> list[Due]:
             )
         )
     for cat, grp in sorted(groups.items()):
-        if grp != "fixed" or modes.get(cat) == "off_budget" or cat in with_subs:
+        # une charge suivie à l'année (prime annuelle) est dans les provisions, pas attendue
+        # chaque mois : sinon elle compterait deux fois dans le reste
+        if grp != "fixed" or modes.get(cat) == "off_budget" or cat in with_subs or cat in year:
             continue
         on = paid_on.get(cat) or expected_on.get(cat)
         if on is None:

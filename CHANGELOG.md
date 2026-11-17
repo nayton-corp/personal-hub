@@ -10,6 +10,9 @@
   part mensuelle des provisions de l'année en sont retirés (le chiffre était trop haut tant
   qu'une charge n'était pas débitée). Le mois en détail les montre (`plan.pending`,
   `plan.provisions`).
+- Budget, « À venir » : une charge fixe suivie à l'année (prime annuelle) n'est plus attendue
+  chaque mois ni signalée « pas encore vue » ; elle reste dans les provisions de l'année et ne
+  compte plus deux fois dans le reste.
 
 ## [0.28.3] · 2026-11-17
 
