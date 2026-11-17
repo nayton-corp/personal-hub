@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from sqlalchemy import Connection, text
 
 
-def import_detail(conn: Connection, import_id: str) -> dict[str, Any] | None:
+def import_detail(conn: Connection, import_id: str) -> dict[str, object] | None:
     row = conn.execute(
         text(
             "SELECT id, source, file_name, received_at, status, stats_json FROM imports "

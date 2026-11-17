@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.27.2] · 2026-11-17
+
 ### Corrigé
 
 Corrections d'un passage de test manuel de toute l'app (interactions, affichage, petits écrans,
