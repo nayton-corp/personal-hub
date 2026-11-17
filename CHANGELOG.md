@@ -39,6 +39,17 @@ coupures).
   pastilles plus contrastées, barre du bas lisible avec le texte agrandi, « au-dessus du
   budget », « 1 compte » / « 2 comptes ».
 
+## [0.27.1] · 2026-11-16
+
+### Corrigé
+
+- Frais des fonds : un passage qui ne trouve pas de TER le dit désormais sur la ligne de la
+  source des cours : le site qui a refusé et sa réponse (par ex. « http_403 »), ou le nombre de
+  fonds qu'aucun site ne publie. Avant, rien n'apparaissait. Le journal du collecteur compte les
+  fonds demandés, trouvés, introuvables et en échec.
+- Biens et dettes : une valeur saisie entre minuit et 1 h (2 h en été) prenait la date de la
+  veille ; elle prend désormais le jour de l'appareil.
+
 ## [0.27.0] · 2026-11-16
 
 ### Ajouté

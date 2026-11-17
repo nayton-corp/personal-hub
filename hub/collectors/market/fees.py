@@ -31,7 +31,9 @@ from hub.collectors.client import HubUnavailable
 from hub.collectors.http import Http
 from hub.collectors.market import funds
 from hub.collectors.runtime import Env
+from hub.platform.logging import get_logger
 
+log = get_logger("hub.collector.fees")
 DAY_KEY = "fees_day"
 HEADER = "isin,ter_pct,origin,on_date"
 MAX_TER_PCT = Decimal(5)
@@ -174,8 +176,18 @@ def lookup(env: Env, http: Http, isin: str, pages: Pages) -> Found | None:
     return None
 
 
+def gap(f: Failure) -> str:
+    """`fees.<site>:<raison>` : le site et la réponse (`fees.list:http_403`), pour l'écran des
+    sources."""
+    step, _, why = f.detail.partition(":")
+    return f"{step or 'fees'}:{why or f.outcome}"
+
+
 def run(env: Env, http: Http) -> tuple[int, list[str]]:
-    """(fichiers déposés, manques du passage). Sans hub (tests, essai à la main), rien."""
+    """(fichiers déposés, manques du passage). Sans hub (tests, essai à la main), rien.
+
+    Un manque par site en échec (`fees.list:http_403`), et `fees:not_found=<n>` pour les fonds
+    qu'aucun site ne publie : l'écran des sources dit pourquoi un TER manque."""
     if env.client is None or (not env.forced and env.memory.get(DAY_KEY) == env.today.isoformat()):
         return 0, []
     try:
@@ -184,7 +196,9 @@ def run(env: Env, http: Http) -> tuple[int, list[str]]:
         return 0, ["fees:hub_unavailable"]
     days = 0 if env.forced else env.cfg.market.fees_refresh_days
     pages: Pages = {}  # chaque passage relit les listes
-    rows, failed = [], ""
+    rows: list[str] = []
+    failed: list[str] = []
+    missing = 0
     for fund in funds:
         isin = str(fund.get("isin") or "") if isinstance(fund, dict) else ""
         if not isin or not due(fund, env.today, days):
@@ -192,18 +206,24 @@ def run(env: Env, http: Http) -> tuple[int, list[str]]:
         try:
             found = lookup(env, http, isin, pages)
         except Failure as f:
-            failed = failed or f.outcome  # les autres fonds passent ; on réessaie demain
+            failed.append(gap(f))  # les autres fonds passent ; on réessaie demain
             continue
-        if found is not None:
-            ter, origin = found
-            rows.append(f"{isin},{format(ter.normalize(), 'f')},{origin},{env.today.isoformat()}")
+        if found is None:
+            missing += 1
+            continue
+        ter, origin = found
+        rows.append(f"{isin},{format(ter.normalize(), 'f')},{origin},{env.today.isoformat()}")
+    log.info(
+        "collector.fees", asked=len(funds), found=len(rows), missing=missing, failed=len(failed)
+    )
     dropped = 0
     if rows:
         data = "\n".join([HEADER, *rows]).encode() + b"\n"
         dropped = int(env.inbox.drop("fund-fees.csv", data, readable, step="fees.file"))
     if not failed:
         env.memory.put(DAY_KEY, env.today.isoformat())
-    return dropped, [f"fees:{failed}"] if failed else []
+    gaps = sorted(set(failed)) + ([f"fees:not_found={missing}"] if missing else [])
+    return dropped, gaps
 
 
 def with_compositions(env: Env, http: Http) -> tuple[int, list[str]]:
