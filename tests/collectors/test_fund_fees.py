@@ -76,7 +76,8 @@ def test_each_fund_gets_its_ter_from_the_first_site_that_knows_it(
     fake_hub.funds = held(LISTED, EUROPEAN, AMERICAN, NOWHERE)
     env = env_for(make_env)
     site = sites()
-    assert fees.run(env, Http(site)) == (1, [])
+    # le fonds qu'aucun site ne connaît est dit, sans bloquer le passage
+    assert fees.run(env, Http(site)) == (1, ["fees:not_found=1"])
     got = {f.isin: (f.ter, f.origin, f.on_date) for f in dropped(env)}
     today = env.today.isoformat()
     assert got == {
@@ -116,7 +117,8 @@ def test_a_site_down_does_not_stop_the_others(make_env: Any, fake_hub: FakeHub) 
     env = env_for(make_env)
     # la plateforme en panne : le fonds européen est lu quand même ; le fonds de la liste est
     # cherché ailleurs, en vain, et le passage le dit
-    assert fees.run(env, Http(sites(down="platform.example"))) == (1, ["fees:site_unavailable"])
+    # le manque nomme le site et sa réponse
+    assert fees.run(env, Http(sites(down="platform.example"))) == (1, ["fees.list:http_503"])
     assert [f.isin for f in dropped(env)] == [EUROPEAN]
     assert env.memory.get(fees.DAY_KEY) is None  # redemandé au passage suivant
     assert fees.run(env, Http(sites())) == (1, [])

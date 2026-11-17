@@ -202,7 +202,8 @@ def test_the_market_run_drops_the_compositions_with_the_rest(
         )
     )
     result = market.run(env, "run", Http(both))
-    assert (result.outcome, result.files, result.detail) == ("ok", 2, None)
+    # les frais : aucun site factice ne connaît le fonds, le passage le dit
+    assert (result.outcome, result.files, result.detail) == ("ok", 2, "partial fees:not_found=1")
     assert list(dropped(env)) == [CSPX]
     later = make_env("market", market={"crypto": {}, "erc20_tokens": {}, "staking_tokens": {}})
     fake_hub.funds = held(CSPX)
@@ -211,4 +212,6 @@ def test_the_market_run_drops_the_compositions_with_the_rest(
             (404, b"") if fee_site(u) else (503, b"") if "ishares" in u else rest.route(m, u, d)
         )
     )
-    assert market.run(later, "run", Http(down)).detail == "partial funds:site_unavailable"
+    assert market.run(later, "run", Http(down)).detail == (
+        "partial funds:site_unavailable fees:not_found=1"
+    )
