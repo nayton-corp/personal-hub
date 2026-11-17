@@ -2,6 +2,13 @@
 
 ## [Non publié]
 
+## [0.28.1] · 2026-11-17
+
+### Corrigé
+
+- Écran d'une catégorie : le choix d'icône et de teinte est une grille serrée (cinq cases ou plus
+  par ligne sur un téléphone) et l'icône en cours, même venue du pack, s'y voit sélectionnée.
+
 ## [0.28.0] · 2026-11-17
 
 ### Ajouté
