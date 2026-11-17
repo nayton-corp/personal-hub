@@ -200,6 +200,35 @@ def _recurring(conn: Connection) -> list[Alert]:
     return out
 
 
+def _off_budget_up(conn: Connection, today: date) -> list[Alert]:
+    """Catégorie hors budget dont le net envoyé grossit trois mois clos de suite (lot Q) : de
+    l'argent prêté qui ne revient pas, par exemple ; une alerte par mois où ça se constate."""
+    month = period.month_of(today)
+    months = amounts.previous_months(month, 3)
+    names = insights.category_names(conn)
+    nets: dict[str, list[int]] = {}
+    for i, m in enumerate(months):
+        for x in insights.off_budget_lines(conn, [m]):
+            nets.setdefault(x.category, [0, 0, 0])[i] = -x.minor
+    out = []
+    for cat, (a, b, c) in sorted(nets.items()):
+        if 0 < a < b < c:
+            out.append(
+                Alert(
+                    f"off-budget-up:{cat}:{month}",
+                    "off_budget_up",
+                    f"{names.get(cat, cat)} : le net envoyé grossit depuis 3 mois",
+                    "Budget : une catégorie hors budget grossit",
+                    {
+                        "category": cat,
+                        "month": month,
+                        "nets": [amounts.in_base(v) for v in (a, b, c)],
+                    },
+                )
+            )
+    return out
+
+
 def _pillar3a(conn: Connection, today: date, cap: int | None, pack: CountryPack) -> list[Alert]:
     if today.month not in PILLAR3A_MONTHS:
         return []
@@ -233,7 +262,7 @@ def evaluate(
 ) -> list[Alert]:
     pack = pack or packs.current()
     p3 = _pillar3a(conn, today, pillar3a_cap, pack) if pillar3a else []
-    return _budget(conn, today) + _recurring(conn) + p3
+    return _budget(conn, today) + _off_budget_up(conn, today) + _recurring(conn) + p3
 
 
 def run(

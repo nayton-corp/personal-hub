@@ -74,7 +74,14 @@ DESCRIPTIONS = {
     "comptes, ou mise et sortie de staking.",
     "unlink_crypto_moves": "Propose de défaire un lien entre deux mouvements crypto.",
     "disable_rule": "Propose de désactiver une règle de catégorisation.",
-    "create_category": "Propose une nouvelle catégorie (identifiant, nom, groupe).",
+    "create_category": "Propose une nouvelle catégorie (nom, groupe ; identifiant, mode et "
+    "icône facultatifs).",
+    "edit_category": "Propose de renommer une catégorie, de changer son icône, son groupe ou son "
+    "mode budgétaire (target : avec cible ; tracked : suivie sans cible ; off_budget : hors "
+    "budget).",
+    "merge_categories": "Propose de fusionner deux catégories du même groupe : écritures, règles "
+    "et cible passent sur into_id, from_id est archivée.",
+    "archive_category": "Propose d'archiver une catégorie (archived=false : la restaurer).",
     "create_account": "Propose d'ouvrir un compte (finance_pending_accounts en liste à ouvrir).",
     "set_account_goal": "Propose l'objectif d'un compte (current, safety, projects, long_term, "
     "retirement).",

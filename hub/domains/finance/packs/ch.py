@@ -169,6 +169,8 @@ PACK = CountryPack(
     institution_logos=INSTITUTION_LOGOS,
     fund_logos=FUND_LOGOS,
     category_icons=CATEGORY_ICONS,
+    # de l'argent qui circule entre amis, souvent remboursé : hors budget, en net
+    category_modes={"twint-particuliers": "off_budget"},
     regions=Regions(
         home="Suisse",
         home_words=("switzerland", "suisse", "schweiz", "ch"),

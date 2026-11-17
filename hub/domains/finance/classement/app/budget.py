@@ -20,6 +20,7 @@ from hub.domains.finance.classement.app.insights import (
     lines_for,
     merge_small,
     monthly_expenses,
+    off_budget_lines,
     report_for,
     targets,
     totals_json,
@@ -214,6 +215,8 @@ def budget(
             "over_by": _money(-rest if rest is not None and rest < 0 else None),
         },
         "missing_fx": [m.public() for m in report.missing_fx],
+        # hors budget (lot Q) : le net de la période, envoyé − reçu, à part
+        "off_budget": _off_budget(conn, months, names, aggregates_only=aggregates_only),
         # le plan du mois (H1) et la courbe des dépenses cumulées (plan.py)
         **plan.month_plan(
             conn,
@@ -227,6 +230,21 @@ def budget(
             aggregates_only=aggregates_only,
         ),
     }
+
+
+def _off_budget(
+    conn: Connection, months: list[str], names: dict[str, str], *, aggregates_only: bool
+) -> list[dict[str, Any]]:
+    out = [
+        {
+            "category": x.category,
+            "name": names.get(x.category, x.category),
+            "net": in_base(-x.minor),  # positif : plus envoyé que reçu
+            "count": x.count,
+        }
+        for x in off_budget_lines(conn, months)
+    ]
+    return merge_small(out, key="net") if aggregates_only else out
 
 
 def budget_totals(conn: Connection, month: str, period: str) -> dict[str, Any]:

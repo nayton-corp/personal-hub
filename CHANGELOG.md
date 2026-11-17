@@ -11,8 +11,15 @@
 - Budget : dépensé cumulé jour par jour du mois et du mois d'avant (`daily`, `prev_daily`).
 - Provisions annuelles : rythme de l'année, montant à mettre de côté par mois et état
   « probablement dépassée ».
+- Modes de catégorie : avec cible, suivie sans cible (compte dans le dépensé, sans cible ni
+  alerte) ou hors budget (montrée à part, en net, alerte quand ce net grossit trois mois de
+  suite). Modes par défaut venus du pack pays.
+- Écran « Catégories » (depuis le Budget et le panneau d'une catégorie) : créer, renommer,
+  changer l'icône, le groupe ou le mode, fusionner deux catégories, archiver et restaurer.
+  Propositions `edit_category`, `merge_categories`, `archive_category` ; `create_category`
+  tire l'identifiant du nom.
 - Migration finance 0032 : table `plan_income` (en ajout seul), colonnes `mode`, `icon` et
-  `archived_at` sur les catégories (préparées pour les modes de catégorie).
+  `archived_at` sur les catégories.
 
 ### Modifié
 

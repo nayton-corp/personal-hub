@@ -142,7 +142,12 @@ def _rule(r: Sequence[object]) -> Rule:
 
 
 def list_rules(conn: Connection, *, active_only: bool = False) -> list[Rule]:
-    where = " WHERE active = 1" if active_only else ""
+    # une règle vers une catégorie archivée ne classe plus rien (lot Q) ; elle revient avec elle
+    where = (
+        " WHERE active = 1 AND category_id NOT IN (SELECT id FROM categories WHERE active = 0)"
+        if active_only
+        else ""
+    )
     rows = conn.execute(text(f"SELECT {_RULE_COLS} FROM rules{where}"))  # noqa: S608
     return sorted((_rule(tuple(r)) for r in rows), key=Rule.key)
 

@@ -12,6 +12,7 @@ import { sankeyData, sankeyInfo, sankeySvg } from "./bflow.js";
 import { GROUP_LABEL, catLook, catMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { linkTo } from "./journal.js";
+import { MODE_LABEL } from "./categories.js";
 import { monthStartDay, shiftMonth, store } from "../../store.js";
 import {
   SHEETS, SH, amount, amount2, announce, closeSheet, errBox, esc, escMoney, escNums, failure, fill, ibox, ic, m0, money, n0, nf, openSheet, pf, pref,
@@ -156,7 +157,7 @@ SHEETS.cat = (id, sh) => {
       ${pts.map((p) => `<div><i class="${p.m === P.month ? "" : "past"}" data-css="--h:${((p.v / mx) * 72).toFixed(0)}px;--c:${target != null && p.v > target ? "var(--neg)" : look.color}"></i><span>${shortMonth(p.m)}</span></div>`).join("")}</div>
       ${target != null ? '<p class="hint">Pointillés : la cible mensuelle.</p>' : ""}`;
   }
-  const budgetable = group === "fixed" || group === "variable";
+  const budgetable = (group === "fixed" || group === "variable") && (!c || (c.mode || "target") === "target"); // suivie sans cible, hors budget : pas de cible
   const removing = budgetable && !(sh.tmp > 0) && shown > 0, changed = removing || (budgetable && sh.tmp > 0 && (sh.tmp !== shown || sh.cad !== was)); // champ vidé : cible retirée
   const per = sh.cad === "year" ? "annuelle" : "mensuelle";
   return {
@@ -169,6 +170,9 @@ SHEETS.cat = (id, sh) => {
       <div class="target"><button type="button" data-a="tstep" data-v="-10" aria-label="Diminuer de 10">−</button><input id="t-input" inputmode="decimal" value="${sh.tmp || ""}" aria-label="Cible ${per} en ${base()}" placeholder="aucune"><button type="button" data-a="tstep" data-v="10" aria-label="Augmenter de 10">+</button></div>
       ${sh.cad === "year" ? `<p class="hint">Pour les dépenses par à-coups (vacances, entretien) : comparée au cumul depuis janvier, sans peser sur le reste à vivre du mois.${line && line.yearly ? ` Dépensé depuis janvier : ${m0(u(line.yearly.spent))} ${base()}.` : ""}</p>` : ""}
       ${sh.bad || sh.err ? `<div class="err" role="alert">${esc(sh.bad || sh.err)}</div>` : ""}` : '<p class="hint">Les cibles portent sur les dépenses fixes et variables.</p>'}
+      ${c && !budgetable && (group === "fixed" || group === "variable") ? `<p class="hint">${esc(MODE_LABEL[c.mode] || "")} :
+        ${c.mode === "off_budget" ? "ni dans le dépensé ni dans le reste." : "comptée dans le dépensé, sans cible ni alerte."}</p>` : ""}
+      ${c ? `<button class="link-row" type="button" data-a="cat-edit" data-v="${esc(id)}">Gérer la catégorie (nom, icône, mode)${ic("chev")}</button>` : ""}
       ${line && line.count ? `<div class="stack-v"><button class="secondary" type="button" data-a="cat-tx" data-v="${esc(id)}">${ic("list")}${line.count > 1 ? `Voir les ${line.count} écritures` : "Voir l'écriture"}</button></div>` : ""}`,
     foot: budgetable ? `<button class="primary" type="button" data-a="target-save" ${changed && !sh.busy && !sh.bad ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : removing ? "Retirer la cible avec Face ID" : "Enregistrer la cible avec Face ID"}</button>` : "",
   };
@@ -186,7 +190,7 @@ function planData() {
   const year = new Set(cur.lines.filter((l) => l.yearly).map((l) => l.category));
   const now = Object.fromEntries(cur.lines.map((l) => [l.category, l.yearly ? (l.yearly.target ? u(l.yearly.target) : null) : l.target ? u(l.target) : null]));
   const avg = Object.fromEntries(past.lines.map((l) => [l.category, (u(l.spent) / past.months.length) * (year.has(l.category) ? 12 : 1)]));
-  const rows = cats.items.filter((c) => c.active && (c.group === "fixed" || c.group === "variable"))
+  const rows = cats.items.filter((c) => c.active && (c.mode || "target") === "target" && (c.group === "fixed" || c.group === "variable"))
     .map((c) => ({ id: c.id, name: c.name, group: c.group, now: now[c.id] ?? null, avg: avg[c.id] || 0, year: year.has(c.id) }))
     .sort((a, b) => (a.group === b.group ? 0 : a.group === "fixed" ? -1 : 1) || b.avg - a.avg || a.name.localeCompare(b.name, "fr"));
   return { rows, income: u(past.income) / past.months.length, months: past.months };

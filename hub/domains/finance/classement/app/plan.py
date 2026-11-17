@@ -23,6 +23,7 @@ from hub.domains.finance.classement.app.insights import (
     category_groups,
     category_names,
     lines_for,
+    off_budget,
     targets,
     yearly,
 )
@@ -104,10 +105,11 @@ _DAILY = (
 )
 
 
-def daily(conn: Connection, month: str, year: frozenset[str], until: date | None) -> list[int]:
-    """Dépensé cumulé à la fin de chaque jour du mois, hors catégories suivies à l'année,
-    jusqu'à `until` compris (le mois entier sans lui). Comme le dépensé du budget, une catégorie
-    remboursée au-delà de son coût ne descend pas sous 0 ; le dernier point vaut ce dépensé."""
+def daily(conn: Connection, month: str, skip: frozenset[str], until: date | None) -> list[int]:
+    """Dépensé cumulé à la fin de chaque jour du mois, hors catégories `skip` (suivies à
+    l'année, hors budget), jusqu'à `until` compris (le mois entier sans lui). Comme le dépensé
+    du budget, une catégorie remboursée au-delà de son coût ne descend pas sous 0 ; le dernier
+    point vaut ce dépensé."""
     start, after = period_rules.bounds(month)
     last = after - timedelta(days=1) if until is None else min(until, after - timedelta(days=1))
     if last < start:
@@ -126,7 +128,7 @@ def daily(conn: Connection, month: str, year: frozenset[str], until: date | None
     fx: FxTable | None = None
     by_day: dict[str, dict[str, int]] = {}
     for day, cat, grp, total, ccy in rows:
-        if grp not in EXPENSE_GROUPS or cat in year:
+        if grp not in EXPENSE_GROUPS or cat in skip:
             continue
         minor = int(total)
         if ccy != base:
@@ -167,7 +169,7 @@ def month_plan(
     point ou une ligne pourrait révéler une transaction."""
     n, month = len(months), months[-1]
     groups = category_groups(conn)
-    year = yearly(conn)
+    skip = yearly(conn) | off_budget(conn)
     names = category_names(conn)
     income, source = expected_income(conn, month)
     expected = income * n if income is not None else None
@@ -201,8 +203,8 @@ def month_plan(
     curve = n == 1 and not aggregates_only
     return {
         "plan": plan,
-        "daily": daily(conn, month, year, today) if curve else [],
-        "prev_daily": daily(conn, shift_month(month, -1), year, None) if curve else [],
+        "daily": daily(conn, month, skip, today) if curve else [],
+        "prev_daily": daily(conn, shift_month(month, -1), skip, None) if curve else [],
     }
 
 

@@ -177,6 +177,7 @@ export interface BudgetOut {
   state: BudgetStateOut;
   lines: BudgetLineOut[];
   missing_fx: MissingFxOut[];
+  off_budget: OffBudgetOut[];
   plan: PlanOut;
   daily: number[];
   prev_daily: number[];
@@ -234,6 +235,10 @@ export interface CategoryOut {
   name: string;
   group: string;
   active: boolean;
+  mode?: string;
+  mode_set?: boolean;
+  icon?: string | null;
+  archived_at?: string | null;
 }
 
 export interface CategoryRefOut {
@@ -905,6 +910,13 @@ export interface ObservationOut {
   on_date: string;
   urn: string | null;
   detail: Record<string, any>;
+}
+
+export interface OffBudgetOut {
+  category: string;
+  name: string;
+  net: MoneyOut;
+  count: number;
 }
 
 export interface PackOut {

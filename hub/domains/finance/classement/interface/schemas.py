@@ -75,6 +75,13 @@ class SavingsLineOut(Out):
     done: MoneyOut  # versé pendant la période
 
 
+class OffBudgetOut(Out):
+    category: str
+    name: str
+    net: MoneyOut  # envoyé − reçu sur la période ; positif : plus envoyé que reçu
+    count: int
+
+
 class PlanOut(Out):
     """Le plan du mois (refonte du budget, lot A, plan.py)."""
 
@@ -109,6 +116,7 @@ class BudgetOut(Out):
     state: BudgetStateOut
     lines: list[BudgetLineOut]
     missing_fx: list[MissingFxOut]
+    off_budget: list[OffBudgetOut]  # catégories hors budget, en net
     plan: PlanOut
     daily: list[int]  # dépensé cumulé à la fin de chaque jour, en unités mineures
     prev_daily: list[int]  # la même courbe pour le mois d'avant, entier
