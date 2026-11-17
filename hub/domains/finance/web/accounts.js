@@ -1,7 +1,7 @@
 // Réglages d'un compte : nom, objectif et montant visé, disponibilité, catégorie, masquage et catégorie de toutes
 // ses dépenses (une poche Vacances), enregistrés par un seul Face ID. Le panneau s'ouvre depuis le patrimoine (détail d'un
 // compte) ou depuis la carte « Comptes » des réglages, qui montre aussi la fraîcheur.
-import { ago, date, daysSince, staleDays, units } from "../../format.js";
+import { ago, date, daysSince, parseAmount, staleDays, units } from "../../format.js";
 import { sourceOf } from "./addaccount.js";
 import { paths } from "./connections.js";
 import { FACET, GROUP_LABEL, facetMark, facetName, instMark, setInstitutions } from "./meta.js";
@@ -27,7 +27,7 @@ function initial(a) {
 function changes(a, t) {
   const now = initial(a), out = {};
   for (const k of Object.keys(now)) if (t[k] !== now[k]) out[k] = t[k];
-  if ("target" in out && !/^\d{0,10}$/.test(out.target.trim())) return null;
+  if ("target" in out && parseAmount(out.target).error) return null;
   return "name" in out && !out.name.trim() ? null : out;
 }
 
@@ -65,7 +65,7 @@ SHEETS.account = (id, sh) => {
       ${feedLine(a)}
       <h3 class="field">Objectif</h3>
       ${radio("goal", facet("goal"), t.goal)}
-      <label class="field" for="acc-target">Montant visé (${esc(a.balance.currency)})<input id="acc-target" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="off" placeholder="aucun" value="${esc(t.target)}"></label>
+      <label class="field" for="acc-target">Montant visé (${esc(a.balance.currency)})<input id="acc-target" inputmode="decimal" maxlength="16" autocomplete="off" placeholder="aucun" value="${esc(t.target)}"></label>
       <p class="hint">Un montant à atteindre : la page du compte montre la progression et une date estimée sur tes apports. Vide : pas d'objectif chiffré.</p>
       <h3 class="field">Disponibilité</h3>
       ${radio("availability", [auto(`Selon le type (${facetName("liq", a.availability_auto).toLowerCase()})`), ...facet("liq")], t.availability)}
@@ -75,6 +75,7 @@ SHEETS.account = (id, sh) => {
       <label class="field" for="acc-spend">Dépenses de ce compte<select id="acc-spend" class="select-full"><option value="" ${t.spend ? "" : "selected"}>Selon les règles habituelles</option>${spendOpts}</select></label>
       <p class="hint">Pour une poche dédiée (vacances, voiture) : toutes ses sorties vont dans cette catégorie, celles déjà importées comme les prochaines. Les virements vers tes autres comptes restent des virements, et une catégorie choisie à la main reste la sienne.</p>
       <div class="setrow"><span id="acc-hide-lbl">Masquer ce compte<small>Il disparaît du patrimoine et de l'accueil. Ses relevés continuent d'arriver et rien n'est effacé.</small></span><button class="switch" type="button" role="switch" aria-checked="${t.hidden}" aria-labelledby="acc-hide-lbl" data-a="acc-pick" data-v="hidden|${!t.hidden}"></button></div>
+      ${parseAmount(t.target).error ? `<div class="err" role="alert">Montant visé : ${esc(parseAmount(t.target).error)}</div>` : ""}
       ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}`,
     foot: `<button class="primary" type="button" data-a="acc-save" ${diff && Object.keys(diff).length && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer avec Face ID"}</button>`,
   };
@@ -142,7 +143,7 @@ export const actions = {
     const diff = changes(a, SH.tmp);
     if (!diff || !Object.keys(diff).length) return;
     if ("name" in diff) diff.name = diff.name.trim();
-    if ("target" in diff) diff.target = Number(diff.target.trim() || 0);
+    if ("target" in diff) diff.target = Math.round(parseAmount(diff.target).value || 0); // 30'000 comme 30000
     const items = [];
     if ("spend" in diff) {
       // une seule règle « tout débit » par compte : l'ancienne s'éteint, la nouvelle la remplace

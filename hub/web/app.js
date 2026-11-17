@@ -109,7 +109,7 @@ async function enter(session) {
   if (!started) {
     started = true;
     await start();
-  }
+  } else store.notify(); // reconnecté : les écrans se relisent (cache vidé à l'expiration)
   await renderSettings(session);
 }
 
@@ -185,7 +185,12 @@ $("form-profile").addEventListener("submit", guard(async () => {
   store.invalidate(); // le pays ouvre ou ferme le pilier 3a des chiffres clés
   say("Profil enregistré.");
 }));
-window.addEventListener("hub:auth", () => refresh());
+window.addEventListener("hub:auth", () => {
+  store.clear();
+  refresh();
+});
+// le réseau revient : les écrans restés sur une erreur se relisent seuls
+window.addEventListener("online", () => store.retryErrors());
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 refresh();

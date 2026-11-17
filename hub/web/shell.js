@@ -23,6 +23,7 @@ import * as assistant from "./assistant.js";
 import * as sources from "./sources.js";
 import { setBase, setLocale } from "./format.js";
 import { api, setPacks, setTimeZone, store } from "./store.js";
+import { barFor, echo } from "./tapguard.js";
 import {
   SH, SHEETS, announce, applyTheme, closeSheet, esc, fill, ibox, ic, initSheetSwipe, initToast, openSheet, pref, renderSheet, setPref, sheetEntryOpen, sheetPop,
 } from "./ui.js";
@@ -142,9 +143,15 @@ const entry = () => ({ tab: P.tab, rubric: P.rubric || null, link: P.jlink || nu
 const where = () => P.tab + (P.rubric || "") + (P.page ? JSON.stringify(P.page) : "");
 const title = () => (P.rubric ? sources.rubricLabel(P.rubric) : LABEL[P.tab]);
 
+// un lien de notification suivi app ouverte a déjà son entrée (celle du #) : l'écran qu'il ouvre
+// la remplace au lieu d'en ajouter une seconde
+let hashEntry = false;
+
 function remember(replace) {
   const s = entry();
-  if (replace || sheetEntryOpen()) history.replaceState(s, "");
+  const reuse = hashEntry;
+  hashEntry = false;
+  if (replace || reuse || sheetEntryOpen()) history.replaceState(s, "");
   else {
     history.pushState(s, "");
     depth += 1;
@@ -154,14 +161,19 @@ function remember(replace) {
 export function go(tab, opts = {}) {
   if (!VIEWS[tab]) tab = "accueil";
   const inSheet = sheetEntryOpen();
-  closeSheet(true, false, true);
   const rubric = tab === "sources" ? (opts.rubric ?? null) : null;
   const page = opts.page && opts.page.length ? opts.page : null;
   if (tab === P.tab && rubric === (P.rubric || null) && JSON.stringify(page) === JSON.stringify(P.page || null)) {
-    if (inSheet) history.replaceState(entry(), "");
+    // déjà sur cet écran : le panneau se ferme en rendant son entrée, rien ne s'ajoute
+    closeSheet(true);
+    if (hashEntry) {
+      hashEntry = false;
+      history.back(); // l'entrée du # ne mène nulle part : elle part
+    }
     if (opts.top) window.scrollTo({ top: 0, behavior: reduced() ? "auto" : "smooth" });
     return;
   }
+  closeSheet(true, false, true);
   scrolls[where()] = window.scrollY;
   if (tab === "sources" && P.tab !== "sources") back = P.tab;
   store.set({ tab, rubric, jlink: opts.link || null, page });
@@ -206,6 +218,7 @@ function openSpace(name) {
 }
 
 Object.assign(ACTIONS, {
+  retry: () => store.retryErrors(), // bouton Réessayer d'un écran resté sur une erreur
   tab: (v) => go(v, { top: v === P.tab }),
   space: openSpace,
   spaces: () => openSheet("spaces"),
@@ -280,6 +293,7 @@ function chrome() {
   }
   // l'orbe au milieu : la moitié des entrées de chaque côté (l'accueil seul à gauche dans le hub)
   const left = ctx ? Math.ceil(buttons.length / 2) : 1;
+  barFor(ctx);
   fill($("tabs-start"), buttons.slice(0, left).join(""));
   fill($("tabs-end"), buttons.slice(left).join(""));
   $("tabbar").setAttribute("aria-label", ctx ? `Navigation de ${SPACES[ctx].label}` : "Navigation principale");
@@ -317,12 +331,17 @@ export function draw() {
 
 // liens des notifications (#todo, et ceux des domaines) ; le hash est effacé une fois suivi,
 // le retour revient à l'écran d'avant
-async function deeplink() {
+async function deeplink(ev) {
   const h = location.hash.slice(1);
   if (!h) return;
   history.replaceState(history.state, "", location.pathname + location.search);
-  for (const m of MODULES) if (m.deeplink && (await m.deeplink(h))) return;
-  go("accueil", { top: true });
+  hashEntry = Boolean(ev); // app ouverte (hashchange) : le navigateur a ajouté une entrée
+  try {
+    for (const m of MODULES) if (m.deeplink && (await m.deeplink(h))) return;
+    go("accueil", { top: true });
+  } finally {
+    hashEntry = false; // seulement pour l'écran que le lien ouvre
+  }
 }
 
 // Le profil de l'instance (fuseau, devise, locale) : lu avant le premier rendu, puis à chaque
@@ -345,6 +364,7 @@ export async function start() {
     const fn = ACTIONS[t.dataset.a];
     if (!fn) return;
     e.preventDefault();
+    if (t.closest("#tabbar") && echo(e)) return;
     fn(t.dataset.v, t, e);
   });
   // éléments SVG ou blocs à rôle de bouton : Entrée et Espace comme un clic

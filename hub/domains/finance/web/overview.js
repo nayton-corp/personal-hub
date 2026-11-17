@@ -6,7 +6,7 @@ import { row } from "../../accueil.js";
 import { pendingCount, pendingPath } from "../../approvals.js";
 import { base, units } from "../../format.js";
 import { store } from "../../store.js";
-import { closeSheet, esc, fill, ic, n0, nf, openSheet, pf, setPref, sgn, skel } from "../../ui.js";
+import { closeSheet, errBox, esc, fill, ic, n0, nf, openSheet, pf, setPref, sgn, skel } from "../../ui.js";
 import { go } from "../../shell.js";
 import { model } from "./bmodel.js";
 import { firstVisit } from "./firstvisit.js";
@@ -96,7 +96,7 @@ export function render() {
   const fv = firstVisit();
   if (fv && fv.full) return fill(box, fv.full);
   if (ke.status === "error") {
-    fill(box, `<div class="err-box" role="alert">Impossible de charger l'aperçu : ${esc(ke.error.message)}</div>`);
+    fill(box, errBox(`Impossible de charger l'aperçu : ${ke.error.message}`));
     return;
   }
   if (!k) {

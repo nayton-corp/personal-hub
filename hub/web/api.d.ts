@@ -570,6 +570,7 @@ export interface EntryDetailOut {
 export interface EntryListOut {
   items: EntryOut[];
   next_cursor: string | null;
+  totals?: EntryTotalsOut | null;
 }
 
 export interface EntryOut {
@@ -590,6 +591,12 @@ export interface EntryOut {
 
 export interface EntrySearchOut {
   items: EntryOut[];
+}
+
+export interface EntryTotalsOut {
+  count: number;
+  in_minor: number;
+  out_minor: number;
 }
 
 export interface ExtremeOut {

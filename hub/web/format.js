@@ -55,6 +55,19 @@ export const units = (m) => (m == null ? null : m.minor / 10 ** baseExp);
 /** @param {string | number} value */
 export const toMinor = (value) => Math.round(Number(value) * 10 ** baseExp);
 
+// une saisie de montant tapée ou collée : 1'250.50, 1 250,50, 12.5. Refuse le signe, la notation
+// 1e6 et plus de décimales que la devise n'en a. { value } en unités, ou { error } à afficher.
+/** @param {string} raw @returns {{ value: number, error?: undefined } | { error: string, value?: undefined }} */
+export function parseAmount(raw) {
+  const t = String(raw ?? "").trim().replace(/[\s\u00a0\u202f'’]/g, "");
+  if (!t) return { value: 0 };
+  const dec = baseExp > 0 ? `([.,]\\d{0,${baseExp}})?` : "";
+  if (!new RegExp(`^\\d+${dec}$`).test(t)) {
+    return { error: baseExp > 0 ? `Montant invalide : des chiffres, ${baseExp} décimales au plus.` : "Montant invalide : des chiffres seulement." };
+  }
+  return { value: Number(t.replace(",", ".").replace(/\.$/, "")) };
+}
+
 /** @param {number | null | undefined} value */
 export function chf(value) {
   if (value == null || Number.isNaN(value)) return "—";

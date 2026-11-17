@@ -5,15 +5,16 @@
 // viennent de /finance/budget, /flows, /budget/months (audit M3) : ici on met en mots, on ne
 // calcule pas.
 import { go, reveal } from "../../shell.js";
-import { MOIS, base, date, monthName, toMinor, units } from "../../format.js";
+import { MOIS, base, date, monthName, parseAmount, toMinor, units } from "../../format.js";
 import { categories, foldHead, offTarget, shortMonth, trend } from "./bviews.js";
 import { catState, model, yearState } from "./bmodel.js";
 import { sankeyData, sankeyInfo, sankeySvg } from "./bflow.js";
 import { GROUP_LABEL, catLook, catMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
+import { linkTo } from "./journal.js";
 import { monthStartDay, shiftMonth, store } from "../../store.js";
 import {
-  SHEETS, SH, amount, amount2, announce, closeSheet, esc, failure, fill, ibox, ic, money, n0, nf, openSheet, pf, pref,
+  SHEETS, SH, amount, amount2, announce, closeSheet, errBox, esc, escMoney, escNums, failure, fill, ibox, ic, m0, money, n0, nf, openSheet, pf, pref,
   renderSheet, setPref, skel, toast,
 } from "../../ui.js";
 
@@ -66,21 +67,21 @@ export function render() {
       <b aria-live="polite">${esc(lab)}${b && monthStartDay() !== 1 ? `<small class="per-dates">${esc(spanLabel(b))}</small>` : ""}</b>
       <button type="button" data-a="bm" data-v="1" aria-label="Mois suivant" ${P.month >= store.today ? "disabled" : ""}>${ic("chev")}</button></div>
     <div class="seg small" role="group" aria-label="Période"><button type="button" data-a="bper" data-v="m" aria-pressed="${P.period === "m"}">Mois</button><button type="button" data-a="bper" data-v="q" aria-pressed="${P.period === "q"}" aria-label="Trois mois complets avant le mois choisi">3 mois</button></div>`);
-  if (be.status === "error") return fill($("budBody"), `<div class="err-box" role="alert">Impossible de charger le budget : ${esc(be.error.message)}</div>`);
+  if (be.status === "error") return fill($("budBody"), errBox(`Impossible de charger le budget : ${be.error.message}`));
   if (!b) return fill($("budBody"), skel());
   const m = model(b);
   const st = m.state, off = offTarget(m);
   let proj = "";
   if (m.projection != null && m.T != null) {
     const d = m.projection - m.T;
-    proj = `<div class="proj">${ic("trend")}<span>Projection fin ${P.period === "m" ? monthName(P.month).split(" ")[0] : "de période"} : <b class="num">${amount(m.projection)}</b>, ${d > 0 ? `<b>${n0(d)} au-dessus</b>` : `<span class="delta pos">${n0(-d)} sous</span>`} le budget</span></div>`;
+    proj = `<div class="proj">${ic("trend")}<span>Projection fin ${P.period === "m" ? monthName(P.month).split(" ")[0] : "de période"} : <b class="num">${amount(m.projection)}</b>, ${d > 0 ? `<b>${m0(d)} au-dessus</b> du budget` : `<span class="delta pos">${m0(-d)} sous</span> le budget`}</span></div>`;
   }
   const hero = `<section class="card bflat" aria-labelledby="t-bud">
       <div class="hero-label"><span id="t-bud">${m.T == null ? "Dépensé" : P.period === "m" ? "Reste à vivre" : "Reste sur 3 mois"}</span><span>${!m.current ? "clos" : m.daysLeft < 1 ? "Dernier jour du mois" : `${m.daysLeft} jour${m.daysLeft > 1 ? "s" : ""} restant${m.daysLeft > 1 ? "s" : ""}`}</span></div>
       <div class="hero-amount num${m.rest != null && m.rest < 0 ? " neg" : ""}"><span class="money">${nf(m.T == null ? m.spent : m.rest)}</span><small>${base()}</small></div>
-      ${m.T == null ? `<button class="primary plan-cta" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}Créer mon budget</button>` : `<div class="hint">${amount(m.spent)} dépensés sur ${amount(m.T)} de budget${off >= 1 ? `, dont ${n0(off)} hors cible` : ""}</div>
+      ${m.T == null ? `<button class="primary plan-cta" type="button" data-a="plan" aria-haspopup="dialog">${ic("wallet")}Créer mon budget</button>` : `<div class="hint">${amount(m.spent)} dépensés sur ${amount(m.T)} de budget${off >= 1 ? `, dont ${m0(off)} hors cible` : ""}</div>
       <div class="pbar" role="img" aria-label="${pf(m.ratio, 0)} % du budget dépensé${m.expected != null ? `, ${pf(m.expected, 0)} % attendus à ce jour` : ""}" data-css="--c:${st.color}"><i data-css="width:${Math.min(100, m.ratio * 100).toFixed(1)}%"></i>${m.expected != null ? `<span class="pace" data-css="left:${(m.expected * 100).toFixed(1)}%"></span>` : ""}</div>`}
-      <div class="status ${st.k}">${ic(st.icon)}<span>${st.text}</span></div>
+      <div class="status ${st.k}">${ic(st.icon)}<span>${escMoney(st.text)}</span></div>
       ${missingFx(m.missingFx)}
       ${fe.data ? savingsStrip(fe.data) : ""}
       ${proj}
@@ -96,7 +97,7 @@ export function render() {
       <p class="hint">Entré ${amount(sd.I)} · dépensé ${amount(spentF)} · épargné ${amount(sd.S)}</p>
       ${sd.tot > 1 ? `<div class="skcols" aria-hidden="true"><span>Revenus</span><span>Usage</span><span>Postes</span></div>${sankeySvg(sd, B.sk)}${sankeyInfo(sd, B.sk)}` : '<div class="empty">Aucun mouvement sur la période.</div>'}
     </section>`;
-  } else if (fe.status === "error") flow = `<div class="err-box">Flux indisponible : ${esc(fe.error.message)}</div>`;
+  } else if (fe.status === "error") flow = errBox(`Flux indisponible : ${fe.error.message}`);
   fill($("budBody"), hero + categories(m, B, fe.data) + flow + subscriptions(re) + trend(me.data, P) + '<div class="endspace"></div>');
 }
 
@@ -111,10 +112,10 @@ function subscriptions(re) {
   const items = r && r.items ? r.items.filter((x) => x.active) : [];
   if (!items.length) return "";
   const open = pref("subsOpen", false);
-  const total = r.monthly_total.map((x) => `${n0(Math.abs(u(x)))} ${x.currency}`).join(" + ");
+  const total = r.monthly_total.map((x) => `${m0(Math.abs(u(x)))} ${esc(x.currency)}`).join(" + ");
   const next = items.slice().sort((a, b) => (a.next_date || "").localeCompare(b.next_date || ""))[0];
   const ups = items.filter((s) => Math.abs(u(s.last_amount)) - Math.abs(u(s.amount)) > 0.009).length;
-  const sum = `${items.length} abonnement${items.length > 1 ? "s" : ""} · ${esc(total)} par mois${next ? ` · prochain : ${esc(next.label)} le ${date(next.next_date)}` : ""}${ups ? ` · ${ups} en hausse` : ""}`;
+  const sum = `${items.length} abonnement${items.length > 1 ? "s" : ""} · ${total} par mois${next ? ` · prochain : ${esc(next.label)} le ${date(next.next_date)}` : ""}${ups ? ` · ${ups} en hausse` : ""}`;
   return `<section class="card${open ? "" : " folded"}" id="subs" aria-labelledby="t-subs">
       ${foldHead("subs", "Abonnements", open, sum)}
       ${open ? `<div class="sec-body" id="subs-body">${items.map((s) => {
@@ -161,15 +162,15 @@ SHEETS.cat = (id, sh) => {
   return {
     title: `${catMark(id, group)}<span>${esc(name)}</span>`,
     body: `<div class="sheet-big num">${amount(spent)}${line && line.t != null ? ` <small>sur ${amount(line.t)}</small>` : ""}</div>
-      <span class="crow-st ${s.k}">${esc(s.txt)} · ${esc(periodLabel(b))}</span>
+      <span class="crow-st ${s.k}">${escNums(s.txt)} · ${esc(periodLabel(b))}</span>
       <h3>Six derniers mois</h3>${hist}
       ${budgetable ? `<h3>Cible ${per}</h3>
       <div class="seg cad-seg" role="group" aria-label="Suivi">${[["month", "Par mois"], ["year", "Par an"]].map(([k, l]) => `<button type="button" data-a="tcad" data-v="${k}" aria-pressed="${sh.cad === k}">${l}</button>`).join("")}</div>
-      <div class="target"><button type="button" data-a="tstep" data-v="-10" aria-label="Diminuer de 10">−</button><input id="t-input" inputmode="numeric" value="${sh.tmp || ""}" aria-label="Cible ${per} en ${base()}" placeholder="aucune"><button type="button" data-a="tstep" data-v="10" aria-label="Augmenter de 10">+</button></div>
-      ${sh.cad === "year" ? `<p class="hint">Pour les dépenses par à-coups (vacances, entretien) : comparée au cumul depuis janvier, sans peser sur le reste à vivre du mois.${line && line.yearly ? ` Dépensé depuis janvier : ${n0(u(line.yearly.spent))} ${base()}.` : ""}</p>` : ""}
-      ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}` : '<p class="hint">Les cibles portent sur les dépenses fixes et variables.</p>'}
+      <div class="target"><button type="button" data-a="tstep" data-v="-10" aria-label="Diminuer de 10">−</button><input id="t-input" inputmode="decimal" value="${sh.tmp || ""}" aria-label="Cible ${per} en ${base()}" placeholder="aucune"><button type="button" data-a="tstep" data-v="10" aria-label="Augmenter de 10">+</button></div>
+      ${sh.cad === "year" ? `<p class="hint">Pour les dépenses par à-coups (vacances, entretien) : comparée au cumul depuis janvier, sans peser sur le reste à vivre du mois.${line && line.yearly ? ` Dépensé depuis janvier : ${m0(u(line.yearly.spent))} ${base()}.` : ""}</p>` : ""}
+      ${sh.bad || sh.err ? `<div class="err" role="alert">${esc(sh.bad || sh.err)}</div>` : ""}` : '<p class="hint">Les cibles portent sur les dépenses fixes et variables.</p>'}
       ${line && line.count ? `<div class="stack-v"><button class="secondary" type="button" data-a="cat-tx" data-v="${esc(id)}">${ic("list")}${line.count > 1 ? `Voir les ${line.count} écritures` : "Voir l'écriture"}</button></div>` : ""}`,
-    foot: budgetable ? `<button class="primary" type="button" data-a="target-save" ${changed && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : removing ? "Retirer la cible avec Face ID" : "Enregistrer la cible avec Face ID"}</button>` : "",
+    foot: budgetable ? `<button class="primary" type="button" data-a="target-save" ${changed && !sh.busy && !sh.bad ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : removing ? "Retirer la cible avec Face ID" : "Enregistrer la cible avec Face ID"}</button>` : "",
   };
 };
 
@@ -206,30 +207,34 @@ SHEETS.plan = (_arg, sh) => {
     g = r.group;
     const v = sh.tmp[r.id];
     return `${head}<div class="plan-row">${catMark(r.id, r.group, "sm")}
-      <label for="plan-${esc(r.id)}"><b>${esc(r.name)}${r.year ? ' <span class="pill">par an</span>' : ""}</b><small>${r.avg ? `moyenne ${n0(r.avg)}` : "rien dépensé"}${r.now != null ? ` · cible ${n0(r.now)}` : ""}</small></label>
-      <input id="plan-${esc(r.id)}" data-plan="${esc(r.id)}" inputmode="numeric" value="${v ? v : ""}" placeholder="—" aria-label="Cible ${r.year ? "annuelle" : "mensuelle"} ${esc(r.name)} en ${base()}"></div>`;
+      <label for="plan-${esc(r.id)}"><b>${esc(r.name)}${r.year ? ' <span class="pill">par an</span>' : ""}</b><small>${r.avg ? `moyenne ${m0(r.avg)}` : "rien dépensé"}${r.now != null ? ` · cible ${m0(r.now)}` : ""}</small></label>
+      <input id="plan-${esc(r.id)}" data-plan="${esc(r.id)}" inputmode="decimal" value="${v ? v : ""}" placeholder="—" aria-label="Cible ${r.year ? "annuelle" : "mensuelle"} ${esc(r.name)} en ${base()}"></div>`;
   }).join("");
   return {
     title: "Préparer le budget",
     body: `<p class="hint">Une cible par mois et par catégorie, proposée d'après ta moyenne des derniers mois (${esc(from)}) et arrondie à la dizaine. Laisse vide ce que tu ne veux pas suivre.</p>
       <div class="plan-sum"><span>Revenus<b class="num">${amount(d.income)}</b></span><span>Budget<b class="num">${amount(total)}</b></span><span>Reste<b class="num${d.income - total < 0 ? " neg" : ""}">${amount(d.income - total)}</b></span></div>
-      ${rows}${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}`,
-    foot: `<button class="primary" type="button" data-a="plan-save" ${ch.length && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : ch.length ? `Enregistrer ${ch.length} cible${ch.length > 1 ? "s" : ""} avec Face ID` : "Aucun changement"}</button>`,
+      ${rows}${sh.bad || sh.err ? `<div class="err" role="alert">${esc(sh.bad || sh.err)}</div>` : ""}`,
+    foot: `<button class="primary" type="button" data-a="plan-save" ${ch.length && !sh.busy && !sh.bad ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : ch.length ? `${sh.touched ? "Enregistrer" : "Accepter"} ${ch.length} cible${ch.length > 1 ? "s" : ""}${sh.touched ? "" : " proposée" + (ch.length > 1 ? "s" : "")} avec Face ID` : "Aucun changement"}</button>`,
   };
 };
 
 document.addEventListener("input", (e) => {
   const id = e.target.dataset && e.target.dataset.plan;
   if (!id || SH.kind !== "plan" || !SH.tmp) return;
-  const n = parseInt(e.target.value.replace(/\D/g, ""), 10);
-  SH.tmp[id] = Number.isNaN(n) ? 0 : n;
+  const r = parseAmount(e.target.value);
+  SH.bad = r.error || "";
+  SH.touched = true;
+  if (r.value != null) SH.tmp[id] = r.value;
   renderSheet();
 });
 
 document.addEventListener("input", (e) => {
   if (e.target.id !== "t-input" || SH.kind !== "cat") return;
-  const n = parseInt(e.target.value.replace(/\D/g, ""), 10);
-  SH.tmp = Number.isNaN(n) ? 0 : n;
+  const r = parseAmount(e.target.value);
+  SH.bad = r.error || "";
+  SH.conv = null;
+  if (r.value != null) SH.tmp = r.value;
   renderSheet();
 });
 
@@ -294,13 +299,19 @@ export const actions = {
   },
   tcad: (k) => {
     if (SH.cad === k) return;
-    // la même enveloppe, exprimée par an ou par mois
-    SH.tmp = k === "year" ? (SH.tmp || 0) * 12 : Math.round((SH.tmp || 0) / 12);
+    // la même enveloppe, exprimée par an ou par mois ; un aller-retour sans retouche rend la
+    // valeur tapée, sans arrondi perdu en chemin
+    const back = SH.conv && SH.conv.to === SH.tmp ? SH.conv.from : null;
+    const next = back ?? (k === "year" ? (SH.tmp || 0) * 12 : Math.round(((SH.tmp || 0) / 12) * 100) / 100);
+    SH.conv = back == null ? { from: SH.tmp || 0, to: next } : null;
+    SH.tmp = next;
     SH.cad = k;
     renderSheet();
   },
   tstep: (v) => {
-    SH.tmp = Math.max(0, (SH.tmp || 0) + Number(v));
+    SH.conv = null;
+    SH.bad = "";
+    SH.tmp = Math.max(0, Math.round(((SH.tmp || 0) + Number(v)) * 100) / 100);
     renderSheet();
   },
   plan: () => {
@@ -318,13 +329,16 @@ export const actions = {
     try {
       const items = ch.map((r) => ["set_budget", { category_id: r.id, amount_minor: toMinor(SH.tmp[r.id]), cadence: r.year ? "year" : "month", valid_from: `${store.today}-01` }]);
       const [text, bad] = outcome(await proposeAndApprove(items));
-      if (bad) SH.err = text;
-      else {
-        closeSheet();
+      if (bad) {
+        if (SH.kind === "plan") SH.err = text;
+        else toast(`Budget non enregistré : ${text}`, { error: true });
+      } else {
+        if (SH.kind === "plan") closeSheet();
         toast(`${ch.length} cible${ch.length > 1 ? "s" : ""} enregistrée${ch.length > 1 ? "s" : ""}`);
       }
     } catch (e) {
-      SH.err = failure(e);
+      if (SH.kind === "plan") SH.err = failure(e);
+      else toast(`Budget non enregistré : ${failure(e)}`, { error: true });
     } finally {
       SH.busy = false;
       if (SH.kind) renderSheet();
@@ -337,23 +351,31 @@ export const actions = {
     renderSheet();
     try {
       const [text, bad] = outcome(await proposeAndApprove([["set_budget", { category_id: id, amount_minor: toMinor(value), cadence: yearly ? "year" : "month" }]]));
-      if (bad) SH.err = text;
-      else {
-        closeSheet();
+      if (bad) {
+        if (SH.kind === "cat" && SH.arg === id) SH.err = text;
+        else toast(`Cible non enregistrée : ${text}`, { error: true });
+      } else {
+        if (SH.kind === "cat" && SH.arg === id) closeSheet();
         toast(value > 0 ? `Cible enregistrée : ${n0(value)} ${base()} par ${yearly ? "an" : "mois"}` : "Cible retirée");
       }
     } catch (e) {
-      SH.err = failure(e);
+      // le panneau a pu être fermé pendant la validation : l'échec se dit quand même
+      if (SH.kind === "cat" && SH.arg === id) SH.err = failure(e);
+      else toast(`Cible non enregistrée : ${failure(e)}`, { error: true });
     } finally {
       SH.busy = false;
       if (SH.kind) renderSheet();
     }
   },
   "cat-tx": (id) => {
-    closeSheet(true);
-    const months = P.period === "m" ? [P.month] : (store.data(budgetPath(P.month, P.period))?.months || [P.month]);
-    store.set({ tx: "all", q: "", txcat: { id, from: months[0], to: months[months.length - 1] } });
-    go("journal", { top: true });
+    const b = store.data(budgetPath(P.month, P.period));
+    const months = P.period === "m" ? [P.month] : (b?.months || [P.month]);
+    // les bornes du serveur (fin exclue), qui suivent le jour de début en vigueur chaque mois
+    const span = b ? [b.start, new Date(Date.parse(`${b.end}T00:00:00Z`) - 864e5).toISOString().slice(0, 10)] : null;
+    const link = linkTo({ kind: "cat", id, label: id });
+    store.set({ txcat: { id, from: months[0], to: months[months.length - 1], span } });
+    // go ferme le panneau en remplaçant son entrée : le retour revient au Budget
+    go("journal", { top: true, link });
   },
 };
 

@@ -7,7 +7,6 @@ Les montants sortent toujours en `{"minor", "currency", "display"}`. Pour la por
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -211,11 +210,10 @@ def decode_cursor(cursor: str) -> tuple[str, int]:
     return d, int(s)
 
 
-def entries(
-    conn: Connection, f: EntryFilter, cursor: str | None, limit: int
-) -> tuple[list[dict[str, Any]], str | None]:
+def _entry_where(f: EntryFilter) -> tuple[list[str], dict[str, Any]] | None:
+    """Conditions SQL d'un filtre d'écritures ; None quand la recherche ne peut rien trouver."""
     where = ["1 = 1"]
-    params: dict[str, Any] = {"lim": limit + 1}
+    params: dict[str, Any] = {}
     if f.account:
         where.append("e.account_id = :acc")
         params["acc"] = f.account
@@ -241,9 +239,41 @@ def entries(
     if f.q:
         query = fts_query(f.q)
         if query is None:
-            return [], None
+            return None
         where.append("e.seq IN (SELECT rowid FROM entries_fts WHERE entries_fts MATCH :q)")
         params["q"] = query
+    return where, params
+
+
+def entry_totals(conn: Connection, f: EntryFilter) -> dict[str, int]:
+    """Nombre d'écritures du filtre et sommes des entrées et sorties sur TOUTE la sélection
+    (pas seulement la page lue), virements internes exclus des sommes, en centimes."""
+    built = _entry_where(f)
+    if built is None:
+        return {"count": 0, "in_minor": 0, "out_minor": 0}
+    where, params = built
+    ext = "(vc.category_id IS NULL OR vc.category_id NOT LIKE 'transfer%')"
+    row = conn.execute(
+        text(
+            "SELECT count(*), "
+            f"coalesce(sum(CASE WHEN e.amount_minor > 0 AND {ext} THEN e.amount_minor END), 0), "
+            f"coalesce(sum(CASE WHEN e.amount_minor < 0 AND {ext} THEN -e.amount_minor END), 0) "
+            "FROM entries e LEFT JOIN v_entry_shown vc ON vc.entry_seq = e.seq "
+            f"WHERE {' AND '.join(where)}"
+        ),
+        params,
+    ).one()
+    return {"count": int(row[0]), "in_minor": int(row[1]), "out_minor": int(row[2])}
+
+
+def entries(
+    conn: Connection, f: EntryFilter, cursor: str | None, limit: int
+) -> tuple[list[dict[str, Any]], str | None]:
+    built = _entry_where(f)
+    if built is None:
+        return [], None
+    where, params = built
+    params["lim"] = limit + 1
     by_amount = f.sort == "amount"
     if cursor:
         if by_amount:
@@ -345,45 +375,3 @@ def search(conn: Connection, q: str, limit: int = SEARCH_LIMIT) -> list[dict[str
     ).fetchall()
     pack = packs.current()
     return [_entry(r, pack) for r in rows]
-
-
-def import_detail(conn: Connection, import_id: str) -> dict[str, Any] | None:
-    row = conn.execute(
-        text(
-            "SELECT id, source, file_name, received_at, status, stats_json FROM imports "
-            "WHERE id = :i"
-        ),
-        {"i": import_id},
-    ).first()
-    if row is None:
-        return None
-    statements = [
-        {
-            "index": s[0],
-            "account_id": s[1],
-            "opbd_date": s[2],
-            "clbd_date": s[3],
-            "status": s[4],
-            "reasons": json.loads(s[5]),
-            "new": s[6],
-            "duplicates": s[7],
-        }
-        for s in conn.execute(
-            text(
-                "SELECT stmt_index, account_id, opbd_date, clbd_date, status, reasons_json, "
-                "new_entries, duplicates FROM import_statements WHERE import_id = :i "
-                "ORDER BY stmt_index"
-            ),
-            {"i": import_id},
-        )
-    ]
-    return {
-        "id": row[0],
-        "source": row[1],
-        "file_name": row[2],
-        "received_at": row[3],
-        "status": row[4],
-        "stats": json.loads(row[5]),
-        "statements": statements,
-        "proposal_id": None,  # carte apply_import : ajoutée par la route (core.db)
-    }

@@ -6,7 +6,7 @@
 // sous la carte) et prepare(ids) (remplace des cartes retouchées avant le Face ID).
 import { chosen, tick, ticked } from "./picks.js";
 import { api, store } from "./store.js";
-import { SHEETS, closeSheet, esc, failure, ic, openSheet, toast } from "./ui.js";
+import { SHEETS, closeSheet, esc, escMoney, failure, ic, openSheet, toast } from "./ui.js";
 import { credentialJSON, requestOptions } from "./webauthn.js";
 
 const BATCH = 50; // plafond de /approvals/challenge
@@ -80,7 +80,7 @@ SHEETS.props = () => {
     title: "À valider",
     body: `<p class="hint">Rien ne change sans ton Face ID. Il signe ce qui est coché ici, rien d'autre.</p>` + list.map((p) => `
       <div class="prop"><input type="checkbox" id="prop-${esc(p.id)}" data-prop="${esc(p.id)}" ${ticked(p, choices) ? "checked" : ""}>
-        <label for="prop-${esc(p.id)}"><b>${esc(p.preview.summary)}</b><span><span>${several ? `${esc(capital(p.domain))} · ` : ""}${p.revision > 1 ? `révision ${p.revision} · a changé, relis-la` : by(p.created_by)}</span>${p.reason && p.created_by.startsWith("token:") ? `<span>« ${esc(p.reason)} »</span>` : ""}</span></label>
+        <label for="prop-${esc(p.id)}"><b>${escMoney(p.preview.summary)}</b><span><span>${several ? `${esc(capital(p.domain))} · ` : ""}${p.revision > 1 ? `révision ${p.revision} · a changé, relis-la` : by(p.created_by)}</span>${p.reason && p.created_by.startsWith("token:") ? `<span>« ${esc(p.reason)} »</span>` : ""}</span></label>
         <button class="reject" type="button" data-a="prop-reject" data-v="${esc(p.id)}">Refuser</button></div>${detail(p)}`).join(""),
     foot: `<button class="primary" type="button" data-a="props-ok" ${ids.length && !busy ? "" : "disabled"}>${sign(ids)}</button>`,
   };
@@ -96,7 +96,7 @@ export function card() {
   const rest = list.length - INLINE;
   const rows = list.slice(0, INLINE).map((p) => `
       <div class="prop"><input type="checkbox" id="hp-${esc(p.id)}" data-prop="${esc(p.id)}" ${ticked(p, choices) ? "checked" : ""}>
-        <label for="hp-${esc(p.id)}"><b>${esc(p.preview.summary)}</b><span><span>${esc(capital(p.domain))} · ${p.revision > 1 ? "a changé, relis-la" : by(p.created_by)}</span></span></label></div>`).join("");
+        <label for="hp-${esc(p.id)}"><b>${escMoney(p.preview.summary)}</b><span><span>${esc(capital(p.domain))} · ${p.revision > 1 ? "a changé, relis-la" : by(p.created_by)}</span></span></label></div>`).join("");
   const others = rest > 0 ? `<p class="hint">${rest} autre${rest > 1 ? "s" : ""} dans « Tout voir » : ce Face ID ne ${rest > 1 ? "les" : "la"} signe pas.</p>` : "";
   const more = list.length > INLINE ? `<button class="link" type="button" data-a="props">Tout voir (${list.length})</button>` : `<button class="link" type="button" data-a="props">Détails</button>`;
   return `<section class="card" aria-labelledby="t-approve">
@@ -114,6 +114,7 @@ document.addEventListener("change", (e) => {
 });
 
 async function validate(ids) {
+  if (busy) return; // deux touchers dans la même trame : une seule validation
   busy = true;
   store.notify();
   try {

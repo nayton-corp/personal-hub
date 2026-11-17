@@ -8,7 +8,7 @@ import { go } from "../../shell.js";
 import { base, date, monthName, staleDays, units } from "../../format.js";
 import { catMark, taxRate } from "./meta.js";
 import { shiftMonth, store } from "../../store.js";
-import { esc, fill, ic, n0, n2, nf, pctOnly, pf, pref, setPref, sgn, skel } from "../../ui.js";
+import { errBox, esc, fill, ic, n0, n2, nf, pctOnly, pf, pref, setPref, sgn, skel } from "../../ui.js";
 import { gapRows } from "./gaps.js";
 import { breaksPath } from "./wplace.js";
 import { STRATS, todoRows } from "./strategies.js";
@@ -119,7 +119,7 @@ export function render(box) {
   const sp = sparkPath(k);
   const se = sp ? store.use(sp) : null;
   if (ke.status === "error") {
-    fill(box, `<div class="err-box" role="alert">Impossible de charger l'accueil : ${esc(ke.error.message)}</div>`);
+    fill(box, errBox(`Impossible de charger l'accueil : ${ke.error.message}`));
     return;
   }
   if (!k) {

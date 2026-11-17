@@ -3,7 +3,7 @@
 // puis constate l'opération au journal ou prend la réponse (c'est fait, plus tard, je passe).
 // La section du patrimoine, le panneau d'une stratégie, celui où on l'écrit ; calculs : smodel.js.
 import * as M from "./smodel.js";
-import { SHEETS, SH, closeSheet, esc, failure, ibox, ic, n0, n2, openSheet, renderSheet, skel, toast } from "../../ui.js";
+import { SHEETS, SH, closeSheet, errBox, esc, failure, ibox, ic, n0, n2, openSheet, renderSheet, skel, toast } from "../../ui.js";
 import { ago, base, date, decimals } from "../../format.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { api, store } from "../../store.js";
@@ -62,7 +62,7 @@ SHEETS.wstrat = () => {
   const all = e.data ? e.data.items : [];
   const live = all.filter((s) => s.status !== "ended"), ended = all.length - live.length;
   const body = () => {
-    if (e.status === "error") return `<div class="err-box" role="alert">Stratégies indisponibles : ${esc(e.error.message)}</div>`;
+    if (e.status === "error") return errBox(`Stratégies indisponibles : ${e.error.message}`);
     if (!e.data) return skel("block");
     const list = live.length ? `<div class="list">${live.map(card).join("")}</div>`
       : '<div class="empty">Une stratégie, c\'est une décision prise à froid : « si ça arrive, je fais ça ». Le hub te prévient le jour venu.</div>';

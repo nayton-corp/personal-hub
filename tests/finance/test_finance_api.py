@@ -161,6 +161,34 @@ def test_entries_pagination_and_detail(
     assert client.get("/api/finance/entries?limit=500", headers=h).status_code == 422
 
 
+def test_entries_first_page_carries_totals_of_the_whole_selection(
+    client: TestClient, ctx: HubContext, loaded: FinanceDomain
+) -> None:
+    """Les totaux d'Entrées et Sorties du Journal portent sur toute la sélection, pas sur les
+    lignes de la page lue : le premier appel les donne, les pages suivantes non."""
+    h = token(ctx, "brain=finance")
+    every: list[dict] = []
+    page = client.get("/api/finance/entries?limit=2", headers=h).json()
+    totals = page["totals"]
+    every += page["items"]
+    while page["next_cursor"]:
+        page = client.get(
+            f"/api/finance/entries?limit=2&cursor={page['next_cursor']}", headers=h
+        ).json()
+        assert page["totals"] is None
+        every += page["items"]
+    ext = [e for e in every if not (e["category"] and e["category"]["id"].startswith("transfer"))]
+    assert totals == {
+        "count": len(every),
+        "in_minor": sum(e["amount"]["minor"] for e in ext if e["amount"]["minor"] > 0),
+        "out_minor": -sum(e["amount"]["minor"] for e in ext if e["amount"]["minor"] < 0),
+    }
+    assert totals["count"] > 2  # plus d'une page : la somme de la première ne suffirait pas
+    r = client.get("/api/finance/entries?direction=out&limit=1", headers=h).json()
+    assert r["totals"]["in_minor"] == 0
+    assert r["totals"]["out_minor"] == totals["out_minor"]
+
+
 def test_summary_budget_trend(client: TestClient, ctx: HubContext, loaded: FinanceDomain) -> None:
     brain = client.get(
         "/api/finance/summary?month=2026-10", headers=token(ctx, "brain=finance")

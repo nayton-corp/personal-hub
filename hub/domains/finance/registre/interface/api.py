@@ -71,9 +71,11 @@ def build_router(host: http.Host) -> APIRouter:
         try:
             with engine.connect() as conn:
                 items, next_cursor = reads.entries(conn, f, cursor, limit)
+                # les totaux de toute la sélection, avec la première page seulement
+                totals = None if cursor else reads.entry_totals(conn, f)
         except ValueError:
             raise Problem("validation.params", "curseur invalide") from None
-        return {"items": items, "next_cursor": next_cursor}
+        return {"items": items, "next_cursor": next_cursor, "totals": totals}
 
     @r.get("/trades", response_model=TradeListOut)
     def trades_route(

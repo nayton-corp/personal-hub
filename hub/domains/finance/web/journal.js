@@ -2,7 +2,7 @@
 // période, montant) et tri, écritures par jour, détail d'une écriture et classement avec Face ID ;
 // « À classer » groupe par contrepartie avec ses libellés, comptes, dates et montants, un choix
 // par groupe, une validation pour tout le lot.
-import { MOIS, base, dayName, date, toMinor, units } from "../../format.js";
+import { MOIS, base, dayName, date, decimals, toMinor, units as u } from "../../format.js";
 import { GROUP_LABEL, catIc, catMark, txMark } from "./meta.js";
 import { outcome, proposeAndApprove } from "./proposals.js";
 import { PERIODS, periodOf } from "./jperiods.js";
@@ -19,7 +19,7 @@ const packsPath = "/finance/rules/packs";
 // tout le reste d'avant une date : catégorie proposée d'abord
 const REST_DEFAULT = "divers";
 const todoPath = "/finance/todo"; // la pastille « à classer » : une route légère, pas les chiffres clés (audit P1)
-const tx = { key: null, items: [], cursor: null, loading: false, error: null };
+const tx = { key: null, items: [], cursor: null, loading: false, error: null, totals: null };
 const picks = {}; // groupe (clé) → catégorie choisie
 const always = new Set();
 const opened = new Set(); // groupes « À classer » dépliés
@@ -30,7 +30,6 @@ let busy = false;
 const ALWAYS_PRIORITY = 4;
 
 const internal = (e) => Boolean(e.category && e.category.id.startsWith("transfer"));
-const u = (m) => units(m);
 
 const F = () => P.jf || {};
 // lien suivi depuis le Patrimoine : { token, label, jf d'avant, asset } ; un actif montre ses ordres
@@ -50,8 +49,8 @@ function query(more) {
   // le budget ouvre le journal sur une catégorie et ses mois : il prime sur les filtres
   if (P.txcat) {
     qs.set("category", P.txcat.id);
-    qs.set("from", monthSpan(P.txcat.from)[0]);
-    qs.set("to", monthSpan(P.txcat.to)[1]);
+    qs.set("from", P.txcat.span ? P.txcat.span[0] : monthSpan(P.txcat.from)[0]);
+    qs.set("to", P.txcat.span ? P.txcat.span[1] : monthSpan(P.txcat.to)[1]);
   }
   if (f.min != null && f.min !== "") qs.set("min_minor", String(toMinor(f.min)));
   if (f.max != null && f.max !== "") qs.set("max_minor", String(toMinor(f.max)));
@@ -62,13 +61,16 @@ function query(more) {
 
 async function load(more = false) {
   const key = txKey();
-  if (tx.loading && !more) return;
+  // une lecture à la fois, suite comprise (sinon le même curseur est lu deux fois) ; refusée, elle repart au finally
+  if (tx.loading) return;
   tx.loading = true;
+  if (more) store.notify(); // le bouton passe à « Chargement… » tout de suite
   try {
     const page = await api(`/finance/entries?${query(more)}`);
     if (key !== txKey()) return;
     tx.items = more ? tx.items.concat(page.items) : page.items;
     tx.cursor = page.next_cursor || null;
+    if (!more) tx.totals = page.totals || null;
     tx.error = null;
   } catch (e) {
     tx.error = lost(e);
@@ -79,18 +81,13 @@ async function load(more = false) {
   }
 }
 
-export function reset() {
-  tx.key = null;
-}
+export const reset = () => { tx.key = null; };
 
 // badge de l'onglet : les écritures à classer
 export const todoLabel = "à classer";
 export const todoCount = () => (store.data(todoPath) || { to_categorize: 0 }).to_categorize;
 
-function catMap() {
-  const c = store.data(catsPath);
-  return Object.fromEntries((c ? c.items : []).map((x) => [x.id, x]));
-}
+const catMap = () => Object.fromEntries((store.data(catsPath)?.items ?? []).map((x) => [x.id, x]));
 
 const short = (iso) => `${Number(iso.slice(8, 10))} ${MOIS[Number(iso.slice(5, 7)) - 1]}`;
 const shortY = (iso) => `${short(iso)} ${iso.slice(0, 4)}`;
@@ -145,11 +142,14 @@ function draw() {
   }
   const accName = accNames();
   const list = tx.items;
-  const inn = list.filter((e) => e.amount.minor > 0 && !internal(e)).reduce((s, e) => s + u(e.amount), 0);
-  const out = list.filter((e) => e.amount.minor < 0 && !internal(e)).reduce((s, e) => s - u(e.amount), 0);
+  // les totaux de toute la sélection viennent du serveur ; la somme des lignes lues, à défaut
+  const T = tx.totals;
+  const nb = T ? T.count : list.length;
+  const inn = T ? T.in_minor / 10 ** decimals() : list.filter((e) => e.amount.minor > 0 && !internal(e)).reduce((s, e) => s + u(e.amount), 0);
+  const out = T ? T.out_minor / 10 ** decimals() : list.filter((e) => e.amount.minor < 0 && !internal(e)).reduce((s, e) => s - u(e.amount), 0);
   const q = P.q;
   const filtered = P.txcat || q || P.tx !== "all" || active.length;
-  let h = `<div class="jsum" role="status"><span><b>${list.length}</b> écriture${list.length > 1 ? "s" : ""}${tx.cursor ? " affichées" : ""}</span><span>Entrées <b class="amt-in num">+${amount2(inn)}</b></span><span>Sorties <b class="num">−${amount2(out)}</b></span>${q && q.length < 3 ? `<span>Encore ${3 - q.length} lettre${3 - q.length > 1 ? "s" : ""} pour chercher</span>` : ""}</div>`;
+  let h = `<div class="jsum" role="status"><span><b>${nb}</b> écriture${nb > 1 ? "s" : ""}</span><span>Entrées <b class="amt-in num">+${amount2(inn)}</b></span><span>Sorties <b class="num">−${amount2(out)}</b></span>${q && q.length < 3 ? `<span>Encore ${3 - q.length} lettre${3 - q.length > 1 ? "s" : ""} pour chercher</span>` : ""}</div>`;
   if (tx.error) h += `<div class="err-box" role="alert">Impossible de charger : ${esc(tx.error)} <button class="link" type="button" data-a="jretry">Réessayer</button></div>`;
   else if (!list.length) h += tx.loading ? skel("block") : `<div class="empty">Aucune écriture ne correspond.${filtered ? '<br><button type="button" data-a="jreset">Tout afficher</button>' : ""}</div>`;
   if (F().sort === "amount") {

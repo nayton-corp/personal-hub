@@ -12,12 +12,18 @@ export class ApiError extends Error {
 
 // GET sans corps, POST avec ; `method` pour PATCH, PUT et DELETE (connexions, G5)
 export async function api(path, body, method) {
-  const res = await fetch(`/api${path}`, {
-    method: method || (body === undefined ? "GET" : "POST"),
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: "same-origin",
-  });
+  let res;
+  try {
+    res = await fetch(`/api${path}`, {
+      method: method || (body === undefined ? "GET" : "POST"),
+      headers: body === undefined ? {} : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      credentials: "same-origin",
+    });
+  } catch {
+    // réseau coupé : le message du navigateur (« Failed to fetch ») n'est pas pour l'utilisateur
+    throw new ApiError("le hub ne répond pas : vérifie la connexion", 0, "network");
+  }
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(data.title || `Erreur ${res.status}`, res.status, data.type);
@@ -89,7 +95,7 @@ function remembered() {
 // derrière son relais : 502, 503, 504) laisse à l'écran les derniers chiffres reçus pendant la
 // session ; rien n'est gardé sur l'appareil. Une erreur du hub (500) n'est pas une coupure : elle
 // se dit là où elle arrive, sans faire passer toute l'app « hors ligne » (16/11).
-export const unreachable = (e) => !(e instanceof ApiError) || [502, 503, 504].includes(e.status);
+export const unreachable = (e) => !(e instanceof ApiError) || [0, 502, 503, 504].includes(e.status);
 // le message d'un échec de chargement ; injoignable, l'app passe « hors ligne »
 export function lost(e) {
   if (!unreachable(e)) return e.message;
@@ -139,6 +145,18 @@ class Store {
         this.notify();
       });
     return entry;
+  }
+
+  // relire tout ce qui a échoué (bouton Réessayer, retour du réseau), puis redessiner
+  retryErrors() {
+    for (const [k, e] of [...this.cache.entries()]) if (e.status === "error") this.cache.delete(k);
+    this.notify();
+  }
+
+  // session finie : rien de ce qui a été lu (ni ses erreurs « authentification requise ») ne
+  // survit à la reconnexion
+  clear() {
+    this.cache.clear();
   }
 
   // relire ce qui commence par `prefix` (après un échec), puis redessiner

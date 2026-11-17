@@ -13,7 +13,7 @@ from hub.core import proposal_events, proposals
 from hub.core.auth import AppSession, Ctx
 from hub.core.body import read_body
 from hub.core.errors import Problem
-from hub.domains.finance.registre.app import reads
+from hub.domains.finance.registre.app import import_reads
 from hub.domains.finance.registre.interface import http
 from hub.domains.finance.registre.interface.http import (
     Reader,
@@ -81,7 +81,7 @@ def build_router(host: Host) -> APIRouter:
     @r.get("/imports/{import_id}", response_model=ImportDetailOut)
     def import_detail(_session: AppSession, hub_ctx: Ctx, import_id: str) -> dict[str, Any]:
         with engine.connect() as conn:
-            found = reads.import_detail(conn, import_id)
+            found = import_reads.import_detail(conn, import_id)
         if found is None:
             raise Problem("not_found")
         proposal_events.sync_events(hub_ctx)
@@ -94,5 +94,5 @@ def build_router(host: Host) -> APIRouter:
 def _status(conn: Any, import_id: str | None) -> str | None:
     if import_id is None:
         return None
-    found = reads.import_detail(conn, import_id)
+    found = import_reads.import_detail(conn, import_id)
     return str(found["status"]) if found else None
