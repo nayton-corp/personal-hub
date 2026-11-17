@@ -26,7 +26,8 @@ function row(c, pace) {
   const rest = c.t - c.s, over = rest < 0;
   const st = over ? `${m0(c.s)} sur ${m0(c.t)} · ${m0(-rest)} de trop` : `${m0(c.s)} sur ${m0(c.t)}${c.state === "likely_over" ? " · au-dessus du rythme" : ""}`;
   return `<button class="crow" type="button" data-a="cat" data-v="${esc(c.category)}" aria-label="${esc(c.name)} : ${over ? "dépassé" : "reste"} ${n0(Math.abs(rest))} ${base()}">
-    ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}</b><span class="brest num${over ? " neg" : ""}"><small>${over ? "dépassé" : "reste"}</small>${over ? "−" : ""}${m0(Math.abs(rest))}</span></span>
+    ${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}</b>
+    <span class="brest num${over ? " neg" : ""}"><small>${over ? "dépassé" : "reste"}</small>${over ? "−" : ""}${m0(Math.abs(rest))}</span></span>
     ${bar(c.t ? c.s / c.t : 0, pace)}<span class="crow-st ok">${st}</span></span></button>`;
 }
 
@@ -114,7 +115,8 @@ export function provisions(m) {
     ${ys.map((c) => {
       const y = c.yearly, done = u(y.spent), goal = u(y.target), r = goal - done;
       const aside = y.set_aside ? u(y.set_aside) : null, pace = y.pace != null ? Number(y.pace) : null;
-      const st = `${m0(done)} sur ${m0(goal)} depuis janvier${c.s ? ` · ${m0(c.s)} ce mois` : ""}${r <= 0 ? " · enveloppe épuisée" : aside != null ? ` · ${m0(aside)} par mois d'ici décembre` : ""}${c.state === "likely_over" ? " · au-dessus du rythme" : ""}`;
+      const left = r <= 0 ? " · enveloppe épuisée" : aside != null ? ` · ${m0(aside)} par mois d'ici décembre` : "";
+      const st = `${m0(done)} sur ${m0(goal)} depuis janvier${c.s ? ` · ${m0(c.s)} ce mois` : ""}${left}${c.state === "likely_over" ? " · au-dessus du rythme" : ""}`;
       return `<button class="crow" type="button" data-a="cat" data-v="${esc(c.category)}">${catMark(c.category, c.group)}<span><span class="crow-top"><b>${esc(c.name)}</b>
         <span class="brest num${r < 0 ? " neg" : ""}"><small>${r < 0 ? "dépassé" : "reste"}</small>${r < 0 ? "−" : ""}${m0(Math.abs(r))}</span></span>
         ${bar(goal ? done / goal : 0, pace)}<span class="crow-st ok">${st}</span></span></button>`;

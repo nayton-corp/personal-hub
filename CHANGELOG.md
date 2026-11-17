@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.28.0] · 2026-11-17
+
 ### Ajouté
 
 - Nouvel écran Budget : « Reste à dépenser » et ce qu'il laisse par jour, courbe du dépensé

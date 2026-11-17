@@ -45,7 +45,7 @@ def _close(page: Any) -> None:
 
 
 def _target(page: Any, category: str, value: str) -> None:
-    page.evaluate(f"document.querySelector('[data-a=\"cat\"][data-v=\"{category}\"]')?.click()")
+    page.evaluate(f'document.querySelector(\'[data-a="cat"][data-v="{category}"]\')?.click()')
     page.wait_for_selector("#t-input")
     page.fill("#t-input", value)
     page.locator('#sheet [data-a="target-save"]').click()

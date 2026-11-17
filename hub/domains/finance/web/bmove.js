@@ -35,12 +35,14 @@ SHEETS.bhead = () => {
       ${kv("arrowin", "var(--s2)", "Revenus attendus", p.income ? amount(u(p.income)) : "—", src)}
       ${kv("piggy", "var(--s2)", "Épargne visée", amount(u(p.savings)))}
       ${kv("wallet", "var(--s1)", "Cibles des dépenses", amount(u(p.targets)), "fixes et variables, provisions de l'année comprises")}
-      ${unassigned != null ? kv("sliders", unassigned < 0 ? "var(--neg)" : "var(--s4)", "Non attribué", signedAmount(unassigned), unassigned < 0 ? "le plan dépasse les revenus" : "ni ciblé ni épargné") : ""}
+      ${unassigned != null ? kv("sliders", unassigned < 0 ? "var(--neg)" : "var(--s4)", "Non attribué", signedAmount(unassigned),
+        unassigned < 0 ? "le plan dépasse les revenus" : "ni ciblé ni épargné") : ""}
       <h3>Le mois</h3>
       ${kv("cart", "var(--s3)", "Dépensé", amount(spent), "hors provisions de l'année et hors budget")}
       ${p.rest ? kv("check", "var(--accent)", "Reste à dépenser", signedAmount(u(p.rest)), p.income ? "revenus attendus − épargne visée − dépensé" : "cibles − dépensé") : ""}
       ${proj != null && b.current ? kv("trend", "var(--s4)", "Projection fin du mois", amount(proj)) : ""}
-      ${cmp != null ? kv("calendar", "var(--s6)", `Au même jour en ${esc(monthName(prevMonth(b.month)).split(" ")[0])}`, `${cmp > 0 ? "+" : "−"}${m0(Math.abs(cmp))} ${base()}`, cmp > 0 ? "tu dépenses plus vite" : "tu dépenses moins vite") : ""}
+      ${cmp != null ? kv("calendar", "var(--s6)", `Au même jour en ${esc(monthName(prevMonth(b.month)).split(" ")[0])}`,
+        `${cmp > 0 ? "+" : "−"}${m0(Math.abs(cmp))} ${base()}`, cmp > 0 ? "tu dépenses plus vite" : "tu dépenses moins vite") : ""}
       ${saved != null && f && u(f.income) ? kv("piggy", "var(--s2)", "Épargné", amount(saved), `${pf(saved / u(f.income), 0)} % des revenus reçus`) : ""}
       ${lines ? `<h3>Épargne visée</h3>${lines}` : ""}
       <p class="hint">Le reste = revenus attendus − épargne visée − dépensé. Les catégories hors budget et les provisions de l'année n'y comptent pas.</p>`,
@@ -58,12 +60,14 @@ SHEETS.bincome = (_a, sh) => {
   if (sh.tmp == null) sh.tmp = set && p.income ? Math.round(u(p.income)) : "";
   return {
     title: `${ic("arrowin")}<span>Revenus attendus</span>`,
-    body: `<p class="hint">Ce que tu comptes recevoir par mois. Sans saisie, le plan prend la moyenne des revenus des trois mois d'avant${!set && p.income ? ` (${m0(u(p.income))} ${base()})` : ""}.</p>
+    body: `<p class="hint">Ce que tu comptes recevoir par mois. Sans saisie, le plan prend la moyenne des revenus
+      des trois mois d'avant${!set && p.income ? ` (${m0(u(p.income))} ${base()})` : ""}.</p>
       <label class="field" for="inc-input">Par mois, en ${base()}
         <input id="inc-input" inputmode="decimal" value="${esc(sh.tmp)}" placeholder="moyenne" autocomplete="off" data-autofocus></label>
       ${sh.bad || sh.err ? `<div class="err" role="alert">${esc(sh.bad || sh.err)}</div>` : ""}
       ${set ? `<button class="link-row" type="button" data-a="binc-avg">Revenir à la moyenne des trois mois${ic("chev")}</button>` : ""}`,
-    foot: `<button class="primary" type="button" data-a="binc-save" ${sh.busy || sh.bad || !(Number(sh.tmp) > 0) ? "disabled" : ""}>${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer avec Face ID"}</button>`,
+    foot: `<button class="primary" type="button" data-a="binc-save" ${sh.busy || sh.bad || !(Number(sh.tmp) > 0) ? "disabled" : ""}>
+      ${ic("faceid")}${sh.busy ? "Validation…" : "Enregistrer avec Face ID"}</button>`,
   };
 };
 
@@ -112,7 +116,8 @@ SHEETS.bmove = (cat, sh) => {
       ${rows || '<div class="empty">Aucune catégorie n\'a de marge ce mois-ci.</div>'}
       <div class="mv-sum"><span>Repris</span><b class="num${tot < need ? " neg" : ""}">${m0(tot)} / ${m0(need)} ${base()}</b></div>
       ${sh.err ? `<div class="err" role="alert">${esc(sh.err)}</div>` : ""}`,
-    foot: `<button class="primary" type="button" data-a="bmv-save" ${tot && !sh.busy ? "" : "disabled"}>${ic("faceid")}${sh.busy ? "Validation…" : `Déplacer ${m0(tot)} ${base()} avec Face ID`}</button>`,
+    foot: `<button class="primary" type="button" data-a="bmv-save" ${tot && !sh.busy ? "" : "disabled"}>
+      ${ic("faceid")}${sh.busy ? "Validation…" : `Déplacer ${m0(tot)} ${base()} avec Face ID`}</button>`,
   };
 };
 
