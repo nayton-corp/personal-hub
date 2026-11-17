@@ -105,3 +105,37 @@ def expected_share(fixed: int, variable: int, c: Clock) -> tuple[int, int] | Non
     if not c.current or fixed + variable <= 0:
         return None
     return fixed * c.length + variable * c.elapsed, (fixed + variable) * c.length
+
+
+MIN_MONTHS_FOR_YEARLY = 3  # une provision annuelle ne se projette qu'après trois mois
+
+
+def year_elapsed(months_done: int, c: Clock) -> tuple[int, int]:
+    """Part écoulée de l'année budgétaire (numérateur, dénominateur) : les mois clos depuis
+    janvier, plus la part du mois en cours ; `months_done` compte le mois affiché."""
+    if not c.current:
+        return months_done, 12
+    return (months_done - 1) * c.length + c.elapsed, 12 * c.length
+
+
+def yearly_state(done: int, annual: int | None, elapsed: tuple[int, int], months_done: int) -> str:
+    """`untracked`, `over` (cumul au-delà de la cible), `likely_over` (cumul projeté à décembre au
+    rythme de l'année au-delà de la cible de plus de 10 %, après trois mois) ou `ok`."""
+    if annual is None:
+        return "untracked"
+    if done > annual:
+        return "over"
+    num, den = elapsed
+    early = months_done < MIN_MONTHS_FOR_YEARLY or num == 0
+    if not early and done * den * 100 > annual * num * (100 + LIKELY_MARGIN_PCT):
+        return "likely_over"
+    return "ok"
+
+
+def set_aside(done: int, annual: int | None, months_done: int) -> int | None:
+    """À mettre de côté chaque mois d'ici décembre, mois affiché compris :
+    (cible − cumul) ÷ mois restants ; 0 quand la cible est atteinte."""
+    if annual is None:
+        return None
+    left = max(1, 12 - months_done + 1)
+    return max(0, annual - done) // left

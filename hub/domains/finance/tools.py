@@ -84,6 +84,8 @@ DESCRIPTIONS = {
     "save_debt": "Propose une dette ou sa mise à jour (nom, prêteur, départ, mensualité, taux).",
     "record_debt_balance": "Propose un solde constaté d'une dette à une date.",
     "set_fund_fee": "Propose les frais courants (TER, en % par an) d'un fonds détenu.",
+    "set_plan_income": "Propose les revenus attendus par mois du plan du budget (sans montant : "
+    "la moyenne des revenus des trois derniers mois).",
     "save_good": "Propose un bien hors comptes (logement, véhicule, objet, prêt accordé), sa "
     "mise à jour ou une nouvelle valeur à une date.",
     "save_strategy": "Propose d'écrire ou de modifier une stratégie (finance_strategies) : vendre "

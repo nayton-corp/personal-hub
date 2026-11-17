@@ -15,7 +15,15 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from hub.domains.finance import thresholds
-from hub.domains.finance.classement.app.totals import Line, Lines, Totals, period_report
+from hub.domains.finance.classement.app.totals import (
+    EXPENSE_GROUPS as EXPENSE_GROUPS,
+)
+from hub.domains.finance.classement.app.totals import (
+    Line,
+    Lines,
+    Totals,
+    period_report,
+)
 from hub.domains.finance.packs import CountryPack
 from hub.domains.finance.registre.app.reads import budget_accounts, in_list, last_dates
 from hub.domains.finance.registre.model import institutions
@@ -32,7 +40,6 @@ from hub.kernel.money import base_currency
 PENSION_DEPOSITS = institutions.like_any(
     "bank_tx_code", institutions.prefixes(pension_deposit=True)
 )
-EXPENSE_GROUPS = ("fixed", "variable")
 FLOW_GROUPS = ("fixed", "variable", "savings")
 NAMES_EXTRA = {UNCATEGORIZED: "À catégoriser", OTHERS: "Autres"}
 
@@ -119,8 +126,11 @@ def expense_budget(conn: Connection, month: str) -> int | None:
 
 
 def monthly_expenses(lines: list[Line], year: frozenset[str]) -> int:
-    """Dépenses de la période hors catégories suivies à l'année, en positif."""
-    return -sum(x.minor for x in lines if x.group in EXPENSE_GROUPS and x.category not in year)
+    """Dépenses de la période hors catégories suivies à l'année, en positif ; une catégorie
+    remboursée au-delà de ce qu'elle a coûté compte pour 0 (totals.netted)."""
+    return -sum(
+        min(0, x.minor) for x in lines if x.group in EXPENSE_GROUPS and x.category not in year
+    )
 
 
 def report_for(conn: Connection, months: list[str]) -> Lines:

@@ -13,7 +13,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import Connection, text
 
-from hub.domains.finance.classement.app.totals import _scope
+from hub.domains.finance.classement.app.totals import scope_clause
 from hub.domains.finance.registre.model import period as period_rules
 from hub.domains.finance.registre.model.amounts import previous_months
 
@@ -30,7 +30,7 @@ _LAST = (
 
 def last_paid(conn: Connection, start: date, end: date) -> dict[str, str]:
     """Catégorie fixe → date de son dernier débit entre `start` inclus et `end` exclu."""
-    scope, params = _scope(conn)
+    scope, params = scope_clause(conn)
     rows = conn.execute(
         text(_LAST.format(scope=scope)), {**params, "s": start.isoformat(), "e": end.isoformat()}
     )

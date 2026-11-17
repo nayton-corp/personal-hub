@@ -177,6 +177,9 @@ export interface BudgetOut {
   state: BudgetStateOut;
   lines: BudgetLineOut[];
   missing_fx: MissingFxOut[];
+  plan: PlanOut;
+  daily: number[];
+  prev_daily: number[];
 }
 
 export interface BudgetStateOut {
@@ -998,6 +1001,17 @@ export interface Pillar3aOut {
   source: string;
 }
 
+export interface PlanOut {
+  income: MoneyOut | null;
+  income_source: string | null;
+  savings: MoneyOut;
+  targets: MoneyOut;
+  unassigned: MoneyOut | null;
+  rest: MoneyOut | null;
+  per_day: MoneyOut | null;
+  savings_lines: SavingsLineOut[];
+}
+
 export interface PreviewOut {
   summary: string;
   details: Record<string, any>;
@@ -1176,6 +1190,13 @@ export interface RunnerConnectionOut {
 
 export interface RunnerListOut {
   items: RunnerConnectionOut[];
+}
+
+export interface SavingsLineOut {
+  category: string;
+  name: string;
+  target: MoneyOut;
+  done: MoneyOut;
 }
 
 export interface SearchOut {
@@ -1413,4 +1434,6 @@ export interface YearlyOut {
   target: MoneyOut | null;
   spent: MoneyOut;
   ratio: string | null;
+  pace?: string | null;
+  set_aside?: MoneyOut | null;
 }

@@ -2,6 +2,23 @@
 
 ## [Non publié]
 
+### Ajouté
+
+- Budget, plan du mois (calcul serveur, `plan` dans `/finance/budget`) : revenus attendus
+  (saisis, ou moyenne des trois mois d'avant), épargne visée (cibles posées sur les catégories
+  d'épargne), non attribué, reste du mois et montant par jour. Nouvelle proposition
+  `set_plan_income` ; `set_budget` accepte les catégories d'épargne.
+- Budget : dépensé cumulé jour par jour du mois et du mois d'avant (`daily`, `prev_daily`).
+- Provisions annuelles : rythme de l'année, montant à mettre de côté par mois et état
+  « probablement dépassée ».
+- Migration finance 0032 : table `plan_income` (en ajout seul), colonnes `mode`, `icon` et
+  `archived_at` sur les catégories (préparées pour les modes de catégorie).
+
+### Modifié
+
+- Un remboursement classé dans une catégorie de dépense la diminue sans la rendre négative sur
+  la période ; l'excédent compte en revenu (totaux inchangés).
+
 ## [0.27.2] · 2026-11-17
 
 ### Corrigé

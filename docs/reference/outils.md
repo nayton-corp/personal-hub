@@ -80,5 +80,6 @@ Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hu
 | `finance_propose_set_account_goal` | `finance:propose` | `account_id`, `goal`, `reason`? | Propose l'objectif d'un compte (current, safety, projects, long_term, retirement). |
 | `finance_propose_set_fund_fee` | `finance:propose` | `isin`, `ter_pct`, `reason`? | Propose les frais courants (TER, en % par an) d'un fonds détenu. |
 | `finance_propose_set_month_start` | `finance:propose` | `start_day`, `valid_from`?, `reason`? | Propose le jour où commence le mois budgétaire, dès un mois donné. |
+| `finance_propose_set_plan_income` | `finance:propose` | `amount_minor`?, `currency`?, `valid_from`?, `reason`? | Propose les revenus attendus par mois du plan du budget (sans montant : la moyenne des revenus des trois derniers mois). |
 | `finance_propose_unlink_crypto_moves` | `finance:propose` | `entry_id`, `peer_id`, `kind`, `reason`? | Propose de défaire un lien entre deux mouvements crypto. |
 | `finance_propose_withdraw_break_decision` | `finance:propose` | `decision_id`, `reason`? | Propose de retirer une décision de rapprochement : la rupture se rouvre. |

@@ -42,6 +42,8 @@ class YearlyOut(Out):
     target: MoneyOut | None  # suivie à l'année sans cible en vigueur ce mois-là
     spent: MoneyOut
     ratio: str | None
+    pace: str | None = None  # part écoulée de l'année
+    set_aside: MoneyOut | None = None  # à mettre de côté par mois d'ici décembre
 
 
 class BudgetLineOut(Out):
@@ -66,6 +68,26 @@ class BudgetStateOut(Out):
     over_by: MoneyOut | None
 
 
+class SavingsLineOut(Out):
+    category: str
+    name: str
+    target: MoneyOut  # cible de la période
+    done: MoneyOut  # versé pendant la période
+
+
+class PlanOut(Out):
+    """Le plan du mois (refonte du budget, lot A, plan.py)."""
+
+    income: MoneyOut | None  # revenus attendus ; None sans saisie ni historique
+    income_source: str | None  # set (saisis) | average (moyenne des 3 mois d'avant)
+    savings: MoneyOut  # épargne visée
+    targets: MoneyOut  # cibles des dépenses, douzième des cibles annuelles compris
+    unassigned: MoneyOut | None  # revenus − épargne − cibles ; négatif : le plan dépasse
+    rest: MoneyOut | None  # reste du mois : revenus − épargne − dépensé (H1)
+    per_day: MoneyOut | None  # reste ÷ jours restants, aujourd'hui compris
+    savings_lines: list[SavingsLineOut]
+
+
 class BudgetOut(Out):
     month: str
     period: str
@@ -87,6 +109,9 @@ class BudgetOut(Out):
     state: BudgetStateOut
     lines: list[BudgetLineOut]
     missing_fx: list[MissingFxOut]
+    plan: PlanOut
+    daily: list[int]  # dépensé cumulé à la fin de chaque jour, en unités mineures
+    prev_daily: list[int]  # la même courbe pour le mois d'avant, entier
 
 
 class BudgetTotalsOut(Out):
