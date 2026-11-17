@@ -38,6 +38,8 @@ def test_plan_numbers_follow_h1_and_fall_back_to_targets() -> None:
     assert plan.plan_numbers(500_000, 60_000, 175_000, 193_000, None) == (265_000, 247_000)
     # sans revenus attendus : le reste d'avant (cibles − dépensé), pas de non attribué
     assert plan.plan_numbers(None, 60_000, 175_000, 193_000, -18_000) == (None, -18_000)
+    # ce qui est déjà promis (charges attendues, provisions) sort aussi du reste
+    assert plan.plan_numbers(500_000, 60_000, 175_000, 0, None, reserved=150_000)[1] == 290_000
     assert plan.per_day(247_000, 4, True) == 49_400  # 5 jours, aujourd'hui compris
     assert plan.per_day(-1, 4, True) is None
     assert plan.per_day(247_000, 4, False) is None
@@ -126,3 +128,25 @@ def test_aggregates_scope_has_no_curve_nor_savings_detail(
     b = r.json()
     assert (b["daily"], b["prev_daily"], b["plan"]["savings_lines"]) == ([], [], [])
     assert b["plan"]["rest"] is not None
+
+
+def test_charges_still_expected_are_taken_out_of_the_rest(
+    year: FinanceDomain,  # noqa: F811
+) -> None:
+    from hub.domains.finance.classement.app import budget as budget_app
+    from hub.domains.finance.classement.app import recurring
+    from hub.platform.db import begin_immediate
+
+    today = date(2026, 11, 3)  # rien d'importé en novembre : le loyer du 1er est attendu
+    with begin_immediate(year.engine()) as conn:
+        recurring.refresh(conn, today)
+    with year.engine().connect() as conn:
+        b = budget_app.budget(conn, "2026-11", "m", today, aggregates_only=False)
+    p = b["plan"]
+    pending = minor(p["pending"])
+    assert pending >= 150_000  # le loyer au moins
+    assert minor(p["rest"]) == minor(p["income"]) - minor(b["budgeted_expenses"]) - pending
+    # un mois clos n'attend plus rien
+    with year.engine().connect() as conn:
+        oct_ = budget_app.budget(conn, "2026-09", "m", date(2026, 10, 27), aggregates_only=False)
+    assert minor(oct_["plan"]["pending"]) == 0

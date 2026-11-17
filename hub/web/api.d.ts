@@ -1018,6 +1018,8 @@ export interface PlanOut {
   income_source: string | null;
   savings: MoneyOut;
   targets: MoneyOut;
+  pending: MoneyOut;
+  provisions: MoneyOut;
   unassigned: MoneyOut | null;
   rest: MoneyOut | null;
   per_day: MoneyOut | null;

@@ -22,11 +22,12 @@ function missingFx(items) {
     pas comptée${n > 1 ? "s" : ""} ici tant que le cours manque.</span></div>`;
 }
 
-// ce qu'on peut dépenser sur la période : le dépensé plus le reste du plan (revenus attendus −
-// épargne visée), sinon la somme des cibles
+// ce qu'on peut dépenser sur la période : le dépensé, le reste du plan et les charges encore
+// attendues (revenus attendus − épargne visée − provisions), sinon la somme des cibles
 export function ceiling(b, m) {
   const rest = b.plan && b.plan.rest ? u(b.plan.rest) : null;
-  return rest != null ? { v: m.spent + rest, label: b.plan.income ? "Disponible" : "Budget" } : m.T != null ? { v: m.T, label: "Budget" } : null;
+  const pending = b.plan && b.plan.pending ? u(b.plan.pending) : 0; // charges encore attendues : elles finiront dans la courbe
+  return rest != null ? { v: m.spent + rest + pending, label: b.plan.income ? "Disponible" : "Budget" } : m.T != null ? { v: m.T, label: "Budget" } : null;
 }
 
 // --- la courbe du mois -------------------------------------------------------------------------

@@ -40,14 +40,17 @@ SHEETS.bhead = () => {
         unassigned < 0 ? "le plan dépasse les revenus" : "ni ciblé ni épargné") : ""}
       <h3>Le mois</h3>
       ${kv("cart", "var(--s3)", "Dépensé", amount(spent), "hors provisions de l'année et hors budget")}
-      ${p.rest ? kv("check", "var(--accent)", "Reste à dépenser", signedAmount(u(p.rest)), p.income ? "revenus attendus − épargne visée − dépensé" : "cibles − dépensé") : ""}
+      ${u(p.pending) ? kv("calendar", "var(--s4)", "Encore attendu", amount(u(p.pending)), "charges fixes et abonnements pas encore passés") : ""}
+      ${u(p.provisions) && p.income ? kv("plane", "var(--s7)", "Provisions de l'année", amount(u(p.provisions)), "la part du mois, mise de côté") : ""}
+      ${p.rest ? kv("check", "var(--accent)", "Reste à dépenser", signedAmount(u(p.rest)), p.income ? "revenus − épargne − dépensé − attendu − provisions" : "cibles − dépensé") : ""}
       ${proj != null && b.current ? kv("trend", "var(--s4)", "Projection fin du mois", amount(proj)) : ""}
       ${cmp != null ? kv("calendar", "var(--s6)", `Au même jour en ${esc(monthName(prevMonth(b.month)).split(" ")[0])}`,
         `${cmp > 0 ? "+" : "−"}${m0(Math.abs(cmp))} ${base()}`, cmp > 0 ? "tu dépenses plus vite" : "tu dépenses moins vite") : ""}
       ${saved != null && f && u(f.income) ? kv("piggy", "var(--s2)", "Épargné", amount(saved), `${pf(saved / u(f.income), 0)} % des revenus reçus`) : ""}
       <h3>Épargne visée</h3>${lines || '<p class="hint">Aucune pour l\'instant : fixe ce que tu veux mettre de côté chaque mois sur tes catégories d\'épargne.</p>'}
       <button class="link-row" type="button" data-a="plan">${lines ? "Modifier l'épargne visée" : "Fixer l'épargne visée"}${ic("chev")}</button>
-      <p class="hint">Le reste = revenus attendus − épargne visée − dépensé. Les catégories hors budget et les provisions de l'année n'y comptent pas.</p>`,
+      <p class="hint">Le reste = revenus attendus − épargne visée − dépensé − charges encore attendues ce mois
+        − part mensuelle des provisions de l'année. Les catégories hors budget n'y comptent pas.</p>`,
     foot: `<button class="secondary" type="button" data-a="bincome" aria-haspopup="dialog">${ic("arrowin")}Revenus attendus</button>
       <button class="secondary" type="button" data-a="plan" aria-haspopup="dialog">${ic("sliders")}Ajuster les cibles</button>`,
   };

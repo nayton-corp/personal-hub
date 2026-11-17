@@ -89,8 +89,10 @@ class PlanOut(Out):
     income_source: str | None  # set (saisis) | average (moyenne des 3 mois d'avant)
     savings: MoneyOut  # épargne visée
     targets: MoneyOut  # cibles des dépenses, douzième des cibles annuelles compris
+    pending: MoneyOut  # charges fixes et abonnements du mois encore attendus
+    provisions: MoneyOut  # douzième des cibles annuelles, mis de côté
     unassigned: MoneyOut | None  # revenus − épargne − cibles ; négatif : le plan dépasse
-    rest: MoneyOut | None  # reste du mois : revenus − épargne − dépensé (H1)
+    rest: MoneyOut | None  # revenus − épargne − dépensé − attendu − provisions (H1)
     per_day: MoneyOut | None  # reste ÷ jours restants, aujourd'hui compris
     savings_lines: list[SavingsLineOut]
 

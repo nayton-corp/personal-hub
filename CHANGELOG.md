@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+## [0.28.4] · 2026-11-17
+
+### Corrigé
+
+- Budget, « Reste à dépenser » : les charges fixes et abonnements du mois pas encore passés et la
+  part mensuelle des provisions de l'année en sont retirés (le chiffre était trop haut tant
+  qu'une charge n'était pas débitée). Le mois en détail les montre (`plan.pending`,
+  `plan.provisions`).
+
 ## [0.28.3] · 2026-11-17
 
 ### Ajouté
