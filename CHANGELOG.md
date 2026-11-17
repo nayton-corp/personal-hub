@@ -2,6 +2,8 @@
 
 ## [Non publié]
 
+## [0.28.3] · 2026-11-17
+
 ### Ajouté
 
 - Budget : l'épargne visée se règle dans l'app. « Préparer le budget » liste aussi les catégories
