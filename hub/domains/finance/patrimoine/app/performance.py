@@ -55,6 +55,8 @@ from hub.domains.finance.patrimoine.model.returns import (
     engaged,
     extremes,
     mwr,
+    on_stake,
+    peak_stakes,
     personal,
 )
 from hub.domains.finance.registre.model.amounts import money
@@ -137,6 +139,8 @@ def _summary(days: Sequence[str], s: Series, ccy: str, *, with_mwr: bool = True)
         # partie de la période (un compte vidé tôt donnait un taux annuel énorme)
         "mwr": _rate(mwr(days, s)) if with_mwr and engaged(s) else None,
         "personal": _rate(personal(s, floor)),
+        # le gain rapporté à l'argent mis en jeu : le repli quand les deux taux se taisent
+        "on_stake": _rate(on_stake(gain, peak_stakes(s)[-1], floor)),
         "complete": not any(s.missing),
     }
 
@@ -186,6 +190,7 @@ def report(
         if j and f > 0:
             stake += f
     floor = min_base()
+    upto = peak_stakes(s)  # jusqu'au jour j compris : l'apport du jour est dans son gain
     points = []
     for k in _sample(days, ks, ke, step):
         j = k - ks
@@ -198,6 +203,7 @@ def report(
                 "gain": money(s.value[j] - s.value[0] - flows, ccy),
                 "twr": _rate(s.index[j] - 1) if s.positive else None,
                 "personal": _rate(dietz(s, j, flows, timed[j], floor, stakes[j])),
+                "on_stake": _rate(on_stake(s.value[j] - s.value[0] - flows, upto[j], floor)),
                 "drawdown": _rate(s.index[j] / peaks[j] - 1) if s.positive else None,
                 "complete": not s.missing[j],
             }

@@ -296,6 +296,7 @@ class LineSummaryOut(Out):
     twr_yearly: str | None
     mwr: str | None
     personal: str | None = None
+    on_stake: str | None = None
     complete: bool
 
 
@@ -306,6 +307,7 @@ class PerformancePointOut(Out):
     gain: MoneyOut
     twr: str | None
     personal: str | None = None
+    on_stake: str | None = None
     drawdown: str | None
     complete: bool
 
