@@ -78,7 +78,8 @@ def test_the_month_opens_on_what_is_left_and_its_curve(page: Any) -> None:
     shown = page.eval_on_selector_all(
         '#budCats [data-a="cat"]', "(xs) => xs.map((x) => x.dataset.v)"
     )
-    assert shown and len(shown) == len(set(shown))
+    assert shown
+    assert len(shown) == len(set(shown))
     assert page.locator("#trend .mcol").count() >= 1  # la tendance, ouverte en bas
     assert page.problems == []
 
@@ -229,9 +230,7 @@ def test_a_fixed_target_is_set_per_year_from_the_plan_and_shows_on_the_month(pag
 
 def test_a_category_set_per_year_from_its_card_goes_to_per_year(page: Any) -> None:
     lines = _budget(page)["lines"]
-    var = next(
-        x for x in lines if x["group"] == "variable" and x["target"] and not x.get("yearly")
-    )
+    var = next(x for x in lines if x["group"] == "variable" and x["target"] and not x.get("yearly"))
     open_tab(page, "budget")
     page.locator(f'#budCats [data-a="cat"][data-v="{var["category"]}"]').click()
     page.wait_for_selector("#f-amt")
@@ -262,7 +261,8 @@ def test_a_new_category_with_a_target_keeps_its_target_to_confirm(page: Any) -> 
     page.wait_for_selector("#sheet .hint >> text=Il reste à valider sa cible")
     page.locator('#sheet [data-a="f-save"]').click()
     page.wait_for_selector("html:not(.sheet-open)")
-    made = next(c for c in _get(page, "/finance/categories")["items"] if c["name"] == "Frais du jardin")
+    cats = _get(page, "/finance/categories")["items"]
+    made = next(c for c in cats if c["name"] == "Frais du jardin")
     line = next(x for x in _budget(page)["lines"] if x["category"] == made["id"])
     assert float(line["yearly"]["target"]["display"]) == 600
     assert page.problems == []
