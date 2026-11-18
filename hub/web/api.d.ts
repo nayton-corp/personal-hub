@@ -1111,6 +1111,8 @@ export interface RecurringItemOut {
   active: boolean;
   account: string | null;
   last_entry_id: string | null;
+  key: string;
+  found_label: string;
 }
 
 export interface RecurringOut {
@@ -1120,6 +1122,14 @@ export interface RecurringOut {
   monthly_total: MoneyOut[];
   by_category: RecurringByCategoryOut[];
   items?: RecurringItemOut[] | null;
+  removed?: RecurringRemovedOut[] | null;
+}
+
+export interface RecurringRemovedOut {
+  key: string;
+  label: string;
+  cadence: string;
+  amount: MoneyOut;
 }
 
 export interface RefOut {
@@ -1433,6 +1443,7 @@ export interface UpcomingItemOut {
   amount: MoneyOut;
   status: string;
   suggested_target: MoneyOut | null;
+  via?: string | null;
 }
 
 export interface UpcomingOut {

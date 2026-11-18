@@ -7,7 +7,7 @@ du mois et par jour, et les dépenses cumulées jour par jour pour la courbe de 
 - Non attribué : revenus attendus − épargne visée − cibles des dépenses (une cible annuelle
   pour son douzième). Négatif : le plan dépasse les revenus.
 - Reste du mois (H1) : revenus attendus − épargne visée − dépensé − ce qui est encore attendu
-  (charges fixes et abonnements du mois pas encore passés, upcoming.py) − le douzième des
+  (charges fixes du mois pas encore passées, upcoming.py) − le douzième des
   cibles annuelles (les catégories suivies à l'année ont leur enveloppe : leur dépense n'entre
   pas dans le dépensé) ; sans revenus attendus, cibles − dépensé (le reste à vivre d'avant).
 - Par jour : le reste ÷ les jours restants, aujourd'hui compris ; rien si le reste est négatif.

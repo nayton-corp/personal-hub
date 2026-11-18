@@ -96,6 +96,9 @@ DESCRIPTIONS = {
     "la moyenne des revenus des trois derniers mois).",
     "move_budget": "Propose de déplacer un montant de la cible d'une catégorie vers une autre, "
     "pour un mois seulement (couvrir un dépassement avec ce qui reste ailleurs).",
+    "set_recurring": "Propose de corriger un abonnement repéré (finance_recurring, sa clé) : "
+    "le renommer, changer sa catégorie, ou le retirer (hidden=true : ce n'est pas un "
+    "abonnement) et le remettre.",
     "save_good": "Propose un bien hors comptes (logement, véhicule, objet, prêt accordé), sa "
     "mise à jour ou une nouvelle valeur à une date.",
     "save_strategy": "Propose d'écrire ou de modifier une stratégie (finance_strategies) : vendre "

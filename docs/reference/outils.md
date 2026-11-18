@@ -37,7 +37,7 @@ Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hu
 | `finance_month_summary` | `finance:aggregates` | `month`? | Totaux d'un mois : revenus, dépenses, épargne, et montant par catégorie (en positif). Répond à « combien en restaurants ce mois ? ». |
 | `finance_budget_status` | `finance:aggregates` | `month`? | Budget d'un mois : dépensé contre cible par catégorie, projection à fin de mois, dépassements, reste à vivre. |
 | `finance_budget_months` | `finance:aggregates` | `month`?, `months`? | Revenus, dépenses fixes et variables, épargne, placements et taux d'épargne, mois par mois jusqu'au mois demandé. |
-| `finance_budget_upcoming` | `finance:aggregates` | `month`? | « À venir » du mois : charges fixes et abonnements, payés ou attendus, avec leur date, ce qui reste à payer et les charges pas vues à leur date habituelle. |
+| `finance_budget_upcoming` | `finance:aggregates` | `month`? | « À venir » du mois : charges fixes (une par catégorie), payées ou attendues, avec leur date, ce qui reste à payer et les charges pas vues à leur date habituelle. |
 | `finance_flows` | `finance:aggregates` | `month`?, `period`? | Les flux d'un mois : revenus par source, puis fixe, variable, épargne par catégorie, et le reste sur compte ; `period: q` pour le trimestre. |
 | `finance_category_trend` | `finance:aggregates` | `category`, `months`? | Montant d'une catégorie mois par mois, jusqu'au mois en cours. |
 | `finance_networth` | `finance:aggregates` | — | Patrimoine net dans la devise de base, répartition par enveloppe, variations sur un mois et depuis janvier, marge 3a de l'année. |
@@ -86,5 +86,6 @@ Les outils que chaque domaine donne à l'assistant (`hub_capabilities`, puis `hu
 | `finance_propose_set_fund_fee` | `finance:propose` | `isin`, `ter_pct`, `reason`? | Propose les frais courants (TER, en % par an) d'un fonds détenu. |
 | `finance_propose_set_month_start` | `finance:propose` | `start_day`, `valid_from`?, `reason`? | Propose le jour où commence le mois budgétaire, dès un mois donné. |
 | `finance_propose_set_plan_income` | `finance:propose` | `amount_minor`?, `currency`?, `valid_from`?, `reason`? | Propose les revenus attendus par mois du plan du budget (sans montant : la moyenne des revenus des trois derniers mois). |
+| `finance_propose_set_recurring` | `finance:propose` | `key`, `hidden`?, `label`?, `category_id`?, `reason`? | Propose de corriger un abonnement repéré (finance_recurring, sa clé) : le renommer, changer sa catégorie, ou le retirer (hidden=true : ce n'est pas un abonnement) et le remettre. |
 | `finance_propose_unlink_crypto_moves` | `finance:propose` | `entry_id`, `peer_id`, `kind`, `reason`? | Propose de défaire un lien entre deux mouvements crypto. |
 | `finance_propose_withdraw_break_decision` | `finance:propose` | `decision_id`, `reason`? | Propose de retirer une décision de rapprochement : la rupture se rouvre. |

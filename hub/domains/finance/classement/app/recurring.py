@@ -10,7 +10,8 @@ suivante est le dernier paiement plus le rythme ; un abonnement dont l'échéanc
 plus d'une tolérance est réputé arrêté.
 
 Les virements, l'épargne et les écritures appariées ne comptent pas. La table est dérivée :
-recalculée en entier avec les instantanés.
+recalculée en entier avec les instantanés. Les corrections de la personne (nom, catégorie,
+retiré) sont à part (`recurring_choices`, recurring_kinds.py) : `v_recurring` les applique.
 """
 
 from __future__ import annotations
@@ -92,6 +93,26 @@ def display(counterparty: str | None, label: str) -> str:
     return label.strip()
 
 
+_CARD = re.compile(r"\b(num[ée]ro de carte|card number|carte n)\b.*$", re.IGNORECASE)
+_GENERIC = {"paiement", "achat", "debit", "débit", "payment", "purchase", "ordre", "lsv", "ebill"}
+
+
+def tidy(text: str) -> str:
+    """Un nom lisible tiré d'un libellé bancaire : sans date, heure, référence ni numéro de
+    carte, sans « Paiement » en tête ; en capitales seulement, remis en casse de titre.
+    « Paiement 04.11.2026 17:14 AMAZON PAYMENTS Numéro de carte: 5354… » → « Amazon Payments »."""
+    words = [w for w in _CARD.sub("", text).replace(":", " ").split() if not _DIGIT.search(w)]
+    words = [w for w in words if "*" not in w and w.strip(".,;-/")]
+    while words and normalize(words[0]) in _GENERIC:
+        words.pop(0)
+    out = " ".join(words).strip(" .,;-/")
+    if not out:
+        return text.strip()
+    if out.isupper() and len(out) > 4:
+        return " ".join(w[:1] + w[1:].lower() for w in out.split())
+    return out
+
+
 def merchant_key(counterparty: str | None, label: str) -> str:
     """Les mots sans chiffre (une référence change à chaque paiement), sans ponctuation."""
     words = [w for w in normalize(display(counterparty, label)).split() if not _DIGIT.search(w)]
@@ -146,7 +167,7 @@ def detect(pays: list[Pay], today: date) -> Series | None:
     return Series(
         key="",
         account_id=last.account_id,
-        label=display(last.counterparty, last.label)[:80] or "Paiement régulier",
+        label=tidy(display(last.counterparty, last.label))[:80] or "Paiement régulier",
         category_id=last.category,
         cadence=cadence,
         amount=-median,
@@ -247,12 +268,15 @@ def listing(conn: Connection, today: date, *, aggregates_only: bool) -> dict[str
     rows = conn.execute(
         text(
             "SELECT r.label, r.category_id, c.name, r.cadence, r.amount_minor, r.last_minor, "
-            "r.currency, r.occurrences, r.last_date, r.next_date, r.active, a.name, e.id "
-            "FROM recurring r JOIN accounts a ON a.id = r.account_id "
+            "r.currency, r.occurrences, r.last_date, r.next_date, r.active, a.name, e.id, "
+            "r.key, r.hidden, r.found_label "
+            "FROM v_recurring r JOIN accounts a ON a.id = r.account_id "
             "JOIN entries e ON e.seq = r.last_seq "
             "LEFT JOIN categories c ON c.id = r.category_id ORDER BY r.next_date, r.label"
         )
     ).fetchall()
+    removed = [r for r in rows if r[14]]  # retirés à la main : ni comptés ni montrés comme actifs
+    rows = [r for r in rows if not r[14]]
     active = [r for r in rows if r[10]]
     counts: dict[str, int] = defaultdict(int)
     for r in active:
@@ -297,7 +321,12 @@ def listing(conn: Connection, today: date, *, aggregates_only: bool) -> dict[str
             "active": bool(r[10]),
             "account": r[11],
             "last_entry_id": r[12],
+            "key": r[13],
+            "found_label": r[15],
         }
         for r in rows
+    ]
+    out["removed"] = [
+        {"key": r[13], "label": r[0], "cadence": r[3], "amount": money(r[4], r[6])} for r in removed
     ]
     return out

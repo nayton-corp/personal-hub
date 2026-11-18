@@ -40,7 +40,7 @@ SHEETS.bhead = () => {
         unassigned < 0 ? "le plan dépasse les revenus" : "ni ciblé ni épargné") : ""}
       <h3>Le mois</h3>
       ${kv("cart", "var(--s3)", "Dépensé", amount(spent), "hors provisions de l'année et hors budget")}
-      ${u(p.pending) ? kv("calendar", "var(--s4)", "Encore attendu", amount(u(p.pending)), "charges fixes et abonnements pas encore passés") : ""}
+      ${u(p.pending) ? kv("calendar", "var(--s4)", "Encore attendu", amount(u(p.pending)), "charges fixes pas encore passées") : ""}
       ${u(p.provisions) && p.income ? kv("plane", "var(--s7)", "Provisions de l'année", amount(u(p.provisions)), "la part du mois, mise de côté") : ""}
       ${p.rest ? kv("check", "var(--accent)", "Reste à dépenser", signedAmount(u(p.rest)), p.income ? "revenus − épargne − dépensé − attendu − provisions" : "cibles − dépensé") : ""}
       ${proj != null && b.current ? kv("trend", "var(--s4)", "Projection fin du mois", amount(proj)) : ""}

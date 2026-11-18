@@ -158,3 +158,32 @@ def test_a_savings_target_is_set_from_the_month_detail(page: Any) -> None:
     page.locator('#sheet [data-a="sheet-close"]').click()
     page.wait_for_selector("html:not(.sheet-open)")
     assert page.problems == []
+
+
+def test_a_detected_subscription_is_renamed_and_removed_from_the_budget(page: Any) -> None:
+    page.evaluate("fetch('/api/finance/recurring/refresh', {method: 'POST'})")
+    page.wait_for_load_state("networkidle")
+    items = [x for x in _get(page, "/finance/recurring")["items"] if x["active"]]
+    assert items, "les données de démonstration ont des abonnements"
+    sub = items[0]
+    open_tab(page, "budget")
+    if page.locator('#subs [data-a="bfold"][aria-expanded="false"]').count():
+        page.locator("#subs .fold-btn").click()
+    page.locator(f'#subs [data-a="sub"][data-v="{sub["key"]}"]').click()
+    page.wait_for_selector("#sub-name")
+    page.fill("#sub-name", "Nom corrigé")
+    page.locator('#sheet [data-a="sub-save"]').click()
+    page.wait_for_selector("html:not(.sheet-open)")
+    item = next(x for x in _get(page, "/finance/recurring")["items"] if x["key"] == sub["key"])
+    assert (item["label"], item["found_label"]) == ("Nom corrigé", sub["found_label"])
+    page.locator(f'#subs [data-a="sub"][data-v="{sub["key"]}"]').click()
+    page.locator('#sheet [data-a="sub-hide"]').click()
+    page.wait_for_selector("html:not(.sheet-open)")
+    after = _get(page, "/finance/recurring")
+    assert sub["key"] in {x["key"] for x in after["removed"]}
+    page.wait_for_selector(f'#subs [data-a="sub-show"][data-v="{sub["key"]}"]')
+    page.locator(f'#subs [data-a="sub-show"][data-v="{sub["key"]}"]').click()
+    page.wait_for_function(
+        "fetch('/api/finance/recurring').then((r) => r.json()).then((d) => !d.removed.length)"
+    )
+    assert page.problems == []

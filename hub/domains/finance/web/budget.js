@@ -5,11 +5,12 @@
 // viennent de /finance/budget, /flows, /budget/months (audit M3) : ici on met en mots, on ne
 // calcule pas.
 import { go, reveal } from "../../shell.js";
-import { MOIS, base, date, monthName, parseAmount, toMinor, units } from "../../format.js";
-import { categories, foldHead, shortMonth, trend } from "./bviews.js";
+import { MOIS, base, monthName, parseAmount, toMinor, units } from "../../format.js";
+import { categories, shortMonth, trend } from "./bviews.js";
 import { action, hero, heroActions } from "./bhero.js";
 import { daily, outside, provisions, upcoming } from "./bmonth.js";
 import * as bmove from "./bmove.js";
+import * as bsubs from "./bsubs.js";
 import { catState, model, yearState } from "./bmodel.js";
 import { sankeyData, sankeyInfo, sankeySvg } from "./bflow.js";
 import { GROUP_LABEL, catLook, catMark } from "./meta.js";
@@ -18,20 +19,18 @@ import { linkTo } from "./journal.js";
 import { MODE_LABEL } from "./categories.js";
 import { monthStartDay, shiftMonth, store } from "../../store.js";
 import {
-  SHEETS, SH, amount, amount2, announce, closeSheet, errBox, esc, escNums, failure, fill, ibox, ic, m0, n0, openSheet, pref,
+  SHEETS, SH, amount, announce, closeSheet, errBox, esc, escNums, failure, fill, ic, m0, n0, openSheet, pref,
   renderSheet, setPref, skel, toast,
 } from "../../ui.js";
 
 const $ = (id) => document.getElementById(id);
 const P = store.params;
-const CADENCE = { weekly: "chaque semaine", monthly: "mensuel", quarterly: "trimestriel", yearly: "annuel" };
 const OLDEST = 36; // mois en arrière au plus
 const B = { sk: null, bgroup: null, offOpen: false, paidOpen: false };
 
 export const budgetPath = (month, period) => `/finance/budget?month=${month}&period=${period}`;
 const flowsPath = () => `/finance/flows?month=${P.month}&period=${P.period}`;
 const monthsPath = () => `/finance/budget/months?month=${P.month}&months=6`;
-const recurringPath = "/finance/recurring";
 const upcomingPath = () => `/finance/budget/upcoming?month=${P.month}`;
 const trendPath = (cat) => `/finance/trend?category=${encodeURIComponent(cat)}&months=6&month=${P.month}`;
 const u = (m) => (m ? units(m) : 0);
@@ -56,7 +55,7 @@ export function render() {
   const b = be.data;
   const fe = store.use(flowsPath());
   const me = store.use(monthsPath());
-  const re = store.use(recurringPath);
+  const re = store.use(bsubs.recurringPath);
   const lab = periodLabel(b);
   const oldest = shiftMonth(store.today, -OLDEST);
   fill($("budCtx"), `<div class="stepper" role="group" aria-label="Mois affiché">
@@ -81,7 +80,7 @@ export function render() {
       ${sd.tot > 1 ? `<div class="skcols" aria-hidden="true"><span>Revenus</span><span>Usage</span><span>Postes</span></div>${sankeySvg(sd, B.sk)}${sankeyInfo(sd, B.sk)}` : '<div class="empty">Aucun mouvement sur la période.</div>'}
     </section>`;
   } else if (fe.status === "error") flow = errBox(`Flux indisponible : ${fe.error.message}`);
-  const head = hero(b, m), tail = subscriptions(re) + trend(me.data, P);
+  const head = hero(b, m), tail = bsubs.subscriptions(re) + trend(me.data, P);
   const foot = `<div class="bfoot"><button class="secondary" type="button" data-a="plan" aria-haspopup="dialog">${ic("sliders")}${m.T == null ? "Créer mon budget" : "Ajuster le budget"}</button>
     <button class="linkish bfoot-l" type="button" data-a="cats">${ic("list")}Gérer les catégories</button></div>`;
   // le mois : la tête, une action, le quotidien, le hors budget, le flux, ce qui arrive, les
@@ -90,24 +89,6 @@ export function render() {
     ? head + action(b, m, up) + daily(m, B) + outside(b) + flow + upcoming(up, b, B) + provisions(m) + tail + foot
     : head + categories(m, B, fe.data) + flow + tail;
   fill($("budBody"), `${body}<div class="endspace"></div>`);
-}
-
-function subscriptions(re) {
-  const r = re.data;
-  const items = r && r.items ? r.items.filter((x) => x.active) : [];
-  if (!items.length) return "";
-  const open = pref("subsOpen", false);
-  const total = r.monthly_total.map((x) => `${m0(Math.abs(u(x)))} ${esc(x.currency)}`).join(" + ");
-  const next = items.slice().sort((a, b) => (a.next_date || "").localeCompare(b.next_date || ""))[0];
-  const ups = items.filter((s) => Math.abs(u(s.last_amount)) - Math.abs(u(s.amount)) > 0.009).length;
-  const sum = `${items.length} abonnement${items.length > 1 ? "s" : ""} · ${total} par mois${next ? ` · prochain : ${esc(next.label)} le ${date(next.next_date)}` : ""}${ups ? ` · ${ups} en hausse` : ""}`;
-  return `<section class="card${open ? "" : " folded"}" id="subs" aria-labelledby="t-subs">
-      ${foldHead("subs", "Abonnements", open, sum)}
-      ${open ? `<div class="sec-body" id="subs-body">${items.map((s) => {
-        const up = Math.abs(u(s.last_amount)) - Math.abs(u(s.amount));
-        return `<div class="kv">${ibox(ic("repeat"), "var(--s4)", "sm")}<span>${esc(s.label)}<span class="s">${CADENCE[s.cadence] || esc(s.cadence)} · prochain le ${date(s.next_date)}</span>${up > 0.009 ? ` <span class="pill warn">${ic("alert")}hausse +${amount2(up)}</span>` : ""}</span><b class="num">${amount2(Math.abs(u(s.last_amount)))}${s.amount.currency === base() ? "" : ` ${esc(s.amount.currency)}`}</b></div>`;
-      }).join("")}<p class="hint">Paiements réguliers repérés dans le registre ; les prochaines échéances sont estimées.</p></div>` : ""}
-    </section>`;
 }
 
 // --- panneau d'une catégorie ------------------------------------------------------------------
@@ -247,6 +228,7 @@ function setMonth(month) {
 export const actions = {
   ...heroActions,
   ...bmove.actions,
+  ...bsubs.actions,
   bpaid: () => {
     B.paidOpen = !B.paidOpen;
     store.notify();

@@ -170,7 +170,7 @@ def _recurring(conn: Connection) -> list[Alert]:
     rows = conn.execute(
         text(
             "SELECT key, label, amount_minor, last_minor, currency, last_date, cadence "
-            "FROM recurring WHERE active = 1 ORDER BY key"
+            "FROM v_recurring WHERE active = 1 AND hidden = 0 ORDER BY key"
         )
     ).fetchall()
     out = []

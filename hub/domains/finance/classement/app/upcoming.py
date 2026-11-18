@@ -39,13 +39,14 @@ LATE_DAYS = 3  # une charge fixe pas vue 3 jours après son jour habituel
 
 @dataclass(frozen=True)
 class Due:
-    kind: str  # fixed | subscription
+    kind: str  # fixed
     category: str
-    name: str  # la catégorie, ou le nom de l'abonnement
+    name: str  # la catégorie
     on: str  # payée le, ou attendue le
     amount: int  # positif, devise de base
     status: str  # paid | due | late
     suggested_target: int | None = None
+    via: str | None = None  # les abonnements repérés rangés dans la catégorie
 
 
 def _habit(conn: Connection, month: str) -> dict[str, int]:
@@ -68,7 +69,7 @@ def _subscriptions(conn: Connection, start: date, after: date) -> list[tuple[obj
         conn.execute(
             text(
                 "SELECT label, category_id, cadence, amount_minor, currency, last_date, next_date "
-                "FROM recurring WHERE active = 1 AND currency = :ccy "
+                "FROM v_recurring WHERE active = 1 AND hidden = 0 AND currency = :ccy "
                 "AND ((next_date >= :s AND next_date < :e) OR (last_date >= :s AND last_date < :e))"
             ),
             {"ccy": base_currency(), "s": start.isoformat(), "e": after.isoformat()},
@@ -83,35 +84,30 @@ def _status(on: str, paid: bool, today: date) -> str:
 
 
 def month_dues(conn: Connection, month: str, today: date) -> list[Due]:
-    """Les charges fixes et abonnements du mois, payés ou attendus, par date."""
+    """Les charges fixes du mois (une ligne par catégorie du groupe Fixes), payées ou attendues,
+    par date. Un abonnement repéré n'y fait pas de ligne à lui : rangé dans une catégorie fixe,
+    il dit seulement quand elle tombe et par qui (`via`) ; ailleurs, il reste dans la section
+    des abonnements."""
     start, after = period_rules.bounds(month)
     groups, modes, names = category_groups(conn), category_modes(conn), category_names(conn)
     goal, year = targets(conn, month), yearly(conn)
     paid_on = due.last_paid(conn, start, after)
     expected_on = due.expected(conn, month)
     habit = _habit(conn, month)
+    via: dict[str, list[str]] = {}
+    sub_on: dict[str, str] = {}
+    for label, cat, _cadence, _amount, _ccy, _last, nxt in _subscriptions(conn, start, after):
+        if cat and groups.get(str(cat)) == "fixed":
+            via.setdefault(str(cat), []).append(str(label))
+            if start.isoformat() <= str(nxt) < after.isoformat():
+                sub_on[str(cat)] = min(str(nxt), sub_on.get(str(cat), str(nxt)))
     out: list[Due] = []
-    with_subs: set[str] = set()
-    for label, cat, _cadence, amount, _ccy, last, nxt in _subscriptions(conn, start, after):
-        paid = start.isoformat() <= str(last) < after.isoformat()
-        if cat:
-            with_subs.add(str(cat))
-        out.append(
-            Due(
-                "subscription",
-                str(cat or ""),
-                str(label),
-                str(last if paid else nxt),
-                -int(str(amount)),
-                _status(str(nxt), paid, today),
-            )
-        )
     for cat, grp in sorted(groups.items()):
         # une charge suivie à l'année (prime annuelle) est dans les provisions, pas attendue
         # chaque mois : sinon elle compterait deux fois dans le reste
-        if grp != "fixed" or modes.get(cat) == "off_budget" or cat in with_subs or cat in year:
+        if grp != "fixed" or modes.get(cat) == "off_budget" or cat in year:
             continue
-        on = paid_on.get(cat) or expected_on.get(cat)
+        on = paid_on.get(cat) or sub_on.get(cat) or expected_on.get(cat)
         if on is None:
             continue  # ni payée ce mois ni d'habitude connue : rien à attendre
         target = goal[cat].monthly if cat in goal else None
@@ -128,6 +124,7 @@ def month_dues(conn: Connection, month: str, today: date) -> list[Due]:
                 target if target is not None else usual,
                 _status(on, cat in paid_on, today),
                 suggest,
+                via=", ".join(sorted(set(via.get(cat, [])))) or None,
             )
         )
     out.sort(key=lambda d: (d.on, d.name))
@@ -158,6 +155,7 @@ def upcoming(
                 "amount": in_base(d.amount),
                 "status": d.status,
                 "suggested_target": in_base(d.suggested_target) if d.suggested_target else None,
+                "via": d.via,
             }
             for d in dues
         ]
@@ -174,8 +172,8 @@ def new_subscriptions(conn: Connection) -> list[tuple[str, str, str, int, str]]:
     nom, rythme, coût mensuel, devise)."""
     rows = conn.execute(
         text(
-            "SELECT key, label, cadence, amount_minor, currency, occurrences FROM recurring "
-            "WHERE active = 1 ORDER BY key"
+            "SELECT key, label, cadence, amount_minor, currency, occurrences FROM v_recurring "
+            "WHERE active = 1 AND hidden = 0 ORDER BY key"
         )
     ).fetchall()
     return [

@@ -2,6 +2,25 @@
 
 ## [Non publié]
 
+## [0.29.0] · 2026-11-18
+
+### Ajouté
+
+- Budget, abonnements repérés corrigeables : renommer, changer de catégorie, « ce n'est pas un
+  abonnement » (retiré du budget et des alertes, à remettre depuis la section), avec Face ID
+  (proposition `set_recurring`, table `recurring_choices` en ajout seul, vue `v_recurring`) ;
+  les corrections survivent aux recalculs. « Rechercher à nouveau » relance la détection
+  (`POST /api/finance/recurring/refresh`, app seulement).
+
+### Modifié
+
+- Budget, « À venir » devient « Charges fixes du mois » : une ligne par catégorie du groupe
+  Fixes ; un abonnement repéré n'y fait plus de ligne à lui, il date la catégorie fixe où il
+  est rangé et la nomme (`via`). Les paiements réguliers d'autres catégories restent dans la
+  section Abonnements.
+- Abonnements : le nom est tiré du libellé bancaire sans date, heure, référence ni numéro de
+  carte (« Paiement 04.11… AMAZON PAYMENTS Numéro de carte… » → « Amazon Payments »).
+
 ## [0.28.4] · 2026-11-17
 
 ### Corrigé
