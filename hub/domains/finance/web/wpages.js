@@ -52,8 +52,8 @@ function bars(data) {
 function perfStrip(c, days) {
   if (!c) return "";
   // à côté du gain : le rendement de ton argent (wcurve.js), comme la carte du haut
-  const g = units(c.gain), mine = moneyRate(rate(c.personal), days, rate(c.mwr));
-  return `<div class="strip"><div><span>Gain</span><b class="num ${tone(g)}"><span class="money">${sgnMoney(g)}</span></b></div><div><span>Rendement de ton argent${mine && mine.yr ? ", par an" : ""}</span><b class="num ${tone(mine ? mine.v : null)}">${mine ? pct(mine.v) : "—"}</b></div></div>
+  const g = units(c.gain), mine = moneyRate(rate(c.personal), days, rate(c.mwr), rate(c.on_stake));
+  return `<div class="strip"><div><span>Gain</span><b class="num ${tone(g)}"><span class="money">${sgnMoney(g)}</span></b></div><div><span>Rendement de ton argent${mine && mine.yr ? ", par an" : mine && mine.put ? ", sur l'argent placé" : ""}</span><b class="num ${tone(mine ? mine.v : null)}">${mine ? pct(mine.v) : "—"}</b></div></div>
     ${c.complete ? "" : '<p class="pnote">Des cours manquent sur la période : chiffres partiels.</p>'}`;
 }
 
@@ -137,13 +137,13 @@ export function assetPage(m, all, r) {
     const lat = pool ? units(pool.unrealized) : cost != null ? value - cost : null;
     // le cours : celui de la ligne au cours le plus récent (une ligne peut garder un cours plus ancien)
     const pl = ls.filter((l) => l.price).reduce((a, l) => (a && (a.priceDate || "") >= (l.priceDate || "") ? a : l), null) || f;
-    const bought = buyGain(ls, pool), mine = moneyRate(c ? rate(c.personal) : null, days, c ? rate(c.mwr) : null);
+    const bought = buyGain(ls, pool), mine = moneyRate(c ? rate(c.personal) : null, days, c ? rate(c.mwr) : null, c ? rate(c.on_stake) : null);
     h += section("Ma position", r.from && S.where === "here" ? `dans ${esc(f.inst)}` : "tous comptes", `<div class="strip">
       <div><span>Quantité</span><b class="num money">${qty(q)}</b></div><div><span>Cours</span><b class="num">${pl.price ? `${px(Number(pl.price))} <small>${esc(pl.priceCcy || "")}</small>` : "—"}</b></div>
       <div><span>Prix de revient</span><b class="num">${cost != null && q ? `<span class="money">${px(cost / q)}</span> <small>${base()}</small>` : "—"}</b></div>
       <div><span>Gain latent</span><b class="num ${tone(lat)}">${lat == null ? "—" : `<span class="money">${sgnMoney(lat)}</span>`}</b></div>
       <div><span>Depuis l'achat</span><b class="num ${tone(bought ? bought.pct : null)}">${bought ? pct(bought.pct) : "—"}</b></div>
-      <div><span>Rendement ${S.custom ? "" : S.period}${mine && mine.yr ? ", par an" : ""}</span><b class="num ${tone(mine ? mine.v : null)}">${mine ? pct(mine.v) : "—"}</b></div></div>
+      <div><span>Rendement ${S.custom ? "" : S.period}${mine && mine.yr ? ", par an" : mine && mine.put ? ", sur l'argent placé" : ""}</span><b class="num ${tone(mine ? mine.v : null)}">${mine ? pct(mine.v) : "—"}</b></div></div>
       ${pool && (units(pool.realized) || units(pool.income)) ? `<p class="pnote">Depuis l'achat : réalisé <span class="money">${sgnMoney(units(pool.realized))}</span> ${base()}, récompenses reçues <span class="money">${n0(units(pool.income))}</span> ${base()}.</p>` : ""}
       ${cost == null ? `<p class="pnote">Prix de revient inconnu pour une partie des parts${pool ? ` (<span class="money">${n0(blind)}</span> ${base()} sans historique d'achat, hors du gain latent)` : ""}.</p>` : ""}`);
   }

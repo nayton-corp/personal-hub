@@ -131,6 +131,30 @@ def personal(s: Series, floor: int) -> Decimal | None:
     return dietz(s, last, sum(s.flow), weighted, floor, staked(s, last))
 
 
+def peak_stakes(s: Series) -> list[int]:
+    """Jour par jour, le plus d'argent mis en jeu jusque-là : la valeur de départ plus les flux
+    nets cumulés, à son plus haut. Une vente suivie d'un rachat ne compte pas deux fois le même
+    argent, un retrait ne le diminue pas."""
+    out, run, top = [], max(s.value[0], 0), max(s.value[0], 0)
+    for j, f in enumerate(s.flow):
+        if j:
+            run += f
+            top = max(top, run)
+        out.append(top)
+    return out
+
+
+def on_stake(gain: int, stake: int, floor: int) -> Decimal | None:
+    """Le gain rapporté à l'argent mis en jeu (`peak_stakes`), sur la période, pas par an.
+    Toujours lisible, même quand l'argent est arrivé tard dans la période et que `personal` ou
+    `mwr` se taisent : c'est le pourcentage que l'écran met alors à côté des francs. None sans
+    argent mis en jeu (moins que le plancher d'une base)."""
+    if stake < max(floor, 1):
+        return None
+    with localcontext(RATE_CONTEXT):
+        return Decimal(gain) / Decimal(stake)
+
+
 def _rate(x: Decimal | None) -> str | None:
     if x is None or not x.is_finite():
         return None

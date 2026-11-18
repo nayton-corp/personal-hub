@@ -488,6 +488,8 @@ def test_no_return_when_the_money_was_barely_in(fin: FinanceDomain) -> None:
     s = run(fin, "2026-03-31", start="2026-01-01")["summary"]
     assert chf(s["gain"]) == 10_000  # le gain en francs, lui, reste juste
     assert s["personal"] is None
+    # le repli de l'écran : le gain sur l'argent mis en jeu, le rachat ne le compte pas deux fois
+    assert rate(s["on_stake"]) == pytest.approx(0.10, abs=1e-6)
     # sans la vente, l'argent était là tout le temps : le taux se dit
     late = run(fin, "2026-03-31", start="2026-03-25")["summary"]
     assert rate(late["personal"]) == pytest.approx(0.10, abs=1e-6)
@@ -521,3 +523,24 @@ def test_no_yearly_rate_for_money_gone_early_in_the_period(fin: FinanceDomain) -
     assert chf(s["gain"]) == 100_000
     assert s["mwr"] is None
     assert s["personal"] is None
+    assert rate(s["on_stake"]) == pytest.approx(1.0, abs=1e-6)  # l'argent a doublé
+
+
+def test_a_percentage_even_when_the_money_came_late(fin: FinanceDomain) -> None:
+    """Une période de trois ans dont l'argent n'arrive que la dernière année : ni taux annuel ni
+    taux de la période, mais le gain rapporté à l'argent mis en jeu, au résumé et à chaque point,
+    pour que l'écran ait toujours un pourcentage à côté des francs."""
+    acc = ref(fin, "test:arrive-tard", "securities")
+    with begin_immediate(fin.engine()) as conn:
+        price(conn, "2024-01-01", "100")
+        trade(conn, acc, "2024-01-01", "1", 10_000)  # presque rien au départ
+        trade(conn, acc, "2026-01-05", "10", 100_000)
+        trade(conn, acc, "2026-07-01", "10", 100_000)
+        price(conn, "2026-12-31", "110")
+    out = run(fin, "2026-12-31", start="2024-01-01")
+    s = out["summary"]
+    assert chf(s["gain"]) == 21_000
+    assert s["mwr"] is None
+    assert rate(s["on_stake"]) == pytest.approx(0.10, abs=1e-6)
+    assert out["items"][-1]["on_stake"] == s["on_stake"]
+    assert rate(out["items"][0]["on_stake"]) == 0

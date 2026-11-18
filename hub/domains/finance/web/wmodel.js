@@ -95,7 +95,7 @@ export function model(r = here()) {
   out.pts = items.map((it) => {
     const o = own ? own.get(it.on_date) || it : it;
     const f = units(it.net_flows);
-    const perf = { g: units(o.gain), r: rate(o.twr), pr: rate(o.personal), dd: rate(o.drawdown) };
+    const perf = { g: units(o.gain), r: rate(o.twr), pr: rate(o.personal), st: rate(o.on_stake), dd: rate(o.drawdown) };
     return { d: it.on_date, v: units(it.value), f, dep: v0 + f, ...perf, ok: it.complete, a: own ? units(o.value) : units(it.value) };
   });
   const pts = out.pts;
