@@ -153,8 +153,13 @@ export const actions = {
     SH.archived = !SH.archived;
     renderSheet();
   },
-  "cat-new": () => openSheet("cat-edit", null),
-  "cat-edit": (/** @type {string} */ id) => openSheet("cat-edit", id),
+  // une catégorie de dépense ou d'épargne s'ouvre sur sa fiche (bfiche.js), comme depuis le
+  // Budget ; revenus et archivées gardent ce panneau
+  "cat-new": () => openSheet("fiche", null),
+  "cat-edit": (/** @type {string} */ id) => {
+    const c = find(id);
+    openSheet(c && c.active && (expense(c.group) || c.group === "savings") ? "fiche" : "cat-edit", id);
+  },
   "cat-group": (/** @type {string} */ v) => pick("group", v),
   "cat-mode": (/** @type {string} */ v) => pick("mode", v),
   "cat-icon": (/** @type {string} */ v) => pick("icon", `${v}:${SH.tmp.icon ? SH.tmp.icon.split(":")[1] : 0}`),

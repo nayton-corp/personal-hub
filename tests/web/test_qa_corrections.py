@@ -41,36 +41,37 @@ def _close(page: Any) -> None:
 def _first_category(page: Any) -> None:
     open_tab(page, "budget")
     page.wait_for_selector("#budCats")
-    off = page.locator('#budCats [data-a="boff"][aria-expanded="false"]')
-    if not page.locator('#budCats .crow[data-a="cat"]').count() and off.count():
-        off.click()
-    page.locator('#budCats .crow[data-a="cat"]').first.click()
-    page.wait_for_selector("#t-input")
+    page.locator('#budCats [data-a="cat"]').first.click()
+    page.wait_for_selector("#sheet .how-seg, #f-amt")
+    if not page.locator("#f-amt").count():  # suivie sans cible : on lui donne une cible
+        page.locator('#sheet [data-a="f-how"][data-v="month"]').click()
+    page.wait_for_selector("#f-amt")
 
 
 def test_a_target_reads_decimals_and_refuses_what_is_not_an_amount(page: Any) -> None:
     _first_category(page)
-    save = page.locator('#sheet [data-a="target-save"]')
+    save = page.locator('#sheet [data-a="f-save"]')
     for typed in ("12.50", "1'250,50", "1 250"):
-        page.fill("#t-input", typed)
+        page.fill("#f-amt", typed)
         assert page.locator("#sheet .err").count() == 0, typed
         assert save.is_enabled(), typed
     for typed in ("-300", "1e6", "12.345"):
-        page.fill("#t-input", typed)
+        page.fill("#f-amt", typed)
         assert "Montant invalide" in page.inner_text("#sheet .err"), typed
         assert save.is_disabled(), typed
-        assert page.input_value("#t-input") == typed  # ce qui est tapé reste dans le champ
+        assert page.input_value("#f-amt") == typed  # ce qui est tapé reste dans le champ
     _close(page)
     assert page.problems == []
 
 
-def test_a_cadence_round_trip_gives_back_the_typed_amount(page: Any) -> None:
+def test_changing_month_or_year_keeps_the_typed_amount(page: Any) -> None:
     _first_category(page)
-    page.locator('#sheet [data-a="tcad"][data-v="year"]').click()
-    page.fill("#t-input", "125")
-    page.locator('#sheet [data-a="tcad"][data-v="month"]').click()
-    page.locator('#sheet [data-a="tcad"][data-v="year"]').click()
-    assert page.input_value("#t-input") == "125"
+    page.locator('#sheet [data-a="f-how"][data-v="year"]').click()
+    page.fill("#f-amt", "125")
+    page.locator('#sheet [data-a="f-how"][data-v="month"]').click()
+    assert page.input_value("#f-amt") == "125"
+    page.locator('#sheet [data-a="f-how"][data-v="year"]').click()
+    assert page.input_value("#f-amt") == "125"
     _close(page)
 
 

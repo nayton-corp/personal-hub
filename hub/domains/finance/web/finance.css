@@ -673,9 +673,6 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .brest { font-size: .941rem; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 5px; }
 .brest small { font-size: .647rem; font-weight: 500; color: var(--muted); }
 .brest.neg { color: var(--neg); }
-.bfix-cta { display: flex; align-items: center; gap: 8px; font-size: .765rem; color: var(--muted); padding: 6px 0 2px; }
-.bfix-cta .ic { width: 16px; height: 16px; flex: none; }
-.bfix-cta button { margin-left: auto; color: var(--accent); font-weight: 600; min-height: 44px; }
 .pbar.pc.split { display: flex; gap: 2px; }
 .pbar.pc.split > i { border-radius: 5px 0 0 5px; }
 .pbar.pc.split > .ov { display: block; height: 100%; background: var(--neg); border-radius: 0 5px 5px 0; }
@@ -704,7 +701,50 @@ button.lg[aria-pressed="true"] { background: var(--accent-soft); border-color: t
 .mv-row.on .mv-v { color: var(--accent); }
 .mv-sum { display: flex; justify-content: space-between; font-size: .853rem; padding: 14px 0 4px; }
 .mv-sum .neg { color: var(--neg); }
-.bfoot { display: flex; flex-direction: column; gap: 4px; padding: 4px 16px 8px; }
-.bfoot-l { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; color: var(--accent); font-weight: 600; font-size: .794rem; }
-.bfoot-l .ic { width: 16px; height: 16px; }
 .kv-go { width: 100%; text-align: left; color: inherit; }
+
+/* Mon budget (bmine.js) : un bloc, la liste ou le flux */
+.bview { margin: 2px 0 10px; }
+.bview button { min-height: 36px; }
+.breg { display: inline-flex; align-items: center; gap: 4px; font: 600 .765rem var(--font); color: var(--accent); min-height: 44px; }
+.breg .ic { width: 16px; height: 16px; }
+.bfoot-h { margin-top: 12px; }
+.bfoot-h .linkish { color: var(--accent); font: inherit; font-weight: 600; padding: 0; }
+.crow-st .neg { color: var(--neg); font-weight: 600; }
+#trend { margin-top: 12px; }
+/* charges fixes : une liste dans l'ordre du mois, coupée par « Aujourd'hui » */
+.fx-steps { display: flex; gap: 4px; margin: 8px 0 4px; }
+.fx-steps i { flex: 1; height: 8px; border-radius: 4px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+.fx-steps i.on { background: var(--accent); box-shadow: none; }
+.fx-sum { margin: 0 0 4px; font-size: .765rem; color: var(--muted); }
+.fx-sum b, .fx-sum .num { color: var(--ink); font-weight: 600; }
+.fx-list { margin-bottom: 6px; }
+.fx-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 0; min-height: 56px; border-bottom: 1px solid var(--line); }
+.fx-list > .fx-row:last-child { border-bottom: 0; }
+.fx-date { position: relative; width: 40px; height: 40px; border-radius: 11px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; }
+.fx-date b { font-size: .941rem; font-weight: 700; }
+.fx-date span { font-size: .618rem; font-weight: 600; }
+.fx-date.paid { background: var(--accent-soft); color: var(--muted); }
+.fx-date.paid i { position: absolute; right: -4px; bottom: -4px; width: 16px; height: 16px; border-radius: 50%; background: var(--pos); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--surface); }
+.fx-date.paid i .ic { width: 10px; height: 10px; stroke-width: 3; }
+.fx-date.due { color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.fx-date.late { color: var(--warn); box-shadow: inset 0 0 0 1.5px var(--warn); }
+.fx-date.nodate { color: var(--faint); border: 1.5px dashed var(--line); }
+.fx-row .up-main > span { font-size: .706rem; color: var(--muted); }
+.fx-row .up-main .ic { width: 12px; height: 12px; vertical-align: -1px; margin-right: 3px; color: var(--pos); }
+.fx-row .warnt { color: var(--warn); font-weight: 600; }
+.fx-row .warnt .ic { color: var(--warn); }
+.fx-row .neg { color: var(--neg); font-weight: 600; }
+.fx-row.paid .up-v { color: var(--muted); font-weight: 500; }
+.fx-today { display: flex; align-items: center; gap: 8px; margin: 2px 0; color: var(--accent); font: 700 .647rem var(--font); text-transform: uppercase; letter-spacing: .04em; }
+.fx-today::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.fx-today::after { content: ""; flex: 1; height: 1.5px; background: var(--accent); opacity: .5; }
+/* la fiche d'une catégorie (bfiche.js) et Régler */
+.how-seg { flex-wrap: wrap; }
+.how-seg button { flex: 1 1 45%; font-size: .735rem; min-height: 40px; }
+.how-per { margin-top: -2px; }
+.fiche-more { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; }
+.plan-name { font: inherit; font-weight: 600; color: var(--ink); text-align: left; padding: 0; min-height: 28px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.plan-lab { min-width: 0; font-size: .824rem; display: flex; flex-direction: column; align-items: flex-start; }
+.plan-extra { margin-top: 14px; }
+.plan-extra .plan-row { grid-template-columns: auto 1fr; }
