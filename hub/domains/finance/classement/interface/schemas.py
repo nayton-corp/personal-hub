@@ -97,6 +97,11 @@ class PlanOut(Out):
     savings_lines: list[SavingsLineOut]
 
 
+class CategorySpentOut(Out):
+    category: str
+    spent: MoneyOut
+
+
 class BudgetOut(Out):
     month: str
     period: str
@@ -122,6 +127,7 @@ class BudgetOut(Out):
     plan: PlanOut
     daily: list[int]  # dépensé cumulé à la fin de chaque jour, en unités mineures
     prev_daily: list[int]  # la même courbe pour le mois d'avant, entier
+    year_spent: list[CategorySpentOut]  # dépensé sur 12 mois par catégorie (mois, app seule)
 
 
 class UpcomingItemOut(Out):

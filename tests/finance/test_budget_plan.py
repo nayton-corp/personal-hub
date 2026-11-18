@@ -127,6 +127,7 @@ def test_aggregates_scope_has_no_curve_nor_savings_detail(
     r = client.get("/api/finance/budget?month=2026-10", headers=token(ctx, "aggregates"))
     b = r.json()
     assert (b["daily"], b["prev_daily"], b["plan"]["savings_lines"]) == ([], [], [])
+    assert b["year_spent"] == []
     assert b["plan"]["rest"] is not None
 
 
@@ -150,3 +151,15 @@ def test_charges_still_expected_are_taken_out_of_the_rest(
     with year.engine().connect() as conn:
         oct_ = budget_app.budget(conn, "2026-09", "m", date(2026, 10, 27), aggregates_only=False)
     assert minor(oct_["plan"]["pending"]) == 0
+
+
+def test_twelve_months_of_spending_per_category_for_yearly_targets(
+    client: TestClient,  # noqa: F811
+    ctx: HubContext,  # noqa: F811
+    year: FinanceDomain,  # noqa: F811
+) -> None:
+    oct_ = {x["category"]: minor(x["spent"]) for x in budget(client, ctx)["year_spent"]}
+    sep = {x["category"]: minor(x["spent"]) for x in budget(client, ctx, "2026-09")["year_spent"]}
+    assert oct_["logement"] > 150_000  # plus d'un loyer : pas seulement le mois
+    assert oct_["logement"] - sep["logement"] == 150_000  # glisse d'un mois : le loyer d'octobre
+    assert "salaire" not in oct_  # les dépenses seulement

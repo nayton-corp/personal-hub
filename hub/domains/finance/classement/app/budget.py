@@ -217,6 +217,9 @@ def budget(
         "missing_fx": [m.public() for m in report.missing_fx],
         # hors budget (lot Q) : le net de la période, envoyé − reçu, à part
         "off_budget": _off_budget(conn, months, names, aggregates_only=aggregates_only),
+        # sur douze mois (celui-ci compris), par catégorie de dépense : pour proposer une cible
+        # annuelle, et pour ne pas dire « rien dépensé » d'une dépense d'il y a plus de 3 mois
+        "year_spent": [] if aggregates_only or period != "m" else _year_spent(conn, months[-1]),
         # le plan du mois (H1) et la courbe des dépenses cumulées (plan.py)
         **plan.month_plan(
             conn,
@@ -230,6 +233,14 @@ def budget(
             aggregates_only=aggregates_only,
         ),
     }
+
+
+def _year_spent(conn: Connection, month: str) -> list[dict[str, object]]:
+    found: dict[str, int] = {}
+    for x in lines_for(conn, [*previous_months(month, 11), month]):
+        if x.group in EXPENSE_GROUPS:
+            found[x.category] = found.get(x.category, 0) - x.minor
+    return [{"category": c, "spent": in_base(v)} for c, v in sorted(found.items()) if v > 0]
 
 
 def _off_budget(

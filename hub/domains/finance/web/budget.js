@@ -91,6 +91,8 @@ export function render() {
   fill($("budBody"), `${body}<div class="endspace"></div>`);
 }
 
+const spent12 = (b, id) => u(((b && b.year_spent) || []).find((x) => x.category === id)?.spent);
+
 // --- panneau d'une catégorie ------------------------------------------------------------------
 
 SHEETS.cat = (id, sh) => {
@@ -135,7 +137,7 @@ SHEETS.cat = (id, sh) => {
       ${group === "savings" ? '<p class="hint">Ce que tu veux mettre de côté chaque mois : compté dans l\'épargne visée du plan, retiré du reste à dépenser.</p>' : ""}
       <div class="seg cad-seg" role="group" aria-label="Suivi"${group === "savings" ? " hidden" : ""}>${[["month", "Par mois"], ["year", "Par an"]].map(([k, l]) => `<button type="button" data-a="tcad" data-v="${k}" aria-pressed="${sh.cad === k}">${l}</button>`).join("")}</div>
       <div class="target"><button type="button" data-a="tstep" data-v="-10" aria-label="Diminuer de 10">−</button><input id="t-input" inputmode="decimal" value="${sh.tmp || ""}" aria-label="Cible ${per} en ${base()}" placeholder="aucune"><button type="button" data-a="tstep" data-v="10" aria-label="Augmenter de 10">+</button></div>
-      ${sh.cad === "year" ? `<p class="hint">Pour les dépenses par à-coups (vacances, entretien) : comparée au cumul depuis janvier, sans peser sur le reste à vivre du mois.${line && line.yearly ? ` Dépensé depuis janvier : ${m0(u(line.yearly.spent))} ${base()}.` : ""}</p>` : ""}
+      ${sh.cad === "year" ? `<p class="hint">Pour les dépenses par à-coups (vacances, entretien) : comparée au cumul depuis janvier, sans peser sur le reste à vivre du mois.${line && line.yearly ? ` Dépensé depuis janvier : ${m0(u(line.yearly.spent))} ${base()}.` : ""}${spent12(b, id) ? ` Sur douze mois : ${m0(spent12(b, id))} ${base()}.` : ""}</p>` : ""}
       ${sh.bad || sh.err ? `<div class="err" role="alert">${esc(sh.bad || sh.err)}</div>` : ""}` : '<p class="hint">Les cibles portent sur les dépenses fixes et variables.</p>'}
       ${c && !budgetable && (group === "fixed" || group === "variable") ? `<p class="hint">${esc(MODE_LABEL[c.mode] || "")} :
         ${c.mode === "off_budget" ? "ni dans le dépensé ni dans le reste." : "comptée dans le dépensé, sans cible ni alerte."}</p>` : ""}
@@ -156,16 +158,28 @@ function planData() {
   // une catégorie suivie à l'année se règle en montant annuel
   const year = new Set(cur.lines.filter((l) => l.yearly).map((l) => l.category));
   const now = Object.fromEntries(cur.lines.map((l) => [l.category, l.yearly ? (l.yearly.target ? u(l.yearly.target) : null) : l.target ? u(l.target) : null]));
-  const avg = Object.fromEntries(past.lines.map((l) => [l.category, (u(l.spent) / past.months.length) * (year.has(l.category) ? 12 : 1)]));
+  const y12 = Object.fromEntries((cur.year_spent || []).map((x) => [x.category, u(x.spent)]));
+  // suivie à l'année : ce qu'elle a coûté sur douze mois ; sinon la moyenne des trois derniers
+  const avg = Object.fromEntries(past.lines.filter((l) => !year.has(l.category)).map((l) => [l.category, u(l.spent) / past.months.length]));
+  for (const c of year) avg[c] = y12[c] || 0;
   // l'épargne visée : les cibles des catégories d'épargne, la moyenne versée d'après le flux
   for (const x of cur.plan.savings_lines) now[x.category] = u(x.target);
   const fq = store.data(`/finance/flows?month=${store.today}&period=q`);
   for (const i of fq ? fq.groups.find((x) => x.group === "savings")?.items || [] : []) avg[i.category] = u(i.total) / past.months.length;
   const ORDER = { fixed: 0, variable: 1, savings: 2 };
   const rows = cats.items.filter((c) => c.active && (c.mode || "target") === "target" && c.group in ORDER)
-    .map((c) => ({ id: c.id, name: c.name, group: c.group, now: now[c.id] ?? null, avg: avg[c.id] || 0, year: year.has(c.id) }))
+    .map((c) => ({ id: c.id, name: c.name, group: c.group, now: now[c.id] ?? null, avg: avg[c.id] || 0, y12: y12[c.id] || 0, year: year.has(c.id) }))
     .sort((a, b) => ORDER[a.group] - ORDER[b.group] || b.avg - a.avg || a.name.localeCompare(b.name, "fr"));
   return { rows, income: u(past.income) / past.months.length, months: past.months };
+}
+
+// ce qu'une catégorie a coûté : la moyenne des 3 derniers mois, ou sur 12 mois (annuelle, ou
+// une dépense plus ancienne que 3 mois)
+function spentNote(r) {
+  if (r.group === "savings") return r.avg ? `moyenne ${m0(r.avg)}` : "rien versé";
+  if (r.year) return r.y12 ? `${m0(r.y12)} sur 12 mois` : "rien sur 12 mois";
+  if (r.avg) return `moyenne ${m0(r.avg)}`;
+  return r.y12 ? `rien sur 3 mois · ${m0(r.y12)} sur 12 mois` : "rien dépensé sur 12 mois";
 }
 
 const planChanges = (d, tmp) => d.rows.filter((r) => tmp[r.id] != null && tmp[r.id] !== (r.now ?? 0) && !(r.now == null && tmp[r.id] === 0));
@@ -185,7 +199,7 @@ SHEETS.plan = (_arg, sh) => {
     g = r.group;
     const v = sh.tmp[r.id];
     return `${head}<div class="plan-row">${catMark(r.id, r.group, "sm")}
-      <label for="plan-${esc(r.id)}"><b>${esc(r.name)}${r.year ? ' <span class="pill">par an</span>' : ""}</b><small>${r.avg ? `moyenne ${m0(r.avg)}` : r.group === "savings" ? "rien versé" : "rien dépensé"}${r.now != null ? ` · cible ${m0(r.now)}` : ""}</small></label>
+      <label for="plan-${esc(r.id)}"><b>${esc(r.name)}${r.year ? ' <span class="pill">par an</span>' : ""}</b><small>${spentNote(r)}${r.now != null ? ` · cible ${m0(r.now)}` : ""}</small></label>
       <input id="plan-${esc(r.id)}" data-plan="${esc(r.id)}" inputmode="decimal" value="${v ? v : ""}" placeholder="—" aria-label="Cible ${r.year ? "annuelle" : "mensuelle"} ${esc(r.name)} en ${base()}"></div>`;
   }).join("");
   return {

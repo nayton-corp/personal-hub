@@ -23,6 +23,10 @@
 
 ### Corrigé
 
+- Budget, « Préparer le budget » : une catégorie qui n'a rien coûté sur les trois derniers mois
+  ne dit plus « rien dépensé » si elle a coûté quelque chose sur douze mois (frais annuels) ; une
+  catégorie suivie à l'année propose ce qu'elle a coûté sur douze mois. L'écran d'une catégorie
+  le montre en « Par an » (`year_spent` du budget du mois, absent pour la portée `aggregates`).
 - Budget, « Reste à dépenser » : les charges fixes et abonnements du mois pas encore passés et la
   part mensuelle des provisions de l'année en sont retirés (le chiffre était trop haut tant
   qu'une charge n'était pas débitée). Le mois en détail les montre (`plan.pending`,

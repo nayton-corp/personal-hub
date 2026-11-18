@@ -181,6 +181,7 @@ export interface BudgetOut {
   plan: PlanOut;
   daily: number[];
   prev_daily: number[];
+  year_spent: CategorySpentOut[];
 }
 
 export interface BudgetStateOut {
@@ -244,6 +245,11 @@ export interface CategoryOut {
 export interface CategoryRefOut {
   id: string;
   source: string;
+}
+
+export interface CategorySpentOut {
+  category: string;
+  spent: MoneyOut;
 }
 
 export interface CategoryTotalOut {
