@@ -188,3 +188,29 @@ def test_a_detected_subscription_is_renamed_and_removed_from_the_budget(page: An
         "fetch('/api/finance/recurring').then((r) => r.json()).then((d) => !d.removed.length)"
     )
     assert page.problems == []
+
+
+def test_a_fixed_target_is_set_per_year_from_the_plan_and_shows_on_the_month(page: Any) -> None:
+    cats = _get(page, "/finance/categories")["items"]
+    lines = {x["category"]: x for x in _budget(page)["lines"]}
+    fixed = next(
+        c
+        for c in cats
+        if c["active"]
+        and c["group"] == "fixed"
+        and (c.get("mode") or "target") == "target"
+        and not (lines.get(c["id"]) or {}).get("yearly")
+    )
+    open_tab(page, "budget")
+    page.locator('#budBody [data-a="plan"]').first.click()
+    page.wait_for_selector(f"#plan-{fixed['id']}")
+    page.fill(f"#plan-{fixed['id']}", "1200")
+    toggle = page.locator(f'#sheet [data-a="plan-cad"][data-v="{fixed["id"]}"]')
+    assert toggle.get_attribute("aria-pressed") == "false"
+    toggle.click()
+    assert toggle.get_attribute("aria-pressed") == "true"
+    page.locator('#sheet [data-a="plan-save"]').click()
+    page.wait_for_selector("html:not(.sheet-open)")
+    line = next(x for x in _budget(page)["lines"] if x["category"] == fixed["id"])
+    assert float(line["yearly"]["target"]["display"]) == 1200
+    assert page.problems == []

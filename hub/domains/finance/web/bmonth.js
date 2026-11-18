@@ -90,8 +90,15 @@ function upRow(x) {
 }
 
 // up : /finance/budget/upcoming ; B : { paidOpen }
+// une charge fixe ciblée sans date ce mois (ni payée ni d'habitude connue) : visible quand même,
+// pour l'ouvrir (sa cible, « Par an »)
+const quietRow = (l) => `<button class="up-row" type="button" data-a="cat" data-v="${esc(l.category)}"><span class="up-date"><b>–</b><span></span></span>
+  <span class="up-main"><b>${esc(l.name)}</b><span>rien vu ce mois · pas de date connue</span></span><span class="num up-v">${m0(u(l.target))}</span></button>`;
+
 export function upcoming(up, b, B) {
-  if (!up || !up.items.length) return "";
+  const listed = new Set(((up && up.items) || []).map((x) => x.category));
+  const quiet = (b.lines || []).filter((l) => l.group === "fixed" && l.target && !l.yearly && !listed.has(l.category));
+  if (!up || (!up.items.length && !quiet.length)) return "";
   const next = up.items.filter((x) => x.status !== "paid"), paid = up.items.filter((x) => x.status === "paid");
   const tn = u(up.due_total), tp = paid.reduce((t, x) => t + u(x.amount), 0);
   const title = b.current ? "Charges fixes du mois" : "Charges fixes";
@@ -99,7 +106,7 @@ export function upcoming(up, b, B) {
     <div class="section-head"><h2 class="section-title" id="t-up">${title}</h2><span class="hint">${paid.length} sur ${up.items.length} payé${paid.length > 1 ? "s" : ""}</span></div>
     <div class="up-sum"><span><b class="num">${m0(tp)}</b> payés</span><span class="up-bar"><i data-css="width:${tp + tn ? ((tp / (tp + tn)) * 100).toFixed(1) : 0}%"></i></span>
       <span><b class="num">${m0(tn)}</b> ${b.current ? "à venir" : "pas vus"}</span></div>
-    ${next.length ? next.map(upRow).join("") : '<div class="empty">Plus rien d\'attendu d\'ici la fin du mois.</div>'}
+    ${next.length ? next.map(upRow).join("") : quiet.length ? "" : '<div class="empty">Plus rien d\'attendu d\'ici la fin du mois.</div>'}${quiet.map(quietRow).join("")}
     ${paid.length ? `<button class="grp grp-btn" type="button" data-a="bpaid" aria-expanded="${B.paidOpen}"><span>Déjà payé · <span class="num">${m0(tp)}</span></span>
       <span class="grp-st">${paid.length} ligne${paid.length > 1 ? "s" : ""}${ic("down", B.paidOpen ? "up" : "")}</span></button>${B.paidOpen ? paid.map(upRow).join("") : ""}` : ""}
   </section>`;
