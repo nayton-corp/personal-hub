@@ -31,6 +31,15 @@
   chaque mois ni signalée « pas encore vue » ; elle reste dans les provisions de l'année et ne
   compte plus deux fois dans le reste.
 
+## [0.28.6] · 2026-11-17
+
+### Corrigé
+
+- Panneaux du bas sur téléphone (filtre du journal, période choisie du patrimoine, dette, bien) :
+  les champs date suivent la largeur de leur colonne. Sur iOS, le champ date natif imposait sa
+  propre largeur et le panneau défilait de côté, contenu coupé à gauche. Le corps d'un panneau ne
+  défile plus jamais horizontalement.
+
 ## [0.28.5] · 2026-11-17
 
 ### Corrigé
