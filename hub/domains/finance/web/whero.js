@@ -9,7 +9,7 @@ import { esc, fill, ic, n0, nf } from "../../ui.js";
 import { assetMark, instMark } from "./meta.js";
 import { base } from "../../format.js";
 import { kindFor } from "./wmodel.js";
-import { moneyRate } from "./wcurve.js";
+import { moneyRate, rateWord } from "./wcurve.js";
 import { assetSince, buyGain } from "./wcrypto.js";
 import { rate } from "./perf.js";
 
@@ -88,8 +88,8 @@ export function heroHTML(m, all, r = here()) {
   const kind = kindFor(r);
   // à côté des francs : le rendement de ton argent (wcurve.js), exact sur la période entière
   const whole = k === pts.length - 1 && m.perf && m.perf.summary ? rate(m.perf.summary.mwr) : null;
-  const mine = moneyRate(p.pr, days, whole);
-  const mineTxt = mine ? ` · ${pct(mine.v)}${mine.yr ? " par an" : ""}` : "";
+  const mine = moneyRate(p.pr, days, whole, p.st);
+  const mineTxt = mine ? ` · ${pct(mine.v)}${rateWord(mine)}` : "";
   const at = (s) => (scrub ? `<b>${longDate(p.d)}</b>` : s);
   let label, big, sub = "";
   if (kind === "price") {

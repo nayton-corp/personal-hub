@@ -815,6 +815,7 @@ export interface LineSummaryOut {
   twr_yearly: string | null;
   mwr: string | null;
   personal?: string | null;
+  on_stake?: string | null;
   complete: boolean;
 }
 
@@ -989,6 +990,7 @@ export interface PerformancePointOut {
   gain: MoneyOut;
   twr: string | null;
   personal?: string | null;
+  on_stake?: string | null;
   drawdown: string | null;
   complete: boolean;
 }

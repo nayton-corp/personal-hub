@@ -21,8 +21,6 @@
 - Abonnements : le nom est tiré du libellé bancaire sans date, heure, référence ni numéro de
   carte (« Paiement 04.11… AMAZON PAYMENTS Numéro de carte… » → « Amazon Payments »).
 
-## [0.28.4] · 2026-11-17
-
 ### Corrigé
 
 - Budget, « Reste à dépenser » : les charges fixes et abonnements du mois pas encore passés et la
@@ -32,6 +30,17 @@
 - Budget, « À venir » : une charge fixe suivie à l'année (prime annuelle) n'est plus attendue
   chaque mois ni signalée « pas encore vue » ; elle reste dans les provisions de l'année et ne
   compte plus deux fois dans le reste.
+
+## [0.28.5] · 2026-11-17
+
+### Corrigé
+
+- Patrimoine : un pourcentage accompagne toujours le gain en francs. Quand l'argent est arrivé tard
+  dans la période (3 ans, Max), le taux annuel et le taux de la période se taisaient et l'en-tête
+  n'affichait que les francs ; il montre désormais le gain rapporté à l'argent placé (le plus haut
+  de la valeur de départ plus les apports nets), « de l'argent placé », sans annualiser. Même
+  repli pour la carte Rendement, la page d'un compte et la position d'un actif. Nouveau champ
+  `on_stake` au résumé et à chaque point de `/finance/performance`.
 
 ## [0.28.3] · 2026-11-17
 
