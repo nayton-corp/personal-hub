@@ -52,7 +52,7 @@ SHEETS.bhead = () => {
       <p class="hint">Le reste = revenus attendus − épargne visée − dépensé − charges encore attendues ce mois
         − part mensuelle des provisions de l'année. Les catégories hors budget n'y comptent pas.</p>`,
     foot: `<button class="secondary" type="button" data-a="bincome" aria-haspopup="dialog">${ic("arrowin")}Revenus attendus</button>
-      <button class="secondary" type="button" data-a="plan" aria-haspopup="dialog">${ic("sliders")}Ajuster les cibles</button>`,
+      <button class="secondary" type="button" data-a="plan" aria-haspopup="dialog">${ic("sliders")}Régler le budget</button>`,
   };
 };
 

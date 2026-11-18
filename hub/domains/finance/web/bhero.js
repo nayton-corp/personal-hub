@@ -101,7 +101,7 @@ export function hero(b, m) {
   }
   return `<section class="card bflat bhero" aria-labelledby="t-bud">
     <button class="bh-btn" type="button" data-a="bhead" aria-haspopup="dialog">
-      <span class="hero-label"><span id="t-bud">${q ? `${LABEL} sur 3 mois` : LABEL}</span><span>${when}${ic("chev")}</span></span>
+      <span class="hero-label"><span id="t-bud">${q ? `${LABEL} sur 3 mois` : LABEL}</span><span class="bh-more">${when} · Détail${ic("chev")}</span></span>
       <span class="hero-amount num${rest < 0 ? " neg" : ""}"><span class="money">${rest < 0 ? "−" : ""}${n0(Math.abs(rest))}</span><small>${base()}</small></span>
       <span class="bh-line">${line}</span>
     </button>

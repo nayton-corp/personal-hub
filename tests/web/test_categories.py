@@ -35,7 +35,8 @@ def _cats(page: Any) -> dict[str, Any]:
 
 def _open_list(page: Any) -> None:
     open_tab(page, "budget")
-    page.locator('[data-a="cats"]').first.click()
+    page.locator('#budBody [data-a="plan"]').first.click()
+    page.locator('#sheet [data-a="cats"]').click()
     page.wait_for_selector('#sheet [data-a="cat-new"]')
 
 
@@ -47,8 +48,8 @@ def test_a_category_changes_mode_with_face_id(page: Any) -> None:
         if c["active"] and c["group"] == "variable" and c["mode"] == "target"
     )
     page.locator(f'#sheet [data-a="cat-edit"][data-v="{target["id"]}"]').click()
-    page.wait_for_selector("#cat-name")
-    page.get_by_role("radio", name="Suivie sans cible").click()
+    page.wait_for_selector("#sheet .how-seg")  # la fiche de la catégorie, comme depuis le Budget
+    page.locator('#sheet [data-a="f-how"][data-v="tracked"]').click()
     assert "sans cible ni alerte" in page.inner_text("#sheet")
     page.get_by_role("button", name="Enregistrer avec Face ID").click()
     page.wait_for_selector("html:not(.sheet-open)")
@@ -58,7 +59,8 @@ def test_a_category_changes_mode_with_face_id(page: Any) -> None:
 def test_a_new_category_gets_its_id_from_the_hub(page: Any) -> None:
     _open_list(page)
     page.locator('#sheet [data-a="cat-new"]').click()
-    page.fill("#cat-name", "Cours de piano")
+    page.fill("#f-name", "Cours de piano")
+    page.locator('#sheet [data-a="f-more"]').click()
     page.get_by_role("radio", name="music").click()
     page.get_by_role("button", name="Créer avec Face ID").click()
     page.wait_for_selector("html:not(.sheet-open)")
@@ -69,14 +71,15 @@ def test_a_new_category_gets_its_id_from_the_hub(page: Any) -> None:
 def test_the_icon_picker_is_a_compact_grid_with_the_current_icon_selected(page: Any) -> None:
     _open_list(page)
     page.locator('#sheet [data-a="cat-edit"]').first.click()
-    page.wait_for_selector("#cat-name")
+    page.locator('#sheet [data-a="f-more"]').click()
+    page.wait_for_selector("#f-name")
     icons = page.locator('#sheet [aria-label="Icône"] [role="radio"]')
     assert page.locator('#sheet [aria-label="Icône"] [aria-checked="true"]').count() == 1
     assert page.locator('#sheet [aria-label="Teinte"] [aria-checked="true"]').count() == 1
     tops = icons.evaluate_all("(bs) => bs.map((b) => Math.round(b.getBoundingClientRect().top))")
     assert tops.count(tops[0]) >= 5  # cinq icônes au moins par ligne sur un téléphone
     # ouvrir sans rien toucher ne propose aucun changement d'icône
-    page.locator('#sheet [data-a="cat-save"]').click()
-    assert "Rien n'a changé" in page.inner_text("#sheet")
+    assert page.locator('#sheet [data-a="f-save"]').is_disabled()
+    assert "Tout est à jour" in page.inner_text("#sheet")
     page.locator('#sheet [data-a="sheet-close"]').click()
     page.wait_for_selector("html:not(.sheet-open)")

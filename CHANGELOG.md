@@ -2,6 +2,32 @@
 
 ## [Non publié]
 
+## [0.30.0] · 2026-11-18
+
+### Modifié
+
+- Budget, l'écran du mois : sous la tête et l'action du moment, un seul bloc « Mon budget » où
+  chaque catégorie suivie a une seule place, rangée d'après son réglage : Charges fixes, Chaque
+  mois (barre, reste), Par an (cumul depuis janvier), Sans cible (suivies sans cible et hors
+  budget). « Catégories | Flux » montre le diagramme de flux à la place de la liste. Les
+  sections « Dépenses du quotidien », « Hors budget », « Charges fixes du mois », « Provisions de
+  l'année » et « Abonnements » de l'écran disparaissent dans ce bloc.
+- Charges fixes : une seule liste dans l'ordre du mois, coupée par « Aujourd'hui » ; payée avec
+  sa date et une coche, à payer avec la date attendue (« dans 2 jours », en retard en orange),
+  sans date habituelle à la fin ; en tête une case par charge, « N sur M payées », ce qui reste.
+- Une seule fiche par catégorie, d'où qu'on l'ouvre (Mon budget, Régler, le flux, l'accueil,
+  la liste des catégories) : dépensé et état, « Comment la suivre » (par mois, par an, sans
+  cible, hors budget) et le montant (le nombre tapé reste quand on change de rythme), six
+  derniers mois, abonnements rangés ici, écritures, puis nom, icône, groupe, fusion et archivage
+  repliés ; tout en une validation Face ID. Une catégorie créée avec une cible s'ouvre sur sa
+  fiche pour valider la cible (l'identifiant vient du hub).
+- « Préparer le budget » devient « Régler le budget » : toutes les catégories, le nom ouvre la
+  fiche, et en bas les catégories sans cible ou hors budget, « Nouvelle catégorie »,
+  « Abonnements repérés », « Toutes les catégories ». La cible déjà en place n'est plus répétée
+  sous chaque ligne (« avant … » seulement quand elle change).
+- La tendance sur six mois est toujours ouverte, en bas de l'écran. La tête du mois dit
+  « Détail ».
+
 ## [0.29.1] · 2026-11-18
 
 ### Corrigé
