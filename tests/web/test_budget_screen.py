@@ -161,9 +161,10 @@ def test_a_savings_target_is_set_from_the_month_detail(page: Any) -> None:
 
 
 def test_a_detected_subscription_is_renamed_and_removed_from_the_budget(page: Any) -> None:
-    page.evaluate("fetch('/api/finance/recurring/refresh', {method: 'POST'})")
-    page.wait_for_load_state("networkidle")
-    items = [x for x in _get(page, "/finance/recurring")["items"] if x["active"]]
+    found = page.evaluate(
+        "fetch('/api/finance/recurring/refresh', {method: 'POST'}).then((r) => r.json())"
+    )
+    items = [x for x in found["items"] if x["active"]]
     assert items, "les données de démonstration ont des abonnements"
     sub = items[0]
     open_tab(page, "budget")
