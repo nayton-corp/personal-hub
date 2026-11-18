@@ -93,7 +93,7 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `GET` | `/api/finance/budget` | Réel et cible par catégorie de dépense, dépassements, reste à vivre, jours restants. `period=q` : les trois mois complets avant `month`. |
 | `GET` | `/api/finance/budget/months` | Les totaux du budget mois par mois, jusqu'à `month` compris. |
 | `GET` | `/api/finance/budget/totals` | Revenus, dépenses (fixes, variables), épargne, placements et taux d'épargne. |
-| `GET` | `/api/finance/budget/upcoming` | « À venir » du mois : charges fixes et abonnements, payés ou attendus (lot C). |
+| `GET` | `/api/finance/budget/upcoming` | « À venir » du mois : charges fixes (une par catégorie), payées ou attendues (lot C). |
 | `GET` | `/api/finance/categories` | Categories |
 | `GET` | `/api/finance/debts` | Dettes et leur solde aujourd'hui : départ, paiements et intérêts depuis, fin projetée. |
 | `GET` | `/api/finance/entries` | Écritures filtrées ; montants en centimes, comparés en valeur absolue. |
@@ -112,6 +112,7 @@ Toutes les routes, cœur puis domaines installés. La portée exigée et les err
 | `GET` | `/api/finance/performance` | Performance d'une sélection (`account=<compte>` : toutes ses lignes, celles d'une position vendue depuis comprises ; `line=<compte>\|<instrument>`, `<compte>\|cash`, `debt:<id>` ; par défaut, les lignes de l'app) : courbe de la valeur, des apports nets, du gain et du rendement pondéré dans le temps ; résumé (gain, revenus, frais, rendement, rendement personnel annuel) ; le même par compte, par actif, par ligne ; par mois et par année ; risque. Les points tombent sur le calendrier (chaque jour, chaque dimanche, chaque fin de mois) ; au-delà de 400, le pas s'élargit. `extremes` : le plus haut et le plus bas de tous les jours de la période. Des agrégats seulement. |
 | `GET` | `/api/finance/prices` | Cours connus d'un instrument entre deux dates, dans sa devise de cotation, au plus 400 points : la courbe « Cours » de la page d'un actif. |
 | `GET` | `/api/finance/recurring` | Abonnements et paiements réguliers, prochaines échéances, total mensuel ; pour la portée `aggregates`, les totaux seulement. |
+| `POST` | `/api/finance/recurring/refresh` | « Rechercher à nouveau » : recalcule tout de suite les abonnements (et les autres données dérivées) ; les corrections faites à la main restent. |
 | `GET` | `/api/finance/review` | Écritures sans catégorie, groupées par contrepartie normalisée. |
 | `GET` | `/api/finance/rules/packs` | Packs de règles livrés, version installée, ceux du pays de l'instance, et le nombre de règles actives hors système (parcours d'accueil). |
 | `GET` | `/api/finance/search` | Search |

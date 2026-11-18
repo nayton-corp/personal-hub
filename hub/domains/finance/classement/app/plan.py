@@ -6,8 +6,10 @@ du mois et par jour, et les dépenses cumulées jour par jour pour la courbe de 
 - Épargne visée : la somme des cibles posées sur les catégories d'épargne.
 - Non attribué : revenus attendus − épargne visée − cibles des dépenses (une cible annuelle
   pour son douzième). Négatif : le plan dépasse les revenus.
-- Reste du mois (H1) : revenus attendus − épargne visée − dépensé, catégories suivies à l'année
-  exclues ; sans revenus attendus, cibles − dépensé (le reste à vivre d'avant).
+- Reste du mois (H1) : revenus attendus − épargne visée − dépensé − ce qui est encore attendu
+  (charges fixes du mois pas encore passées, upcoming.py) − le douzième des
+  cibles annuelles (les catégories suivies à l'année ont leur enveloppe : leur dépense n'entre
+  pas dans le dépensé) ; sans revenus attendus, cibles − dépensé (le reste à vivre d'avant).
 - Par jour : le reste ÷ les jours restants, aujourd'hui compris ; rien si le reste est négatif.
 Montants en centimes de la devise de base ; le front affiche, il ne calcule pas.
 """
@@ -18,6 +20,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import Connection, text
 
+from hub.domains.finance.classement.app import upcoming
 from hub.domains.finance.classement.app.insights import (
     Target,
     category_groups,
@@ -78,12 +81,18 @@ def savings_targets(conn: Connection, month: str, groups: dict[str, str]) -> dic
 
 
 def plan_numbers(
-    income: int | None, savings: int, targeted: int, used: int, fallback_rest: int | None
+    income: int | None,
+    savings: int,
+    targeted: int,
+    used: int,
+    fallback_rest: int | None,
+    reserved: int = 0,
 ) -> tuple[int | None, int | None]:
-    """(non attribué, reste du mois) ; `fallback_rest` sert sans revenus attendus."""
+    """(non attribué, reste du mois) ; `reserved` : ce qui est déjà promis (charges attendues,
+    provisions annuelles) ; `fallback_rest` sert sans revenus attendus."""
     if income is None:
         return None, fallback_rest
-    return income - savings - targeted, income - savings - used
+    return income - savings - targeted, income - savings - used - reserved
 
 
 def per_day(rest: int | None, days_left: int, current: bool) -> int | None:
@@ -178,13 +187,23 @@ def month_plan(
     savings = sum(t.monthly for t in saving.values()) * n
     targeted = (budget or 0) + provisions
     fallback = budget - used if budget is not None else None
-    unassigned, rest = plan_numbers(expected, savings, targeted, used, fallback)
     current = today is not None
+    # le mois en cours : ce qui est encore attendu ; un mois clos n'attend plus rien
+    pending = (
+        sum(d.amount for d in upcoming.month_dues(conn, month, today) if d.status != "paid")
+        if today is not None and n == 1
+        else 0
+    )
+    unassigned, rest = plan_numbers(
+        expected, savings, targeted, used, fallback, reserved=pending + provisions
+    )
     plan: dict[str, object] = {
         "income": _money(expected),
         "income_source": source,
         "savings": in_base(savings),
         "targets": in_base(targeted),
+        "pending": in_base(pending),
+        "provisions": in_base(provisions),
         "unassigned": _money(unassigned),
         "rest": _money(rest),
         "per_day": _money(per_day(rest, days_left, current and n == 1)),

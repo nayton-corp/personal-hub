@@ -8,6 +8,7 @@ from typing import Annotated, Any, Protocol
 from fastapi import APIRouter, BackgroundTasks, Query
 
 from hub.core import profile
+from hub.core.auth import AppSession
 from hub.domains.finance.classement.app import budget as budget_app
 from hub.domains.finance.classement.app import (
     insights,
@@ -45,6 +46,8 @@ from hub.domains.finance.registre.interface.http import (
 
 class Host(http.Host, Protocol):
     def refresh_snapshots(self) -> object: ...
+
+    def refresh_derived(self) -> dict[str, int]: ...
 
 
 def build_router(host: Host) -> APIRouter:
@@ -100,7 +103,7 @@ def build_router(host: Host) -> APIRouter:
     def budget_upcoming(
         p: AnyReader, month: Annotated[str | None, Query(pattern=MONTH)] = None
     ) -> dict[str, object]:
-        """« À venir » du mois : charges fixes et abonnements, payés ou attendus (lot C)."""
+        """« À venir » du mois : charges fixes (une par catégorie), payées ou attendues (lot C)."""
         m = checked_month(host, month)
         with engine.connect() as conn:
             return upcoming.upcoming(conn, m, host.today(), aggregates_only=aggregates_only(p))
@@ -180,5 +183,13 @@ def build_router(host: Host) -> APIRouter:
         background.add_task(host.refresh_snapshots)  # après la réponse, jamais dans la lecture
         with engine.connect() as conn:
             return recurring.listing(conn, host.today(), aggregates_only=aggregates_only(p))
+
+    @r.post("/recurring/refresh", response_model=RecurringOut, response_model_exclude_unset=True)
+    def recurring_refresh(_session: AppSession) -> object:
+        """« Rechercher à nouveau » : recalcule tout de suite les abonnements (et les autres
+        données dérivées) ; les corrections faites à la main restent."""
+        host.refresh_derived()
+        with engine.connect() as conn:
+            return recurring.listing(conn, host.today(), aggregates_only=False)
 
     return r

@@ -789,7 +789,7 @@ def test_recurring_detection(finance: FinanceDomain) -> None:
             finance, "SELECT label, cadence, amount_minor, next_date, active FROM recurring"
         )
     }
-    assert found["NETFLIX.COM 91234"] == ("monthly", -1790, "2026-11-05", 1)
+    assert found["Netflix.com"] == ("monthly", -1790, "2026-11-05", 1)  # libellé nettoyé
     assert found["Assurance RC"] == ("yearly", -48_500, "2026-11-14", 1)
     assert found["Salle de sport"][0] == "monthly"
     assert found["Salle de sport"][3] == 0

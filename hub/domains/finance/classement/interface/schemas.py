@@ -89,10 +89,17 @@ class PlanOut(Out):
     income_source: str | None  # set (saisis) | average (moyenne des 3 mois d'avant)
     savings: MoneyOut  # épargne visée
     targets: MoneyOut  # cibles des dépenses, douzième des cibles annuelles compris
+    pending: MoneyOut  # charges fixes du mois encore attendues
+    provisions: MoneyOut  # douzième des cibles annuelles, mis de côté
     unassigned: MoneyOut | None  # revenus − épargne − cibles ; négatif : le plan dépasse
-    rest: MoneyOut | None  # reste du mois : revenus − épargne − dépensé (H1)
+    rest: MoneyOut | None  # revenus − épargne − dépensé − attendu − provisions (H1)
     per_day: MoneyOut | None  # reste ÷ jours restants, aujourd'hui compris
     savings_lines: list[SavingsLineOut]
+
+
+class CategorySpentOut(Out):
+    category: str
+    spent: MoneyOut
 
 
 class BudgetOut(Out):
@@ -120,16 +127,18 @@ class BudgetOut(Out):
     plan: PlanOut
     daily: list[int]  # dépensé cumulé à la fin de chaque jour, en unités mineures
     prev_daily: list[int]  # la même courbe pour le mois d'avant, entier
+    year_spent: list[CategorySpentOut]  # dépensé sur 12 mois par catégorie (mois, app seule)
 
 
 class UpcomingItemOut(Out):
-    kind: str  # fixed | subscription
+    kind: str  # fixed (les abonnements repérés restent dans /recurring)
     category: str | None
-    name: str  # la catégorie, ou le nom de l'abonnement
+    name: str  # la catégorie
     on: str  # payée le, ou attendue le
     amount: MoneyOut
     status: str  # paid | due | late (pas vue 3 jours après le jour habituel)
     suggested_target: MoneyOut | None  # fixe sans cible : son habitude, arrondie
+    via: str | None = None  # abonnements repérés rangés dans la catégorie, qui la datent
 
 
 class UpcomingOut(Out):
@@ -287,6 +296,15 @@ class RecurringItemOut(Out):
     active: bool
     account: str | None
     last_entry_id: str | None
+    key: str  # pour le corriger (set_recurring)
+    found_label: str  # le nom repéré, avant un renommage
+
+
+class RecurringRemovedOut(Out):
+    key: str
+    label: str
+    cadence: str
+    amount: MoneyOut
 
 
 class RecurringOut(Out):
@@ -296,3 +314,4 @@ class RecurringOut(Out):
     monthly_total: list[MoneyOut]
     by_category: list[RecurringByCategoryOut]
     items: list[RecurringItemOut] | None = None
+    removed: list[RecurringRemovedOut] | None = None  # retirés à la main, à remettre

@@ -46,6 +46,11 @@ from hub.domains.finance.classement.app.plan_kinds import (
     SetPlanIncomeHandler,
     plan_income_inverse,
 )
+from hub.domains.finance.classement.app.recurring_kinds import (
+    SetRecurring,
+    SetRecurringHandler,
+    recurring_inverse,
+)
 from hub.domains.finance.classement.app.rule_kinds import (
     CreateRule,
     CreateRuleHandler,
@@ -143,6 +148,13 @@ def build_kinds(domain: Finance) -> Mapping[str, ProposalKind]:
             MoveBudgetHandler(domain),
             reversible=True,
             inverse=move_inverse,
+            ai_allowed=True,
+        ),
+        "set_recurring": ProposalKind(
+            SetRecurring,
+            SetRecurringHandler(),
+            reversible=True,
+            inverse=recurring_inverse,
             ai_allowed=True,
         ),
         "add_note": ProposalKind(AddNote, AddNoteHandler(), ai_allowed=True),

@@ -2,6 +2,39 @@
 
 ## [Non publié]
 
+## [0.29.0] · 2026-11-18
+
+### Ajouté
+
+- Budget, abonnements repérés corrigeables : renommer, changer de catégorie, « ce n'est pas un
+  abonnement » (retiré du budget et des alertes, à remettre depuis la section), avec Face ID
+  (proposition `set_recurring`, table `recurring_choices` en ajout seul, vue `v_recurring`) ;
+  les corrections survivent aux recalculs. « Rechercher à nouveau » relance la détection
+  (`POST /api/finance/recurring/refresh`, app seulement).
+
+### Modifié
+
+- Budget, « À venir » devient « Charges fixes du mois » : une ligne par catégorie du groupe
+  Fixes ; un abonnement repéré n'y fait plus de ligne à lui, il date la catégorie fixe où il
+  est rangé et la nomme (`via`). Les paiements réguliers d'autres catégories restent dans la
+  section Abonnements.
+- Abonnements : le nom est tiré du libellé bancaire sans date, heure, référence ni numéro de
+  carte (« Paiement 04.11… AMAZON PAYMENTS Numéro de carte… » → « Amazon Payments »).
+
+### Corrigé
+
+- Budget, « Préparer le budget » : une catégorie qui n'a rien coûté sur les trois derniers mois
+  ne dit plus « rien dépensé » si elle a coûté quelque chose sur douze mois (frais annuels) ; une
+  catégorie suivie à l'année propose ce qu'elle a coûté sur douze mois. L'écran d'une catégorie
+  le montre en « Par an » (`year_spent` du budget du mois, absent pour la portée `aggregates`).
+- Budget, « Reste à dépenser » : les charges fixes et abonnements du mois pas encore passés et la
+  part mensuelle des provisions de l'année en sont retirés (le chiffre était trop haut tant
+  qu'une charge n'était pas débitée). Le mois en détail les montre (`plan.pending`,
+  `plan.provisions`).
+- Budget, « À venir » : une charge fixe suivie à l'année (prime annuelle) n'est plus attendue
+  chaque mois ni signalée « pas encore vue » ; elle reste dans les provisions de l'année et ne
+  compte plus deux fois dans le reste.
+
 ## [0.28.6] · 2026-11-17
 
 ### Corrigé

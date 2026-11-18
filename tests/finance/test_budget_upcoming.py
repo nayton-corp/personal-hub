@@ -8,7 +8,7 @@ from datetime import date
 from fastapi.testclient import TestClient
 
 from hub.core.context import HubContext
-from hub.domains.finance.classement.app import recurring, sentinels, upcoming
+from hub.domains.finance.classement.app import insights, recurring, sentinels, upcoming
 from hub.domains.finance.domain import FinanceDomain
 from hub.platform.db import begin_immediate
 from tests.finance.test_app_reads import (  # noqa: F401  (fixtures)
@@ -18,6 +18,7 @@ from tests.finance.test_app_reads import (  # noqa: F401  (fixtures)
     minor,
     year,
 )
+from tests.finance.test_double_sas import accept, create
 from tests.finance.test_finance_api import token
 
 
@@ -63,6 +64,20 @@ def test_a_charge_not_seen_three_days_after_its_day_is_late_and_alerts_once(
     # trois jours de grâce : le 3, rien n'est en retard
     with year.engine().connect() as conn:
         assert upcoming.late_fixed(conn, date(2026, 11, 3)) == []
+
+
+def test_a_fixed_charge_tracked_by_year_is_not_expected_every_month(
+    ctx: HubContext,  # noqa: F811
+    year: FinanceDomain,  # noqa: F811
+) -> None:
+    params = {"category_id": "logement", "amount_minor": 1_800_000, "cadence": "year"}
+    assert accept(ctx, create(ctx, "set_budget", params)).status == "applied"
+    with year.engine().connect() as conn:
+        assert "logement" in insights.yearly(conn)
+        dues = upcoming.month_dues(conn, "2026-11", date(2026, 11, 10))
+        late = upcoming.late_fixed(conn, date(2026, 11, 10))
+    assert all(d.category != "logement" for d in dues)
+    assert all(d.category != "logement" for d in late)
 
 
 def test_a_fixed_category_without_target_gets_a_suggested_one(

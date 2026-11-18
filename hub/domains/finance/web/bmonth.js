@@ -1,6 +1,6 @@
 // Budget, le corps du mois (refonte du budget, lot B) : les dépenses du quotidien (ce qui reste
-// d'abord), les catégories hors budget en net, « À venir » (charges fixes et abonnements, payés
-// ou attendus, /finance/budget/upcoming) et les provisions de l'année. Tout vient du serveur.
+// d'abord), les catégories hors budget en net, les charges fixes du mois (une par catégorie, payées
+// ou attendues, /finance/budget/upcoming) et les provisions de l'année. Tout vient du serveur.
 import { MOIS, base, units } from "../../format.js";
 import { esc, ic, m0, money, n0 } from "../../ui.js";
 import { catMark } from "./meta.js";
@@ -71,7 +71,7 @@ export function outside(b) {
   </section>`;
 }
 
-// --- à venir : charges fixes et abonnements du mois, par date -----------------------------------
+// --- à venir : les charges fixes du mois, par date ---------------------------------------------
 
 const dateBox = (d, done) => `<span class="up-date${done ? " done" : ""}"><b>${Number(d.slice(8, 10))}</b><span>${MOIS[Number(d.slice(5, 7)) - 1]}</span></span>`;
 
@@ -80,12 +80,12 @@ function when(d) {
   return days < 0 ? "" : days === 0 ? "aujourd'hui" : days === 1 ? "demain" : `dans ${days} jours`;
 }
 
+// une charge fixe : sa catégorie ; « via » les abonnements repérés qui la datent
 function upRow(x) {
-  const paid = x.status === "paid", go = x.category ? `data-a="cat" data-v="${esc(x.category)}"` : 'data-a="subs"';
-  const kind = x.kind === "subscription" ? "abonnement" : "charge fixe";
-  const st = paid ? `${ic("check")}payé le ${dayMonth(x.on)}` : x.status === "late" ? `${kind} · <span class="pill warn">${ic("clock")}pas encore vu</span>` : `${kind} · ${when(x.on)}`;
+  const paid = x.status === "paid", via = x.via ? ` · ${esc(x.via)}` : "";
+  const st = paid ? `${ic("check")}payé le ${dayMonth(x.on)}${via}` : x.status === "late" ? `<span class="pill warn">${ic("clock")}pas encore vu</span>${via}` : `${when(x.on) || "ce mois"}${via}`;
   const tip = x.suggested_target ? ` · cible proposée ${m0(u(x.suggested_target))}` : "";
-  return `<button class="up-row${paid ? " paid" : ""}" type="button" ${go}>${dateBox(x.on, paid)}<span class="up-main"><b>${esc(x.name)}</b><span>${st}${tip}</span></span>
+  return `<button class="up-row${paid ? " paid" : ""}" type="button" data-a="cat" data-v="${esc(x.category)}">${dateBox(x.on, paid)}<span class="up-main"><b>${esc(x.name)}</b><span>${st}${tip}</span></span>
     <span class="num up-v">${m0(u(x.amount))}</span></button>`;
 }
 
@@ -94,7 +94,7 @@ export function upcoming(up, b, B) {
   if (!up || !up.items.length) return "";
   const next = up.items.filter((x) => x.status !== "paid"), paid = up.items.filter((x) => x.status === "paid");
   const tn = u(up.due_total), tp = paid.reduce((t, x) => t + u(x.amount), 0);
-  const title = b.current ? "À venir ce mois" : "Charges et abonnements";
+  const title = b.current ? "Charges fixes du mois" : "Charges fixes";
   return `<section class="card bflat" id="upcoming" aria-labelledby="t-up">
     <div class="section-head"><h2 class="section-title" id="t-up">${title}</h2><span class="hint">${paid.length} sur ${up.items.length} payé${paid.length > 1 ? "s" : ""}</span></div>
     <div class="up-sum"><span><b class="num">${m0(tp)}</b> payés</span><span class="up-bar"><i data-css="width:${tp + tn ? ((tp / (tp + tn)) * 100).toFixed(1) : 0}%"></i></span>

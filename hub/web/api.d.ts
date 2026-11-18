@@ -181,6 +181,7 @@ export interface BudgetOut {
   plan: PlanOut;
   daily: number[];
   prev_daily: number[];
+  year_spent: CategorySpentOut[];
 }
 
 export interface BudgetStateOut {
@@ -244,6 +245,11 @@ export interface CategoryOut {
 export interface CategoryRefOut {
   id: string;
   source: string;
+}
+
+export interface CategorySpentOut {
+  category: string;
+  spent: MoneyOut;
 }
 
 export interface CategoryTotalOut {
@@ -1020,6 +1026,8 @@ export interface PlanOut {
   income_source: string | null;
   savings: MoneyOut;
   targets: MoneyOut;
+  pending: MoneyOut;
+  provisions: MoneyOut;
   unassigned: MoneyOut | null;
   rest: MoneyOut | null;
   per_day: MoneyOut | null;
@@ -1111,6 +1119,8 @@ export interface RecurringItemOut {
   active: boolean;
   account: string | null;
   last_entry_id: string | null;
+  key: string;
+  found_label: string;
 }
 
 export interface RecurringOut {
@@ -1120,6 +1130,14 @@ export interface RecurringOut {
   monthly_total: MoneyOut[];
   by_category: RecurringByCategoryOut[];
   items?: RecurringItemOut[] | null;
+  removed?: RecurringRemovedOut[] | null;
+}
+
+export interface RecurringRemovedOut {
+  key: string;
+  label: string;
+  cadence: string;
+  amount: MoneyOut;
 }
 
 export interface RefOut {
@@ -1433,6 +1451,7 @@ export interface UpcomingItemOut {
   amount: MoneyOut;
   status: string;
   suggested_target: MoneyOut | null;
+  via?: string | null;
 }
 
 export interface UpcomingOut {

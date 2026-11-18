@@ -120,8 +120,9 @@ class ClassementReads(ToolBox):
             ),
             tool(
                 "finance_budget_upcoming",
-                "« À venir » du mois : charges fixes et abonnements, payés ou attendus, avec "
-                "leur date, ce qui reste à payer et les charges pas vues à leur date habituelle.",
+                "« À venir » du mois : charges fixes (une par catégorie), payées ou attendues, "
+                "avec leur date, ce qui reste à payer et les charges pas vues à leur date "
+                "habituelle.",
                 _obj({"month": MONTH_PROP}),
                 AGGREGATES,
                 MonthArgs,
