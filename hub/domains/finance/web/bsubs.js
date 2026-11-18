@@ -104,10 +104,8 @@ async function send(params, done) {
     if (SH.kind) SH.err = failure(err);
     else toast(failure(err));
   } finally {
-    if (SH.kind) {
-      SH.busy = false;
-      renderSheet();
-    }
+    SH.busy = false; // même fiche fermée : sinon la suivante s'ouvrirait « Validation… »
+    if (SH.kind) renderSheet();
   }
 }
 

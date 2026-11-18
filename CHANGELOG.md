@@ -2,6 +2,18 @@
 
 ## [Non publié]
 
+## [0.29.1] · 2026-11-18
+
+### Corrigé
+
+- Budget, « Préparer le budget » : chaque ligne de dépense a un bouton « par mois / par an » ;
+  une cible ne s'enregistre plus forcément au mois (une catégorie de frais annuels se règle
+  d'ici, sans passer par son écran).
+- Budget, « Charges fixes du mois » : une charge fixe ciblée qui n'a rien de payé ni d'attendu
+  ce mois y figure (« rien vu ce mois »), pour l'ouvrir ; elle n'était visible nulle part.
+- Un panneau ouvert après un enregistrement fini dans un autre (une correction d'abonnement)
+  restait bloqué sur « Validation… » : l'état « en cours » repart à zéro à chaque ouverture.
+
 ## [0.29.0] · 2026-11-18
 
 ### Ajouté

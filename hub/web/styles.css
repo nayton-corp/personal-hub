@@ -319,6 +319,9 @@ code { font-family: var(--mono); font-size: .9em; }
 .plan-row label { min-width: 0; font-size: .824rem; }
 .plan-row label b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plan-row small { display: block; font-size: .706rem; color: var(--muted); }
+.plan-in { display: grid; gap: 4px; justify-items: end; }
+.plan-cad { min-height: 28px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--muted); font: inherit; font-size: .706rem; }
+.plan-cad[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 .plan-row input { width: 100%; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; text-align: right; padding: 0 10px; }
 /* --- v3 : socle ------------------------------------------------------------------------- */
 /* retour au toucher : la cible s'enfonce un instant (rien pendant un glissé) */

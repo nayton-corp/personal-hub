@@ -182,16 +182,22 @@ function spentNote(r) {
   return r.y12 ? `rien sur 3 mois · ${m0(r.y12)} sur 12 mois` : "rien dépensé sur 12 mois";
 }
 
-const planChanges = (d, tmp) => d.rows.filter((r) => tmp[r.id] != null && tmp[r.id] !== (r.now ?? 0) && !(r.now == null && tmp[r.id] === 0));
+// suivie à l'année : réglée telle quelle, ou changée sur la ligne (sh.cad) ; jamais l'épargne
+const isYear = (r, sh) => r.group !== "savings" && (sh.cad && sh.cad[r.id] != null ? sh.cad[r.id] : r.year);
+const planChanges = (d, sh) => d.rows.filter((r) => {
+  const v = sh.tmp[r.id];
+  if (v == null || (r.now == null && v === 0)) return false;
+  return v !== (r.now ?? 0) || (v > 0 && isYear(r, sh) !== r.year);
+});
 
 SHEETS.plan = (_arg, sh) => {
   const d = planData();
   if (!d) return { title: "Préparer le budget", body: skel("block") };
   // l'épargne n'est proposée qu'une fois choisie : rien n'est mis de côté sans le demander
   if (!sh.tmp) sh.tmp = Object.fromEntries(d.rows.map((r) => [r.id, r.now ?? (r.group === "savings" ? 0 : roundUp(r.avg))]));
-  const sum = (save) => d.rows.filter((r) => (r.group === "savings") === save).reduce((t, r) => t + (sh.tmp[r.id] || 0) / (r.year ? 12 : 1), 0);
+  const sum = (save) => d.rows.filter((r) => (r.group === "savings") === save).reduce((t, r) => t + (sh.tmp[r.id] || 0) / (isYear(r, sh) ? 12 : 1), 0);
   const total = sum(false), saved = sum(true);
-  const ch = planChanges(d, sh.tmp);
+  const ch = planChanges(d, sh);
   const from = `${shortMonth(d.months[0])} – ${shortMonth(d.months[d.months.length - 1])}`;
   let g = null;
   const rows = d.rows.map((r) => {
@@ -199,12 +205,13 @@ SHEETS.plan = (_arg, sh) => {
     g = r.group;
     const v = sh.tmp[r.id];
     return `${head}<div class="plan-row">${catMark(r.id, r.group, "sm")}
-      <label for="plan-${esc(r.id)}"><b>${esc(r.name)}${r.year ? ' <span class="pill">par an</span>' : ""}</b><small>${spentNote(r)}${r.now != null ? ` · cible ${m0(r.now)}` : ""}</small></label>
-      <input id="plan-${esc(r.id)}" data-plan="${esc(r.id)}" inputmode="decimal" value="${v ? v : ""}" placeholder="—" aria-label="Cible ${r.year ? "annuelle" : "mensuelle"} ${esc(r.name)} en ${base()}"></div>`;
+      <label for="plan-${esc(r.id)}"><b>${esc(r.name)}</b><small>${spentNote(r)}${r.now != null ? ` · cible ${m0(r.now)}${r.year ? " par an" : ""}` : ""}</small></label>
+      <span class="plan-in"><input id="plan-${esc(r.id)}" data-plan="${esc(r.id)}" inputmode="decimal" value="${v ? v : ""}" placeholder="—" aria-label="Cible ${isYear(r, sh) ? "annuelle" : "mensuelle"} ${esc(r.name)} en ${base()}">
+      ${r.group === "savings" ? "" : `<button class="plan-cad" type="button" data-a="plan-cad" data-v="${esc(r.id)}" aria-pressed="${isYear(r, sh)}" aria-label="Suivi de ${esc(r.name)} : ${isYear(r, sh) ? "par an" : "par mois"}, toucher pour changer">${isYear(r, sh) ? "par an" : "par mois"}</button>`}</span></div>`;
   }).join("");
   return {
     title: "Préparer le budget",
-    body: `<p class="hint">Une cible par mois et par catégorie, proposée d'après ta moyenne des derniers mois (${esc(from)}) et arrondie à la dizaine. Laisse vide ce que tu ne veux pas suivre.</p>
+    body: `<p class="hint">Une cible par catégorie, par mois ou par an (touche « par mois » pour changer), proposée d'après ta moyenne des derniers mois (${esc(from)}) et arrondie à la dizaine. Laisse vide ce que tu ne veux pas suivre.</p>
       <div class="plan-sum"><span>Revenus<b class="num">${amount(d.income)}</b></span><span>Budget<b class="num">${amount(total)}</b></span>
         <span>Reste<b class="num${d.income - total - saved < 0 ? " neg" : ""}">${amount(d.income - total - saved)}</b></span></div>
       ${saved ? `<p class="hint">Dont ${amount(saved)} d'épargne visée, retirée du reste.</p>` : ""}
@@ -319,16 +326,23 @@ export const actions = {
     for (const p of [budgetPath(store.today, "m"), budgetPath(store.today, "q"), CATS, `/finance/flows?month=${store.today}&period=q`]) store.use(p);
     openSheet("plan");
   },
+  "plan-cad": (id) => {
+    const d = planData(), r = d && d.rows.find((x) => x.id === id);
+    if (!r) return;
+    SH.cad = { ...(SH.cad || {}), [id]: !isYear(r, SH) };
+    SH.touched = true;
+    renderSheet();
+  },
   "plan-save": async () => {
     const d = planData();
     if (!d) return;
-    const ch = planChanges(d, SH.tmp);
+    const ch = planChanges(d, SH);
     if (!ch.length) return;
     SH.busy = true;
     SH.err = "";
     renderSheet();
     try {
-      const items = ch.map((r) => ["set_budget", { category_id: r.id, amount_minor: toMinor(SH.tmp[r.id]), cadence: r.year && r.group !== "savings" ? "year" : "month", valid_from: `${store.today}-01` }]);
+      const items = ch.map((r) => ["set_budget", { category_id: r.id, amount_minor: toMinor(SH.tmp[r.id]), cadence: isYear(r, SH) ? "year" : "month", valid_from: `${store.today}-01` }]);
       const [text, bad] = outcome(await proposeAndApprove(items));
       if (bad) {
         if (SH.kind === "plan") SH.err = text;

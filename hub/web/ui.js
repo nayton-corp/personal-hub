@@ -224,7 +224,7 @@ export function sheetEntryOpen() {
 
 export function openSheet(kind, arg, tmp = null) {
   const wasOpen = Boolean(SH.kind);
-  Object.assign(SH, { kind, arg, tmp, err: "", cad: null, bad: "", touched: false, conv: null });
+  Object.assign(SH, { kind, arg, tmp, err: "", cad: null, bad: "", touched: false, conv: null, busy: false });
   if (!wasOpen) {
     SH.opener = document.activeElement;
     if (popsToSkip > 0) repush = true;
